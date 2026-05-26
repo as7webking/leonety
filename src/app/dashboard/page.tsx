@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-client'
 import { convertToCurrency, formatCurrency, getSavedAmountInWorkspaceCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
+import { useI18n } from '@/contexts/i18n-context'
 import { Building2 } from 'lucide-react'
 
 interface Income {
@@ -51,6 +52,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
+  const { t } = useI18n()
 
   const loadDashboard = useCallback(async () => {
     if (!currentCompany) {
@@ -100,7 +102,7 @@ export default function DashboardPage() {
   if (companyLoading || loading) {
     return (
       <PageContainer>
-        <PageHeader title="Dashboard" description="Loading your workspace data" />
+        <PageHeader title={t('dashboard.title')} description={t('dashboard.loading')} />
         <LoadingSkeleton />
       </PageContainer>
     )
@@ -109,7 +111,7 @@ export default function DashboardPage() {
   if (!currentCompany) {
     return (
       <PageContainer>
-        <PageHeader title="Dashboard" description="Create a workspace to get started" />
+        <PageHeader title={t('dashboard.title')} description={t('dashboard.noWorkspace')} />
         <EmptyState
           icon={Building2}
           title="No workspace selected"
@@ -160,35 +162,35 @@ export default function DashboardPage() {
 
   return (
     <PageContainer>
-      <PageHeader title="Dashboard" description={`${currentCompany.name} · ${currency}`}>
+      <PageHeader title={t('dashboard.title')} description={`${currentCompany.name} · ${currency}`}>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
           {planLabel} plan
         </span>
       </PageHeader>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">Total Income</h3>
+          <h3 className="text-lg font-semibold">{t('dashboard.totalIncome')}</h3>
           <p className="text-2xl">{formatMoney(totalIncome)}</p>
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">Total Expenses</h3>
+          <h3 className="text-lg font-semibold">{t('dashboard.totalExpenses')}</h3>
           <p className="text-2xl">{formatMoney(totalExpenses)}</p>
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">Net Income</h3>
+          <h3 className="text-lg font-semibold">{t('dashboard.netIncome')}</h3>
           <p className={`text-2xl ${netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatMoney(netIncome)}
           </p>
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">Total Time</h3>
+          <h3 className="text-lg font-semibold">{t('dashboard.totalTime')}</h3>
           <p className="text-2xl">{formatHours(totalHours)}</p>
         </div>
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="rounded-lg bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">Recent Incomes</h3>
+          <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentIncome')}</h3>
           {incomes.slice(0, 3).map((income) => (
             <div key={income.id} className="flex justify-between border-b py-2">
               <span>{income.description}</span>
@@ -198,7 +200,7 @@ export default function DashboardPage() {
           {incomes.length === 0 && <p className="text-muted-foreground">No incomes yet</p>}
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">Recent Expenses</h3>
+          <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentExpenses')}</h3>
           {expenses.slice(0, 3).map((expense) => (
             <div key={expense.id} className="flex justify-between border-b py-2">
               <span>{expense.description}</span>
@@ -208,7 +210,7 @@ export default function DashboardPage() {
           {expenses.length === 0 && <p className="text-muted-foreground">No expenses yet</p>}
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">Recent Time Entries</h3>
+          <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentTime')}</h3>
           {timeEntries.slice(0, 3).map((entry) => (
             <div key={entry.id} className="flex justify-between border-b py-2">
               <span>{entry.description}</span>

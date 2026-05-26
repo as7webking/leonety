@@ -8,8 +8,10 @@ import { createClient } from '@/lib/supabase-client'
 import { formatValidationError, incomeSchema, type IncomeForm } from '@/lib/validations'
 import { useCompany } from '@/contexts/company-context'
 import { buildCsv, parseCsv } from '@/lib/csv'
+import { formatCategoryLabel } from '@/lib/category-labels'
 import { convertToCurrency, currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
+import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -22,6 +24,7 @@ export default function IncomePage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { t } = useI18n()
   const [incomes, setIncomes] = useState<Income[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -39,8 +42,17 @@ export default function IncomePage() {
   const [importing, setImporting] = useState(false)
   const [latestRate, setLatestRate] = useState<number | null>(null)
   const [latestRateLoading, setLatestRateLoading] = useState(false)
+  const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const categoryOptions = ['Salary', 'Freelance', 'Investment', 'Other']
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setGroupReportsByMonth(window.localStorage.getItem('leonety-group-reports-by-month') === 'true')
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [])
 
   const loadIncomes = useCallback(async () => {
     if (!currentCompany) {
@@ -200,6 +212,55 @@ export default function IncomePage() {
     URL.revokeObjectURL(url)
   }
 
+  const getWorkspaceAmount = (income: Income) =>
+    convertToCurrency(
+      Number(income.amount),
+      income.currency,
+      normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
+    )
+
+  const groupedIncomes = incomes.reduce<Record<string, Income[]>>((groups, income) => {
+    const key = income.date.slice(0, 7)
+    return {
+      ...groups,
+      [key]: [...(groups[key] ?? []), income],
+    }
+  }, {})
+
+  const printGroups = groupReportsByMonth ? Object.entries(groupedIncomes) : [['all', incomes] as const]
+  const formatMonthLabel = (monthKey: string) => {
+    if (monthKey === 'all') return ''
+    const [year, month] = monthKey.split('-').map(Number)
+    return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  }
+
+  const renderPrintAmount = (income: Income) => {
+    const originalAmount = `${Number(income.amount).toFixed(2)} ${income.currency}`
+    const workspaceCurrency = normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
+    const convertedAmount = formatCurrency(getWorkspaceAmount(income), workspaceCurrency)
+
+    if (normalizeCurrencyCode(income.currency) === workspaceCurrency) {
+      return originalAmount
+    }
+
+    return `${originalAmount} (${convertedAmount})`
+  }
+
+  const handlePrint = () => {
+    if (incomes.length === 0) {
+      setErrorMessage('No data to print')
+      window.setTimeout(() => setErrorMessage(''), 3000)
+      return
+    }
+
+    const previousTitle = document.title
+    document.title = ' '
+    window.print()
+    window.setTimeout(() => {
+      document.title = previousTitle
+    }, 500)
+  }
+
   const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !currentCompany) return
@@ -283,7 +344,7 @@ export default function IncomePage() {
   if (companyLoading || loading) {
     return (
       <PageContainer>
-        <PageHeader title="Income" description="Track your income sources" />
+        <PageHeader title={t('income.title')} description={t('income.description')} />
         <LoadingSkeleton />
       </PageContainer>
     )
@@ -292,7 +353,7 @@ export default function IncomePage() {
   if (!currentCompany) {
     return (
       <PageContainer>
-        <PageHeader title="Income" description="Track your income sources" />
+        <PageHeader title={t('income.title')} description={t('income.description')} />
         <EmptyState
           icon={Building2}
           title="No workspace selected"
@@ -305,7 +366,7 @@ export default function IncomePage() {
 
   return (
     <PageContainer>
-      <PageHeader title="Income" description={`Track income for ${currentCompany.name}`}>
+      <PageHeader title={t('income.title')} description={`Track income for ${currentCompany.name}`}>
         <div className="flex flex-wrap gap-2">
           <input
             ref={fileInputRef}
@@ -315,14 +376,58 @@ export default function IncomePage() {
             onChange={handleImportCSV}
           />
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
-            {importing ? 'Importing...' : 'Import CSV'}
+            {importing ? 'Importing...' : t('common.importCsv')}
           </Button>
-          {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">Export CSV</Button>}
+          {incomes.length > 0 && (
+            <select
+              value={groupReportsByMonth ? 'month' : 'default'}
+              onChange={(event) => setGroupReportsByMonth(event.target.value === 'month')}
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              aria-label="Print grouping"
+            >
+              <option value="default">Default print</option>
+              <option value="month">Group by month</option>
+            </select>
+          )}
+          {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
+          {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
           <Button onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
-            {showForm ? 'Cancel' : 'Add Income'}
+            {showForm ? t('common.cancel') : t('income.add')}
           </Button>
         </div>
       </PageHeader>
+
+      <div className="print-area hidden">
+        {printGroups.map(([groupKey, groupItems]) => (
+          <section key={groupKey} className="mb-8">
+            {groupReportsByMonth && <h2 className="mb-3 text-lg font-semibold">{formatMonthLabel(groupKey)}</h2>}
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="border p-2 text-left">{t('common.date')}</th>
+                  <th className="border p-2 text-left">{t('common.description')}</th>
+                  <th className="border p-2 text-left">{t('common.category')}</th>
+                  <th className="border p-2 text-right">{t('common.amount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupItems.map((income) => (
+                  <tr key={`print-${income.id}`}>
+                    <td className="border p-2">{income.date}</td>
+                    <td className="border p-2">{income.description}</td>
+                    <td className="border p-2">{formatCategoryLabel(income.category, t)}</td>
+                    <td className="border p-2 text-right">{renderPrintAmount(income)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+
+        <p className="mt-4 text-right font-semibold">
+          {t('common.total')}: {formatCurrency(incomes.reduce((sum, income) => sum + getWorkspaceAmount(income), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
+        </p>
+      </div>
 
       {successMessage && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{successMessage}</div>}
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
@@ -330,7 +435,7 @@ export default function IncomePage() {
       {showForm && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>{editingEntry ? 'Edit Income' : 'Add Income'}</CardTitle>
+            <CardTitle>{editingEntry ? t('income.edit') : t('income.add')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -346,7 +451,9 @@ export default function IncomePage() {
                 <label className="mb-1 block text-sm font-medium">Category</label>
                 <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full rounded-md border px-3 py-2" required>
                   <option value="">Select category</option>
-                  {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  {categoryOptions.map((option) => (
+                    <option key={option} value={option}>{formatCategoryLabel(option, t)}</option>
+                  ))}
                 </select>
                 {formData.category === 'Other' && (
                   <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" placeholder="Custom category" required />
@@ -373,7 +480,7 @@ export default function IncomePage() {
                   </select>
                 </div>
               </div>
-              <Button type="submit">{editingEntry ? 'Save Changes' : 'Save Income'}</Button>
+              <Button type="submit">{editingEntry ? 'Save Changes' : t('income.save')}</Button>
               <p className="text-sm text-slate-500">
                 {latestRateLoading
                   ? 'Loading latest exchange rate...'
@@ -385,7 +492,7 @@ export default function IncomePage() {
       )}
 
       {incomes.length === 0 ? (
-        <EmptyState title="No income entries yet" description="Add your first income entry for this workspace." />
+        <EmptyState title={t('income.noEntries')} description="Add your first income entry for this workspace." />
       ) : (
         <div className="space-y-4">
           {incomes.map((income) => (
@@ -394,7 +501,7 @@ export default function IncomePage() {
                 <div>
                   <p className="font-medium">{income.description}</p>
                   <p className="text-sm text-muted-foreground">
-                    {income.category} · {income.date}
+                    {formatCategoryLabel(income.category, t)} · {income.date}
                   </p>
                 </div>
                 <div className="flex items-center gap-4">

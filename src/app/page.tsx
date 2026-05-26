@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart3, Globe, Shield, Zap, Check } from 'lucide-react'
 import { PublicHeader } from '@/components/public-header'
+import { T } from '@/components/t'
 
 export default async function Home() {
   const supabase = await createServerSupabaseClient()
@@ -17,31 +18,31 @@ export default async function Home() {
           <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
             <div className="space-y-8">
               <div className="max-w-xl space-y-4">
-                <p className="text-sm uppercase tracking-[0.4em] text-slate-500">Modern bookkeeping</p>
+                <p className="text-sm uppercase tracking-[0.4em] text-slate-500"><T k="home.eyebrow" /></p>
                 <h1 className="text-5xl font-semibold tracking-tight sm:text-6xl lg:text-7xl">
-                  Beautiful finance tools for small teams and freelancers.
+                  <T k="home.heroTitle" />
                 </h1>
                 <p className="text-xl leading-8 text-slate-600">
-                  Leonety combines income, expenses, time, and reporting into one polished app so you can manage your business without spreadsheets.
+                  <T k="home.heroText" />
                 </p>
               </div>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 {user ? (
                   <>
                     <Button size="lg" asChild>
-                      <Link href="/dashboard">Open app</Link>
+                      <Link href="/dashboard"><T k="home.openApp" /></Link>
                     </Button>
                     <Button size="lg" variant="outline" asChild>
-                      <Link href="/profile">Profile</Link>
+                      <Link href="/profile"><T k="nav.profile" /></Link>
                     </Button>
                   </>
                 ) : (
                   <>
                     <Button size="lg" asChild>
-                      <Link href="/onboarding">Start free</Link>
+                      <Link href="/onboarding"><T k="home.startFree" /></Link>
                     </Button>
                     <Button size="lg" variant="outline" asChild>
-                      <Link href="/login">Log in</Link>
+                      <Link href="/login"><T k="home.login" /></Link>
                     </Button>
                   </>
                 )}
@@ -55,20 +56,20 @@ export default async function Home() {
                       <BarChart3 className="h-5 w-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">Insightful dashboard</CardTitle>
+                      <CardTitle className="text-lg"><T k="home.dashboardCard" /></CardTitle>
                       <CardDescription className="text-slate-600">
-                        Real-time metrics that keep your finances under control.
+                        <T k="home.dashboardCardText" />
                       </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2">
                   <div className="rounded-3xl bg-slate-100 p-5">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Income</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500"><T k="nav.income" /></p>
                     <p className="mt-3 text-2xl font-semibold">12,450 €</p>
                   </div>
                   <div className="rounded-3xl bg-slate-100 p-5">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Expenses</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500"><T k="nav.expenses" /></p>
                     <p className="mt-3 text-2xl font-semibold">8,320 €</p>
                   </div>
                   <div className="rounded-3xl bg-slate-100 p-5 sm:col-span-2">
@@ -79,12 +80,12 @@ export default async function Home() {
               </Card>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-sm">
-                  <p className="text-sm font-medium text-slate-900">Income tracking</p>
-                  <p className="mt-3 text-sm text-slate-600">Capture payments automatically and keep every source organized.</p>
+                  <p className="text-sm font-medium text-slate-900"><T k="home.incomeTracking" /></p>
+                  <p className="mt-3 text-sm text-slate-600"><T k="home.incomeTrackingText" /></p>
                 </div>
                 <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-sm">
-                  <p className="text-sm font-medium text-slate-900">Expense management</p>
-                  <p className="mt-3 text-sm text-slate-600">Log bills and receipts with ease while staying audit ready.</p>
+                  <p className="text-sm font-medium text-slate-900"><T k="home.expenseManagement" /></p>
+                  <p className="mt-3 text-sm text-slate-600"><T k="home.expenseManagementText" /></p>
                 </div>
               </div>
             </div>
@@ -95,10 +96,10 @@ export default async function Home() {
           <div className="container mx-auto px-4">
             <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
               <div>
-                <p className="text-sm uppercase tracking-[0.4em] text-slate-500">Product</p>
-                <h2 className="mt-6 text-4xl font-semibold tracking-tight text-slate-900">A simple finance app that just works.</h2>
+                <p className="text-sm uppercase tracking-[0.4em] text-slate-500"><T k="public.product" /></p>
+                <h2 className="mt-6 text-4xl font-semibold tracking-tight text-slate-900"><T k="home.productTitle" /></h2>
                 <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-                  Build and run your bookkeeping workflow without switching between tools. Leonety is designed for speed, clarity, and control.
+                  <T k="home.productText" />
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -118,10 +119,10 @@ export default async function Home() {
         <section id="features" className="py-24">
           <div className="container mx-auto px-4">
             <div className="text-center space-y-4 mb-16">
-              <p className="text-sm uppercase tracking-[0.4em] text-slate-500">Features</p>
-              <h2 className="text-4xl font-semibold text-slate-900">Features built for real work.</h2>
+              <p className="text-sm uppercase tracking-[0.4em] text-slate-500"><T k="public.features" /></p>
+              <h2 className="text-4xl font-semibold text-slate-900"><T k="home.featuresTitle" /></h2>
               <p className="text-lg leading-8 text-slate-600 max-w-2xl mx-auto">
-                From currency-aware transactions to time entries and reporting, Leonety keeps everything consistent and easy to use.
+                <T k="home.featuresText" />
               </p>
             </div>
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">

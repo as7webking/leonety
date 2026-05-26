@@ -6,7 +6,10 @@ import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
 import { profileUpdateSchema, formatValidationError } from '@/lib/validations'
 import { useAccountAccess } from '@/hooks/use-account-access'
-import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
+import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
+import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { useI18n } from '@/contexts/i18n-context'
 import { PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,6 +41,16 @@ interface ManagedProfile {
   lastSignInAt: string | null
 }
 
+interface PrintableTransaction {
+  id: string
+  type: 'Income' | 'Expense'
+  date: string
+  description: string
+  category: string
+  amount: number
+  currency: string
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -50,11 +63,47 @@ export default function ProfilePage() {
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([])
   const [adminLoading, setAdminLoading] = useState(false)
   const [monthsByProfile, setMonthsByProfile] = useState<Record<string, number>>({})
+  const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
+  const [reportFromDate, setReportFromDate] = useState(() => {
+    const date = new Date()
+    date.setDate(1)
+    return date.toISOString().split('T')[0]
+  })
+  const [reportToDate, setReportToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [printTransactions, setPrintTransactions] = useState<PrintableTransaction[]>([])
+  const [includeCategoryInPrint, setIncludeCategoryInPrint] = useState(true)
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false)
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, refreshCompanies } = useCompany()
   const { accountAccess } = useAccountAccess(profile?.email)
+  const { locale, t } = useI18n()
   const planLabel = accountAccess.plan === 'pro' ? 'Pro' : 'Free'
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setGroupReportsByMonth(window.localStorage.getItem('leonety-group-reports-by-month') === 'true')
+      setIncludeCategoryInPrint(window.localStorage.getItem('leonety-include-category-in-print') !== 'false')
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  const handleGroupReportsChange = (checked: boolean) => {
+    setGroupReportsByMonth(checked)
+    window.localStorage.setItem('leonety-group-reports-by-month', String(checked))
+  }
+
+  const handleIncludeCategoryInPrintChange = (checked: boolean) => {
+    setIncludeCategoryInPrint(checked)
+    window.localStorage.setItem('leonety-include-category-in-print', String(checked))
+  }
+
+  useEffect(() => {
+    const handleAfterPrint = () => setIsPreparingPrint(false)
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [])
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -279,6 +328,262 @@ export default function ProfilePage() {
     }))
   }
 
+  const getTransactionAmountInAccountCurrency = (transaction: PrintableTransaction) =>
+    convertToCurrency(transaction.amount, transaction.currency, normalizeCurrencyCode(currency))
+
+  const renderTransactionPrintAmount = (transaction: PrintableTransaction) => {
+    const accountCurrency = normalizeCurrencyCode(currency)
+    const originalAmount = `${Number(transaction.amount).toFixed(2)} ${transaction.currency}`
+
+    if (normalizeCurrencyCode(transaction.currency) === accountCurrency) {
+      return originalAmount
+    }
+
+    return `${originalAmount} (${formatCurrency(getTransactionAmountInAccountCurrency(transaction), accountCurrency)})`
+  }
+
+  const getPrintMonthKey = (date: string) => date.slice(0, 7)
+
+  const printMonthGroups = printTransactions.reduce<Record<string, PrintableTransaction[]>>((groups, transaction) => {
+    const key = getPrintMonthKey(transaction.date)
+    return {
+      ...groups,
+      [key]: [...(groups[key] ?? []), transaction],
+    }
+  }, {})
+
+  const sortedPrintMonthGroups = Object.entries(printMonthGroups).sort(([left], [right]) => left.localeCompare(right))
+
+  const getReportTitle = () => {
+    if (sortedPrintMonthGroups.length === 1) {
+      return formatMonthLabel(sortedPrintMonthGroups[0][0], locale)
+    }
+
+    return `${reportFromDate || '...'} - ${reportToDate || '...'}`
+  }
+
+  const escapeHtml = (value: string | number) =>
+    String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+
+  const renderCompactPrintTransaction = (transaction: PrintableTransaction) => (
+    <div className="break-inside-avoid space-y-1">
+      <div className="flex justify-between gap-3">
+        <span className="font-medium">{transaction.description}</span>
+        <span className="whitespace-nowrap text-right font-semibold">{renderTransactionPrintAmount(transaction)}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+        <span>{transaction.date}</span>
+        {includeCategoryInPrint && <span>{formatCategoryLabel(transaction.category, t)}</span>}
+      </div>
+    </div>
+  )
+
+  const renderMonthlyPrintSection = (monthKey: string, transactions: PrintableTransaction[]) => {
+    const incomeTransactions = transactions.filter((transaction) => transaction.type === 'Income')
+    const expenseTransactions = transactions.filter((transaction) => transaction.type === 'Expense')
+    const rowCount = Math.max(incomeTransactions.length, expenseTransactions.length)
+
+    return (
+      <section key={monthKey} className="mb-6 break-inside-avoid">
+        <h2 className="mb-3 text-lg font-semibold capitalize">{formatMonthLabel(monthKey, locale)}</h2>
+        <table className="w-full table-fixed border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="w-1/2 border p-2 text-left">{t('income.title')}</th>
+              <th className="w-1/2 border p-2 text-left">{t('expenses.title')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: rowCount }).map((_, index) => (
+              <tr key={`${monthKey}-${index}`}>
+                <td className="border p-2 align-top">
+                  {incomeTransactions[index] ? renderCompactPrintTransaction(incomeTransactions[index]) : null}
+                </td>
+                <td className="border p-2 align-top">
+                  {expenseTransactions[index] ? renderCompactPrintTransaction(expenseTransactions[index]) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mt-2 grid gap-2 text-sm font-semibold sm:grid-cols-2">
+          <p>
+            {t('income.title')} {t('common.total').toLowerCase()}: {formatCurrency(
+              incomeTransactions.reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
+              normalizeCurrencyCode(currency),
+            )}
+          </p>
+          <p className="sm:text-right">
+            {t('expenses.title')} {t('common.total').toLowerCase()}: {formatCurrency(
+              expenseTransactions.reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
+              normalizeCurrencyCode(currency),
+            )}
+          </p>
+        </div>
+      </section>
+    )
+  }
+
+  const handlePrintTransactions = async () => {
+    if (!currentCompany) {
+      setMessage('No workspace selected')
+      return
+    }
+
+    setIsPreparingPrint(true)
+    setMessage('')
+
+    try {
+      if (!reportFromDate && !reportToDate) {
+        setMessage('Select at least one report date.')
+        setIsPreparingPrint(false)
+        return
+      }
+
+      if (reportFromDate && reportToDate && reportFromDate > reportToDate) {
+        setMessage('Report start date must be before the end date.')
+        setIsPreparingPrint(false)
+        return
+      }
+
+      let incomeQuery = supabase
+        .from('incomes')
+        .select('id, date, description, category, amount, currency')
+        .eq('company_id', currentCompany.id)
+      let expenseQuery = supabase
+        .from('expenses')
+        .select('id, date, description, category, amount, currency')
+        .eq('company_id', currentCompany.id)
+
+      if (reportFromDate) {
+        incomeQuery = incomeQuery.gte('date', reportFromDate)
+        expenseQuery = expenseQuery.gte('date', reportFromDate)
+      }
+
+      if (reportToDate) {
+        incomeQuery = incomeQuery.lte('date', reportToDate)
+        expenseQuery = expenseQuery.lte('date', reportToDate)
+      }
+
+      const [incomeRes, expenseRes] = await Promise.all([
+        incomeQuery.order('date', { ascending: true }),
+        expenseQuery.order('date', { ascending: true }),
+      ])
+
+      if (incomeRes.error) throw incomeRes.error
+      if (expenseRes.error) throw expenseRes.error
+
+      const transactions: PrintableTransaction[] = [
+        ...((incomeRes.data ?? []) as Array<Omit<PrintableTransaction, 'type'>>).map((item) => ({
+          ...item,
+          type: 'Income' as const,
+          amount: Number(item.amount),
+        })),
+        ...((expenseRes.data ?? []) as Array<Omit<PrintableTransaction, 'type'>>).map((item) => ({
+          ...item,
+          type: 'Expense' as const,
+          amount: Number(item.amount),
+        })),
+      ].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime())
+
+      if (transactions.length === 0) {
+        setMessage('No transactions found for the selected period.')
+        setIsPreparingPrint(false)
+        return
+      }
+
+      setPrintTransactions(transactions)
+      window.setTimeout(() => {
+        const previousTitle = document.title
+        document.title = ' '
+        window.print()
+        window.setTimeout(() => {
+          document.title = previousTitle
+        }, 500)
+      }, 50)
+    } catch (error) {
+      setIsPreparingPrint(false)
+      setMessage(error instanceof Error ? `Error: ${error.message}` : 'Error preparing print report')
+    }
+  }
+
+  const buildWordReportHtml = () => {
+    const sections = sortedPrintMonthGroups.map(([monthKey, transactions]) => {
+      const incomeTransactions = transactions.filter((transaction) => transaction.type === 'Income')
+      const expenseTransactions = transactions.filter((transaction) => transaction.type === 'Expense')
+      const rowCount = Math.max(incomeTransactions.length, expenseTransactions.length)
+      const rows = Array.from({ length: rowCount }).map((_, index) => {
+        const renderCell = (transaction: PrintableTransaction | undefined) => {
+          if (!transaction) return ''
+
+          const category = includeCategoryInPrint
+            ? `<div style="font-size:11px;color:#475569;">${escapeHtml(formatCategoryLabel(transaction.category, t))}</div>`
+            : ''
+
+          return `
+            <strong>${escapeHtml(transaction.description)}</strong>
+            <div>${escapeHtml(renderTransactionPrintAmount(transaction))}</div>
+            <div style="font-size:11px;color:#475569;">${escapeHtml(transaction.date)}</div>
+            ${category}
+          `
+        }
+
+        return `
+          <tr>
+            <td style="border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:50%;">${renderCell(incomeTransactions[index])}</td>
+            <td style="border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:50%;">${renderCell(expenseTransactions[index])}</td>
+          </tr>
+        `
+      }).join('')
+
+      return `
+        <h2 style="font-size:18px;margin:0 0 12px;text-transform:capitalize;">${escapeHtml(formatMonthLabel(monthKey, locale))}</h2>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <thead>
+            <tr>
+              <th style="border:1px solid #cbd5e1;padding:8px;text-align:left;width:50%;">${escapeHtml(t('income.title'))}</th>
+              <th style="border:1px solid #cbd5e1;padding:8px;text-align:left;width:50%;">${escapeHtml(t('expenses.title'))}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `
+    }).join('')
+
+    return `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Leonety report</title>
+        </head>
+        <body style="font-family:Arial,sans-serif;color:#0f172a;">
+          <h1 style="font-size:22px;margin:0 0 16px;text-transform:capitalize;">${escapeHtml(getReportTitle())}</h1>
+          ${sections}
+        </body>
+      </html>
+    `
+  }
+
+  const handleDownloadTransactionsWord = () => {
+    if (printTransactions.length === 0) {
+      setMessage('Prepare a report before downloading Word.')
+      return
+    }
+
+    const blob = new Blob([buildWordReportHtml()], { type: 'application/msword;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `leonety-transactions-${new Date().toISOString().split('T')[0]}.doc`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (loading) {
     return (
       <PageContainer>
@@ -312,9 +617,34 @@ export default function ProfilePage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Your Profile"
+        title={t('profile.title')}
         description="Manage your account information"
       />
+
+      {isPreparingPrint && printTransactions.length > 0 && (
+        <div className="print-area hidden">
+          <h1 className="mb-4 text-xl font-semibold capitalize">{getReportTitle()}</h1>
+          {sortedPrintMonthGroups.map(([monthKey, transactions]) => renderMonthlyPrintSection(monthKey, transactions))}
+          <div className="mt-4 grid gap-2 border-t pt-3 text-sm font-semibold sm:grid-cols-2">
+            <p>
+              {t('income.title')} {t('common.total').toLowerCase()}: {formatCurrency(
+                printTransactions
+                  .filter((transaction) => transaction.type === 'Income')
+                  .reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
+                normalizeCurrencyCode(currency),
+              )}
+            </p>
+            <p className="sm:text-right">
+              {t('expenses.title')} {t('common.total').toLowerCase()}: {formatCurrency(
+                printTransactions
+                  .filter((transaction) => transaction.type === 'Expense')
+                  .reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
+                normalizeCurrencyCode(currency),
+              )}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid w-full gap-6 lg:grid-cols-2">
         {/* Profile Information Card */}
@@ -471,6 +801,60 @@ export default function ProfilePage() {
             <CardTitle>Account Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex justify-between items-center py-2 border-b">
+              <span className="text-sm text-gray-600">Language</span>
+              <LanguageSwitcher />
+            </div>
+            <div className="flex items-center justify-between gap-4 border-b py-2">
+              <div>
+                <span className="text-sm text-gray-600">{t('profile.reportSettings')}</span>
+                <p className="text-xs text-gray-500">{t('profile.groupReportsByMonth')}</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={groupReportsByMonth}
+                onChange={(event) => handleGroupReportsChange(event.target.checked)}
+                className="h-4 w-4"
+                aria-label={t('profile.groupReportsByMonth')}
+              />
+            </div>
+            <div className="space-y-3 border-b py-2">
+              <div>
+                <span className="text-sm text-gray-600">{t('profile.printTransactions')}</span>
+                <p className="text-xs text-gray-500">{t('profile.printTransactionsDescription')}</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+                <input
+                  type="date"
+                  value={reportFromDate}
+                  onChange={(event) => setReportFromDate(event.target.value)}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  aria-label={t('common.from')}
+                />
+                <input
+                  type="date"
+                  value={reportToDate}
+                  onChange={(event) => setReportToDate(event.target.value)}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  aria-label={t('common.to')}
+                />
+                <Button type="button" variant="outline" onClick={handlePrintTransactions}>
+                  {isPreparingPrint ? 'Preparing...' : t('common.printSavePdf')}
+                </Button>
+                <Button type="button" variant="outline" onClick={handleDownloadTransactionsWord}>
+                  {t('common.downloadWord')}
+                </Button>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={includeCategoryInPrint}
+                  onChange={(event) => handleIncludeCategoryInPrintChange(event.target.checked)}
+                  className="h-4 w-4"
+                />
+                {t('profile.includeCategoryInPrint')}
+              </label>
+            </div>
             <div className="flex justify-between items-center py-2 border-b">
               <span className="text-sm text-gray-600">Current Plan</span>
               <span className="text-sm font-medium">{planLabel}</span>

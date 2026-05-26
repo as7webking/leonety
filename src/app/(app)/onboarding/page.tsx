@@ -10,6 +10,7 @@ import { useCompany } from '@/contexts/company-context'
 import { canCreateWorkspace } from '@/lib/account-access'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
+import { useI18n } from '@/contexts/i18n-context'
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -23,6 +24,7 @@ export default function OnboardingPage() {
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
 
   const { accountAccess } = useAccountAccess(accountEmail)
+  const { t } = useI18n()
   useEffect(() => {
     const loadAccountContext = async () => {
       const { data: authData } = await supabase.auth.getUser()
@@ -115,14 +117,14 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <PageContainer>
-        <PageHeader title="Welcome" description="Setting up your workspace" />
+        <PageHeader title={t('onboarding.title')} description="Setting up your workspace" />
       </PageContainer>
     )
   }
 
   return (
     <PageContainer>
-      <PageHeader title="Welcome" description="Create your first workspace to start tracking your business." />
+      <PageHeader title={t('onboarding.title')} description="Create your first workspace to start tracking your business." />
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Workspace setup</CardTitle>

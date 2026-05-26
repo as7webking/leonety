@@ -7,6 +7,7 @@ import { Building2, CheckCircle2, Clock, Edit, Pause, Play, Trash2 } from "lucid
 import { createClient } from '@/lib/supabase-client'
 import { timeEntrySchema, type TimeEntryForm } from '@/lib/validations'
 import { useCompany } from '@/contexts/company-context'
+import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -70,6 +71,7 @@ export default function TimePage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { t } = useI18n()
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([])
   const [loading, setLoading] = useState(true)
@@ -216,6 +218,7 @@ export default function TimePage() {
           .from('active_timers')
           .select('id, company_id, user_id, description, started_at, first_started_at, paused_at, accumulated_seconds, pause_events')
           .eq('user_id', user.id)
+          .eq('company_id', currentCompany.id)
           .order('started_at', { ascending: true })
       ])
 
@@ -236,6 +239,7 @@ export default function TimePage() {
             .from('active_timers')
             .select('id, company_id, user_id, description, started_at, paused_at, accumulated_seconds')
             .eq('user_id', user.id)
+            .eq('company_id', currentCompany.id)
             .order('started_at', { ascending: true })
         : null
 
@@ -591,7 +595,7 @@ export default function TimePage() {
   if (companyLoading || loading) {
     return (
       <PageContainer>
-        <PageHeader title="Time Tracking" description="Track your work hours" />
+        <PageHeader title={t('time.title')} description="Track your work hours" />
         <LoadingSkeleton />
       </PageContainer>
     )
@@ -600,7 +604,7 @@ export default function TimePage() {
   if (!currentCompany) {
     return (
       <PageContainer>
-        <PageHeader title="Time Tracking" description="Track your work hours" />
+        <PageHeader title={t('time.title')} description="Track your work hours" />
         <EmptyState
           icon={Building2}
           title="No workspace selected"
@@ -613,7 +617,7 @@ export default function TimePage() {
 
   return (
     <PageContainer>
-      <PageHeader title="Time Tracking" description={`Track your work hours for ${currentCompany.name}`}>
+      <PageHeader title={t('time.title')} description={`Track your work hours for ${currentCompany.name}`}>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             <input

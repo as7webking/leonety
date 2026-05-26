@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
+import { useI18n } from '@/contexts/i18n-context'
 
 type SearchGroup = 'Income' | 'Expenses' | 'Time' | 'Workspaces'
 
@@ -69,6 +70,7 @@ function formatHours(hoursValue: number) {
 export function AppSearch() {
   const [supabase] = useState(() => createClient())
   const { companies, currentCompany } = useCompany()
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -227,7 +229,7 @@ export function AppSearch() {
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search workspace"
+          placeholder={t('search.placeholder')}
           className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm"
         />
       </div>

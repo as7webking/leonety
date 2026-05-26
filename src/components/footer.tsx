@@ -2,8 +2,11 @@
 
 import Link from 'next/link'
 import { DollarSign } from 'lucide-react'
+import { useI18n } from '@/contexts/i18n-context'
 
 export function Footer() {
+  const { t } = useI18n()
+
   return (
     <footer className="mt-auto border-t border-slate-200 bg-white py-12">
           <div className="container mx-auto px-4">
@@ -36,11 +39,11 @@ export function Footer() {
               <div>
                 <p className="font-semibold text-slate-900 mb-4">Legal</p>
                 <ul className="space-y-2 text-sm text-slate-600">
-                  <li><Link href="/privacy" className="hover:text-slate-900 transition">Privacy</Link></li>
-                  <li><Link href="/terms" className="hover:text-slate-900 transition">Terms</Link></li>
-                  <li><Link href="/cookies" className="hover:text-slate-900 transition">Cookies</Link></li>
-                  <li><Link href="/impressum" className="hover:text-slate-900 transition">Impressum</Link></li>
-                  <li><Link href="/delete-account" className="hover:text-slate-900 transition">Delete account</Link></li>
+                  <li><Link href="/privacy" className="hover:text-slate-900 transition">{t('legal.privacy')}</Link></li>
+                  <li><Link href="/terms" className="hover:text-slate-900 transition">{t('legal.terms')}</Link></li>
+                  <li><Link href="/cookies" className="hover:text-slate-900 transition">{t('legal.cookies')}</Link></li>
+                  <li><Link href="/impressum" className="hover:text-slate-900 transition">{t('legal.impressum')}</Link></li>
+                  <li><Link href="/delete-account" className="hover:text-slate-900 transition">{t('legal.deleteAccount')}</Link></li>
                 </ul>
               </div>
             </div>

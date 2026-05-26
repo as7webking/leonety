@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
+import { getAuthCallbackUrl } from '@/lib/site-url'
+import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Eye, EyeOff } from 'lucide-react'
@@ -18,8 +20,22 @@ export default function LoginPage() {
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSignUp, setIsSignUp] = useState(false)
+  const [confirmationEmail, setConfirmationEmail] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [isResending, setIsResending] = useState(false)
   const router = useRouter()
   const [supabase] = useState(() => createClient())
+  const { t } = useI18n()
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+
+    const timer = window.setInterval(() => {
+      setResendCooldown((seconds) => Math.max(0, seconds - 1))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [resendCooldown])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,15 +53,16 @@ export default function LoginPage() {
           throw new Error('Password must be at least 6 characters')
         }
 
+        const normalizedEmail = email.trim()
         const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: {
             data: {
               full_name: fullName,
               currency: currency,
             },
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: getAuthCallbackUrl(),
           },
         })
 
@@ -53,7 +70,14 @@ export default function LoginPage() {
           throw signUpError
         }
 
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          setError(t('auth.accountExists'))
+          return
+        }
+
         if (data.user) {
+          setConfirmationEmail(normalizedEmail)
+          setResendCooldown(60)
           setSuccess('Check your email for confirmation link. You should be able to sign in once you confirm your email.')
           // Reset form
           setEmail('')
@@ -88,13 +112,50 @@ export default function LoginPage() {
     }
   }
 
+  const handleResendConfirmation = async () => {
+    const targetEmail = (confirmationEmail || email).trim()
+
+    if (resendCooldown > 0 || isResending) {
+      return
+    }
+
+    setError('')
+    setSuccess('')
+
+    if (!targetEmail) {
+      setError('Enter your email address to request another confirmation email.')
+      return
+    }
+
+    setIsResending(true)
+
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: targetEmail,
+        options: {
+          emailRedirectTo: getAuthCallbackUrl(),
+        },
+      })
+
+      if (resendError) throw resendError
+
+      setResendCooldown(60)
+      setSuccess('Confirmation email sent. Please check your inbox.')
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Failed to resend confirmation email.')
+    } finally {
+      setIsResending(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>{isSignUp ? 'Create Account' : 'Sign In'}</CardTitle>
+          <CardTitle>{isSignUp ? t('auth.createAccount') : t('auth.signIn')}</CardTitle>
           <CardDescription>
-            {isSignUp ? 'Join Leonety to manage your finances' : 'Welcome back to Leonety'}
+            {isSignUp ? t('auth.signUpSubtitle') : t('auth.signInSubtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -109,9 +170,28 @@ export default function LoginPage() {
                 {success}
               </div>
             )}
+            {isSignUp && (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <p>
+                  {resendCooldown > 0
+                    ? 'Please wait 60 seconds before requesting another confirmation email.'
+                    : 'Need another confirmation link? Enter your email and request it here.'}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  disabled={resendCooldown > 0 || isResending}
+                  onClick={handleResendConfirmation}
+                >
+                  {resendCooldown > 0 ? `You can resend in ${resendCooldown}s` : isResending ? 'Sending...' : 'Resend confirmation email'}
+                </Button>
+              </div>
+            )}
 
             <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
+              <label className="block text-sm font-medium mb-1">{t('auth.email')}</label>
               <input
                 type="email"
                 value={email}
@@ -124,7 +204,7 @@ export default function LoginPage() {
 
             {isSignUp && (
               <div>
-                <label className="block text-sm font-medium mb-1">Full Name</label>
+                <label className="block text-sm font-medium mb-1">{t('auth.fullName')}</label>
                 <input
                   type="text"
                   value={fullName}
@@ -137,7 +217,7 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
+              <label className="block text-sm font-medium mb-1">{t('auth.password')}</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -168,7 +248,7 @@ export default function LoginPage() {
 
             {isSignUp && (
               <div>
-                <label className="block text-sm font-medium mb-1">Main Currency</label>
+                <label className="block text-sm font-medium mb-1">{t('auth.mainCurrency')}</label>
                 <select
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
@@ -189,14 +269,14 @@ export default function LoginPage() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
+              {isLoading ? t('common.loading') : isSignUp ? t('auth.createAccount') : t('auth.signIn')}
             </Button>
           </form>
 
           {!isSignUp && (
             <div className="mt-4 text-center">
               <Link href="/reset-password" className="text-sm font-medium text-blue-600 hover:underline">
-                Forgot password?
+                {t('auth.forgotPassword')}
               </Link>
             </div>
           )}
@@ -210,8 +290,8 @@ export default function LoginPage() {
             className="w-full mt-4 text-sm text-blue-600 hover:underline font-medium"
           >
             {isSignUp
-              ? 'Already have an account? Sign In'
-              : "Don't have an account? Create one"}
+              ? t('auth.alreadyHaveAccount')
+              : t('auth.createOne')}
           </button>
         </CardContent>
       </Card>

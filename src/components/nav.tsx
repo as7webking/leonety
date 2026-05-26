@@ -8,22 +8,26 @@ import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { canCreateWorkspace } from '@/lib/account-access'
 import { AppSearch } from '@/components/app-search'
+import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
-import { Menu, X, User } from 'lucide-react'
+import { useI18n } from '@/contexts/i18n-context'
+import { ChevronDown, Menu, X, User } from 'lucide-react'
 
 const WORKSPACE_ACTION_VALUE = '__workspace_action__'
 
 export function Nav() {
   const [isOpen, setIsOpen] = useState(false)
+  const [transactionsOpen, setTransactionsOpen] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [supabase] = useState(() => createClient())
   const router = useRouter()
   const { companies, currentCompanyId, loading, setCurrentCompanyId } = useCompany()
   const { accountAccess } = useAccountAccess(accountEmail)
+  const { t } = useI18n()
   const canAddWorkspace = canCreateWorkspace(companies.length, accountAccess)
   const workspaceActionHref = canAddWorkspace ? '/workspaces' : '/upgrade'
-  const workspaceActionLabel = canAddWorkspace ? 'Add Workspace' : 'Switch to Pro'
+  const workspaceActionLabel = canAddWorkspace ? t('nav.addWorkspace') : t('nav.switchToPro')
 
   useEffect(() => {
     let mounted = true
@@ -78,15 +82,37 @@ export function Nav() {
           {/* Desktop menu */}
           <div className="hidden flex-1 items-center justify-between gap-3 lg:flex">
             <div className="flex items-center gap-1 rounded-md bg-slate-50 p-1">
-              <Link href="/dashboard" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">Dashboard</Link>
-              <Link href="/income" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">Income</Link>
-              <Link href="/expenses" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">Expenses</Link>
-              <Link href="/time" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">Time</Link>
-              <Link href="/workspaces" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">Workspaces</Link>
+              <Link href="/dashboard" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.dashboard')}</Link>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setTransactionsOpen((open) => !open)}
+                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950"
+                  aria-expanded={transactionsOpen}
+                >
+                  {t('nav.transactions')}
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+                {transactionsOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                    <Link href="/transactions" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
+                      {t('nav.allTransactions')}
+                    </Link>
+                    <Link href="/income" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
+                      {t('nav.income')}
+                    </Link>
+                    <Link href="/expenses" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
+                      {t('nav.expenses')}
+                    </Link>
+                  </div>
+                )}
+              </div>
+              <Link href="/time" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.time')}</Link>
+              <Link href="/workspaces" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.workspaces')}</Link>
             </div>
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex min-w-0 items-center justify-end gap-2">
               <AppSearch />
-              <div className="min-w-[220px]">
+              <div className="min-w-[190px] max-w-[240px]">
                 <label htmlFor="company-selector" className="sr-only">Current company</label>
                 <select
                   id="company-selector"
@@ -95,7 +121,7 @@ export function Nav() {
                   disabled={loading}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                 >
-                  {companies.length === 0 && <option value="">No workspace selected</option>}
+                  {companies.length === 0 && <option value="">{t('nav.noWorkspace')}</option>}
                   {companies.map((company) => (
                     <option key={company.id} value={company.id}>
                       {company.name} ({company.type})
@@ -107,14 +133,15 @@ export function Nav() {
               {isAuthenticated && (
                 <Link href="/profile" className="flex items-center gap-1 rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">
                   <User className="h-4 w-4" />
-                  Profile
+                  {t('nav.profile')}
                 </Link>
               )}
+              <LanguageSwitcher />
               {isAuthenticated ? (
-                <Button onClick={handleLogout} variant="outline" size="sm">Logout</Button>
+                <Button onClick={handleLogout} variant="outline" size="sm">{t('nav.logout')}</Button>
               ) : (
                 <Link href="/login">
-                  <Button variant="outline" size="sm">Login</Button>
+                  <Button variant="outline" size="sm">{t('nav.login')}</Button>
                 </Link>
               )}
             </div>
@@ -141,7 +168,7 @@ export function Nav() {
                 disabled={loading}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               >
-                {companies.length === 0 && <option value="">No workspace selected</option>}
+                {companies.length === 0 && <option value="">{t('nav.noWorkspace')}</option>}
                 {companies.map((company) => (
                   <option key={company.id} value={company.id}>
                     {company.name} ({company.type})
@@ -149,24 +176,31 @@ export function Nav() {
                 ))}
                 <option value={WORKSPACE_ACTION_VALUE}>{workspaceActionLabel}</option>
               </select>
-              <Link href="/dashboard" className="hover:underline" onClick={() => setIsOpen(false)}>Dashboard</Link>
-              <Link href="/income" className="hover:underline" onClick={() => setIsOpen(false)}>Income</Link>
-              <Link href="/expenses" className="hover:underline" onClick={() => setIsOpen(false)}>Expenses</Link>
-              <Link href="/time" className="hover:underline" onClick={() => setIsOpen(false)}>Time</Link>
-              <Link href="/workspaces" className="hover:underline" onClick={() => setIsOpen(false)}>Workspaces</Link>
+              <Link href="/dashboard" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.dashboard')}</Link>
+              <div className="rounded-md border border-slate-200 p-3">
+                <p className="mb-2 text-sm font-medium text-slate-700">{t('nav.transactions')}</p>
+                <div className="flex flex-col gap-2 pl-2">
+                  <Link href="/transactions" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.allTransactions')}</Link>
+                  <Link href="/income" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.income')}</Link>
+                  <Link href="/expenses" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.expenses')}</Link>
+                </div>
+              </div>
+              <Link href="/time" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.time')}</Link>
+              <Link href="/workspaces" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.workspaces')}</Link>
               {isAuthenticated && (
                 <Link href="/profile" className="hover:underline flex items-center gap-1" onClick={() => setIsOpen(false)}>
                   <User className="h-4 w-4" />
-                  Profile
+                  {t('nav.profile')}
                 </Link>
               )}
+              <LanguageSwitcher />
               {isAuthenticated ? (
                 <Button onClick={handleLogout} variant="outline" size="sm" className="w-full">
-                  Logout
+                  {t('nav.logout')}
                 </Button>
               ) : (
                 <Link href="/login" className="w-full" onClick={() => setIsOpen(false)}>
-                  <Button variant="outline" size="sm" className="w-full">Login</Button>
+                  <Button variant="outline" size="sm" className="w-full">{t('nav.login')}</Button>
                 </Link>
               )}
             </div>
