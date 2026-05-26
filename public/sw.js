@@ -1,6 +1,5 @@
-const CACHE_NAME = 'leonety-v2'
+const CACHE_NAME = 'leonety-v3'
 const ASSETS_TO_CACHE = [
-  '/',
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png',
@@ -46,6 +45,11 @@ self.addEventListener('fetch', (event) => {
     requestUrl.pathname.startsWith('/api/') ||
     requestUrl.pathname === '/sw.js'
   ) {
+    return
+  }
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request))
     return
   }
 
