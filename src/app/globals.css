@@ -107,6 +107,17 @@ body, button, input, textarea, [contenteditable], .container, .container * {
   -webkit-touch-callout: default;
 }
 
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
 /* Touch-friendly interactions */
 button, a, [role="button"] {
   /* Minimum 44x44 touch target
@@ -143,13 +154,14 @@ html {
     background: white !important;
   }
 
-  body * {
-    visibility: hidden;
+  body:has(.print-area) nav,
+  body:has(.print-area) footer,
+  body:has(.print-area) .no-print {
+    display: none !important;
   }
 
-  .print-area,
-  .print-area * {
-    visibility: visible;
+  body:has(.print-area) .container > :not(.print-area) {
+    display: none !important;
   }
 
   .print-area {
@@ -159,6 +171,14 @@ html {
     padding: 0;
     background: white;
     color: black;
+  }
+
+  .print-area table,
+  .print-area tr,
+  .print-area section,
+  .print-area .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .no-print {

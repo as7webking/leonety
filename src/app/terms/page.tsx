@@ -1,105 +1,47 @@
-import type { Metadata } from 'next'
-import { LegalPage } from '@/components/legal-page'
-import { getContactEmail } from '@/lib/contact'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Terms of Service',
-  description: 'Terms of Service for Leonety.',
+import { LegalPage } from '@/components/legal-page'
+import { useI18n } from '@/contexts/i18n-context'
+
+const content = {
+  en: {
+    title: 'Terms of Service',
+    intro: 'These Terms govern access to Leonety, an MVP SaaS product for bookkeeping, clients, invoices, and time tracking.',
+    sections: [
+      ['Use of the Service', 'You may use Leonety only for lawful business or personal productivity purposes. You are responsible for the accuracy of the data you enter.'],
+      ['Accounts and Workspaces', 'Users can create and manage workspaces subject to plan limits. Workspace owners are responsible for records and activity inside their workspaces.'],
+      ['Plans and Access', 'Free and Pro features may differ. During the MVP phase, Pro access may be manually reviewed and activated by an administrator.'],
+      ['No Professional Advice', 'Leonety helps organize records, but does not provide tax, legal, accounting, or financial advice.'],
+      ['Liability', 'Leonety is provided as an evolving MVP without guarantees of uninterrupted availability, error-free operation, or specific business outcomes.'],
+    ],
+  },
+  de: {
+    title: 'Nutzungsbedingungen',
+    intro: 'Diese Bedingungen regeln den Zugang zu Leonety, einem MVP-SaaS für Buchhaltung, Kunden, Rechnungen und Zeiterfassung.',
+    sections: [
+      ['Nutzung des Dienstes', 'Sie dürfen Leonety nur für rechtmäßige geschäftliche oder persönliche Produktivitätszwecke nutzen. Sie sind für die Richtigkeit Ihrer Eingaben verantwortlich.'],
+      ['Konten und Arbeitsbereiche', 'Nutzer können Arbeitsbereiche gemäß Planlimits erstellen und verwalten. Eigentümer sind für Einträge und Aktivitäten verantwortlich.'],
+      ['Pläne und Zugriff', 'Free- und Pro-Funktionen können sich unterscheiden. In der MVP-Phase kann Pro-Zugriff manuell geprüft und aktiviert werden.'],
+      ['Keine professionelle Beratung', 'Leonety hilft beim Organisieren von Daten, bietet aber keine Steuer-, Rechts-, Buchhaltungs- oder Finanzberatung.'],
+      ['Haftung', 'Leonety wird als sich entwickelndes MVP ohne Garantie für ununterbrochene Verfügbarkeit, Fehlerfreiheit oder bestimmte Geschäftsergebnisse bereitgestellt.'],
+    ],
+  },
+  ru: {
+    title: 'Условия использования',
+    intro: 'Эти условия регулируют доступ к Leonety, MVP SaaS для учёта, клиентов, счетов и времени.',
+    sections: [
+      ['Использование сервиса', 'Вы можете использовать Leonety только для законных рабочих или личных целей. Вы отвечаете за точность введённых данных.'],
+      ['Аккаунты и workspace', 'Пользователи могут создавать и управлять workspace в рамках лимитов плана. Владелец отвечает за записи и действия внутри workspace.'],
+      ['Планы и доступ', 'Функции Free и Pro могут отличаться. На этапе MVP Pro-доступ может проверяться и активироваться администратором вручную.'],
+      ['Не является профессиональной консультацией', 'Leonety помогает организовывать данные, но не предоставляет налоговые, юридические, бухгалтерские или финансовые консультации.'],
+      ['Ответственность', 'Leonety предоставляется как развивающийся MVP без гарантий непрерывной доступности, отсутствия ошибок или конкретных бизнес-результатов.'],
+    ],
+  },
 }
 
 export default function TermsPage() {
-  const contactEmail = getContactEmail()
+  const { locale } = useI18n()
+  const page = content[locale]
 
-  return (
-    <LegalPage
-      title="Terms of Service"
-      intro={
-        <p>
-          These Terms govern access to Leonety, an MVP SaaS product for workspace-based bookkeeping, income and expense
-          tracking, and time tracking.
-        </p>
-      }
-      sections={[
-        {
-          title: '1. Use of the Service',
-          content: (
-            <p>
-              You may use Leonety only for lawful business or personal productivity purposes. You are responsible for the
-              accuracy of the data you enter and for keeping your account credentials secure.
-            </p>
-          ),
-        },
-        {
-          title: '2. Accounts and Workspaces',
-          content: (
-            <p>
-              Users can create and manage workspaces subject to plan limits. Workspace owners are responsible for the
-              records, settings, and activity inside their workspaces.
-            </p>
-          ),
-        },
-        {
-          title: '3. Plans and Access',
-          content: (
-            <p>
-              Free and paid plan features may differ. During the MVP phase, Pro access may be manually reviewed and
-              activated by an administrator before automated payments are introduced.
-            </p>
-          ),
-        },
-        {
-          title: '4. Acceptable Use',
-          content: (
-            <p>
-              You must not misuse the service, attempt unauthorized access, upload illegal content, disrupt the platform,
-              reverse engineer protected systems, or use Leonety to violate applicable laws.
-            </p>
-          ),
-        },
-        {
-          title: '5. No Professional Advice',
-          content: (
-            <p>
-              Leonety helps organize business records, but it does not provide tax, legal, accounting, or financial
-              advice. Users should verify records and consult qualified professionals where needed.
-            </p>
-          ),
-        },
-        {
-          title: '6. Availability and Changes',
-          content: (
-            <p>
-              Leonety is provided as an evolving MVP. Features may change, be improved, or be temporarily unavailable
-              due to maintenance, security updates, or third-party infrastructure issues.
-            </p>
-          ),
-        },
-        {
-          title: '7. Liability',
-          content: (
-            <p>
-              To the maximum extent permitted by applicable law, Leonety is provided without guarantees of uninterrupted
-              availability, error-free operation, or specific business outcomes.
-            </p>
-          ),
-        },
-        {
-          title: '8. Contact',
-          content: (
-            <p>
-              Questions about these Terms can be sent to{' '}
-              {contactEmail ? (
-                <a className="font-medium text-slate-900 underline" href={`mailto:${contactEmail}`}>
-                  {contactEmail}
-                </a>
-              ) : (
-                'the contact email configured by the service operator'
-              )}
-              .
-            </p>
-          ),
-        },
-      ]}
-    />
-  )
+  return <LegalPage title={page.title} intro={<p>{page.intro}</p>} sections={page.sections.map(([title, text]) => ({ title, content: <p>{text}</p> }))} />
 }

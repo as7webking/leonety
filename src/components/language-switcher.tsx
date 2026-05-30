@@ -2,6 +2,7 @@
 
 import { locales, type Locale } from '@/lib/i18n'
 import { useI18n } from '@/contexts/i18n-context'
+import { AppSelect } from '@/components/app-select'
 
 const labels: Record<Locale, string> = {
   en: 'EN',
@@ -15,16 +16,13 @@ export function LanguageSwitcher() {
   return (
     <div>
       <label htmlFor="language-switcher" className="sr-only">{t('language.label')}</label>
-      <select
-        id="language-switcher"
+      <AppSelect
         value={locale}
-        onChange={(event) => setLocale(event.target.value as Locale)}
-        className="rounded-md border bg-background px-2 py-2 text-sm"
-      >
-        {locales.map((item) => (
-          <option key={item} value={item}>{labels[item]}</option>
-        ))}
-      </select>
+        onChange={(value) => setLocale(value as Locale)}
+        options={locales.map((item) => ({ value: item, label: labels[item] }))}
+        ariaLabel={t('language.label')}
+        className="w-20"
+      />
     </div>
   )
 }

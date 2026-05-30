@@ -18,22 +18,22 @@ export function Footer() {
                   </div>
                   <span className="text-lg font-semibold">Leonety</span>
                 </div>
-                <p className="text-sm text-slate-600">Beautiful finance tools for freelancers and small teams.</p>
+                <p className="text-sm text-slate-600">{t('footer.description')}</p>
               </div>
               <div>
-                <p className="font-semibold text-slate-900 mb-4">Product</p>
+                <p className="font-semibold text-slate-900 mb-4">{t('footer.product')}</p>
                 <ul className="space-y-2 text-sm text-slate-600">
-                  <li><Link href="/#features" className="hover:text-slate-900 transition">Features</Link></li>
-                  <li><Link href="/#pricing" className="hover:text-slate-900 transition">Pricing</Link></li>
-                  <li><Link href="/onboarding" className="hover:text-slate-900 transition">Get started</Link></li>
+                  <li><Link href="/#features" className="hover:text-slate-900 transition">{t('footer.features')}</Link></li>
+                  <li><Link href="/#pricing" className="hover:text-slate-900 transition">{t('footer.pricing')}</Link></li>
+                  <li><Link href="/onboarding" className="hover:text-slate-900 transition">{t('footer.getStarted')}</Link></li>
                 </ul>
               </div>
               <div>
-                <p className="font-semibold text-slate-900 mb-4">Support</p>
+                <p className="font-semibold text-slate-900 mb-4">{t('footer.support')}</p>
                 <ul className="space-y-2 text-sm text-slate-600">
-                  <li><Link href="/#help-center" className="hover:text-slate-900 transition">Help center</Link></li>
-                  <li><Link href="/#contact" className="hover:text-slate-900 transition">Contact</Link></li>
-                  <li><a href="mailto:support@leonety.app" className="hover:text-slate-900 transition">Email us</a></li>
+                  <li><Link href="/#help-center" className="hover:text-slate-900 transition">{t('public.helpCenter')}</Link></li>
+                  <li><Link href="/#contact" className="hover:text-slate-900 transition">{t('footer.contact')}</Link></li>
+                  <li><a href="mailto:support@leonety.app" className="hover:text-slate-900 transition">{t('footer.emailUs')}</a></li>
                 </ul>
               </div>
               <div>
@@ -48,7 +48,7 @@ export function Footer() {
               </div>
             </div>
             <div className="border-t border-slate-200 mt-12 pt-8">
-              <p className="text-center text-sm text-slate-600">© 2026 Leonety. All rights reserved.</p>
+              <p className="text-center text-sm text-slate-600">© 2026 Leonety. {t('footer.rights')}</p>
             </div>
           </div>
         </footer>

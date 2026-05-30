@@ -8,6 +8,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { canCreateWorkspace } from '@/lib/account-access'
 import { AppSearch } from '@/components/app-search'
+import { AppSelect } from '@/components/app-select'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/contexts/i18n-context'
@@ -28,6 +29,14 @@ export function Nav() {
   const canAddWorkspace = canCreateWorkspace(companies.length, accountAccess)
   const workspaceActionHref = canAddWorkspace ? '/workspaces' : '/upgrade'
   const workspaceActionLabel = canAddWorkspace ? t('nav.addWorkspace') : t('nav.switchToPro')
+  const companyOptions = [
+    ...(companies.length === 0 ? [{ value: '', label: t('nav.noWorkspace'), disabled: true }] : []),
+    ...companies.map((company) => ({ value: company.id, label: `${company.name} (${company.type})` })),
+    { value: WORKSPACE_ACTION_VALUE, label: workspaceActionLabel },
+  ]
+  const showBusinessModules = currentCompanyId
+    ? companies.find((company) => company.id === currentCompanyId)?.type === 'business'
+    : false
 
   useEffect(() => {
     let mounted = true
@@ -75,19 +84,19 @@ export function Nav() {
 
   return (
     <nav className="bg-card border-b">
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <Link href="/" className="text-xl font-bold" onClick={() => setIsOpen(false)}>Leonety</Link>
+      <div className="container mx-auto px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/" className="text-lg font-bold" onClick={() => setIsOpen(false)}>Leonety</Link>
           
           {/* Desktop menu */}
-          <div className="hidden flex-1 items-center justify-between gap-3 lg:flex">
-            <div className="flex items-center gap-1 rounded-md bg-slate-50 p-1">
-              <Link href="/dashboard" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.dashboard')}</Link>
+          <div className="hidden flex-1 items-center justify-between gap-2 lg:flex">
+            <div className="flex items-center gap-0.5 rounded-md bg-slate-50 p-0.5">
+              <Link href="/dashboard" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.dashboard')}</Link>
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setTransactionsOpen((open) => !open)}
-                  className="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950"
+                  className="inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950"
                   aria-expanded={transactionsOpen}
                 >
                   {t('nav.transactions')}
@@ -107,31 +116,29 @@ export function Nav() {
                   </div>
                 )}
               </div>
-              <Link href="/time" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.time')}</Link>
-              <Link href="/workspaces" className="rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.workspaces')}</Link>
+              <Link href="/time" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.time')}</Link>
+              {showBusinessModules && (
+                <>
+                  <Link href="/clients" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.clients')}</Link>
+                  <Link href="/invoices" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.invoices')}</Link>
+                </>
+              )}
+              <Link href="/workspaces" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.workspaces')}</Link>
             </div>
-            <div className="flex min-w-0 items-center justify-end gap-2">
+            <div className="flex min-w-0 items-center justify-end gap-1.5">
               <AppSearch />
-              <div className="min-w-[190px] max-w-[240px]">
+              <div className="min-w-[160px] max-w-[210px]">
                 <label htmlFor="company-selector" className="sr-only">Current company</label>
-                <select
-                  id="company-selector"
+                <AppSelect
                   value={currentCompanyId ?? ''}
-                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  onChange={handleCompanyChange}
                   disabled={loading}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                >
-                  {companies.length === 0 && <option value="">{t('nav.noWorkspace')}</option>}
-                  {companies.map((company) => (
-                    <option key={company.id} value={company.id}>
-                      {company.name} ({company.type})
-                    </option>
-                  ))}
-                  <option value={WORKSPACE_ACTION_VALUE}>{workspaceActionLabel}</option>
-                </select>
+                  options={companyOptions}
+                  ariaLabel="Current company"
+                />
               </div>
               {isAuthenticated && (
-                <Link href="/profile" className="flex items-center gap-1 rounded px-2.5 py-1.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">
+                <Link href="/profile" className="flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">
                   <User className="h-4 w-4" />
                   {t('nav.profile')}
                 </Link>
@@ -162,20 +169,13 @@ export function Nav() {
           <div className="mt-4 border-t pt-4 pb-4 lg:hidden">
             <div className="flex flex-col space-y-3">
               <AppSearch />
-              <select
+              <AppSelect
                 value={currentCompanyId ?? ''}
-                onChange={(e) => handleCompanyChange(e.target.value)}
+                onChange={handleCompanyChange}
                 disabled={loading}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              >
-                {companies.length === 0 && <option value="">{t('nav.noWorkspace')}</option>}
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.name} ({company.type})
-                  </option>
-                ))}
-                <option value={WORKSPACE_ACTION_VALUE}>{workspaceActionLabel}</option>
-              </select>
+                options={companyOptions}
+                ariaLabel="Current company"
+              />
               <Link href="/dashboard" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.dashboard')}</Link>
               <div className="rounded-md border border-slate-200 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-700">{t('nav.transactions')}</p>
@@ -186,6 +186,12 @@ export function Nav() {
                 </div>
               </div>
               <Link href="/time" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.time')}</Link>
+              {showBusinessModules && (
+                <>
+                  <Link href="/clients" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.clients')}</Link>
+                  <Link href="/invoices" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.invoices')}</Link>
+                </>
+              )}
               <Link href="/workspaces" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.workspaces')}</Link>
               {isAuthenticated && (
                 <Link href="/profile" className="hover:underline flex items-center gap-1" onClick={() => setIsOpen(false)}>

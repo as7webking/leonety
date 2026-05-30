@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Edit, Trash2 } from "lucide-react"
@@ -14,6 +14,8 @@ import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { AppSelect } from '@/components/app-select'
 
 interface Income extends IncomeForm {
   id: string
@@ -43,8 +45,20 @@ export default function IncomePage() {
   const [latestRate, setLatestRate] = useState<number | null>(null)
   const [latestRateLoading, setLatestRateLoading] = useState(false)
   const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [filterFromDate, setFilterFromDate] = useState(() => {
+    const date = new Date()
+    date.setDate(1)
+    return date.toISOString().split('T')[0]
+  })
+  const [filterToDate, setFilterToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const categoryOptions = ['Salary', 'Freelance', 'Investment', 'Other']
+  const isBusinessWorkspace = currentCompany?.type === 'business'
+  const categoryOptions = currentCompany?.type === 'business'
+    ? ['Sales', 'Service', 'Invoice Payment', 'Salary', 'Other']
+    : ['Salary', 'Freelance', 'Investment', 'Other']
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -122,7 +136,16 @@ export default function IncomePage() {
     }
 
     try {
-      const validatedData = incomeSchema.parse(formData)
+      const effectiveCategory = isBusinessWorkspace ? (formData.category || 'Sales') : formData.category
+      const fallbackDescription = effectiveCategory && effectiveCategory !== 'Other'
+        ? formatCategoryLabel(effectiveCategory, t)
+        : formData.description
+      const validatedData = incomeSchema.parse({
+        ...formData,
+        category: effectiveCategory,
+        currency: isBusinessWorkspace ? normalizeCurrencyCode(currentCompany.currency ?? 'USD') : formData.currency,
+        description: fallbackDescription,
+      })
       const category = validatedData.category === 'Other' ? customCategory || 'Other' : validatedData.category
       const payload = {
         description: validatedData.description,
@@ -140,11 +163,11 @@ export default function IncomePage() {
           .eq('id', editingEntry.id)
           .eq('company_id', currentCompany.id)
         if (error) throw error
-        setSuccessMessage('Income updated successfully!')
+        setSuccessMessage(t('income.updated'))
       } else {
         const { error } = await supabase.from('incomes').insert(payload)
         if (error) throw error
-        setSuccessMessage('Income added successfully!')
+        setSuccessMessage(t('income.created'))
       }
 
       setFormData({
@@ -179,13 +202,13 @@ export default function IncomePage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!currentCompany || !confirm('Delete this income entry?')) return
+    if (!currentCompany) return
 
     try {
       const { error } = await supabase.from('incomes').delete().eq('id', id).eq('company_id', currentCompany.id)
       if (error) throw error
       loadIncomes()
-      setSuccessMessage('Income deleted')
+      setSuccessMessage(t('income.deleted'))
       window.setTimeout(() => setSuccessMessage(''), 3000)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to delete income')
@@ -219,7 +242,19 @@ export default function IncomePage() {
       normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
     )
 
-  const groupedIncomes = incomes.reduce<Record<string, Income[]>>((groups, income) => {
+  const sortedIncomes = useMemo(() => {
+    return incomes.filter((income) => {
+      const afterStart = !filterFromDate || income.date >= filterFromDate
+      const beforeEnd = !filterToDate || income.date <= filterToDate
+      return afterStart && beforeEnd
+    }).sort((left, right) => {
+      const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
+      const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
+      return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
+    })
+  }, [filterFromDate, filterToDate, incomes, sortBy, sortDirection])
+
+  const groupedIncomes = sortedIncomes.reduce<Record<string, Income[]>>((groups, income) => {
     const key = income.date.slice(0, 7)
     return {
       ...groups,
@@ -227,7 +262,8 @@ export default function IncomePage() {
     }
   }, {})
 
-  const printGroups = groupReportsByMonth ? Object.entries(groupedIncomes) : [['all', incomes] as const]
+  const displayGroups = groupReportsByMonth ? Object.entries(groupedIncomes).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedIncomes] as const]
+  const printGroups = displayGroups
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
     const [year, month] = monthKey.split('-').map(Number)
@@ -356,9 +392,9 @@ export default function IncomePage() {
         <PageHeader title={t('income.title')} description={t('income.description')} />
         <EmptyState
           icon={Building2}
-          title="No workspace selected"
-          description="Create your first workspace before adding income."
-          action={{ label: 'Go to onboarding', onClick: () => router.push('/onboarding') }}
+          title={t('common.noWorkspaceSelected')}
+          description={t('dashboard.noWorkspace')}
+          action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }}
         />
       </PageContainer>
     )
@@ -366,7 +402,7 @@ export default function IncomePage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('income.title')} description={`Track income for ${currentCompany.name}`}>
+      <PageHeader title={t('income.title')} description={t('income.pageDescription').replace('{workspace}', currentCompany.name)}>
         <div className="flex flex-wrap gap-2">
           <input
             ref={fileInputRef}
@@ -379,15 +415,58 @@ export default function IncomePage() {
             {importing ? 'Importing...' : t('common.importCsv')}
           </Button>
           {incomes.length > 0 && (
-            <select
+            <AppSelect
               value={groupReportsByMonth ? 'month' : 'default'}
-              onChange={(event) => setGroupReportsByMonth(event.target.value === 'month')}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              aria-label="Print grouping"
-            >
-              <option value="default">Default print</option>
-              <option value="month">Group by month</option>
-            </select>
+              onChange={(value) => setGroupReportsByMonth(value === 'month')}
+              options={[
+                { value: 'default', label: t('common.noMonthGrouping') },
+                { value: 'month', label: t('common.groupByMonth') },
+              ]}
+              ariaLabel="Print grouping"
+              className="w-48"
+            />
+          )}
+          {incomes.length > 0 && (
+            <>
+              <input
+                type="date"
+                value={filterFromDate}
+                onChange={(event) => setFilterFromDate(event.target.value)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                aria-label={t('dashboard.filterFrom')}
+              />
+              <input
+                type="date"
+                value={filterToDate}
+                onChange={(event) => setFilterToDate(event.target.value)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                aria-label={t('dashboard.filterTo')}
+              />
+            </>
+          )}
+          {incomes.length > 0 && (
+            <>
+              <AppSelect
+                value={sortBy}
+                onChange={(value) => setSortBy(value as 'date' | 'amount')}
+                options={[
+                  { value: 'date', label: t('common.sortDate') },
+                  { value: 'amount', label: t('common.sortAmount') },
+                ]}
+                ariaLabel={t('common.sortBy')}
+                className="w-36"
+              />
+              <AppSelect
+                value={sortDirection}
+                onChange={(value) => setSortDirection(value as 'asc' | 'desc')}
+                options={[
+                  { value: 'desc', label: t('common.descending') },
+                  { value: 'asc', label: t('common.ascending') },
+                ]}
+                ariaLabel={t('common.sortDirection')}
+                className="w-40"
+              />
+            </>
           )}
           {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
           {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
@@ -425,7 +504,7 @@ export default function IncomePage() {
         ))}
 
         <p className="mt-4 text-right font-semibold">
-          {t('common.total')}: {formatCurrency(incomes.reduce((sum, income) => sum + getWorkspaceAmount(income), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
+          {t('common.total')}: {formatCurrency(sortedIncomes.reduce((sum, income) => sum + getWorkspaceAmount(income), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
         </p>
       </div>
 
@@ -440,62 +519,79 @@ export default function IncomePage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium">Amount</label>
+                <label className="mb-1 block text-sm font-medium">{t('common.amount')}</label>
                 <input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })} className="w-full rounded-md border px-3 py-2" required />
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Description</label>
-                <input type="text" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" required />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Category</label>
-                <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full rounded-md border px-3 py-2" required>
-                  <option value="">Select category</option>
-                  {categoryOptions.map((option) => (
-                    <option key={option} value={option}>{formatCategoryLabel(option, t)}</option>
-                  ))}
-                </select>
-                {formData.category === 'Other' && (
-                  <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" placeholder="Custom category" required />
-                )}
-              </div>
+              {isBusinessWorkspace ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">{t('common.description')}</label>
+                  <input
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value, category: formData.category || 'Sales' })}
+                    className="w-full rounded-md border px-3 py-2"
+                    placeholder={t('common.description')}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">{t('common.category')}</label>
+                  <AppSelect
+                    value={formData.category}
+                    onChange={(value) => setFormData({ ...formData, category: value })}
+                    options={[
+                      { value: '', label: t('income.categoryPlaceholder'), disabled: true },
+                      ...categoryOptions.map((option) => ({ value: option, label: formatCategoryLabel(option, t) })),
+                    ]}
+                  />
+                  {formData.category === 'Other' && (
+                    <div className="mt-2 space-y-2">
+                      <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="w-full rounded-md border px-3 py-2" placeholder={t('income.customCategory')} required />
+                      <input type="text" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('common.description')} required />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Date</label>
+                  <label className="mb-1 block text-sm font-medium">{t('common.date')}</label>
                   <input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full rounded-md border px-3 py-2" required />
                 </div>
+                {!isBusinessWorkspace && (
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Currency</label>
-                  <select
+                  <label className="mb-1 block text-sm font-medium">{t('common.currency')}</label>
+                  <AppSelect
                     value={formData.currency}
-                    onChange={(e) => setFormData({ ...formData, currency: normalizeCurrencyCode(e.target.value) })}
-                    className="w-full rounded-md border px-3 py-2"
-                    required
-                  >
-                    {currencyOptions.map((option) => (
-                      <option key={option.code} value={option.code}>
-                        {option.code} - {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setFormData({ ...formData, currency: normalizeCurrencyCode(value) })}
+                    options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
+                  />
                 </div>
+                )}
               </div>
-              <Button type="submit">{editingEntry ? 'Save Changes' : t('income.save')}</Button>
-              <p className="text-sm text-slate-500">
-                {latestRateLoading
-                  ? 'Loading latest exchange rate...'
-                  : `Latest rate: 1 ${normalizeCurrencyCode(formData.currency)} = ${(latestRate ?? 1).toFixed(4)} ${normalizeCurrencyCode(currentCompany.currency ?? 'USD')}`}
-              </p>
+              <Button type="submit">{editingEntry ? t('common.saveChanges') : t('income.save')}</Button>
+              {!isBusinessWorkspace && (
+                <p className="text-sm text-slate-500">
+                  {latestRateLoading
+                    ? t('income.latestRateLoading')
+                    : t('income.latestRate')
+                      .replace('{from}', normalizeCurrencyCode(formData.currency))
+                      .replace('{rate}', (latestRate ?? 1).toFixed(4))
+                      .replace('{to}', normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
+                </p>
+              )}
             </form>
           </CardContent>
         </Card>
       )}
 
       {incomes.length === 0 ? (
-        <EmptyState title={t('income.noEntries')} description="Add your first income entry for this workspace." />
+        <EmptyState title={t('income.noEntries')} description={t('income.emptyDescription')} />
       ) : (
         <div className="space-y-4">
-          {incomes.map((income) => (
+          {displayGroups.map(([groupKey, groupItems]) => (
+            <div key={groupKey} className="space-y-4">
+              {groupReportsByMonth && <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{formatMonthLabel(groupKey)}</h2>}
+              {groupItems.map((income) => (
             <Card key={income.id}>
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
@@ -523,13 +619,29 @@ export default function IncomePage() {
                     )}
                   </div>
                   <Button variant="outline" size="icon" onClick={() => handleEdit(income)}><Edit className="h-4 w-4" /></Button>
-                  <Button variant="destructive" size="icon" onClick={() => handleDelete(income.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </CardContent>
             </Card>
+              ))}
+            </div>
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(deleteId)}
+        title={t('common.confirmDelete')}
+        description={t('income.deleteConfirm')}
+        confirmLabel={t('common.deleteAnyway')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        onCancel={() => setDeleteId(null)}
+        onConfirm={() => {
+          const id = deleteId
+          setDeleteId(null)
+          if (id) void handleDelete(id)
+        }}
+      />
     </PageContainer>
   )
 }

@@ -10,6 +10,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AppSelect } from '@/components/app-select'
 
 interface TimeEntry {
   id: string
@@ -662,15 +663,15 @@ export default function TimePage() {
               </div>
               <div className="space-y-1">
                 <label className="block text-sm font-medium">Round to</label>
-                <select
+                <AppSelect
                   value={rounding}
-                  onChange={(e) => setRounding(e.target.value as 'none' | 'hour' | 'day')}
-                  className="w-full rounded-md border px-3 py-2"
-                >
-                  <option value="none">Exact minutes</option>
-                  <option value="hour">Hours</option>
-                  <option value="day">Days</option>
-                </select>
+                  onChange={(value) => setRounding(value as 'none' | 'hour' | 'day')}
+                  options={[
+                    { value: 'none', label: 'Exact minutes' },
+                    { value: 'hour', label: 'Hours' },
+                    { value: 'day', label: 'Days' },
+                  ]}
+                />
               </div>
             </div>
             <Button onClick={startNewTimer} disabled={startingTimer || activeTimers.length >= MAX_ACTIVE_TIMERS}>

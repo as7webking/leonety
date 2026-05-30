@@ -1,13 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowDownCircle, ArrowUpCircle, Building2 } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, Building2, Printer, Plus } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AppSelect } from '@/components/app-select'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCategoryLabel } from '@/lib/category-labels'
-import { formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { createClient } from '@/lib/supabase-client'
 
 interface TransactionRow {
@@ -33,10 +36,28 @@ export default function TransactionsPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
+  const [message, setMessage] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [printFromDate, setPrintFromDate] = useState(() => {
+    const date = new Date()
+    date.setDate(1)
+    return date.toISOString().split('T')[0]
+  })
+  const [printToDate, setPrintToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [formData, setFormData] = useState({
+    type: 'income' as 'income' | 'expense',
+    amount: 0,
+    description: '',
+    category: '',
+    date: new Date().toISOString().split('T')[0],
+    currency: 'USD',
+  })
 
   const loadTransactions = useCallback(async () => {
     if (!currentCompany) {
@@ -47,6 +68,7 @@ export default function TransactionsPage() {
     try {
       setLoading(true)
       setErrorMessage('')
+      setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
       const [incomeRes, expenseRes] = await Promise.all([
         supabase
@@ -89,6 +111,141 @@ export default function TransactionsPage() {
     void loadTransactions()
   }, [loadTransactions])
 
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setMessage('')
+    setErrorMessage('')
+
+    if (!currentCompany) {
+      setErrorMessage('Create or select a workspace first.')
+      return
+    }
+
+    if (!formData.description.trim()) {
+      setErrorMessage('Description is required.')
+      return
+    }
+
+    if (!Number.isFinite(formData.amount) || formData.amount <= 0) {
+      setErrorMessage('Amount must be greater than 0.')
+      return
+    }
+
+    const table = formData.type === 'income' ? 'incomes' : 'expenses'
+    const { error } = await supabase.from(table).insert({
+      company_id: currentCompany.id,
+      amount: Number(formData.amount.toFixed(2)),
+      description: formData.description.trim(),
+      category: formData.category.trim() || 'Other',
+      date: formData.date,
+      currency: normalizeCurrencyCode(formData.currency),
+    })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setMessage('Transaction created.')
+    setShowForm(false)
+    setFormData({
+      type: 'income',
+      amount: 0,
+      description: '',
+      category: '',
+      date: new Date().toISOString().split('T')[0],
+      currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'),
+    })
+    await loadTransactions()
+  }
+
+  const handlePrint = () => {
+    const previousTitle = document.title
+    document.title = ' '
+    window.print()
+    window.setTimeout(() => {
+      document.title = previousTitle
+    }, 500)
+  }
+
+  const sortedTransactions = useMemo(() => {
+    return [...transactions].sort((left, right) => {
+      const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : left.amount
+      const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : right.amount
+      return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
+    })
+  }, [transactions, sortBy, sortDirection])
+
+  const printableTransactions = useMemo(() => {
+    return sortedTransactions.filter((transaction) => {
+      const afterStart = !printFromDate || transaction.date >= printFromDate
+      const beforeEnd = !printToDate || transaction.date <= printToDate
+      return afterStart && beforeEnd
+    })
+  }, [printFromDate, printToDate, sortedTransactions])
+
+  const printColumns = useMemo(() => {
+    const incomes = printableTransactions.filter((transaction) => transaction.type === 'income')
+    const expenses = printableTransactions.filter((transaction) => transaction.type === 'expense')
+    const rowCount = Math.max(incomes.length, expenses.length)
+
+    return { incomes, expenses, rowCount }
+  }, [printableTransactions])
+
+  const formatTotalsByCurrency = (items: TransactionRow[]) => {
+    const totals = items.reduce<Record<string, number>>((acc, transaction) => {
+      const currency = normalizeCurrencyCode(transaction.currency)
+      acc[currency] = (acc[currency] ?? 0) + transaction.amount
+      return acc
+    }, {})
+
+    const totalText = Object.entries(totals)
+      .map(([currency, amount]) => formatCurrency(amount, currency))
+      .join(' · ')
+
+    return totalText || formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'))
+  }
+
+  const getTotalsByCurrency = (items: TransactionRow[]) =>
+    items.reduce<Record<string, number>>((acc, transaction) => {
+      const currency = normalizeCurrencyCode(transaction.currency)
+      acc[currency] = (acc[currency] ?? 0) + transaction.amount
+      return acc
+    }, {})
+
+  const formatNetTotals = () => {
+    const incomeTotals = getTotalsByCurrency(printColumns.incomes)
+    const expenseTotals = getTotalsByCurrency(printColumns.expenses)
+    const currencies = Array.from(new Set([...Object.keys(incomeTotals), ...Object.keys(expenseTotals)]))
+
+    if (currencies.length === 0) {
+      return formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'))
+    }
+
+    return currencies
+      .map((currency) => formatCurrency((incomeTotals[currency] ?? 0) - (expenseTotals[currency] ?? 0), currency))
+      .join(' · ')
+  }
+
+  const renderPrintCell = (transaction: TransactionRow | undefined) => {
+    if (!transaction) return null
+
+    return (
+      <div className="break-inside-avoid space-y-1">
+        <div className="flex justify-between gap-3">
+          <span className="font-medium">{transaction.description || '-'}</span>
+          <span className="whitespace-nowrap font-semibold">
+            {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency))}
+          </span>
+        </div>
+        <div className="text-xs text-slate-600">
+          {new Date(`${transaction.date}T00:00:00`).toLocaleDateString(locale)}
+          {transaction.category ? ` · ${formatCategoryLabel(transaction.category, t)}` : ''}
+        </div>
+      </div>
+    )
+  }
+
   if (companyLoading || loading) {
     return (
       <PageContainer>
@@ -104,9 +261,9 @@ export default function TransactionsPage() {
         <PageHeader title={t('transactions.title')} description={t('transactions.description')} />
         <EmptyState
           icon={Building2}
-          title="No workspace selected"
-          description="Create your first workspace before viewing transactions."
-          action={{ label: 'Go to onboarding', onClick: () => router.push('/onboarding') }}
+          title={t('common.noWorkspaceSelected')}
+          description={t('dashboard.noWorkspace')}
+          action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }}
         />
       </PageContainer>
     )
@@ -114,23 +271,164 @@ export default function TransactionsPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('transactions.title')} description={`${t('transactions.description')} · ${currentCompany.name}`} />
+      <PageHeader title={t('transactions.title')} description={`${t('transactions.description')} · ${currentCompany.name}`}>
+        <div className="flex flex-wrap gap-2">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <span>{t('transactions.printFrom')}</span>
+            <input
+              type="date"
+              value={printFromDate}
+              onChange={(event) => setPrintFromDate(event.target.value)}
+              className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <span>{t('transactions.printTo')}</span>
+            <input
+              type="date"
+              value={printToDate}
+              onChange={(event) => setPrintToDate(event.target.value)}
+              className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+            />
+          </label>
+          <AppSelect
+            value={sortBy}
+            onChange={(value) => setSortBy(value as 'date' | 'amount')}
+            options={[
+              { value: 'date', label: t('common.sortDate') },
+              { value: 'amount', label: t('common.sortAmount') },
+            ]}
+            ariaLabel={t('common.sortBy')}
+            className="w-36"
+          />
+          <AppSelect
+            value={sortDirection}
+            onChange={(value) => setSortDirection(value as 'asc' | 'desc')}
+            options={[
+              { value: 'desc', label: t('common.descending') },
+              { value: 'asc', label: t('common.ascending') },
+            ]}
+            ariaLabel={t('common.sortDirection')}
+            className="w-40"
+          />
+          <Button type="button" variant="outline" onClick={handlePrint} disabled={printableTransactions.length === 0}>
+            <Printer className="h-4 w-4" />
+            {t('common.print')}
+          </Button>
+          <Button type="button" onClick={() => setShowForm((value) => !value)}>
+            <Plus className="h-4 w-4" />
+            {showForm ? t('common.cancel') : t('transactions.add')}
+          </Button>
+        </div>
+      </PageHeader>
+
+      <div className="print-area hidden">
+        <div className="mb-4">
+          <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
+          <p className="text-sm text-slate-600">
+            {t('transactions.title')} · {printFromDate || '...'} - {printToDate || '...'}
+          </p>
+        </div>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="w-1/2 border p-2 text-left">{t('income.title')}</th>
+              <th className="w-1/2 border p-2 text-left">{t('expenses.title')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: printColumns.rowCount }).map((_, index) => {
+              const income = printColumns.incomes[index]
+              const expense = printColumns.expenses[index]
+
+              return (
+                <tr key={`print-row-${index}`}>
+                  <td className="border p-2 align-top">{renderPrintCell(income)}</td>
+                  <td className="border p-2 align-top">{renderPrintCell(expense)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td className="border p-2 font-semibold">{formatTotalsByCurrency(printColumns.incomes)}</td>
+              <td className="border p-2 font-semibold">{formatTotalsByCurrency(printColumns.expenses)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div className="mt-4 border-t pt-3 text-right text-base font-semibold">
+          {t('common.total')}: {formatNetTotals()}
+        </div>
+      </div>
 
       {errorMessage && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>
       )}
+      {message && (
+        <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>
+      )}
+
+      {showForm && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>{t('transactions.add')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-3">
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('transactions.type')}</span>
+                <AppSelect
+                  value={formData.type}
+                  onChange={(value) => setFormData({ ...formData, type: value as 'income' | 'expense' })}
+                  options={[
+                    { value: 'income', label: t('income.title') },
+                    { value: 'expense', label: t('expenses.title') },
+                  ]}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('common.amount')}</span>
+                <input type="number" min="0" step="0.01" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: Number(event.target.value) })} className="w-full rounded-md border px-3 py-2" required />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('common.currency')}</span>
+                <AppSelect
+                  value={formData.currency}
+                  onChange={(value) => setFormData({ ...formData, currency: normalizeCurrencyCode(value) })}
+                  options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('common.date')}</span>
+                <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('common.category')}</span>
+                <input value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="w-full rounded-md border px-3 py-2" />
+              </label>
+              <label className="space-y-1 md:col-span-3">
+                <span className="text-sm font-medium">{t('common.description')}</span>
+                <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
+              </label>
+              <div className="md:col-span-3">
+                <Button type="submit">{t('transactions.save')}</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {transactions.length === 0 ? (
-        <EmptyState title={t('common.noTransactions')} description="Add income or expenses to see them here." />
+        <EmptyState title={t('common.noTransactions')} description={t('transactions.emptyDescription')} />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           <div className="grid grid-cols-[auto_1fr_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid-cols-[auto_1fr_160px_160px]">
-            <span>Type</span>
+            <span>{t('transactions.type')}</span>
             <span>{t('common.description')}</span>
             <span className="hidden md:block">{t('common.category')}</span>
             <span className="text-right">{t('common.amount')}</span>
           </div>
-          {transactions.map((transaction) => {
+          {sortedTransactions.map((transaction) => {
             const isIncome = transaction.type === 'income'
             const Icon = isIncome ? ArrowUpCircle : ArrowDownCircle
 

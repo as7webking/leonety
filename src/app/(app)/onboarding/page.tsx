@@ -11,6 +11,7 @@ import { canCreateWorkspace } from '@/lib/account-access'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
 import { useI18n } from '@/contexts/i18n-context'
+import { AppSelect } from '@/components/app-select'
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -222,17 +223,11 @@ export default function OnboardingPage() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">Workspace currency</label>
-              <select
+              <AppSelect
                 value={workspaceCurrency}
-                onChange={(e) => setWorkspaceCurrency(normalizeCurrencyCode(e.target.value))}
-                className="w-full rounded-md border px-3 py-2"
-              >
-                {currencyOptions.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.code} - {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setWorkspaceCurrency(normalizeCurrencyCode(value))}
+                options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
+              />
             </div>
 
             <Button type="submit" disabled={submitting}>

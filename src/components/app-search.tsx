@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 
-type SearchGroup = 'Income' | 'Expenses' | 'Time' | 'Workspaces'
+type SearchGroup = 'Income' | 'Expenses' | 'Time' | 'Clients' | 'Invoices' | 'Workspaces'
 
 interface SearchResult {
   id: string
@@ -43,7 +43,25 @@ interface TimeRow {
   company_id: string
 }
 
-const groups: SearchGroup[] = ['Income', 'Expenses', 'Time', 'Workspaces']
+interface ClientRow {
+  id: string
+  name: string
+  phone: string | null
+  interested_in: string | null
+  status: string
+  company_id: string
+}
+
+interface InvoiceRow {
+  id: string
+  invoice_number: string
+  status: string
+  total: number | string
+  currency: string
+  company_id: string
+}
+
+const groups: SearchGroup[] = ['Income', 'Expenses', 'Time', 'Clients', 'Invoices', 'Workspaces']
 
 function matchesQuery(values: Array<string | number | null | undefined>, query: string) {
   const normalizedQuery = query.trim().toLowerCase()
@@ -106,7 +124,7 @@ export function AppSearch() {
       setError('')
 
       try {
-        const [incomeRes, expenseRes, timeRes] = await Promise.all([
+        const [incomeRes, expenseRes, timeRes, clientRes, invoiceRes] = await Promise.all([
           supabase
             .from('incomes')
             .select('id, description, category, amount, date, company_id')
@@ -125,11 +143,25 @@ export function AppSearch() {
             .eq('company_id', currentCompany.id)
             .order('date', { ascending: false })
             .limit(100),
+          supabase
+            .from('clients')
+            .select('id, name, phone, interested_in, status, company_id')
+            .eq('company_id', currentCompany.id)
+            .order('created_at', { ascending: false })
+            .limit(100),
+          supabase
+            .from('invoices')
+            .select('id, invoice_number, status, total, currency, company_id')
+            .eq('company_id', currentCompany.id)
+            .order('created_at', { ascending: false })
+            .limit(100),
         ])
 
         if (incomeRes.error) throw incomeRes.error
         if (expenseRes.error) throw expenseRes.error
         if (timeRes.error) throw timeRes.error
+        if (clientRes.error && clientRes.error.code !== '42P01') throw clientRes.error
+        if (invoiceRes.error && invoiceRes.error.code !== '42P01') throw invoiceRes.error
 
         const nextResults: SearchResult[] = []
 
@@ -178,6 +210,30 @@ export function AppSearch() {
               title: entry.description || 'Time entry',
               detail: `${duration} · ${entry.date}`,
               href: '/time',
+            })
+          }
+        }
+
+        for (const client of (clientRes.data ?? []) as ClientRow[]) {
+          if (matchesQuery([client.name, client.phone, client.interested_in, client.status], trimmedQuery)) {
+            nextResults.push({
+              id: `client-${client.id}`,
+              group: 'Clients',
+              title: client.name,
+              detail: [client.phone, client.interested_in, client.status].filter(Boolean).join(' · '),
+              href: '/clients',
+            })
+          }
+        }
+
+        for (const invoice of (invoiceRes.data ?? []) as InvoiceRow[]) {
+          if (matchesQuery([invoice.invoice_number, invoice.status, invoice.total, invoice.currency], trimmedQuery)) {
+            nextResults.push({
+              id: `invoice-${invoice.id}`,
+              group: 'Invoices',
+              title: invoice.invoice_number,
+              detail: [invoice.status, `${invoice.total} ${invoice.currency}`].filter(Boolean).join(' · '),
+              href: '/invoices',
             })
           }
         }

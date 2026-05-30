@@ -8,6 +8,7 @@ import { getAuthCallbackUrl } from '@/lib/site-url'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AppSelect } from '@/components/app-select'
 import { Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
@@ -249,18 +250,18 @@ export default function LoginPage() {
             {isSignUp && (
               <div>
                 <label className="block text-sm font-medium mb-1">{t('auth.mainCurrency')}</label>
-                <select
+                <AppSelect
                   value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-                >
-                  <option value="USD">USD - United States Dollar</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="GBP">GBP - British Pound</option>
-                  <option value="JPY">JPY - Japanese Yen</option>
-                  <option value="CAD">CAD - Canadian Dollar</option>
-                  <option value="AUD">AUD - Australian Dollar</option>
-                </select>
+                  onChange={setCurrency}
+                  options={[
+                    { value: 'USD', label: 'USD - United States Dollar' },
+                    { value: 'EUR', label: 'EUR - Euro' },
+                    { value: 'GBP', label: 'GBP - British Pound' },
+                    { value: 'JPY', label: 'JPY - Japanese Yen' },
+                    { value: 'CAD', label: 'CAD - Canadian Dollar' },
+                    { value: 'AUD', label: 'AUD - Australian Dollar' },
+                  ]}
+                />
               </div>
             )}
 

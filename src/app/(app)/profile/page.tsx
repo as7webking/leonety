@@ -9,6 +9,7 @@ import { useAccountAccess } from '@/hooks/use-account-access'
 import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
 import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { AppSelect } from '@/components/app-select'
 import { useI18n } from '@/contexts/i18n-context'
 import { PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
@@ -410,20 +411,6 @@ export default function ProfilePage() {
             ))}
           </tbody>
         </table>
-        <div className="mt-2 grid gap-2 text-sm font-semibold sm:grid-cols-2">
-          <p>
-            {t('income.title')} {t('common.total').toLowerCase()}: {formatCurrency(
-              incomeTransactions.reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
-              normalizeCurrencyCode(currency),
-            )}
-          </p>
-          <p className="sm:text-right">
-            {t('expenses.title')} {t('common.total').toLowerCase()}: {formatCurrency(
-              expenseTransactions.reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
-              normalizeCurrencyCode(currency),
-            )}
-          </p>
-        </div>
       </section>
     )
   }
@@ -618,7 +605,7 @@ export default function ProfilePage() {
     <PageContainer>
       <PageHeader
         title={t('profile.title')}
-        description="Manage your account information"
+        description={t('profile.description')}
       />
 
       {isPreparingPrint && printTransactions.length > 0 && (
@@ -652,9 +639,9 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              Account Information
+              {t('profile.accountInformation')}
             </CardTitle>
-            <CardDescription>View and update your personal details</CardDescription>
+            <CardDescription>{t('profile.accountInformationDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -669,7 +656,7 @@ export default function ProfilePage() {
               )}
 
               <div>
-                <label className="block text-sm font-medium mb-2">Full Name</label>
+                <label className="block text-sm font-medium mb-2">{t('profile.fullName')}</label>
                 <input
                   type="text"
                   value={fullName}
@@ -683,7 +670,7 @@ export default function ProfilePage() {
               <div>
                 <label className="block text-sm font-medium mb-2 flex items-center gap-2">
                   <Mail className="h-4 w-4" />
-                  Email Address
+                  {t('profile.emailAddress')}
                 </label>
                 <input
                   type="email"
@@ -692,26 +679,20 @@ export default function ProfilePage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Email cannot be changed. Contact support if you need to update it.
+                  {t('profile.emailLocked')}
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-2 flex items-center gap-2">
                   <DollarSign className="h-4 w-4" />
-                  Default Currency
+                  {t('profile.defaultCurrency')}
                 </label>
-                <select
+                <AppSelect
                   value={currency}
-                  onChange={(e) => setCurrency(normalizeCurrencyCode(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-                >
-                  {currencyOptions.map((option) => (
-                    <option key={option.code} value={option.code}>
-                      {option.code} - {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setCurrency(normalizeCurrencyCode(value))}
+                  options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
+                />
               </div>
 
               <div className="pt-4 border-t">
@@ -720,7 +701,7 @@ export default function ProfilePage() {
                   disabled={isSaving}
                   className="w-full"
                 >
-                  {isSaving ? 'Saving...' : 'Save Changes'}
+                  {isSaving ? t('profile.saving') : t('common.saveChanges')}
                 </Button>
               </div>
             </form>
@@ -731,15 +712,15 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BriefcaseBusiness className="h-5 w-5" />
-              Current Workspace
+              {t('profile.currentWorkspace')}
             </CardTitle>
-            <CardDescription>Manage the active workspace here or open the full workspace management page.</CardDescription>
+            <CardDescription>{t('profile.currentWorkspaceDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             {currentCompany ? (
               <form onSubmit={handleSaveWorkspace} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Workspace Name</label>
+                  <label className="block text-sm font-medium mb-2">{t('profile.workspaceName')}</label>
                   <input
                     type="text"
                     value={workspaceName}
@@ -752,7 +733,7 @@ export default function ProfilePage() {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Workspace Type</label>
+                    <label className="block text-sm font-medium mb-2">{t('profile.workspaceType')}</label>
                     <input
                       type="text"
                       value={currentCompany.type}
@@ -761,35 +742,29 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Workspace Currency</label>
-                    <select
+                    <label className="block text-sm font-medium mb-2">{t('profile.workspaceCurrency')}</label>
+                    <AppSelect
                       value={workspaceCurrency}
-                      onChange={(e) => setWorkspaceCurrency(normalizeCurrencyCode(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-                    >
-                      {currencyOptions.map((option) => (
-                        <option key={option.code} value={option.code}>
-                          {option.code} - {option.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => setWorkspaceCurrency(normalizeCurrencyCode(value))}
+                      options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
+                    />
                   </div>
                 </div>
 
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  Current plan: {planLabel}
+                  {t('profile.currentPlanInline').replace('{plan}', planLabel)}
                 </div>
 
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button type="submit" className="w-full">Save Workspace</Button>
+                  <Button type="submit" className="w-full">{t('profile.saveWorkspace')}</Button>
                   <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/workspaces')}>
-                    Manage Workspaces
+                    {t('profile.manageWorkspaces')}
                   </Button>
                 </div>
               </form>
             ) : (
               <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                Complete onboarding to create your first workspace.
+                {t('profile.completeOnboarding')}
               </div>
             )}
           </CardContent>
@@ -798,11 +773,11 @@ export default function ProfilePage() {
         {/* Account Details */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Account Details</CardTitle>
+            <CardTitle>{t('profile.accountDetails')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-sm text-gray-600">Language</span>
+              <span className="text-sm text-gray-600">{t('profile.language')}</span>
               <LanguageSwitcher />
             </div>
             <div className="flex items-center justify-between gap-4 border-b py-2">
@@ -856,17 +831,45 @@ export default function ProfilePage() {
               </label>
             </div>
             <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-sm text-gray-600">Current Plan</span>
+              <span className="text-sm text-gray-600">{t('profile.currentPlan')}</span>
               <span className="text-sm font-medium">{planLabel}</span>
             </div>
+            <div className="flex items-start justify-between gap-4 border-b py-2">
+              <div className="w-full space-y-3">
+                <span className="text-sm text-gray-600">{t('profile.whatsappTitle')}</span>
+                <p className="text-xs text-gray-500">{t('profile.whatsappDescription')}</p>
+                <div className="grid gap-2 md:grid-cols-3">
+                  <label className="space-y-1 text-xs text-slate-500">
+                    <span>{t('profile.whatsappBusinessNumber')}</span>
+                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder="+49 ..." />
+                  </label>
+                  <label className="space-y-1 text-xs text-slate-500">
+                    <span>{t('profile.whatsappPhoneNumberId')}</span>
+                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder="Meta Phone Number ID" />
+                  </label>
+                  <label className="space-y-1 text-xs text-slate-500">
+                    <span>{t('profile.whatsappWebhook')}</span>
+                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" value="/api/whatsapp/webhook" readOnly />
+                  </label>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                  {t('profile.whatsappStatus')}
+                </span>
+                <Button type="button" variant="outline" size="sm" disabled>
+                  {t('profile.whatsappComingSoon')}
+                </Button>
+              </div>
+            </div>
             <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-sm text-gray-600">Account Created</span>
+              <span className="text-sm text-gray-600">{t('profile.accountCreated')}</span>
               <span className="text-sm font-medium">
                 {new Date(profile.created_at).toLocaleDateString()}
               </span>
             </div>
             <div className="flex justify-between items-center py-2">
-              <span className="text-sm text-gray-600">Account ID</span>
+              <span className="text-sm text-gray-600">{t('profile.accountId')}</span>
               <span className="text-xs font-mono text-gray-500 truncate max-w-xs">
                 {profile.profile_number ?? profile.id}
               </span>
@@ -877,17 +880,17 @@ export default function ProfilePage() {
         {accountAccess.isAdmin && (
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Admin Access Management</CardTitle>
-              <CardDescription>Grant or revoke Pro access and admin rights for other profiles.</CardDescription>
+              <CardTitle>{t('profile.adminAccessManagement')}</CardTitle>
+              <CardDescription>{t('profile.adminAccessDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {adminLoading && managedProfiles.length === 0 ? (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  Loading profiles...
+                  {t('profile.loadingProfiles')}
                 </div>
               ) : managedProfiles.length === 0 ? (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  No profiles found.
+                  {t('profile.noProfilesFound')}
                 </div>
               ) : (
                 managedProfiles.map((managedProfile) => {

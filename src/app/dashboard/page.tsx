@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageContainer, PageHeader, EmptyState, LoadingSkeleton } from '@/components'
@@ -8,6 +9,7 @@ import { convertToCurrency, formatCurrency, getSavedAmountInWorkspaceCurrency, n
 import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
+import { AppSelect } from '@/components/app-select'
 import { Building2 } from 'lucide-react'
 
 interface Income {
@@ -51,6 +53,15 @@ export default function DashboardPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
+  const [filterFromDate, setFilterFromDate] = useState(() => {
+    const date = new Date()
+    date.setDate(1)
+    return date.toISOString().split('T')[0]
+  })
+  const [filterToDate, setFilterToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [groupByMonth, setGroupByMonth] = useState(false)
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const { accountAccess } = useAccountAccess(accountEmail)
   const { t } = useI18n()
 
@@ -114,9 +125,9 @@ export default function DashboardPage() {
         <PageHeader title={t('dashboard.title')} description={t('dashboard.noWorkspace')} />
         <EmptyState
           icon={Building2}
-          title="No workspace selected"
-          description="Finish onboarding to create your first personal or business workspace."
-          action={{ label: 'Go to onboarding', onClick: () => router.push('/onboarding') }}
+          title={t('common.noWorkspaceSelected')}
+          description={t('dashboard.noWorkspace')}
+          action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }}
         />
       </PageContainer>
     )
@@ -160,6 +171,55 @@ export default function DashboardPage() {
     return parts.join(' ')
   }
 
+  const filterByDate = <T extends { date: string }>(items: T[]) =>
+    items.filter((item) => (!filterFromDate || item.date >= filterFromDate) && (!filterToDate || item.date <= filterToDate))
+
+  const sortedIncomes = filterByDate(incomes).sort((left, right) => {
+    const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
+    const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
+    return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
+  })
+
+  const sortedExpenses = filterByDate(expenses).sort((left, right) => {
+    const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
+    const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
+    return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
+  })
+
+  const sortedTimeEntries = filterByDate(timeEntries).sort((left, right) => {
+    const leftValue = new Date(left.date).getTime()
+    const rightValue = new Date(right.date).getTime()
+    return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
+  })
+
+  const formatMonthHeading = (date: string) =>
+    new Date(`${date.slice(0, 7)}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+
+  const renderGrouped = <T extends { id: string; date: string }>(
+    items: T[],
+    renderItem: (item: T) => React.ReactNode,
+    empty: string,
+  ) => {
+    if (items.length === 0) return <p className="text-muted-foreground">{empty}</p>
+
+    if (!groupByMonth) {
+      return items.slice(0, 6).map(renderItem)
+    }
+
+    const groups = items.reduce<Record<string, T[]>>((acc, item) => {
+      const month = item.date.slice(0, 7)
+      acc[month] = [...(acc[month] ?? []), item]
+      return acc
+    }, {})
+
+    return Object.entries(groups).map(([month, groupItems]) => (
+      <div key={month} className="space-y-2">
+        <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{formatMonthHeading(`${month}-01`)}</p>
+        {groupItems.slice(0, 6).map(renderItem)}
+      </div>
+    ))
+  }
+
   return (
     <PageContainer>
       <PageHeader title={t('dashboard.title')} description={`${currentCompany.name} · ${currency}`}>
@@ -167,6 +227,43 @@ export default function DashboardPage() {
           {planLabel} plan
         </span>
       </PageHeader>
+      <div className="mb-6 grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto_auto]">
+        <label className="space-y-1 text-sm">
+          <span className="text-slate-600">{t('dashboard.filterFrom')}</span>
+          <input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} className="w-full rounded-md border px-3 py-2" />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-slate-600">{t('dashboard.filterTo')}</span>
+          <input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} className="w-full rounded-md border px-3 py-2" />
+        </label>
+        <AppSelect
+          value={groupByMonth ? 'month' : 'none'}
+          onChange={(value) => setGroupByMonth(value === 'month')}
+          options={[
+            { value: 'none', label: t('common.noMonthGrouping') },
+            { value: 'month', label: t('common.groupByMonth') },
+          ]}
+          className="self-end"
+        />
+        <AppSelect
+          value={sortBy}
+          onChange={(value) => setSortBy(value as 'date' | 'amount')}
+          options={[
+            { value: 'date', label: t('common.sortDate') },
+            { value: 'amount', label: t('common.sortAmount') },
+          ]}
+          className="self-end"
+        />
+        <AppSelect
+          value={sortDirection}
+          onChange={(value) => setSortDirection(value as 'asc' | 'desc')}
+          options={[
+            { value: 'desc', label: t('common.descending') },
+            { value: 'asc', label: t('common.ascending') },
+          ]}
+          className="self-end"
+        />
+      </div>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
         <div className="rounded-lg bg-card p-6">
           <h3 className="text-lg font-semibold">{t('dashboard.totalIncome')}</h3>
@@ -190,34 +287,41 @@ export default function DashboardPage() {
 
       <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="rounded-lg bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentIncome')}</h3>
-          {incomes.slice(0, 3).map((income) => (
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold">{t('dashboard.recentIncome')}</h3>
+            <Link href="/transactions" className="text-sm font-medium text-primary hover:underline">
+              {t('nav.allTransactions')}
+            </Link>
+          </div>
+          {renderGrouped(sortedIncomes, (income) => (
             <div key={income.id} className="flex justify-between border-b py-2">
               <span>{income.description}</span>
               <span>{formatMoney(getDisplayAmount(Number(income.amount), income.currency ?? currency, income.exchange_rate, income.workspace_currency))}</span>
             </div>
-          ))}
-          {incomes.length === 0 && <p className="text-muted-foreground">No incomes yet</p>}
+          ), t('dashboard.noIncome'))}
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentExpenses')}</h3>
-          {expenses.slice(0, 3).map((expense) => (
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold">{t('dashboard.recentExpenses')}</h3>
+            <Link href="/transactions" className="text-sm font-medium text-primary hover:underline">
+              {t('nav.allTransactions')}
+            </Link>
+          </div>
+          {renderGrouped(sortedExpenses, (expense) => (
             <div key={expense.id} className="flex justify-between border-b py-2">
               <span>{expense.description}</span>
               <span>{formatMoney(getDisplayAmount(Number(expense.amount), expense.currency ?? currency, expense.exchange_rate, expense.workspace_currency))}</span>
             </div>
-          ))}
-          {expenses.length === 0 && <p className="text-muted-foreground">No expenses yet</p>}
+          ), t('dashboard.noExpenses'))}
         </div>
         <div className="rounded-lg bg-card p-6">
           <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentTime')}</h3>
-          {timeEntries.slice(0, 3).map((entry) => (
+          {renderGrouped(sortedTimeEntries, (entry) => (
             <div key={entry.id} className="flex justify-between border-b py-2">
               <span>{entry.description}</span>
               <span>{formatHours(Number(entry.hours))}</span>
             </div>
-          ))}
-          {timeEntries.length === 0 && <p className="text-muted-foreground">No time entries yet</p>}
+          ), t('dashboard.noTime'))}
         </div>
       </div>
     </PageContainer>
