@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { DollarSign } from 'lucide-react'
 import { useI18n } from '@/contexts/i18n-context'
 
 export function Footer() {
@@ -13,9 +12,7 @@ export function Footer() {
             <div className="grid gap-8 md:grid-cols-4">
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
-                    <DollarSign className="h-5 w-5" />
-                  </div>
+                  <img src="/logo.png" alt="Leonety" className="h-10 w-10 object-contain" />
                   <span className="text-lg font-semibold">Leonety</span>
                 </div>
                 <p className="text-sm text-slate-600">{t('footer.description')}</p>

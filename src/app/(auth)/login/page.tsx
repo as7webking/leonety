@@ -63,7 +63,7 @@ export default function LoginPage() {
               full_name: fullName,
               currency: currency,
             },
-            emailRedirectTo: getAuthCallbackUrl(),
+            emailRedirectTo: getAuthCallbackUrl('/profile'),
           },
         })
 
@@ -135,7 +135,7 @@ export default function LoginPage() {
         type: 'signup',
         email: targetEmail,
         options: {
-          emailRedirectTo: getAuthCallbackUrl(),
+          emailRedirectTo: getAuthCallbackUrl('/profile'),
         },
       })
 

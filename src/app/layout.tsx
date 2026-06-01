@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { CookieNotice } from "@/components/cookie-notice";
 import { Footer } from "@/components/footer";
+import { NumberInputWheelGuard } from "@/components/number-input-wheel-guard";
 import { PwaInstaller } from "@/components/pwa-installer";
 import { I18nProvider } from "@/contexts/i18n-context";
 import "./globals.css";
@@ -48,6 +49,7 @@ export default function RootLayout({
         <div className="flex min-h-screen flex-col bg-background">
           <I18nProvider>
             <PwaInstaller />
+            <NumberInputWheelGuard />
             <div className="flex-1">
               {children}
             </div>

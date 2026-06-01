@@ -1,7 +1,6 @@
 'use client'
 
 import Link from "next/link"
-import { DollarSign } from "lucide-react"
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { useI18n } from '@/contexts/i18n-context'
 
@@ -16,9 +15,7 @@ export function PublicHeader({ user }: PublicHeaderProps) {
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
-            <DollarSign className="h-5 w-5" />
-          </div>
+          <img src="/logo.png" alt="Leonety" className="h-10 w-10 object-contain" />
           <span className="text-lg font-semibold">Leonety</span>
         </div>
 

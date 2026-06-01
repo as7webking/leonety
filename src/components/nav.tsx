@@ -86,7 +86,10 @@ export function Nav() {
     <nav className="bg-card border-b">
       <div className="container mx-auto px-3 py-2.5">
         <div className="flex items-center justify-between gap-3">
-          <Link href="/" className="text-lg font-bold" onClick={() => setIsOpen(false)}>Leonety</Link>
+          <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={() => setIsOpen(false)}>
+            <img src="/logo.png" alt="Leonety" className="h-9 w-9 object-contain" />
+            <span>Leonety</span>
+          </Link>
           
           {/* Desktop menu */}
           <div className="hidden flex-1 items-center justify-between gap-2 lg:flex">

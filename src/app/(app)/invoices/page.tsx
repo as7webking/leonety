@@ -129,8 +129,8 @@ const newItem = (taxRate = 19): InvoiceItem => ({
   line_total: 0,
 })
 
-function formatStatus(status: string) {
-  return status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+function formatInvoiceStatus(status: InvoiceStatus, t: (key: string) => string) {
+  return t(`invoices.status.${status}`)
 }
 
 function today() {
@@ -568,15 +568,16 @@ export default function InvoicesPage() {
       {printingInvoice && (
         <div className="print-area hidden">
           <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold">Leonety {t('invoices.title')}</h1>
-              <p className="text-sm text-slate-600">{currentCompany.name}</p>
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Leonety" className="h-12 w-12 object-contain" />
+              <div>
+                <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
+                <p className="text-sm text-slate-600">{printingInvoice.invoice_number}</p>
+              </div>
             </div>
             <div className="text-right text-sm">
-              <p className="font-semibold">{printingInvoice.invoice_number}</p>
-              <p>{t('invoices.status')}: {formatStatus(printingInvoice.status)}</p>
+              <p>{t('invoices.status')}: {formatInvoiceStatus(printingInvoice.status, t)}</p>
               <p>{t('invoices.issueDate')}: {printingInvoice.issue_date}</p>
-              {printingInvoice.due_date && <p>{t('invoices.dueDate')}: {printingInvoice.due_date}</p>}
             </div>
           </div>
           <div className="mb-3 rounded-md border p-3 text-sm">
@@ -585,6 +586,7 @@ export default function InvoicesPage() {
             {printingInvoice.clients?.client_company && <p>{printingInvoice.clients.client_company}</p>}
             {printingInvoice.clients?.email && <p>{printingInvoice.clients.email}</p>}
             {printingInvoice.clients?.phone && <p>{printingInvoice.clients.phone}</p>}
+            {printingInvoice.notes && <p className="mt-2 whitespace-pre-line text-slate-700">{printingInvoice.notes}</p>}
           </div>
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -613,7 +615,6 @@ export default function InvoicesPage() {
             <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(printingInvoice.tax_amount, printingInvoice.currency)}</span></div>
             <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(printingInvoice.total, printingInvoice.currency)}</span></div>
           </div>
-          {printingInvoice.notes && <p className="mt-6 text-sm">{printingInvoice.notes}</p>}
         </div>
       )}
 
@@ -648,7 +649,7 @@ export default function InvoicesPage() {
                   <AppSelect
                     value={formData.status}
                     onChange={(value) => setFormData({ ...formData, status: value as InvoiceStatus })}
-                    options={invoiceStatuses.map((status) => ({ value: status, label: formatStatus(status) }))}
+                    options={invoiceStatuses.map((status) => ({ value: status, label: formatInvoiceStatus(status, t) }))}
                   />
                 </label>
                 <label className="space-y-1">
@@ -756,8 +757,13 @@ export default function InvoicesPage() {
               </div>
 
               <label className="block space-y-1">
-                <span className="text-sm font-medium">{t('clients.notes')}</span>
-                <textarea value={formData.notes} onChange={(event) => setFormData({ ...formData, notes: event.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" />
+                <span className="text-sm font-medium">{t('invoices.clientDetailsForPrint')}</span>
+                <textarea
+                  value={formData.notes}
+                  onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+                  className="min-h-20 w-full rounded-md border px-3 py-2"
+                  placeholder={t('invoices.clientDetailsPlaceholder')}
+                />
               </label>
 
               <div className="ml-auto max-w-xs space-y-2 rounded-md border bg-slate-50 p-4 text-sm">
@@ -788,7 +794,7 @@ export default function InvoicesPage() {
                     {invoice.clients?.name ?? t('invoices.noClient')} · {invoice.issue_date}
                     {invoice.due_date ? ` · ${t('invoices.dueDate')} ${invoice.due_date}` : ''}
                   </p>
-                  <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{formatStatus(invoice.status)}</span>
+                  <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{formatInvoiceStatus(invoice.status, t)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="mr-2 font-semibold">{formatCurrency(invoice.total, invoice.currency)}</span>
