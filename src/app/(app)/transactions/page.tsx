@@ -229,19 +229,32 @@ export default function TransactionsPage() {
 
   const renderPrintCell = (transaction: TransactionRow | undefined) => {
     if (!transaction) return null
+    const categoryLabel = formatCategoryLabel(transaction.category, t)
+    const isDefaultBusinessIncome =
+      currentCompany?.type === 'business' &&
+      transaction.type === 'income' &&
+      (!transaction.description ||
+        transaction.description === transaction.category ||
+        transaction.description === categoryLabel)
 
     return (
       <div className="break-inside-avoid space-y-1">
         <div className="flex justify-between gap-3">
-          <span className="font-medium">{transaction.description || '-'}</span>
+          <span className="font-medium">
+            {isDefaultBusinessIncome
+              ? new Date(`${transaction.date}T00:00:00`).toLocaleDateString(locale)
+              : transaction.description || transaction.date}
+          </span>
           <span className="whitespace-nowrap font-semibold">
             {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency))}
           </span>
         </div>
-        <div className="text-xs text-slate-600">
-          {new Date(`${transaction.date}T00:00:00`).toLocaleDateString(locale)}
-          {transaction.category ? ` · ${formatCategoryLabel(transaction.category, t)}` : ''}
-        </div>
+        {!isDefaultBusinessIncome && (
+          <div className="text-xs text-slate-600">
+            {new Date(`${transaction.date}T00:00:00`).toLocaleDateString(locale)}
+            {transaction.type === 'expense' && transaction.category ? ` · ${categoryLabel}` : ''}
+          </div>
+        )}
       </div>
     )
   }

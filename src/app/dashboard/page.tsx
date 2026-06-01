@@ -287,11 +287,8 @@ export default function DashboardPage() {
 
       <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="rounded-lg bg-card p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4">
             <h3 className="text-lg font-semibold">{t('dashboard.recentIncome')}</h3>
-            <Link href="/transactions" className="text-sm font-medium text-primary hover:underline">
-              {t('nav.allTransactions')}
-            </Link>
           </div>
           {renderGrouped(sortedIncomes, (income) => (
             <div key={income.id} className="flex justify-between border-b py-2">
@@ -299,13 +296,13 @@ export default function DashboardPage() {
               <span>{formatMoney(getDisplayAmount(Number(income.amount), income.currency ?? currency, income.exchange_rate, income.workspace_currency))}</span>
             </div>
           ), t('dashboard.noIncome'))}
+          <Link href="/income" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
+            {t('dashboard.viewAllIncome')}
+          </Link>
         </div>
         <div className="rounded-lg bg-card p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4">
             <h3 className="text-lg font-semibold">{t('dashboard.recentExpenses')}</h3>
-            <Link href="/transactions" className="text-sm font-medium text-primary hover:underline">
-              {t('nav.allTransactions')}
-            </Link>
           </div>
           {renderGrouped(sortedExpenses, (expense) => (
             <div key={expense.id} className="flex justify-between border-b py-2">
@@ -313,6 +310,9 @@ export default function DashboardPage() {
               <span>{formatMoney(getDisplayAmount(Number(expense.amount), expense.currency ?? currency, expense.exchange_rate, expense.workspace_currency))}</span>
             </div>
           ), t('dashboard.noExpenses'))}
+          <Link href="/expenses" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
+            {t('dashboard.viewAllExpenses')}
+          </Link>
         </div>
         <div className="rounded-lg bg-card p-6">
           <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentTime')}</h3>

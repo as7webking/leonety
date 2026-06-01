@@ -119,11 +119,13 @@ interface InvoiceFormState {
   items: InvoiceItem[]
 }
 
-const newItem = (): InvoiceItem => ({
+type InvoiceNumberFormat = 'yy-seq' | 'yyyy-seq'
+
+const newItem = (taxRate = 19): InvoiceItem => ({
   description: '',
   quantity: 1,
   unit_price: 0,
-  tax_rate: 19,
+  tax_rate: taxRate,
   line_total: 0,
 })
 
@@ -161,9 +163,34 @@ function calculateItems(items: InvoiceItem[]) {
   }
 }
 
-function makeInvoiceNumber() {
+function getInvoiceNumberSettings() {
+  if (typeof window === 'undefined') {
+    return { format: 'yy-seq' as InvoiceNumberFormat, digits: 3 }
+  }
+
+  const savedFormat = window.localStorage.getItem('leonety-invoice-number-format') as InvoiceNumberFormat | null
+  const savedDigits = Number(window.localStorage.getItem('leonety-invoice-number-digits'))
+
+  return {
+    format: savedFormat === 'yyyy-seq' ? savedFormat : 'yy-seq',
+    digits: [3, 4, 5].includes(savedDigits) ? savedDigits : 3,
+  }
+}
+
+function makeInvoiceNumber(existingInvoices: InvoiceRecord[] = []) {
   const date = new Date()
-  return `INV-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-5)}`
+  const settings = getInvoiceNumberSettings()
+  const prefix = settings.format === 'yyyy-seq'
+    ? String(date.getFullYear())
+    : String(date.getFullYear()).slice(-2)
+  const pattern = new RegExp(`^${prefix}-(\\d+)$`)
+  const highestSequence = existingInvoices.reduce((highest, invoice) => {
+    const match = invoice.invoice_number.match(pattern)
+    if (!match) return highest
+    return Math.max(highest, Number(match[1]) || 0)
+  }, 0)
+
+  return `${prefix}-${String(highestSequence + 1).padStart(settings.digits, '0')}`
 }
 
 function getTaxRate(countryCode: TaxCountryCode, taxType: TaxType) {
@@ -171,6 +198,17 @@ function getTaxRate(countryCode: TaxCountryCode, taxType: TaxType) {
 
   const country = taxCountries.find((item) => item.code === countryCode) ?? taxCountries[0]
   return taxType === 'reduced' ? country.reducedRate : country.standardRate
+}
+
+function getVatOptions(countryCode: TaxCountryCode, t: (key: string) => string) {
+  const standardRate = getTaxRate(countryCode, 'standard')
+  const reducedRate = getTaxRate(countryCode, 'reduced')
+
+  return [
+    { value: String(standardRate), label: `${t('invoices.standardVat')} (${standardRate}%)` },
+    { value: String(reducedRate), label: `${t('invoices.reducedVat')} (${reducedRate}%)` },
+    { value: '0', label: `${t('invoices.noVat')} (0%)` },
+  ]
 }
 
 export default function InvoicesPage() {
@@ -201,12 +239,14 @@ export default function InvoicesPage() {
   })
 
   const calculated = useMemo(() => calculateItems(formData.items), [formData.items])
+  const vatOptions = useMemo(() => getVatOptions(formData.tax_country, t), [formData.tax_country, t])
 
   const resetForm = useCallback(() => {
+    const defaultTaxRate = getTaxRate('DE', 'standard')
     setEditingInvoice(null)
     setFormData({
       client_id: '',
-      invoice_number: makeInvoiceNumber(),
+      invoice_number: makeInvoiceNumber(invoices),
       issue_date: today(),
       due_date: '',
       currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
@@ -214,10 +254,28 @@ export default function InvoicesPage() {
       notes: '',
       tax_country: 'DE',
       tax_type: 'standard',
-      items: [newItem()],
+      items: [newItem(defaultTaxRate)],
     })
     setShowForm(false)
-  }, [currentCompany])
+  }, [currentCompany, invoices])
+
+  const openCreateForm = () => {
+    const defaultTaxRate = getTaxRate('DE', 'standard')
+    setEditingInvoice(null)
+    setFormData({
+      client_id: '',
+      invoice_number: makeInvoiceNumber(invoices),
+      issue_date: today(),
+      due_date: '',
+      currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
+      status: 'draft',
+      notes: '',
+      tax_country: 'DE',
+      tax_type: 'standard',
+      items: [newItem(defaultTaxRate)],
+    })
+    setShowForm(true)
+  }
 
   const loadInvoices = useCallback(async () => {
     if (!currentCompany) {
@@ -286,6 +344,9 @@ export default function InvoicesPage() {
   }
 
   const handleEdit = (invoice: InvoiceRecord) => {
+    const invoiceItems = invoice.invoice_items && invoice.invoice_items.length > 0
+      ? invoice.invoice_items
+      : [newItem(getTaxRate('DE', 'standard'))]
     setEditingInvoice(invoice)
     setFormData({
       client_id: invoice.client_id ?? '',
@@ -297,7 +358,7 @@ export default function InvoicesPage() {
       notes: invoice.notes ?? '',
       tax_country: 'DE',
       tax_type: 'standard',
-      items: invoice.invoice_items && invoice.invoice_items.length > 0 ? invoice.invoice_items : [newItem()],
+      items: invoiceItems,
     })
     setShowForm(true)
   }
@@ -498,7 +559,7 @@ export default function InvoicesPage() {
   return (
     <PageContainer>
       <PageHeader title={t('invoices.title')} description={`${t('invoices.description')} · ${currentCompany.name}`}>
-        <Button onClick={() => { setShowForm((value) => !value); setEditingInvoice(null) }}>
+        <Button onClick={() => showForm ? resetForm() : openCreateForm()}>
           <FileText className="h-4 w-4" />
           {showForm ? t('common.cancel') : t('invoices.add')}
         </Button>
@@ -506,7 +567,7 @@ export default function InvoicesPage() {
 
       {printingInvoice && (
         <div className="print-area hidden">
-          <div className="mb-8 flex items-start justify-between gap-6">
+          <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold">Leonety {t('invoices.title')}</h1>
               <p className="text-sm text-slate-600">{currentCompany.name}</p>
@@ -518,7 +579,7 @@ export default function InvoicesPage() {
               {printingInvoice.due_date && <p>{t('invoices.dueDate')}: {printingInvoice.due_date}</p>}
             </div>
           </div>
-          <div className="mb-6 rounded-md border p-4 text-sm">
+          <div className="mb-3 rounded-md border p-3 text-sm">
             <p className="font-semibold">{t('invoices.client')}</p>
             <p>{printingInvoice.clients?.name ?? t('invoices.noClient')}</p>
             {printingInvoice.clients?.client_company && <p>{printingInvoice.clients.client_company}</p>}
@@ -616,7 +677,10 @@ export default function InvoicesPage() {
                       setFormData({
                         ...formData,
                         tax_country: nextCountry,
-                        items: formData.items.map((item) => ({ ...item, tax_rate: nextRate })),
+                        items: formData.items.map((item) => ({
+                          ...item,
+                          tax_rate: item.tax_rate === 0 ? 0 : nextRate,
+                        })),
                       })
                     }}
                     options={taxCountries.map((country) => ({ value: country.code, label: country.label }))}
@@ -627,12 +691,12 @@ export default function InvoicesPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium">{t('invoices.items')}</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setFormData({ ...formData, items: [...formData.items, { ...newItem(), tax_rate: getTaxRate(formData.tax_country, 'standard') }] })}>{t('invoices.addItem')}</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setFormData({ ...formData, items: [...formData.items, newItem(getTaxRate(formData.tax_country, 'standard'))] })}>{t('invoices.addItem')}</Button>
                 </div>
                 {formData.items.map((item, index) => {
                   const normalizedLine = calculateItems([item]).items[0]
                   return (
-                    <div key={index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_150px_120px_90px_120px_auto]">
+                    <div key={index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_150px_120px_170px_120px_auto]">
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-600">{t('invoices.product')}</span>
                         <input value={item.description} onChange={(event) => updateItem(index, { description: event.target.value })} className="w-full rounded-md border px-3 py-2 text-sm" placeholder={t('common.description')} required />
@@ -672,7 +736,12 @@ export default function InvoicesPage() {
                       </label>
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-600">{t('invoices.vat')}</span>
-                        <div className="rounded-md bg-slate-50 px-3 py-2 text-right text-sm font-medium">{item.tax_rate}%</div>
+                        <AppSelect
+                          value={String(item.tax_rate)}
+                          onChange={(value) => updateItem(index, { tax_rate: Number(value) })}
+                          options={vatOptions}
+                          ariaLabel={t('invoices.vat')}
+                        />
                       </label>
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-600">{t('invoices.lineTotal')}</span>

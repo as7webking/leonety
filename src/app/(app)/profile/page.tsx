@@ -73,6 +73,8 @@ export default function ProfilePage() {
   const [reportToDate, setReportToDate] = useState(() => new Date().toISOString().split('T')[0])
   const [printTransactions, setPrintTransactions] = useState<PrintableTransaction[]>([])
   const [includeCategoryInPrint, setIncludeCategoryInPrint] = useState(true)
+  const [invoiceNumberFormat, setInvoiceNumberFormat] = useState<'yy-seq' | 'yyyy-seq'>('yy-seq')
+  const [invoiceNumberDigits, setInvoiceNumberDigits] = useState('3')
   const [isPreparingPrint, setIsPreparingPrint] = useState(false)
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -85,6 +87,8 @@ export default function ProfilePage() {
     const timer = window.setTimeout(() => {
       setGroupReportsByMonth(window.localStorage.getItem('leonety-group-reports-by-month') === 'true')
       setIncludeCategoryInPrint(window.localStorage.getItem('leonety-include-category-in-print') !== 'false')
+      setInvoiceNumberFormat(window.localStorage.getItem('leonety-invoice-number-format') === 'yyyy-seq' ? 'yyyy-seq' : 'yy-seq')
+      setInvoiceNumberDigits(window.localStorage.getItem('leonety-invoice-number-digits') ?? '3')
     }, 0)
 
     return () => window.clearTimeout(timer)
@@ -98,6 +102,16 @@ export default function ProfilePage() {
   const handleIncludeCategoryInPrintChange = (checked: boolean) => {
     setIncludeCategoryInPrint(checked)
     window.localStorage.setItem('leonety-include-category-in-print', String(checked))
+  }
+
+  const handleInvoiceNumberFormatChange = (value: 'yy-seq' | 'yyyy-seq') => {
+    setInvoiceNumberFormat(value)
+    window.localStorage.setItem('leonety-invoice-number-format', value)
+  }
+
+  const handleInvoiceNumberDigitsChange = (value: string) => {
+    setInvoiceNumberDigits(value)
+    window.localStorage.setItem('leonety-invoice-number-digits', value)
   }
 
   useEffect(() => {
@@ -792,6 +806,37 @@ export default function ProfilePage() {
                 className="h-4 w-4"
                 aria-label={t('profile.groupReportsByMonth')}
               />
+            </div>
+            <div className="space-y-3 border-b py-2">
+              <div>
+                <span className="text-sm text-gray-600">{t('profile.invoiceNumberSettings')}</span>
+                <p className="text-xs text-gray-500">{t('profile.invoiceNumberSettingsDescription')}</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">{t('profile.invoiceNumberFormat')}</span>
+                  <AppSelect
+                    value={invoiceNumberFormat}
+                    onChange={(value) => handleInvoiceNumberFormatChange(value as 'yy-seq' | 'yyyy-seq')}
+                    options={[
+                      { value: 'yy-seq', label: '26-001' },
+                      { value: 'yyyy-seq', label: '2026-001' },
+                    ]}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">{t('profile.invoiceNumberDigits')}</span>
+                  <AppSelect
+                    value={invoiceNumberDigits}
+                    onChange={handleInvoiceNumberDigitsChange}
+                    options={[
+                      { value: '3', label: '001' },
+                      { value: '4', label: '0001' },
+                      { value: '5', label: '00001' },
+                    ]}
+                  />
+                </label>
+              </div>
             </div>
             <div className="space-y-3 border-b py-2">
               <div>

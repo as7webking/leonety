@@ -50,9 +50,9 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
 
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
-          {options.map((option) => (
+          {options.map((option, index) => (
             <button
-              key={option.value}
+              key={`${option.value}-${option.label}-${index}`}
               type="button"
               disabled={option.disabled}
               onClick={() => {

@@ -144,7 +144,7 @@ html {
 
 @media print {
   @page {
-    margin: 12mm;
+    margin: 8mm;
   }
 
   html,
@@ -171,6 +171,23 @@ html {
     padding: 0;
     background: white;
     color: black;
+  }
+
+  .print-area h1 {
+    margin-top: 0 !important;
+  }
+
+  .print-area table {
+    border-collapse: collapse !important;
+  }
+
+  .print-area th,
+  .print-area td {
+    padding: 4px 6px !important;
+  }
+
+  .print-area section {
+    margin-bottom: 8px !important;
   }
 
   .print-area table,
