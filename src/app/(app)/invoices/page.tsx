@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { createClient } from '@/lib/supabase-client'
 
@@ -225,6 +226,9 @@ export default function InvoicesPage() {
   const [deleteInvoice, setDeleteInvoice] = useState<InvoiceRecord | null>(null)
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [companyLogo, setCompanyLogo] = useState('')
+  const [companyAddress, setCompanyAddress] = useState('')
+  const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
   const [formData, setFormData] = useState<InvoiceFormState>({
     client_id: '',
     invoice_number: makeInvoiceNumber(),
@@ -240,6 +244,21 @@ export default function InvoicesPage() {
 
   const calculated = useMemo(() => calculateItems(formData.items), [formData.items])
   const vatOptions = useMemo(() => getVatOptions(formData.tax_country, t), [formData.tax_country, t])
+
+  useEffect(() => {
+    if (!currentCompany) return
+    const branding = loadCompanyBranding(currentCompany.id)
+    setCompanyLogo(branding.logo)
+    setCompanyAddress(branding.address)
+    setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
+  }, [currentCompany])
+
+  const handleIncludeCompanyAddressChange = (checked: boolean) => {
+    setIncludeCompanyAddress(checked)
+    if (currentCompany) {
+      window.localStorage.setItem(`leonety-include-company-address:${currentCompany.id}`, String(checked))
+    }
+  }
 
   const resetForm = useCallback(() => {
     const defaultTaxRate = getTaxRate('DE', 'standard')
@@ -569,10 +588,19 @@ export default function InvoicesPage() {
         <div className="print-area hidden">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="Leonety" className="h-12 w-12 object-contain" />
+              {companyLogo ? (
+                <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
+                  {currentCompany.name.slice(0, 1).toUpperCase()}
+                </div>
+              )}
               <div>
                 <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
                 <p className="text-sm text-slate-600">{printingInvoice.invoice_number}</p>
+                {includeCompanyAddress && companyAddress && (
+                  <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>
+                )}
               </div>
             </div>
             <div className="text-right text-sm">
@@ -764,6 +792,16 @@ export default function InvoicesPage() {
                   className="min-h-20 w-full rounded-md border px-3 py-2"
                   placeholder={t('invoices.clientDetailsPlaceholder')}
                 />
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={includeCompanyAddress}
+                  onChange={(event) => handleIncludeCompanyAddressChange(event.target.checked)}
+                  className="h-4 w-4"
+                />
+                {t('invoices.includeCompanyAddress')}
               </label>
 
               <div className="ml-auto max-w-xs space-y-2 rounded-md border bg-slate-50 p-4 text-sm">

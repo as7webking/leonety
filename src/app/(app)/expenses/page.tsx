@@ -9,6 +9,7 @@ import { expenseSchema, formatValidationError, type ExpenseForm } from '@/lib/va
 import { useCompany } from '@/contexts/company-context'
 import { buildCsv, parseCsv } from '@/lib/csv'
 import { formatCategoryLabel } from '@/lib/category-labels'
+import { loadCompanyBranding } from '@/lib/company-branding'
 import { convertToCurrency, currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
 import { useI18n } from '@/contexts/i18n-context'
@@ -53,6 +54,8 @@ export default function ExpensesPage() {
     return date.toISOString().split('T')[0]
   })
   const [filterToDate, setFilterToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [companyLogo, setCompanyLogo] = useState('')
+  const [companyAddress, setCompanyAddress] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const categoryOptions = ['Food', 'Utilities', 'Rent', 'Other']
@@ -64,6 +67,13 @@ export default function ExpensesPage() {
 
     return () => window.clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    if (!currentCompany) return
+    const branding = loadCompanyBranding(currentCompany.id)
+    setCompanyLogo(branding.logo)
+    setCompanyAddress(branding.address)
+  }, [currentCompany])
 
   const loadExpenses = useCallback(async () => {
     if (!currentCompany) {
@@ -251,7 +261,7 @@ export default function ExpensesPage() {
   }, {})
 
   const displayGroups = groupReportsByMonth ? Object.entries(groupedExpenses).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedExpenses] as const]
-  const printGroups = displayGroups
+  const printGroups = displayGroups.filter(([, groupItems]) => groupItems.length > 0)
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
     const [year, month] = monthKey.split('-').map(Number)
@@ -464,10 +474,24 @@ export default function ExpensesPage() {
         </div>
       </PageHeader>
 
-      <div className="print-area hidden">
+      <div className="print-area print-compact hidden">
+        <div className="mb-2 flex items-start gap-3">
+          {companyLogo ? (
+            <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
+              {currentCompany.name.slice(0, 1).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
+            <p className="text-sm text-slate-600">{t('expenses.report')}</p>
+            {companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>}
+          </div>
+        </div>
         {printGroups.map(([groupKey, groupItems]) => (
-          <section key={groupKey} className="mb-8">
-            {groupReportsByMonth && <h2 className="mb-3 text-lg font-semibold">{formatMonthLabel(groupKey)}</h2>}
+          <section key={groupKey} className="mb-2">
+            {groupReportsByMonth && <h2 className="mb-1 text-base font-semibold">{formatMonthLabel(groupKey)}</h2>}
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
@@ -491,7 +515,7 @@ export default function ExpensesPage() {
           </section>
         ))}
 
-        <p className="mt-4 text-right font-semibold">
+        <p className="mt-2 text-right font-semibold">
           {t('common.total')}: {formatCurrency(sortedExpenses.reduce((sum, expense) => sum + getWorkspaceAmount(expense), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
         </p>
       </div>

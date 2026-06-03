@@ -7,6 +7,7 @@ import { useCompany } from '@/contexts/company-context'
 import { profileUpdateSchema, formatValidationError } from '@/lib/validations'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
+import { loadCompanyBranding, saveCompanyBranding } from '@/lib/company-branding'
 import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AppSelect } from '@/components/app-select'
@@ -60,6 +61,8 @@ export default function ProfilePage() {
   const [currency, setCurrency] = useState('USD')
   const [workspaceName, setWorkspaceName] = useState('')
   const [workspaceCurrency, setWorkspaceCurrency] = useState('USD')
+  const [workspaceLogo, setWorkspaceLogo] = useState('')
+  const [workspaceAddress, setWorkspaceAddress] = useState('')
   const [message, setMessage] = useState('')
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([])
   const [adminLoading, setAdminLoading] = useState(false)
@@ -160,8 +163,37 @@ export default function ProfilePage() {
     if (currentCompany) {
       setWorkspaceName(currentCompany.name)
       setWorkspaceCurrency(normalizeCurrencyCode(currentCompany.currency ?? 'USD'))
+      const branding = loadCompanyBranding(currentCompany.id)
+      setWorkspaceLogo(branding.logo)
+      setWorkspaceAddress(branding.address)
     }
   }, [currentCompany])
+
+  const persistWorkspaceBranding = (nextLogo = workspaceLogo, nextAddress = workspaceAddress) => {
+    if (!currentCompany) return
+    saveCompanyBranding(currentCompany.id, {
+      logo: nextLogo,
+      address: nextAddress,
+    })
+  }
+
+  const handleWorkspaceLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setMessage('Error: Please choose an image file.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      setWorkspaceLogo(result)
+      persistWorkspaceBranding(result, workspaceAddress)
+    }
+    reader.readAsDataURL(file)
+  }
 
   useEffect(() => {
     if (!accountAccess.isAdmin) return
@@ -277,6 +309,7 @@ export default function ProfilePage() {
       if (error) throw error
 
       await refreshCompanies(currentCompany.id)
+      persistWorkspaceBranding()
       setMessage('Workspace updated successfully!')
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
@@ -624,7 +657,20 @@ export default function ProfilePage() {
 
       {isPreparingPrint && printTransactions.length > 0 && (
         <div className="print-area hidden">
-          <h1 className="mb-4 text-xl font-semibold capitalize">{getReportTitle()}</h1>
+          <div className="mb-4 flex items-start gap-3">
+            {workspaceLogo ? (
+              <img src={workspaceLogo} alt={currentCompany?.name ?? 'Workspace'} className="h-12 w-12 object-contain" />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
+                {(currentCompany?.name ?? 'L').slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <h1 className="text-xl font-semibold">{currentCompany?.name ?? 'Workspace'}</h1>
+              <p className="text-sm text-slate-600 capitalize">{getReportTitle()}</p>
+              {workspaceAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{workspaceAddress}</p>}
+            </div>
+          </div>
           {sortedPrintMonthGroups.map(([monthKey, transactions]) => renderMonthlyPrintSection(monthKey, transactions))}
           <div className="mt-4 grid gap-2 border-t pt-3 text-sm font-semibold sm:grid-cols-2">
             <p>
@@ -767,6 +813,52 @@ export default function ProfilePage() {
 
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                   {t('profile.currentPlanInline').replace('{plan}', planLabel)}
+                </div>
+
+                <div className="space-y-3 rounded-md border border-slate-200 p-4">
+                  <div className="flex items-center gap-4">
+                    {workspaceLogo ? (
+                      <img src={workspaceLogo} alt={workspaceName || 'Workspace logo'} className="h-14 w-14 rounded-md object-contain" />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-500">
+                        {(workspaceName || currentCompany.name).slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <label className="block text-sm font-medium">{t('profile.companyLogo')}</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleWorkspaceLogoChange}
+                        className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                      />
+                    </div>
+                    {workspaceLogo && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setWorkspaceLogo('')
+                          persistWorkspaceBranding('', workspaceAddress)
+                        }}
+                      >
+                        {t('common.delete')}
+                      </Button>
+                    )}
+                  </div>
+                  <label className="block space-y-1">
+                    <span className="text-sm font-medium">{t('profile.companyAddress')}</span>
+                    <textarea
+                      value={workspaceAddress}
+                      onChange={(event) => {
+                        setWorkspaceAddress(event.target.value)
+                        persistWorkspaceBranding(workspaceLogo, event.target.value)
+                      }}
+                      className="min-h-20 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder={t('profile.companyAddressPlaceholder')}
+                    />
+                  </label>
                 </div>
 
                 <div className="flex flex-col gap-2 sm:flex-row">

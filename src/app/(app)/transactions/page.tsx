@@ -10,6 +10,7 @@ import { AppSelect } from '@/components/app-select'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCategoryLabel } from '@/lib/category-labels'
+import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { createClient } from '@/lib/supabase-client'
 
@@ -32,6 +33,9 @@ interface SupabaseTransactionRow {
   currency: string
 }
 
+type BulkRenameTarget = 'all' | 'income' | 'expense'
+type BulkRenameField = 'description' | 'category'
+
 export default function TransactionsPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -42,6 +46,7 @@ export default function TransactionsPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [message, setMessage] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showBulkRename, setShowBulkRename] = useState(false)
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [printFromDate, setPrintFromDate] = useState(() => {
@@ -50,6 +55,8 @@ export default function TransactionsPage() {
     return date.toISOString().split('T')[0]
   })
   const [printToDate, setPrintToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [companyLogo, setCompanyLogo] = useState('')
+  const [companyAddress, setCompanyAddress] = useState('')
   const [formData, setFormData] = useState({
     type: 'income' as 'income' | 'expense',
     amount: 0,
@@ -58,6 +65,13 @@ export default function TransactionsPage() {
     date: new Date().toISOString().split('T')[0],
     currency: 'USD',
   })
+  const [bulkRename, setBulkRename] = useState({
+    target: 'income' as BulkRenameTarget,
+    field: 'description' as BulkRenameField,
+    from: '',
+    to: '',
+  })
+  const [selectedBulkRenameIds, setSelectedBulkRenameIds] = useState<string[]>([])
 
   const loadTransactions = useCallback(async () => {
     if (!currentCompany) {
@@ -111,6 +125,13 @@ export default function TransactionsPage() {
     void loadTransactions()
   }, [loadTransactions])
 
+  useEffect(() => {
+    if (!currentCompany) return
+    const branding = loadCompanyBranding(currentCompany.id)
+    setCompanyLogo(branding.logo)
+    setCompanyAddress(branding.address)
+  }, [currentCompany])
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setMessage('')
@@ -159,6 +180,68 @@ export default function TransactionsPage() {
     await loadTransactions()
   }
 
+  const handleBulkRename = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setMessage('')
+    setErrorMessage('')
+
+    if (!currentCompany) {
+      setErrorMessage('Create or select a workspace first.')
+      return
+    }
+
+    const fromValue = bulkRename.from.trim()
+    const toValue = bulkRename.to.trim()
+
+    if (!fromValue || !toValue) {
+      setErrorMessage(t('transactions.bulkRenameRequired'))
+      return
+    }
+
+    const selectedMatches = bulkRenameMatches.filter((transaction) =>
+      selectedBulkRenameIds.includes(`${transaction.type}:${transaction.id}`)
+    )
+
+    if (selectedMatches.length === 0) {
+      setErrorMessage(t('transactions.bulkRenameSelectRequired'))
+      return
+    }
+
+    const tables = [
+      {
+        table: 'incomes',
+        ids: selectedMatches.filter((transaction) => transaction.type === 'income').map((transaction) => transaction.id),
+      },
+      {
+        table: 'expenses',
+        ids: selectedMatches.filter((transaction) => transaction.type === 'expense').map((transaction) => transaction.id),
+      },
+    ]
+    let updatedCount = 0
+
+    for (const { table, ids } of tables) {
+      if (ids.length === 0) continue
+
+      const { error } = await supabase
+        .from(table)
+        .update({ [bulkRename.field]: toValue })
+        .eq('company_id', currentCompany.id)
+        .in('id', ids)
+
+      if (error) {
+        setErrorMessage(error.message)
+        return
+      }
+
+      updatedCount += ids.length
+    }
+
+    setMessage(t('transactions.bulkRenameDone').replace('{count}', String(updatedCount)))
+    setBulkRename((prev) => ({ ...prev, from: '', to: '' }))
+    setSelectedBulkRenameIds([])
+    await loadTransactions()
+  }
+
   const handlePrint = () => {
     const previousTitle = document.title
     document.title = ' '
@@ -175,6 +258,22 @@ export default function TransactionsPage() {
       return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
     })
   }, [transactions, sortBy, sortDirection])
+
+  const bulkRenameMatches = useMemo(() => {
+    const fromValue = bulkRename.from.trim()
+    if (!fromValue) return []
+
+    return transactions.filter((transaction) => {
+      const matchesTarget = bulkRename.target === 'all' || transaction.type === bulkRename.target
+      const fieldValue = transaction[bulkRename.field] ?? ''
+      const translatedValue = bulkRename.field === 'category' ? formatCategoryLabel(transaction.category, t) : fieldValue
+      return matchesTarget && (fieldValue === fromValue || translatedValue === fromValue)
+    })
+  }, [bulkRename.field, bulkRename.from, bulkRename.target, transactions, t])
+
+  useEffect(() => {
+    setSelectedBulkRenameIds(bulkRenameMatches.map((transaction) => `${transaction.type}:${transaction.id}`))
+  }, [bulkRenameMatches])
 
   const printableTransactions = useMemo(() => {
     return sortedTransactions.filter((transaction) => {
@@ -193,12 +292,7 @@ export default function TransactionsPage() {
   }, [printableTransactions])
 
   const formatTotalsByCurrency = (items: TransactionRow[]) => {
-    const totals = items.reduce<Record<string, number>>((acc, transaction) => {
-      const currency = normalizeCurrencyCode(transaction.currency)
-      acc[currency] = (acc[currency] ?? 0) + transaction.amount
-      return acc
-    }, {})
-
+    const totals = getTotalsByCurrency(items)
     const totalText = Object.entries(totals)
       .map(([currency, amount]) => formatCurrency(amount, currency))
       .join(' · ')
@@ -328,6 +422,9 @@ export default function TransactionsPage() {
             <Printer className="h-4 w-4" />
             {t('common.print')}
           </Button>
+          <Button type="button" variant="outline" onClick={() => setShowBulkRename((value) => !value)}>
+            {showBulkRename ? t('common.cancel') : t('transactions.bulkRename')}
+          </Button>
           <Button type="button" onClick={() => setShowForm((value) => !value)}>
             <Plus className="h-4 w-4" />
             {showForm ? t('common.cancel') : t('transactions.add')}
@@ -335,12 +432,22 @@ export default function TransactionsPage() {
         </div>
       </PageHeader>
 
-      <div className="print-area hidden">
-        <div className="mb-4">
-          <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
-          <p className="text-sm text-slate-600">
-            {t('transactions.title')} · {printFromDate || '...'} - {printToDate || '...'}
-          </p>
+      <div className="print-area print-compact hidden">
+        <div className="mb-2 flex items-start gap-3">
+          {companyLogo ? (
+            <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
+              {currentCompany.name.slice(0, 1).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
+            <p className="text-sm text-slate-600">
+              {t('transactions.title')} · {printFromDate || '...'} - {printToDate || '...'}
+            </p>
+            {companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>}
+          </div>
         </div>
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -362,15 +469,11 @@ export default function TransactionsPage() {
               )
             })}
           </tbody>
-          <tfoot>
-            <tr>
-              <td className="border p-2 font-semibold">{formatTotalsByCurrency(printColumns.incomes)}</td>
-              <td className="border p-2 font-semibold">{formatTotalsByCurrency(printColumns.expenses)}</td>
-            </tr>
-          </tfoot>
         </table>
-        <div className="mt-4 border-t pt-3 text-right text-base font-semibold">
-          {t('common.total')}: {formatNetTotals()}
+        <div className="mt-2 space-y-1 border-t pt-2 text-right text-sm font-semibold">
+          <p>{t('income.title')}: {formatTotalsByCurrency(printColumns.incomes)}</p>
+          <p>{t('expenses.title')}: {formatTotalsByCurrency(printColumns.expenses)}</p>
+          <p className="text-base">{t('dashboard.netIncome')}: {formatNetTotals()}</p>
         </div>
       </div>
 
@@ -379,6 +482,122 @@ export default function TransactionsPage() {
       )}
       {message && (
         <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>
+      )}
+
+      {showBulkRename && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>{t('transactions.bulkRename')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleBulkRename} className="grid gap-4 md:grid-cols-5">
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('transactions.bulkTarget')}</span>
+                <AppSelect
+                  value={bulkRename.target}
+                  onChange={(value) => setBulkRename({ ...bulkRename, target: value as BulkRenameTarget })}
+                  options={[
+                    { value: 'income', label: t('income.title') },
+                    { value: 'expense', label: t('expenses.title') },
+                    { value: 'all', label: t('transactions.all') },
+                  ]}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('transactions.bulkField')}</span>
+                <AppSelect
+                  value={bulkRename.field}
+                  onChange={(value) => setBulkRename({ ...bulkRename, field: value as BulkRenameField })}
+                  options={[
+                    { value: 'description', label: t('common.description') },
+                    { value: 'category', label: t('common.category') },
+                  ]}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('transactions.bulkOldValue')}</span>
+                <input
+                  value={bulkRename.from}
+                  onChange={(event) => setBulkRename({ ...bulkRename, from: event.target.value })}
+                  className="w-full rounded-md border px-3 py-2"
+                  placeholder="Verkauf"
+                  required
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('transactions.bulkNewValue')}</span>
+                <input
+                  value={bulkRename.to}
+                  onChange={(event) => setBulkRename({ ...bulkRename, to: event.target.value })}
+                  className="w-full rounded-md border px-3 py-2"
+                  placeholder="eingenommen"
+                  required
+                />
+              </label>
+              <div className="flex items-end">
+                <Button type="submit" className="w-full">{t('transactions.bulkApply')}</Button>
+              </div>
+              <p className="text-xs text-slate-500 md:col-span-5">
+                {t('transactions.bulkHint')}
+              </p>
+              <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-700">
+                    {t('transactions.bulkMatches').replace('{count}', String(bulkRenameMatches.length))}
+                  </p>
+                  {bulkRenameMatches.length > 0 && (
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={selectedBulkRenameIds.length === bulkRenameMatches.length}
+                        onChange={(event) => {
+                          setSelectedBulkRenameIds(event.target.checked
+                            ? bulkRenameMatches.map((transaction) => `${transaction.type}:${transaction.id}`)
+                            : []
+                          )
+                        }}
+                        className="h-4 w-4"
+                      />
+                      {t('transactions.bulkSelectAll')}
+                    </label>
+                  )}
+                </div>
+                {bulkRenameMatches.length === 0 ? (
+                  <p className="text-sm text-slate-500">{t('transactions.bulkNoMatches')}</p>
+                ) : (
+                  <div className="max-h-56 space-y-2 overflow-y-auto">
+                    {bulkRenameMatches.map((transaction) => {
+                      const rowId = `${transaction.type}:${transaction.id}`
+                      return (
+                        <label key={rowId} className="flex items-start gap-2 rounded-md bg-white p-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedBulkRenameIds.includes(rowId)}
+                            onChange={(event) => {
+                              setSelectedBulkRenameIds((prev) => event.target.checked
+                                ? [...prev, rowId]
+                                : prev.filter((id) => id !== rowId)
+                              )
+                            }}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span className="min-w-0">
+                            <span className="block font-medium text-slate-900">
+                              {transaction.type === 'income' ? t('income.title') : t('expenses.title')} · {transaction.date}
+                            </span>
+                            <span className="block truncate text-slate-600">
+                              {transaction.description || '-'} · {formatCategoryLabel(transaction.category, t)} · {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency))}
+                            </span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       {showForm && (

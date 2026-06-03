@@ -198,6 +198,22 @@ html {
     page-break-inside: avoid;
   }
 
+  .print-area.print-compact table,
+  .print-area.print-compact tbody,
+  .print-area.print-compact tr,
+  .print-area.print-compact section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-area.print-compact thead {
+    display: table-header-group;
+  }
+
+  .print-area.print-compact tfoot {
+    display: table-footer-group;
+  }
+
   .no-print {
     display: none !important;
   }
