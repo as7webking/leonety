@@ -47,6 +47,9 @@ export default function TransactionsPage() {
   const [message, setMessage] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showBulkRename, setShowBulkRename] = useState(false)
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
+  const [selectedField, setSelectedField] = useState<BulkRenameField>('description')
+  const [selectedValue, setSelectedValue] = useState('')
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [printFromDate, setPrintFromDate] = useState(() => {
@@ -242,6 +245,76 @@ export default function TransactionsPage() {
     await loadTransactions()
   }
 
+  const getSelectionKey = (transaction: TransactionRow) => `${transaction.type}:${transaction.id}`
+
+  const handleSelectedUpdate = async () => {
+    if (!currentCompany || selectedTransactions.length === 0 || !selectedValue.trim()) {
+      setErrorMessage(t('transactions.bulkRenameRequired'))
+      return
+    }
+
+    setErrorMessage('')
+    setMessage('')
+    let updatedCount = 0
+
+    for (const type of ['income', 'expense'] as const) {
+      const ids = selectedTransactions
+        .filter((value) => value.startsWith(`${type}:`))
+        .map((value) => value.slice(type.length + 1))
+
+      if (ids.length === 0) continue
+
+      const { error } = await supabase
+        .from(type === 'income' ? 'incomes' : 'expenses')
+        .update({ [selectedField]: selectedValue.trim() })
+        .eq('company_id', currentCompany.id)
+        .in('id', ids)
+
+      if (error) {
+        setErrorMessage(error.message)
+        return
+      }
+
+      updatedCount += ids.length
+    }
+
+    setMessage(t('transactions.bulkSelectedDone').replace('{count}', String(updatedCount)))
+    setSelectedTransactions([])
+    setSelectedValue('')
+    await loadTransactions()
+  }
+
+  const handleEksExport = () => {
+    const monthly = printableTransactions.reduce<Record<string, { income: number; expense: number }>>((acc, transaction) => {
+      const month = transaction.date.slice(0, 7)
+      const current = acc[month] ?? { income: 0, expense: 0 }
+      current[transaction.type] += transaction.amount
+      acc[month] = current
+      return acc
+    }, {})
+
+    const rows = [
+      ['Monat', 'Betriebseinnahmen', 'Betriebsausgaben', 'Gewinn', 'Währung'],
+      ...Object.entries(monthly)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([month, totals]) => [
+          month,
+          totals.income.toFixed(2).replace('.', ','),
+          totals.expense.toFixed(2).replace('.', ','),
+          (totals.income - totals.expense).toFixed(2).replace('.', ','),
+          normalizeCurrencyCode(currentCompany?.currency ?? 'EUR'),
+        ]),
+    ]
+    const csv = `\uFEFF${rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\r\n')}`
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `eks-euer-${printFromDate || 'start'}-${printToDate || 'end'}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handlePrint = () => {
     const previousTitle = document.title
     document.title = ' '
@@ -422,6 +495,9 @@ export default function TransactionsPage() {
             <Printer className="h-4 w-4" />
             {t('common.print')}
           </Button>
+          <Button type="button" variant="outline" onClick={handleEksExport} disabled={printableTransactions.length === 0}>
+            {t('transactions.exportEks')}
+          </Button>
           <Button type="button" variant="outline" onClick={() => setShowBulkRename((value) => !value)}>
             {showBulkRename ? t('common.cancel') : t('transactions.bulkRename')}
           </Button>
@@ -482,6 +558,38 @@ export default function TransactionsPage() {
       )}
       {message && (
         <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>
+      )}
+
+      {selectedTransactions.length > 0 && (
+        <Card className="mb-6">
+          <CardContent className="grid gap-3 p-4 md:grid-cols-[auto_180px_1fr_auto] md:items-end">
+            <p className="self-center text-sm font-medium text-slate-700">
+              {t('transactions.selectedCount').replace('{count}', String(selectedTransactions.length))}
+            </p>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">{t('transactions.bulkField')}</span>
+              <AppSelect
+                value={selectedField}
+                onChange={(value) => setSelectedField(value as BulkRenameField)}
+                options={[
+                  { value: 'description', label: t('common.description') },
+                  { value: 'category', label: t('common.category') },
+                ]}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">{t('transactions.bulkValue')}</span>
+              <input
+                value={selectedValue}
+                onChange={(event) => setSelectedValue(event.target.value)}
+                className="w-full rounded-md border px-3 py-2"
+              />
+            </label>
+            <Button type="button" onClick={() => void handleSelectedUpdate()}>
+              {t('transactions.bulkEditSelected')}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {showBulkRename && (
@@ -654,7 +762,8 @@ export default function TransactionsPage() {
         <EmptyState title={t('common.noTransactions')} description={t('transactions.emptyDescription')} />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <div className="grid grid-cols-[auto_1fr_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid-cols-[auto_1fr_160px_160px]">
+          <div className="grid grid-cols-[auto_auto_1fr_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid-cols-[auto_auto_1fr_160px_160px]">
+            <span>{t('transactions.select')}</span>
             <span>{t('transactions.type')}</span>
             <span>{t('common.description')}</span>
             <span className="hidden md:block">{t('common.category')}</span>
@@ -667,8 +776,20 @@ export default function TransactionsPage() {
             return (
               <div
                 key={`${transaction.type}-${transaction.id}`}
-                className="grid grid-cols-[auto_1fr_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_1fr_160px_160px]"
+                className="grid grid-cols-[auto_auto_1fr_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_1fr_160px_160px]"
               >
+                <input
+                  type="checkbox"
+                  checked={selectedTransactions.includes(getSelectionKey(transaction))}
+                  onChange={(event) => {
+                    const key = getSelectionKey(transaction)
+                    setSelectedTransactions((current) => event.target.checked
+                      ? [...current, key]
+                      : current.filter((value) => value !== key))
+                  }}
+                  aria-label={`${t('transactions.select')} ${transaction.description ?? transaction.date}`}
+                  className="mt-0.5 h-4 w-4"
+                />
                 <span className={`inline-flex items-center gap-1 font-medium ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}>
                   <Icon className="h-4 w-4" />
                   {isIncome ? t('income.title') : t('expenses.title')}

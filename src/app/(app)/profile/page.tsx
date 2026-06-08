@@ -12,7 +12,7 @@ import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCo
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AppSelect } from '@/components/app-select'
 import { useI18n } from '@/contexts/i18n-context'
-import { PageContainer, PageHeader } from '@/components'
+import { LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { User, Mail, DollarSign, LogOut, BriefcaseBusiness } from 'lucide-react'
@@ -58,6 +58,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [currency, setCurrency] = useState('USD')
   const [workspaceName, setWorkspaceName] = useState('')
   const [workspaceCurrency, setWorkspaceCurrency] = useState('USD')
@@ -149,6 +150,7 @@ export default function ProfilePage() {
         setProfile({ ...data, profile_number: numberData?.profile_number ?? null })
         setFullName(data.full_name)
         setCurrency(normalizeCurrencyCode(data.currency))
+        setPhone(typeof user.user_metadata?.phone === 'string' ? user.user_metadata.phone : '')
       } catch {
         setMessage('Error loading profile')
       } finally {
@@ -259,6 +261,11 @@ export default function ProfilePage() {
         .eq('id', user.id)
 
       if (error) throw error
+
+      const { error: authUpdateError } = await supabase.auth.updateUser({
+        data: { phone: phone.trim() || null },
+      })
+      if (authUpdateError) throw authUpdateError
 
       setMessage('Profile updated successfully!')
       setProfile(prev => prev ? {
@@ -622,12 +629,10 @@ export default function ProfilePage() {
     return (
       <PageContainer>
         <PageHeader
-          title="Loading..."
-          description="Please wait..."
+          title={t('profile.title')}
+          description={t('common.loadingDescription')}
         />
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
+        <LoadingSkeleton />
       </PageContainer>
     )
   }
@@ -725,6 +730,18 @@ export default function ProfilePage() {
                   placeholder="Your name"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">{t('profile.phone')}</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="+49 ..."
+                />
+                <p className="mt-1 text-xs text-gray-500">{t('profile.phoneHint')}</p>
               </div>
 
               <div>

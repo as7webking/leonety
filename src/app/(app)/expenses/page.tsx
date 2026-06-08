@@ -523,7 +523,7 @@ export default function ExpensesPage() {
       {successMessage && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{successMessage}</div>}
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
 
-      {showForm && (
+      {showForm && !editingEntry && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>{editingEntry ? t('expenses.edit') : t('expenses.add')}</CardTitle>
@@ -588,7 +588,8 @@ export default function ExpensesPage() {
             <div key={groupKey} className="space-y-4">
               {groupReportsByMonth && <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{formatMonthLabel(groupKey)}</h2>}
               {groupItems.map((expense) => (
-            <Card key={expense.id}>
+            <div key={expense.id} className="space-y-2">
+            <Card>
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
                   <p className="font-medium">{expense.description}</p>
@@ -619,6 +620,23 @@ export default function ExpensesPage() {
                 </div>
               </CardContent>
             </Card>
+            {editingEntry?.id === expense.id && (
+              <Card className="border-primary/30 bg-slate-50">
+                <CardContent className="p-4">
+                  <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
+                    <input type="number" step="0.01" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: Number(event.target.value) })} className="rounded-md border px-3 py-2" aria-label={t('common.amount')} required />
+                    <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} required />
+                    <input value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.category')} required />
+                    <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.date')} required />
+                    <div className="flex gap-2">
+                      <Button type="submit">{t('common.saveChanges')}</Button>
+                      <Button type="button" variant="outline" onClick={() => { setEditingEntry(null); setShowForm(false) }}>{t('common.cancel')}</Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+            </div>
               ))}
             </div>
           ))}

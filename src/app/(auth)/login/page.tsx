@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [currency, setCurrency] = useState('EUR')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -62,6 +63,7 @@ export default function LoginPage() {
             data: {
               full_name: fullName,
               currency: currency,
+              phone: phone.trim() || null,
             },
             emailRedirectTo: getAuthCallbackUrl('/profile'),
           },
@@ -84,6 +86,7 @@ export default function LoginPage() {
           setEmail('')
           setPassword('')
           setFullName('')
+          setPhone('')
           setCurrency('EUR')
           setShowPassword(false)
         }
@@ -213,6 +216,19 @@ export default function LoginPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Your name"
                   required
+                />
+              </div>
+            )}
+
+            {isSignUp && (
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('profile.phone')}</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="+49 ..."
                 />
               </div>
             )}

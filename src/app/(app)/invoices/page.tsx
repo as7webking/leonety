@@ -476,7 +476,7 @@ export default function InvoicesPage() {
             category: 'Invoice Payment',
             amount: totals.total,
             currency: normalizeCurrencyCode(formData.currency),
-            date: today(),
+            date: formData.issue_date,
           })
 
           if (incomeError) throw incomeError
