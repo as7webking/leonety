@@ -58,6 +58,7 @@ export default function TransactionsPage() {
     return date.toISOString().split('T')[0]
   })
   const [printToDate, setPrintToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [includeOpeningBalance, setIncludeOpeningBalance] = useState(false)
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [formData, setFormData] = useState({
@@ -134,6 +135,16 @@ export default function TransactionsPage() {
     setCompanyLogo(branding.logo)
     setCompanyAddress(branding.address)
   }, [currentCompany])
+
+  useEffect(() => {
+    const savedValue = window.localStorage.getItem('leonety-print-opening-balance')
+    setIncludeOpeningBalance(savedValue === 'true')
+  }, [])
+
+  const handleOpeningBalanceChange = (checked: boolean) => {
+    setIncludeOpeningBalance(checked)
+    window.localStorage.setItem('leonety-print-opening-balance', String(checked))
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -364,6 +375,11 @@ export default function TransactionsPage() {
     return { incomes, expenses, rowCount }
   }, [printableTransactions])
 
+  const openingTransactions = useMemo(
+    () => printFromDate ? transactions.filter((transaction) => transaction.date < printFromDate) : [],
+    [printFromDate, transactions]
+  )
+
   const formatTotalsByCurrency = (items: TransactionRow[]) => {
     const totals = getTotalsByCurrency(items)
     const totalText = Object.entries(totals)
@@ -380,9 +396,9 @@ export default function TransactionsPage() {
       return acc
     }, {})
 
-  const formatNetTotals = () => {
-    const incomeTotals = getTotalsByCurrency(printColumns.incomes)
-    const expenseTotals = getTotalsByCurrency(printColumns.expenses)
+  const formatNetTotals = (items: TransactionRow[]) => {
+    const incomeTotals = getTotalsByCurrency(items.filter((transaction) => transaction.type === 'income'))
+    const expenseTotals = getTotalsByCurrency(items.filter((transaction) => transaction.type === 'expense'))
     const currencies = Array.from(new Set([...Object.keys(incomeTotals), ...Object.keys(expenseTotals)]))
 
     if (currencies.length === 0) {
@@ -393,6 +409,10 @@ export default function TransactionsPage() {
       .map((currency) => formatCurrency((incomeTotals[currency] ?? 0) - (expenseTotals[currency] ?? 0), currency))
       .join(' · ')
   }
+
+  const closingTransactions = includeOpeningBalance
+    ? [...openingTransactions, ...printableTransactions]
+    : printableTransactions
 
   const renderPrintCell = (transaction: TransactionRow | undefined) => {
     if (!transaction) return null
@@ -471,6 +491,15 @@ export default function TransactionsPage() {
               className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
             />
           </label>
+          <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={includeOpeningBalance}
+              onChange={(event) => handleOpeningBalanceChange(event.target.checked)}
+              className="h-4 w-4"
+            />
+            {t('transactions.includeOpeningBalance')}
+          </label>
           <AppSelect
             value={sortBy}
             onChange={(value) => setSortBy(value as 'date' | 'amount')}
@@ -525,6 +554,12 @@ export default function TransactionsPage() {
             {companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>}
           </div>
         </div>
+        {includeOpeningBalance && (
+          <div className="mb-2 border border-slate-300 bg-slate-50 px-3 py-2 text-left text-sm">
+            <span className="font-medium">{t('dashboard.openingBalance')}:</span>{' '}
+            <span className="font-semibold">{formatNetTotals(openingTransactions)}</span>
+          </div>
+        )}
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
@@ -545,11 +580,24 @@ export default function TransactionsPage() {
               )
             })}
           </tbody>
+          <tfoot>
+            <tr className="font-semibold">
+              <td className="border p-2 text-right">
+                {t('income.title')}: {formatTotalsByCurrency(printColumns.incomes)}
+              </td>
+              <td className="border p-2 text-right">
+                {t('expenses.title')}: {formatTotalsByCurrency(printColumns.expenses)}
+              </td>
+            </tr>
+          </tfoot>
         </table>
-        <div className="mt-2 space-y-1 border-t pt-2 text-right text-sm font-semibold">
-          <p>{t('income.title')}: {formatTotalsByCurrency(printColumns.incomes)}</p>
-          <p>{t('expenses.title')}: {formatTotalsByCurrency(printColumns.expenses)}</p>
-          <p className="text-base">{t('dashboard.netIncome')}: {formatNetTotals()}</p>
+        <div className="mt-3 space-y-1 border-t-2 border-slate-900 pt-2 text-right">
+          <p className="text-sm font-semibold">
+            {t('dashboard.periodResult')}: {formatNetTotals(printableTransactions)}
+          </p>
+          <p className="text-base font-bold">
+            {t('dashboard.closingBalance')}: {formatNetTotals(closingTransactions)}
+          </p>
         </div>
       </div>
 

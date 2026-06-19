@@ -143,12 +143,15 @@ export default function ExpensesPage() {
     }
 
     try {
-      const validatedData = expenseSchema.parse(formData)
-      const category = validatedData.category === 'Other' ? customCategory || 'Other' : validatedData.category
+      const isOtherExpense = formData.category === 'Other'
+      const validatedData = expenseSchema.parse({
+        ...formData,
+        description: isOtherExpense ? customCategory : formData.description,
+      })
       const payload = {
         description: validatedData.description,
         date: validatedData.date,
-        category,
+        category: validatedData.category,
         amount: Number(validatedData.amount.toFixed(2)),
         currency: validatedData.currency,
         company_id: currentCompany.id,
@@ -189,6 +192,7 @@ export default function ExpensesPage() {
 
   const handleEdit = (entry: Expense) => {
     setEditingEntry(entry)
+    setCustomCategory(entry.category === 'Other' ? entry.description : '')
     setFormData({
       amount: entry.amount,
       description: entry.description,
@@ -534,10 +538,12 @@ export default function ExpensesPage() {
                 <label className="mb-1 block text-sm font-medium">{t('common.amount')}</label>
                 <input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })} className="w-full rounded-md border px-3 py-2" required />
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">{t('common.description')}</label>
-                <input type="text" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" required />
-              </div>
+              {formData.category !== 'Other' && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">{t('common.description')}</label>
+                  <input type="text" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" required />
+                </div>
+              )}
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('common.category')}</label>
                 <AppSelect
@@ -549,7 +555,7 @@ export default function ExpensesPage() {
                   ]}
                 />
                 {formData.category === 'Other' && (
-                  <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" placeholder={t('expenses.customCategory')} required />
+                  <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" placeholder={t('expenses.otherExpenseDetails')} aria-label={t('expenses.otherExpenseDetails')} required />
                 )}
               </div>
               <div className="grid gap-4 md:grid-cols-2">

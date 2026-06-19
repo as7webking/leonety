@@ -10,7 +10,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
 import { AppSelect } from '@/components/app-select'
-import { Building2 } from 'lucide-react'
+import { Boxes, Building2, CalendarDays, Package, Users } from 'lucide-react'
 
 interface Income {
   id: string
@@ -151,9 +151,6 @@ export default function DashboardPage() {
     return convertToCurrency(savedAmount, savedWorkspaceCurrency, currency)
   }
 
-  const totalIncome = incomes.reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
-  const totalExpenses = expenses.reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
-  const netIncome = totalIncome - totalExpenses
   const totalHours = timeEntries.reduce((sum, item) => sum + Number(item.hours), 0)
 
   const formatMoney = (value: number) => formatCurrency(value, currency)
@@ -174,13 +171,27 @@ export default function DashboardPage() {
   const filterByDate = <T extends { date: string }>(items: T[]) =>
     items.filter((item) => (!filterFromDate || item.date >= filterFromDate) && (!filterToDate || item.date <= filterToDate))
 
-  const sortedIncomes = filterByDate(incomes).sort((left, right) => {
+  const periodIncomes = filterByDate(incomes)
+  const periodExpenses = filterByDate(expenses)
+  const openingIncome = incomes
+    .filter((item) => Boolean(filterFromDate) && item.date < filterFromDate)
+    .reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
+  const openingExpenses = expenses
+    .filter((item) => Boolean(filterFromDate) && item.date < filterFromDate)
+    .reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
+  const openingBalance = openingIncome - openingExpenses
+  const periodIncome = periodIncomes.reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
+  const periodExpense = periodExpenses.reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
+  const periodResult = periodIncome - periodExpense
+  const closingBalance = openingBalance + periodResult
+
+  const sortedIncomes = periodIncomes.sort((left, right) => {
     const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
     const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
     return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
   })
 
-  const sortedExpenses = filterByDate(expenses).sort((left, right) => {
+  const sortedExpenses = periodExpenses.sort((left, right) => {
     const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
     const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
     return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
@@ -264,26 +275,47 @@ export default function DashboardPage() {
           className="self-end"
         />
       </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">{t('dashboard.totalIncome')}</h3>
-          <p className="text-2xl">{formatMoney(totalIncome)}</p>
+          <h3 className="text-sm font-medium text-slate-500">{t('dashboard.openingBalance')}</h3>
+          <p className={`mt-2 text-2xl ${openingBalance < 0 ? 'text-red-600' : ''}`}>{formatMoney(openingBalance)}</p>
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">{t('dashboard.totalExpenses')}</h3>
-          <p className="text-2xl">{formatMoney(totalExpenses)}</p>
+          <h3 className="text-sm font-medium text-slate-500">{t('dashboard.periodIncome')}</h3>
+          <p className="mt-2 text-2xl text-green-600">{formatMoney(periodIncome)}</p>
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">{t('dashboard.netIncome')}</h3>
-          <p className={`text-2xl ${netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {formatMoney(netIncome)}
-          </p>
+          <h3 className="text-sm font-medium text-slate-500">{t('dashboard.periodExpenses')}</h3>
+          <p className="mt-2 text-2xl text-red-600">{formatMoney(periodExpense)}</p>
         </div>
         <div className="rounded-lg bg-card p-6">
-          <h3 className="text-lg font-semibold">{t('dashboard.totalTime')}</h3>
-          <p className="text-2xl">{formatHours(totalHours)}</p>
+          <h3 className="text-sm font-medium text-slate-500">{t('dashboard.periodResult')}</h3>
+          <p className={`mt-2 text-2xl ${periodResult >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(periodResult)}</p>
+        </div>
+        <div className="rounded-lg border-2 border-slate-900 bg-card p-6">
+          <h3 className="text-sm font-medium text-slate-500">{t('dashboard.closingBalance')}</h3>
+          <p className={`mt-2 text-2xl font-semibold ${closingBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatMoney(closingBalance)}</p>
         </div>
       </div>
+
+      <div className="mt-4 rounded-lg bg-card p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-slate-500">{t('dashboard.totalTime')}</h3>
+          <p className="text-lg font-semibold">{formatHours(totalHours)}</p>
+        </div>
+      </div>
+
+      {currentCompany.type === 'business' && (
+        <div className="mt-8">
+          <h2 className="mb-3 text-lg font-semibold">{t('dashboard.businessTools')}</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Link href="/employees" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Users className="mb-3 h-5 w-5 text-blue-600" /><p className="font-medium">{t('nav.employees')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.employeesLink')}</p></Link>
+            <Link href="/shifts" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><CalendarDays className="mb-3 h-5 w-5 text-violet-600" /><p className="font-medium">{t('nav.shifts')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.shiftsLink')}</p></Link>
+            <Link href="/products" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Package className="mb-3 h-5 w-5 text-emerald-600" /><p className="font-medium">{t('nav.products')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.productsLink')}</p></Link>
+            <Link href="/inventory" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Boxes className="mb-3 h-5 w-5 text-amber-600" /><p className="font-medium">{t('nav.inventory')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.inventoryLink')}</p></Link>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="rounded-lg bg-card p-6">

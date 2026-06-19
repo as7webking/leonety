@@ -1,3 +1,5 @@
+import { businessModuleDictionaries } from '@/lib/business-modules-i18n'
+
 export const locales = ['en', 'de', 'ru'] as const
 
 export type Locale = typeof locales[number]
@@ -8,6 +10,7 @@ type Dictionary = Record<string, string>
 
 export const dictionaries: Record<Locale, Dictionary> = {
   en: {
+    ...businessModuleDictionaries.en,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Income',
     'nav.expenses': 'Expenses',
@@ -373,6 +376,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety is monitored to keep your financial workflow available.',
   },
   de: {
+    ...businessModuleDictionaries.de,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Einnahmen',
     'nav.expenses': 'Ausgaben',
@@ -738,6 +742,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety wird überwacht, damit dein Finanzworkflow verfügbar bleibt.',
   },
   ru: {
+    ...businessModuleDictionaries.ru,
     'nav.dashboard': 'Панель',
     'nav.income': 'Доходы',
     'nav.expenses': 'Расходы',
