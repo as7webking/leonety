@@ -106,7 +106,7 @@ export default function OnboardingPage() {
       }
 
       await refreshCompanies(data.id)
-      router.push('/dashboard')
+      router.push('/app/dashboard')
     } catch (error) {
       console.error('Onboarding failed:', error)
       setMessage(error instanceof Error ? error.message : 'Failed to create workspace')
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
                         size="sm"
                         onClick={async () => {
                           await refreshCompanies(company.id)
-                          router.push('/dashboard')
+                          router.push('/app/dashboard')
                         }}
                       >
                         Use this
@@ -172,9 +172,9 @@ export default function OnboardingPage() {
                 {message || 'Workspace limit reached. Switch to Pro to add more workspaces.'}
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button onClick={() => router.push('/dashboard')}>Go to dashboard</Button>
-                <Button variant="outline" onClick={() => router.push('/workspaces')}>Open workspace settings</Button>
-                <Button variant="outline" onClick={() => router.push('/upgrade')}>Switch to Pro</Button>
+                <Button onClick={() => router.push('/app/dashboard')}>Go to dashboard</Button>
+                <Button variant="outline" onClick={() => router.push('/app/workspaces')}>Open workspace settings</Button>
+                <Button variant="outline" onClick={() => router.push('/app/upgrade')}>Switch to Pro</Button>
               </div>
             </div>
           ) : (

@@ -300,7 +300,7 @@ export default function WorkspacesPage() {
                     Workspace limit reached. Upgrade Plan to add more workspaces.
                   </div>
                   <Button asChild>
-                    <Link href="/upgrade">Upgrade Plan</Link>
+                    <Link href="/app/upgrade">Upgrade Plan</Link>
                   </Button>
                 </div>
               ) : (

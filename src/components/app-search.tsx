@@ -172,7 +172,7 @@ export function AppSearch() {
               group: 'Workspaces',
               title: company.name,
               detail: `${company.type} workspace${company.currency ? ` · ${company.currency}` : ''}`,
-              href: '/dashboard',
+              href: '/app/dashboard',
             })
           }
         }
@@ -184,7 +184,7 @@ export function AppSearch() {
               group: 'Income',
               title: income.description || 'Income entry',
               detail: [income.category, income.amount, income.date].filter(Boolean).join(' · '),
-              href: '/income',
+              href: '/app/income',
             })
           }
         }
@@ -196,7 +196,7 @@ export function AppSearch() {
               group: 'Expenses',
               title: expense.description || 'Expense entry',
               detail: [expense.category, expense.amount, expense.date].filter(Boolean).join(' · '),
-              href: '/expenses',
+              href: '/app/expenses',
             })
           }
         }
@@ -209,7 +209,7 @@ export function AppSearch() {
               group: 'Time',
               title: entry.description || 'Time entry',
               detail: `${duration} · ${entry.date}`,
-              href: '/time',
+              href: '/app/time',
             })
           }
         }
@@ -221,7 +221,7 @@ export function AppSearch() {
               group: 'Clients',
               title: client.name,
               detail: [client.phone, client.interested_in, client.status].filter(Boolean).join(' · '),
-              href: '/clients',
+              href: '/app/clients',
             })
           }
         }
@@ -233,7 +233,7 @@ export function AppSearch() {
               group: 'Invoices',
               title: invoice.invoice_number,
               detail: [invoice.status, `${invoice.total} ${invoice.currency}`].filter(Boolean).join(' · '),
-              href: '/invoices',
+              href: '/app/invoices',
             })
           }
         }

@@ -19,8 +19,7 @@ const WORKSPACE_ACTION_VALUE = '__workspace_action__'
 export function Nav() {
   const [isOpen, setIsOpen] = useState(false)
   const [transactionsOpen, setTransactionsOpen] = useState(false)
-  const [operationsOpen, setOperationsOpen] = useState(false)
-  const [inventoryOpen, setInventoryOpen] = useState(false)
+  const [businessOpen, setBusinessOpen] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [supabase] = useState(() => createClient())
@@ -29,7 +28,7 @@ export function Nav() {
   const { accountAccess } = useAccountAccess(accountEmail)
   const { t } = useI18n()
   const canAddWorkspace = canCreateWorkspace(companies.length, accountAccess)
-  const workspaceActionHref = canAddWorkspace ? '/workspaces' : '/upgrade'
+  const workspaceActionHref = canAddWorkspace ? '/app/workspaces' : '/app/upgrade'
   const workspaceActionLabel = canAddWorkspace ? t('nav.addWorkspace') : t('nav.switchToPro')
   const companyOptions = [
     ...(companies.length === 0 ? [{ value: '', label: t('nav.noWorkspace'), disabled: true }] : []),
@@ -95,7 +94,7 @@ export function Nav() {
           {/* Desktop menu */}
           <div className="hidden flex-1 items-center justify-between gap-2 lg:flex">
             <div className="flex items-center gap-0.5 rounded-md bg-slate-50 p-0.5">
-              <Link href="/dashboard" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.dashboard')}</Link>
+              <Link href="/app/dashboard" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.dashboard')}</Link>
               <div className="relative">
                 <button
                   type="button"
@@ -108,63 +107,50 @@ export function Nav() {
                 </button>
                 {transactionsOpen && (
                   <div className="absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
-                    <Link href="/transactions" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
+                    <Link href="/app/transactions" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
                       {t('nav.allTransactions')}
                     </Link>
-                    <Link href="/income" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
+                    <Link href="/app/income" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
                       {t('nav.income')}
                     </Link>
-                    <Link href="/expenses" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
+                    <Link href="/app/expenses" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setTransactionsOpen(false)}>
                       {t('nav.expenses')}
                     </Link>
                   </div>
                 )}
               </div>
-              <Link href="/time" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.time')}</Link>
+              <Link href="/app/time" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.time')}</Link>
               {showBusinessModules && (
                 <>
-                  <Link href="/clients" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.clients')}</Link>
-                  <Link href="/invoices" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.invoices')}</Link>
+                  <Link href="/app/clients" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.clients')}</Link>
+                  <Link href="/app/invoices" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.invoices')}</Link>
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setOperationsOpen((open) => !open)}
+                      onClick={() => setBusinessOpen((open) => !open)}
                       className="inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950"
-                      aria-expanded={operationsOpen}
+                      aria-expanded={businessOpen}
                     >
-                      {t('nav.operations')}
+                      {t('nav.business')}
                       <ChevronDown className="h-3.5 w-3.5" />
                     </button>
-                    {operationsOpen && (
-                      <div className="absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
-                        <Link href="/employees" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOperationsOpen(false)}>{t('nav.employees')}</Link>
-                        <Link href="/shifts" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOperationsOpen(false)}>{t('nav.shifts')}</Link>
-                        <Link href="/locations" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOperationsOpen(false)}>{t('nav.locations')}</Link>
-                      </div>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setInventoryOpen((open) => !open)}
-                      className="inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950"
-                      aria-expanded={inventoryOpen}
-                    >
-                      {t('nav.inventory')}
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
-                    {inventoryOpen && (
-                      <div className="absolute left-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
-                        <Link href="/inventory" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setInventoryOpen(false)}>{t('nav.inventoryOverview')}</Link>
-                        <Link href="/products" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setInventoryOpen(false)}>{t('nav.products')}</Link>
-                        <Link href="/stock-movements" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setInventoryOpen(false)}>{t('nav.stockMovements')}</Link>
-                        <Link href="/settings/integrations/woocommerce" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setInventoryOpen(false)}>{t('nav.woocommerce')}</Link>
+                    {businessOpen && (
+                      <div className="absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                        <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase text-slate-400">{t('nav.operations')}</div>
+                        <Link href="/app/employees" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.employees')}</Link>
+                        <Link href="/app/shifts" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.shifts')}</Link>
+                        <Link href="/app/locations" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.locations')}</Link>
+                        <div className="border-y border-slate-100 px-3 py-2 text-xs font-semibold uppercase text-slate-400">{t('nav.inventory')}</div>
+                        <Link href="/app/inventory" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.inventoryOverview')}</Link>
+                        <Link href="/app/products" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.products')}</Link>
+                        <Link href="/app/stock-movements" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.stockMovements')}</Link>
+                        <Link href="/app/settings/integrations/woocommerce" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.woocommerce')}</Link>
                       </div>
                     )}
                   </div>
                 </>
               )}
-              <Link href="/workspaces" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.workspaces')}</Link>
+              <Link href="/app/workspaces" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.workspaces')}</Link>
             </div>
             <div className="flex min-w-0 items-center justify-end gap-1.5">
               <AppSearch />
@@ -179,7 +165,7 @@ export function Nav() {
                 />
               </div>
               {isAuthenticated && (
-                <Link href="/profile" className="flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">
+                <Link href="/app/profile" className="flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">
                   <User className="h-4 w-4" />
                   {t('nav.profile')}
                 </Link>
@@ -217,42 +203,42 @@ export function Nav() {
                 options={companyOptions}
                 ariaLabel="Current company"
               />
-              <Link href="/dashboard" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.dashboard')}</Link>
+              <Link href="/app/dashboard" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.dashboard')}</Link>
               <div className="rounded-md border border-slate-200 p-3">
                 <p className="mb-2 text-sm font-medium text-slate-700">{t('nav.transactions')}</p>
                 <div className="flex flex-col gap-2 pl-2">
-                  <Link href="/transactions" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.allTransactions')}</Link>
-                  <Link href="/income" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.income')}</Link>
-                  <Link href="/expenses" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.expenses')}</Link>
+                  <Link href="/app/transactions" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.allTransactions')}</Link>
+                  <Link href="/app/income" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.income')}</Link>
+                  <Link href="/app/expenses" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.expenses')}</Link>
                 </div>
               </div>
-              <Link href="/time" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.time')}</Link>
+              <Link href="/app/time" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.time')}</Link>
               {showBusinessModules && (
                 <>
-                  <Link href="/clients" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.clients')}</Link>
-                  <Link href="/invoices" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.invoices')}</Link>
+                  <Link href="/app/clients" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.clients')}</Link>
+                  <Link href="/app/invoices" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.invoices')}</Link>
                   <div className="rounded-md border border-slate-200 p-3">
                     <p className="mb-2 text-sm font-medium text-slate-700">{t('nav.operations')}</p>
                     <div className="flex flex-col gap-2 pl-2">
-                      <Link href="/employees" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.employees')}</Link>
-                      <Link href="/shifts" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.shifts')}</Link>
-                      <Link href="/locations" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.locations')}</Link>
+                      <Link href="/app/employees" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.employees')}</Link>
+                      <Link href="/app/shifts" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.shifts')}</Link>
+                      <Link href="/app/locations" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.locations')}</Link>
                     </div>
                   </div>
                   <div className="rounded-md border border-slate-200 p-3">
                     <p className="mb-2 text-sm font-medium text-slate-700">{t('nav.inventory')}</p>
                     <div className="flex flex-col gap-2 pl-2">
-                      <Link href="/inventory" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.inventoryOverview')}</Link>
-                      <Link href="/products" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.products')}</Link>
-                      <Link href="/stock-movements" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.stockMovements')}</Link>
-                      <Link href="/settings/integrations/woocommerce" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.woocommerce')}</Link>
+                      <Link href="/app/inventory" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.inventoryOverview')}</Link>
+                      <Link href="/app/products" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.products')}</Link>
+                      <Link href="/app/stock-movements" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.stockMovements')}</Link>
+                      <Link href="/app/settings/integrations/woocommerce" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.woocommerce')}</Link>
                     </div>
                   </div>
                 </>
               )}
-              <Link href="/workspaces" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.workspaces')}</Link>
+              <Link href="/app/workspaces" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.workspaces')}</Link>
               {isAuthenticated && (
-                <Link href="/profile" className="hover:underline flex items-center gap-1" onClick={() => setIsOpen(false)}>
+                <Link href="/app/profile" className="hover:underline flex items-center gap-1" onClick={() => setIsOpen(false)}>
                   <User className="h-4 w-4" />
                   {t('nav.profile')}
                 </Link>

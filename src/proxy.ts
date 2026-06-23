@@ -36,8 +36,35 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
-  const protectedRoutes = ['/dashboard', '/income', '/expenses', '/time', '/onboarding', '/profile']
-  const workspaceRequiredRoutes = ['/dashboard', '/income', '/expenses', '/time']
+  const appRouteRedirects = [
+    '/dashboard',
+    '/income',
+    '/expenses',
+    '/transactions',
+    '/time',
+    '/onboarding',
+    '/profile',
+    '/workspaces',
+    '/upgrade',
+    '/clients',
+    '/invoices',
+    '/employees',
+    '/locations',
+    '/shifts',
+    '/products',
+    '/inventory',
+    '/stock-movements',
+    '/settings/integrations/woocommerce',
+  ]
+  const matchingLegacyRoute = appRouteRedirects.find((route) => pathname === route || pathname.startsWith(`${route}/`))
+  if (matchingLegacyRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = `/app${pathname}`
+    return NextResponse.redirect(url)
+  }
+
+  const protectedRoutes = ['/app']
+  const workspaceRequiredRoutes = ['/app/dashboard', '/app/income', '/app/expenses', '/app/time', '/app/transactions']
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
 
   if (!user && isProtectedRoute) {
@@ -61,13 +88,13 @@ export async function proxy(request: NextRequest) {
 
     if (pathname === '/login') {
       const url = request.nextUrl.clone()
-      url.pathname = hasCompany ? '/dashboard' : '/onboarding'
+      url.pathname = hasCompany ? '/app/dashboard' : '/app/onboarding'
       return NextResponse.redirect(url)
     }
 
     if (!hasCompany && workspaceRequiredRoutes.some((route) => pathname.startsWith(route))) {
       const url = request.nextUrl.clone()
-      url.pathname = '/onboarding'
+      url.pathname = '/app/onboarding'
       return NextResponse.redirect(url)
     }
 

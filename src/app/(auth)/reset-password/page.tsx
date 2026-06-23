@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
       if (updateError) throw updateError
 
       setMessage('Password updated successfully. Redirecting to your profile...')
-      window.setTimeout(() => router.push('/profile'), 800)
+      window.setTimeout(() => router.push('/app/profile'), 800)
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Failed to update password.')
     } finally {

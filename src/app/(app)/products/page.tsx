@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Archive, Barcode, BriefcaseBusiness, Building2, Edit, PackagePlus, RefreshCw, Search, UploadCloud } from 'lucide-react'
+import { Archive, Barcode, BriefcaseBusiness, Building2, Download, Edit, PackagePlus, RefreshCw, Search, UploadCloud } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
@@ -48,6 +48,7 @@ interface ProductForm {
   low_stock_threshold: string
   status: ProductStatus
   image_url: string
+  publish_to_woocommerce: boolean
   woo_product_type: 'simple' | 'variable'
   woo_attributes: string
   woo_variants: string
@@ -55,10 +56,18 @@ interface ProductForm {
 
 interface ProductSync {
   product_id: string
-  woo_product_id: number | null
-  sync_status: 'not_synced' | 'synced' | 'error'
-  last_sync_at: string | null
+  channel: 'woocommerce' | 'shopify'
+  external_product_id: string | null
+  sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'
+  last_synced_at: string | null
   error_message: string | null
+}
+
+interface BulkEditForm {
+  category: string
+  selling_price: string
+  current_stock: string
+  status: '' | ProductStatus
 }
 
 const makeEmptyForm = (currency = 'EUR'): ProductForm => ({
@@ -73,6 +82,7 @@ const makeEmptyForm = (currency = 'EUR'): ProductForm => ({
   low_stock_threshold: '0',
   status: 'active',
   image_url: '',
+  publish_to_woocommerce: false,
   woo_product_type: 'simple',
   woo_attributes: '',
   woo_variants: '',
@@ -98,6 +108,79 @@ function parseJsonArray(value: string, label: string) {
   return parsed
 }
 
+function escapeCsv(value: unknown) {
+  const text = String(value ?? '')
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+function downloadCsv(filename: string, rows: unknown[][]) {
+  const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function handleFromName(name: string) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product'
+}
+
+function getAttributes(value: unknown): Array<{ name: string; options: string[] }> {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((attribute) => {
+      const record = attribute as { name?: unknown; options?: unknown }
+      return {
+        name: typeof record.name === 'string' ? record.name : '',
+        options: Array.isArray(record.options) ? record.options.map(String) : [],
+      }
+    })
+    .filter((attribute) => attribute.name && attribute.options.length > 0)
+}
+
+function getVariants(value: unknown): Array<{ sku?: string; price?: string | number; stock_quantity?: string | number; attributes?: Record<string, string> }> {
+  return Array.isArray(value) ? value as Array<{ sku?: string; price?: string | number; stock_quantity?: string | number; attributes?: Record<string, string> }> : []
+}
+
+async function compressImageToJpeg(file: File) {
+  const bitmap = await createImageBitmap(file)
+  const maxSide = 1400
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
+  const width = Math.max(1, Math.round(bitmap.width * scale))
+  const height = Math.max(1, Math.round(bitmap.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    throw new Error('Image compression failed.')
+  }
+
+  context.drawImage(bitmap, 0, 0, width, height)
+  bitmap.close()
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((nextBlob) => {
+      if (nextBlob) {
+        resolve(nextBlob)
+      } else {
+        reject(new Error('Image compression failed.'))
+      }
+    }, 'image/jpeg', 0.84)
+  })
+
+  return {
+    blob,
+    dataUrl: canvas.toDataURL('image/jpeg', 0.84),
+  }
+}
+
 export default function ProductsPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -107,6 +190,9 @@ export default function ProductsPage() {
   const [syncs, setSyncs] = useState<Record<string, ProductSync>>({})
   const [syncingProductId, setSyncingProductId] = useState<string | null>(null)
   const [syncingAll, setSyncingAll] = useState(false)
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [bulkForm, setBulkForm] = useState<BulkEditForm>({ category: '', selling_price: '', current_stock: '', status: '' })
+  const [compressingImage, setCompressingImage] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
@@ -124,7 +210,11 @@ export default function ProductsPage() {
     setLoading(true)
     const [productResult, syncResult] = await Promise.all([
       supabase.from('products').select('*').eq('company_id', currentCompany.id).order('name'),
-      supabase.from('product_syncs').select('product_id, woo_product_id, sync_status, last_sync_at, error_message').eq('company_id', currentCompany.id),
+      supabase
+        .from('product_syncs')
+        .select('product_id, channel, external_product_id, sync_status, last_synced_at, error_message')
+        .eq('company_id', currentCompany.id)
+        .eq('channel', 'woocommerce'),
     ])
     const { data, error: loadError } = productResult
     if (loadError) {
@@ -141,7 +231,10 @@ export default function ProductsPage() {
     }
     if (!syncResult.error) {
       setSyncs(Object.fromEntries(((syncResult.data ?? []) as ProductSync[]).map((sync) => [sync.product_id, sync])))
-    } else if (syncResult.error.code !== '42P01') {
+    } else if (['42P01', 'PGRST205'].includes(syncResult.error.code ?? '')) {
+      setSyncs({})
+      setError(t('woocommerce.databaseRequired'))
+    } else {
       setError(syncResult.error.message)
     }
     setLoading(false)
@@ -164,6 +257,11 @@ export default function ProductsPage() {
     ))
   }, [products, query, statusFilter])
 
+  const selectedProducts = useMemo(
+    () => filteredProducts.filter((product) => selectedProductIds.has(product.id)),
+    [filteredProducts, selectedProductIds]
+  )
+
   const resetForm = () => {
     setEditing(null)
     setForm(makeEmptyForm(normalizeCurrencyCode(currentCompany?.currency ?? 'EUR')))
@@ -184,11 +282,49 @@ export default function ProductsPage() {
       low_stock_threshold: String(product.low_stock_threshold),
       status: product.status,
       image_url: product.image_url ?? '',
+      publish_to_woocommerce: Boolean(product.woo_product_type === 'variable' || product.woo_attributes || product.woo_variants),
       woo_product_type: product.woo_product_type === 'variable' ? 'variable' : 'simple',
       woo_attributes: stringifyJson(product.woo_attributes),
       woo_variants: stringifyJson(product.woo_variants),
     })
     setShowForm(true)
+  }
+
+  const handleImageFileChange = async (file: File | null) => {
+    if (!file) return
+    setMessage('')
+    setError('')
+    setCompressingImage(true)
+
+    try {
+      const { blob, dataUrl } = await compressImageToJpeg(file)
+      const storagePath = currentCompany
+        ? `${currentCompany.id}/products/${Date.now()}-${file.name.replace(/\.[^.]+$/, '')}.jpg`
+        : ''
+
+      if (storagePath) {
+        const { error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(storagePath, blob, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          })
+
+        if (!uploadError) {
+          const { data } = supabase.storage.from('product-images').getPublicUrl(storagePath)
+          setForm((current) => ({ ...current, image_url: data.publicUrl }))
+          setMessage(t('products.imageCompressed'))
+          return
+        }
+      }
+
+      setForm((current) => ({ ...current, image_url: dataUrl }))
+      setMessage(t('products.imageCompressed'))
+    } catch (compressionError) {
+      setError(compressionError instanceof Error ? compressionError.message : t('products.imageCompressionFailed'))
+    } finally {
+      setCompressingImage(false)
+    }
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -231,13 +367,13 @@ export default function ProductsPage() {
     if (form.image_url.trim() || editing?.image_url) {
       payload.image_url = form.image_url.trim() || null
     }
-    if (form.woo_product_type !== 'simple' || editing?.woo_product_type) {
+    if (!form.publish_to_woocommerce) {
+      payload.woo_product_type = 'simple'
+      payload.woo_attributes = []
+      payload.woo_variants = []
+    } else {
       payload.woo_product_type = form.woo_product_type
-    }
-    if (form.woo_attributes.trim() || editing?.woo_attributes) {
       payload.woo_attributes = wooAttributes
-    }
-    if (form.woo_variants.trim() || editing?.woo_variants) {
       payload.woo_variants = wooVariants
     }
 
@@ -326,13 +462,197 @@ export default function ProductsPage() {
     await loadProducts()
   }
 
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds((current) => {
+      const next = new Set(current)
+      if (next.has(productId)) {
+        next.delete(productId)
+      } else {
+        next.add(productId)
+      }
+      return next
+    })
+  }
+
+  const toggleAllVisibleProducts = () => {
+    setSelectedProductIds((current) => {
+      const allVisibleSelected = filteredProducts.every((product) => current.has(product.id))
+      if (allVisibleSelected) return new Set()
+      return new Set(filteredProducts.map((product) => product.id))
+    })
+  }
+
+  const exportProducts = (format: 'generic' | 'woocommerce' | 'shopify', list: Product[]) => {
+    const productsToExport = list.length > 0 ? list : filteredProducts
+
+    if (productsToExport.length === 0) return
+
+    if (format === 'woocommerce') {
+      downloadCsv('leonety-woocommerce-products.csv', [
+        ['Type', 'SKU', 'Name', 'Published', 'Visibility in catalog', 'Short description', 'Description', 'Regular price', 'Categories', 'Images', 'Stock', 'Meta: barcode', 'Attribute 1 name', 'Attribute 1 value(s)'],
+        ...productsToExport.map((product) => {
+          const firstAttribute = getAttributes(product.woo_attributes)[0]
+          return [
+            product.woo_product_type === 'variable' ? 'variable' : 'simple',
+            product.sku,
+            product.name,
+            1,
+            'visible',
+            product.category,
+            product.description,
+            product.selling_price ?? '',
+            product.category,
+            product.image_url,
+            product.current_stock,
+            product.barcode,
+            firstAttribute?.name ?? '',
+            firstAttribute?.options.join('|') ?? '',
+          ]
+        }),
+      ])
+      return
+    }
+
+    if (format === 'shopify') {
+      downloadCsv('leonety-shopify-products.csv', [
+        ['Handle', 'Title', 'Body (HTML)', 'Vendor', 'Product Category', 'Type', 'Tags', 'Published', 'Option1 Name', 'Option1 Value', 'Variant SKU', 'Variant Inventory Qty', 'Variant Price', 'Image Src', 'Status'],
+        ...productsToExport.flatMap((product) => {
+          const attributes = getAttributes(product.woo_attributes)
+          const variants = getVariants(product.woo_variants)
+          const option = attributes[0]
+
+          if (variants.length > 0) {
+            return variants.map((variant) => [
+              handleFromName(product.name),
+              product.name,
+              product.description,
+              '',
+              product.category,
+              product.category,
+              product.barcode,
+              'TRUE',
+              option?.name ?? 'Title',
+              option?.name ? variant.attributes?.[option.name] ?? option.options[0] ?? 'Default Title' : 'Default Title',
+              variant.sku ?? product.sku,
+              variant.stock_quantity ?? product.current_stock,
+              variant.price ?? product.selling_price ?? '',
+              product.image_url,
+              product.status === 'archived' ? 'archived' : 'active',
+            ])
+          }
+
+          return [[
+            handleFromName(product.name),
+            product.name,
+            product.description,
+            '',
+            product.category,
+            product.category,
+            product.barcode,
+            'TRUE',
+            'Title',
+            'Default Title',
+            product.sku,
+            product.current_stock,
+            product.selling_price ?? '',
+            product.image_url,
+            product.status === 'archived' ? 'archived' : 'active',
+          ]]
+        }),
+      ])
+      return
+    }
+
+    downloadCsv('leonety-products.csv', [
+      ['name', 'description', 'sku', 'barcode', 'category', 'price', 'currency', 'stock', 'image_url', 'product_type', 'attributes', 'variants'],
+      ...productsToExport.map((product) => [
+        product.name,
+        product.description,
+        product.sku,
+        product.barcode,
+        product.category,
+        product.selling_price ?? '',
+        product.currency,
+        product.current_stock,
+        product.image_url,
+        product.woo_product_type ?? 'simple',
+        JSON.stringify(product.woo_attributes ?? []),
+        JSON.stringify(product.woo_variants ?? []),
+      ]),
+    ])
+  }
+
+  const handleBulkWooSync = async () => {
+    if (!currentCompany || selectedProducts.length === 0) return
+    setSyncingAll(true)
+    setMessage('')
+    setError('')
+
+    for (const product of selectedProducts) {
+      setSyncingProductId(product.id)
+      const response = await fetch('/api/woocommerce/products/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: currentCompany.id, productId: product.id }),
+      })
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setError(payload.error ?? t('woocommerce.syncFailed'))
+        setSyncingProductId(null)
+        setSyncingAll(false)
+        await loadProducts()
+        return
+      }
+    }
+
+    setSyncingProductId(null)
+    setSyncingAll(false)
+    setMessage(t('woocommerce.syncSuccess'))
+    await loadProducts()
+  }
+
+  const handleBulkEdit = async () => {
+    if (!currentCompany || selectedProducts.length === 0) return
+    if (!window.confirm(t('products.bulkConfirm'))) return
+
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (bulkForm.category.trim()) payload.category = bulkForm.category.trim()
+    if (bulkForm.selling_price.trim()) payload.selling_price = Math.max(0, Number(bulkForm.selling_price) || 0)
+    if (bulkForm.current_stock.trim()) payload.current_stock = Math.max(0, Number(bulkForm.current_stock) || 0)
+    if (bulkForm.status) payload.status = bulkForm.status
+
+    if (Object.keys(payload).length === 1) {
+      setError(t('products.bulkNoChanges'))
+      return
+    }
+
+    const { error: bulkError } = await supabase
+      .from('products')
+      .update(payload)
+      .eq('company_id', currentCompany.id)
+      .in('id', selectedProducts.map((product) => product.id))
+
+    if (bulkError) {
+      setError(bulkError.message)
+      return
+    }
+
+    setBulkForm({ category: '', selling_price: '', current_stock: '', status: '' })
+    setSelectedProductIds(new Set())
+    setMessage(t('products.bulkUpdated'))
+    await loadProducts()
+  }
+
   const renderSyncBadge = (product: Product) => {
     const sync = syncs[product.id]
     const status = sync?.sync_status ?? 'not_synced'
     const className = status === 'synced'
       ? 'bg-green-100 text-green-800'
-      : status === 'error'
+      : status === 'failed'
         ? 'bg-red-100 text-red-800'
+        : status === 'pending'
+          ? 'bg-blue-100 text-blue-800'
         : 'bg-slate-100 text-slate-600'
 
     return (
@@ -343,15 +663,23 @@ export default function ProductsPage() {
   }
 
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('products.title')} /><LoadingSkeleton /></PageContainer>
-  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }} /></PageContainer>
+  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/app/onboarding') }} /></PageContainer>
   if (currentCompany.type !== 'business') return <PageContainer><PageHeader title={t('products.title')} /><EmptyState icon={BriefcaseBusiness} title={t('common.businessOnlyTitle')} description={t('modules.businessOnlyDescription')} /></PageContainer>
 
   return (
     <PageContainer>
       <PageHeader title={t('products.title')} description={`${t('products.description')} · ${currentCompany.name}`}>
         <div className="flex flex-wrap gap-2">
-          <Link href="/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
-          <Link href="/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
+          <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
+          <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
+          <Button variant="outline" onClick={() => exportProducts('generic', filteredProducts)} disabled={filteredProducts.length === 0}>
+            <Download className="h-4 w-4" />
+            {t('products.exportGeneric')}
+          </Button>
+          <Button variant="outline" onClick={() => exportProducts('shopify', filteredProducts)} disabled={filteredProducts.length === 0}>
+            <Download className="h-4 w-4" />
+            {t('products.exportShopify')}
+          </Button>
           <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || filteredProducts.length === 0}>
             {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
             {t('woocommerce.exportAll')}
@@ -364,6 +692,39 @@ export default function ProductsPage() {
         <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-md border py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} /></div>
         <AppSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | ProductStatus)} options={[{ value: 'all', label: t('common.all') }, ...productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))]} />
       </div>
+
+      {filteredProducts.length > 0 && (
+        <Card className="mb-5">
+          <CardContent className="space-y-4 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={filteredProducts.every((product) => selectedProductIds.has(product.id))} onChange={toggleAllVisibleProducts} />
+                {t('products.selectVisible')}
+              </label>
+              <span className="text-sm text-slate-500">{selectedProducts.length} {t('products.selected')}</span>
+            </div>
+
+            {selectedProducts.length > 0 && (
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => exportProducts('generic', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
+                  <Button variant="outline" onClick={() => exportProducts('woocommerce', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportWooCsv')}</Button>
+                  <Button variant="outline" onClick={() => exportProducts('shopify', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
+                  <Button variant="outline" onClick={() => void handleBulkWooSync()} disabled={syncingAll}><UploadCloud className="h-4 w-4" />{t('products.bulkSyncWoo')}</Button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-5">
+                  <input value={bulkForm.category} onChange={(event) => setBulkForm({ ...bulkForm, category: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.category')} />
+                  <input type="number" min="0" step="0.01" value={bulkForm.selling_price} onChange={(event) => setBulkForm({ ...bulkForm, selling_price: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.sellingPrice')} />
+                  <input type="number" min="0" step="0.001" value={bulkForm.current_stock} onChange={(event) => setBulkForm({ ...bulkForm, current_stock: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.currentStock')} />
+                  <AppSelect value={bulkForm.status} onChange={(value) => setBulkForm({ ...bulkForm, status: value as '' | ProductStatus })} options={[{ value: '', label: t('products.keepStatus') }, ...productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))]} />
+                  <Button type="button" onClick={() => void handleBulkEdit()}>{t('products.applyBulkEdit')}</Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}
       {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
@@ -382,10 +743,39 @@ export default function ProductsPage() {
               <label className="space-y-1"><span className="text-sm font-medium">{t('common.currency')}</span><AppSelect value={form.currency} onChange={(value) => setForm({ ...form, currency: value })} options={currencyOptions.map((item) => ({ value: item.code, label: `${item.code} - ${item.label}` }))} /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('products.lowStockThreshold')}</span><input type="number" min="0" step="0.001" value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('products.status')}</span><AppSelect value={form.status} onChange={(value) => setForm({ ...form, status: value as ProductStatus })} options={productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))} /></label>
-              <label className="space-y-1"><span className="text-sm font-medium">{t('woocommerce.productType')}</span><AppSelect value={form.woo_product_type} onChange={(value) => setForm({ ...form, woo_product_type: value as 'simple' | 'variable' })} options={[{ value: 'simple', label: t('woocommerce.simpleProduct') }, { value: 'variable', label: t('woocommerce.variableProduct') }]} /></label>
               <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">{t('woocommerce.imageUrl')}</span><input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="https://example.com/product.jpg" /></label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">{t('products.uploadImage')}</span>
+                <input type="file" accept="image/*" onChange={(event) => void handleImageFileChange(event.target.files?.[0] ?? null)} className="w-full rounded-md border px-3 py-2 text-sm" />
+                <span className="text-xs text-slate-500">{compressingImage ? t('products.compressingImage') : t('products.jpgOnly')}</span>
+              </label>
+              {form.image_url && (
+                <div className="space-y-1">
+                  <span className="text-sm font-medium">{t('products.imagePreview')}</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={form.image_url} alt="" className="h-24 w-24 rounded-md border object-cover" />
+                </div>
+              )}
               <label className="space-y-1 md:col-span-2 xl:col-span-3"><span className="text-sm font-medium">{t('products.descriptionField')}</span><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" /></label>
-              {form.woo_product_type === 'variable' && (
+              <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
+                <input
+                  type="checkbox"
+                  checked={form.publish_to_woocommerce}
+                  onChange={(event) => setForm({ ...form, publish_to_woocommerce: event.target.checked })}
+                  className="mt-1 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-sm font-medium">{t('woocommerce.prepareForWoo')}</span>
+                  <span className="block text-xs text-slate-500">{t('woocommerce.prepareForWooDescription')}</span>
+                </span>
+              </label>
+              {form.publish_to_woocommerce && (
+                <label className="space-y-1">
+                  <span className="text-sm font-medium">{t('woocommerce.productType')}</span>
+                  <AppSelect value={form.woo_product_type} onChange={(value) => setForm({ ...form, woo_product_type: value as 'simple' | 'variable' })} options={[{ value: 'simple', label: t('woocommerce.simpleProduct') }, { value: 'variable', label: t('woocommerce.variableProduct') }]} />
+                </label>
+              )}
+              {form.publish_to_woocommerce && form.woo_product_type === 'variable' && (
                 <>
                   <label className="space-y-1 md:col-span-2 xl:col-span-3">
                     <span className="text-sm font-medium">{t('woocommerce.attributesJson')}</span>
@@ -414,7 +804,14 @@ export default function ProductsPage() {
               <Card key={product.id} className={lowStock ? 'border-amber-300' : ''}>
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div><h2 className="font-semibold">{product.name}</h2><p className="text-sm text-slate-500">{[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}</p></div>
+                    <div className="flex items-start gap-3">
+                      <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} className="mt-1" aria-label={`Select ${product.name}`} />
+                      <div>
+                        {product.image_url && <img src={product.image_url} alt="" className="mb-2 h-14 w-14 rounded-md border object-cover" />}
+                        <h2 className="font-semibold">{product.name}</h2>
+                        <p className="text-sm text-slate-500">{[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}</p>
+                      </div>
+                    </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className={`rounded-full px-2 py-1 text-xs ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span>
                       {renderSyncBadge(product)}

@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [confirmationEmail, setConfirmationEmail] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
   const [isResending, setIsResending] = useState(false)
+  const [acceptedLegal, setAcceptedLegal] = useState(false)
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { t } = useI18n()
@@ -53,6 +54,9 @@ export default function LoginPage() {
         }
         if (password.length < 6) {
           throw new Error('Password must be at least 6 characters')
+        }
+        if (!acceptedLegal) {
+          throw new Error(t('auth.acceptLegalRequired'))
         }
 
         const normalizedEmail = email.trim()
@@ -88,6 +92,7 @@ export default function LoginPage() {
           setFullName('')
           setPhone('')
           setCurrency('EUR')
+          setAcceptedLegal(false)
           setShowPassword(false)
         }
       } else {
@@ -102,7 +107,7 @@ export default function LoginPage() {
         }
 
         if (data.session) {
-          router.push('/dashboard')
+          router.push('/app/dashboard')
         }
       }
     } catch (error: unknown) {
@@ -279,6 +284,29 @@ export default function LoginPage() {
                   ]}
                 />
               </div>
+            )}
+
+            {isSignUp && (
+              <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={acceptedLegal}
+                  onChange={(event) => setAcceptedLegal(event.target.checked)}
+                  className="mt-1 h-4 w-4"
+                  required
+                />
+                <span>
+                  {t('auth.acceptLegalPrefix')}{' '}
+                  <Link href="/terms" className="font-medium text-blue-700 hover:underline" target="_blank">
+                    {t('legal.terms')}
+                  </Link>{' '}
+                  {t('auth.acceptLegalAnd')}{' '}
+                  <Link href="/privacy" className="font-medium text-blue-700 hover:underline" target="_blank">
+                    {t('legal.privacy')}
+                  </Link>
+                  .
+                </span>
+              </label>
             )}
 
             <Button

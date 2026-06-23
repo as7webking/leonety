@@ -1,10 +1,43 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useI18n } from '@/contexts/i18n-context'
 
 export function Footer() {
   const { t } = useI18n()
+  const pathname = usePathname()
+  const isAuthPage = pathname === '/login' || pathname === '/reset-password'
+  const isAppPage = pathname === '/app' || pathname.startsWith('/app/')
+
+  if (isAuthPage) {
+    return (
+      <footer className="border-t border-slate-200 bg-white py-5">
+        <div className="mx-auto flex w-[90%] max-w-7xl flex-col items-center justify-between gap-2 text-sm text-slate-500 sm:flex-row">
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="Leonety" className="h-7 w-7 object-contain" />
+            <span className="font-medium text-slate-700">Leonety</span>
+          </div>
+          <p>© 2026 Leonety. {t('footer.rights')}</p>
+        </div>
+      </footer>
+    )
+  }
+
+  if (isAppPage) {
+    return (
+      <footer className="border-t border-slate-200 bg-slate-50 py-4">
+        <div className="mx-auto flex w-[90%] max-w-7xl flex-col justify-between gap-2 text-xs text-slate-500 sm:flex-row">
+          <p>© 2026 Leonety. {t('footer.rights')}</p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/privacy" className="hover:text-slate-900">{t('legal.privacy')}</Link>
+            <Link href="/terms" className="hover:text-slate-900">{t('legal.terms')}</Link>
+            <Link href="/impressum" className="hover:text-slate-900">{t('legal.impressum')}</Link>
+          </div>
+        </div>
+      </footer>
+    )
+  }
 
   return (
     <footer className="mt-auto border-t border-slate-200 bg-white py-12">

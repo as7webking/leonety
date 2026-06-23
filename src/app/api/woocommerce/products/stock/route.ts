@@ -16,7 +16,7 @@ interface ProductRow {
 }
 
 interface SyncRow {
-  woo_product_id: number | null
+  external_product_id: string | null
 }
 
 export async function POST(request: Request) {
@@ -46,9 +46,10 @@ export async function POST(request: Request) {
         .single(),
       auth.adminSupabase
         .from('product_syncs')
-        .select('woo_product_id')
+        .select('external_product_id')
         .eq('company_id', companyId)
         .eq('product_id', productId)
+        .eq('channel', 'woocommerce')
         .maybeSingle(),
     ])
 
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     if (syncError) throw syncError
 
     const wooConnection = connection as ConnectionRow | null
-    const wooProductId = (syncRow as SyncRow | null)?.woo_product_id
+    const wooProductId = Number((syncRow as SyncRow | null)?.external_product_id ?? 0) || null
     if (!wooConnection?.active || !wooConnection.inventory_sync_enabled || !wooProductId) {
       return NextResponse.json({ skipped: true })
     }
@@ -77,6 +78,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true })
   } catch (error) {
-    return NextResponse.json({ error: formatApiError(error) }, { status: 500 })
+    const message = formatApiError(error)
+    console.error('WooCommerce stock sync failed:', { message })
+    const status = message.includes('product_syncs') || message.includes('woocommerce_connections') ? 400 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

@@ -309,10 +309,10 @@ export default function DashboardPage() {
         <div className="mt-8">
           <h2 className="mb-3 text-lg font-semibold">{t('dashboard.businessTools')}</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Link href="/employees" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Users className="mb-3 h-5 w-5 text-blue-600" /><p className="font-medium">{t('nav.employees')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.employeesLink')}</p></Link>
-            <Link href="/shifts" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><CalendarDays className="mb-3 h-5 w-5 text-violet-600" /><p className="font-medium">{t('nav.shifts')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.shiftsLink')}</p></Link>
-            <Link href="/products" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Package className="mb-3 h-5 w-5 text-emerald-600" /><p className="font-medium">{t('nav.products')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.productsLink')}</p></Link>
-            <Link href="/inventory" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Boxes className="mb-3 h-5 w-5 text-amber-600" /><p className="font-medium">{t('nav.inventory')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.inventoryLink')}</p></Link>
+            <Link href="/app/employees" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Users className="mb-3 h-5 w-5 text-blue-600" /><p className="font-medium">{t('nav.employees')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.employeesLink')}</p></Link>
+            <Link href="/app/shifts" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><CalendarDays className="mb-3 h-5 w-5 text-violet-600" /><p className="font-medium">{t('nav.shifts')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.shiftsLink')}</p></Link>
+            <Link href="/app/products" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Package className="mb-3 h-5 w-5 text-emerald-600" /><p className="font-medium">{t('nav.products')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.productsLink')}</p></Link>
+            <Link href="/app/inventory" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Boxes className="mb-3 h-5 w-5 text-amber-600" /><p className="font-medium">{t('nav.inventory')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.inventoryLink')}</p></Link>
           </div>
         </div>
       )}
@@ -328,7 +328,7 @@ export default function DashboardPage() {
               <span>{formatMoney(getDisplayAmount(Number(income.amount), income.currency ?? currency, income.exchange_rate, income.workspace_currency))}</span>
             </div>
           ), t('dashboard.noIncome'))}
-          <Link href="/income" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
+          <Link href="/app/income" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
             {t('dashboard.viewAllIncome')}
           </Link>
         </div>
@@ -342,7 +342,7 @@ export default function DashboardPage() {
               <span>{formatMoney(getDisplayAmount(Number(expense.amount), expense.currency ?? currency, expense.exchange_rate, expense.workspace_currency))}</span>
             </div>
           ), t('dashboard.noExpenses'))}
-          <Link href="/expenses" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
+          <Link href="/app/expenses" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
             {t('dashboard.viewAllExpenses')}
           </Link>
         </div>

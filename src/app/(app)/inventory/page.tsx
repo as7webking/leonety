@@ -57,7 +57,7 @@ export default function InventoryPage() {
   useEffect(() => { void loadInventory() }, [loadInventory])
 
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('inventory.title')} /><LoadingSkeleton /></PageContainer>
-  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }} /></PageContainer>
+  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/app/onboarding') }} /></PageContainer>
   if (currentCompany.type !== 'business') return <PageContainer><PageHeader title={t('inventory.title')} /><EmptyState icon={BriefcaseBusiness} title={t('common.businessOnlyTitle')} description={t('modules.businessOnlyDescription')} /></PageContainer>
 
   const activeProducts = products.filter((product) => product.status === 'active')
@@ -67,7 +67,7 @@ export default function InventoryPage() {
   return (
     <PageContainer>
       <PageHeader title={t('inventory.title')} description={`${t('inventory.description')} · ${currentCompany.name}`}>
-        <div className="flex flex-wrap gap-2"><Link href="/products"><Button variant="outline">{t('products.title')}</Button></Link><Link href="/stock-movements"><Button>{t('stock.add')}</Button></Link></div>
+        <div className="flex flex-wrap gap-2"><Link href="/app/products"><Button variant="outline">{t('products.title')}</Button></Link><Link href="/app/stock-movements"><Button>{t('stock.add')}</Button></Link></div>
       </PageHeader>
 
       {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
@@ -79,7 +79,7 @@ export default function InventoryPage() {
       </div>
 
       {products.length === 0 ? (
-        <EmptyState title={t('products.empty')} description={t('products.emptyDescription')} action={{ label: t('products.add'), onClick: () => router.push('/products') }} />
+        <EmptyState title={t('products.empty')} description={t('products.emptyDescription')} action={{ label: t('products.add'), onClick: () => router.push('/app/products') }} />
       ) : (
         <Card>
           <CardContent className="p-0">

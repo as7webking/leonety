@@ -33,7 +33,7 @@ interface ProductRow {
 }
 
 interface ProductSyncRow {
-  woo_product_id: number | null
+  external_product_id: string | null
 }
 
 interface WooProductResponse {
@@ -161,7 +161,7 @@ async function upsertSyncStatus(
   productId: string,
   payload: {
     woo_product_id?: number | null
-    sync_status: 'synced' | 'error'
+    sync_status: 'synced' | 'failed'
     error_message?: string | null
   }
 ) {
@@ -170,12 +170,13 @@ async function upsertSyncStatus(
     .upsert({
       company_id: companyId,
       product_id: productId,
-      woo_product_id: payload.woo_product_id ?? null,
+      channel: 'woocommerce',
+      external_product_id: payload.woo_product_id ? String(payload.woo_product_id) : null,
       sync_status: payload.sync_status,
       error_message: payload.error_message ?? null,
-      last_sync_at: payload.sync_status === 'synced' ? new Date().toISOString() : null,
+      last_synced_at: payload.sync_status === 'synced' ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'company_id,product_id' })
+    }, { onConflict: 'company_id,product_id,channel' })
 }
 
 export async function POST(request: Request) {
@@ -208,9 +209,10 @@ export async function POST(request: Request) {
         .single(),
       auth.adminSupabase
         .from('product_syncs')
-        .select('woo_product_id')
+        .select('external_product_id')
         .eq('company_id', companyId)
         .eq('product_id', productId)
+        .eq('channel', 'woocommerce')
         .maybeSingle(),
     ])
 
@@ -225,7 +227,7 @@ export async function POST(request: Request) {
     const productRow = product as ProductRow
     const categoryId = await findOrCreateCategory(wooConnection, productRow.category)
     const payload = buildBasePayload(productRow, categoryId)
-    const existingWooId = (syncRow as ProductSyncRow | null)?.woo_product_id ?? null
+    const existingWooId = Number((syncRow as ProductSyncRow | null)?.external_product_id ?? 0) || null
     const wooProduct = existingWooId
       ? await wooRequest<WooProductResponse>(wooConnection, `/products/${existingWooId}`, { method: 'PUT', body: payload })
       : await wooRequest<WooProductResponse>(wooConnection, '/products', { method: 'POST', body: payload })
@@ -264,17 +266,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, wooProductId: wooProduct.id })
   } catch (error) {
     const message = formatApiError(error)
+    console.error('WooCommerce product sync failed:', { companyId, productId, message })
 
     if (companyId && productId) {
       const auth = await requireOwnedCompany(companyId)
       if (!('error' in auth)) {
         await upsertSyncStatus(auth.adminSupabase, companyId, productId, {
-          sync_status: 'error',
+          sync_status: 'failed',
           error_message: message,
         })
       }
     }
 
-    return NextResponse.json({ error: message }, { status: 500 })
+    const status = message.includes('product_syncs') || message.includes('woocommerce_connections') ? 400 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

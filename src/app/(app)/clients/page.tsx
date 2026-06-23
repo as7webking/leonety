@@ -276,7 +276,7 @@ export default function ClientsPage() {
           icon={Building2}
           title={t('common.businessOnlyTitle')}
           description={t('common.businessOnlyDescription')}
-          action={{ label: t('nav.workspaces'), onClick: () => router.push('/workspaces') }}
+          action={{ label: t('nav.workspaces'), onClick: () => router.push('/app/workspaces') }}
         />
       </PageContainer>
     )
@@ -295,7 +295,7 @@ export default function ClientsPage() {
         <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           {isPro ? 'Pro plan: unlimited client records.' : `Used ${monthlyUsage} of ${FREE_CLIENT_LIMIT} client records this month.`}
           {!isPro && monthlyUsage >= FREE_CLIENT_LIMIT && (
-            <Link href="/upgrade" className="ml-2 font-medium text-blue-700 hover:underline">Upgrade to Pro</Link>
+            <Link href="/app/upgrade" className="ml-2 font-medium text-blue-700 hover:underline">Upgrade to Pro</Link>
           )}
         </div>
         <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_180px]">
@@ -324,7 +324,7 @@ export default function ClientsPage() {
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
           {errorMessage}
           {errorMessage.includes('Free plan limit') && (
-            <Link href="/upgrade" className="ml-2 font-medium underline">Upgrade to Pro</Link>
+            <Link href="/app/upgrade" className="ml-2 font-medium underline">Upgrade to Pro</Link>
           )}
         </div>
       )}

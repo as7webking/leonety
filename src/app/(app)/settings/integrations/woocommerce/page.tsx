@@ -186,7 +186,7 @@ export default function WooCommerceSettingsPage() {
   return (
     <PageContainer>
       <PageHeader title={t('woocommerce.title')} description={`${t('woocommerce.description')} · ${currentCompany.name}`}>
-        <Link href="/products"><Button variant="outline">{t('products.title')}</Button></Link>
+        <Link href="/app/products"><Button variant="outline">{t('products.title')}</Button></Link>
       </PageHeader>
 
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}

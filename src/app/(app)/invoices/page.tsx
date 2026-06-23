@@ -569,7 +569,7 @@ export default function InvoicesPage() {
           icon={Building2}
           title={t('common.businessOnlyTitle')}
           description={t('common.businessOnlyDescription')}
-          action={{ label: t('nav.workspaces'), onClick: () => router.push('/workspaces') }}
+          action={{ label: t('nav.workspaces'), onClick: () => router.push('/app/workspaces') }}
         />
       </PageContainer>
     )

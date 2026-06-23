@@ -880,7 +880,7 @@ export default function ProfilePage() {
 
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button type="submit" className="w-full">{t('profile.saveWorkspace')}</Button>
-                  <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/workspaces')}>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/app/workspaces')}>
                     {t('profile.manageWorkspaces')}
                   </Button>
                 </div>

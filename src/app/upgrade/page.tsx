@@ -141,10 +141,10 @@ export default function UpgradePage() {
 
               <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4">
                 <Button asChild variant="outline">
-                  <Link href="/profile">Open profile</Link>
+                  <Link href="/app/profile">Open profile</Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/dashboard">Back to dashboard</Link>
+                  <Link href="/app/dashboard">Back to dashboard</Link>
                 </Button>
               </div>
             </>

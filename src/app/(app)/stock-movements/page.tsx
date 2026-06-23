@@ -113,14 +113,14 @@ export default function StockMovementsPage() {
   }
 
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('stock.title')} /><LoadingSkeleton /></PageContainer>
-  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }} /></PageContainer>
+  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/app/onboarding') }} /></PageContainer>
   if (currentCompany.type !== 'business') return <PageContainer><PageHeader title={t('stock.title')} /><EmptyState icon={BriefcaseBusiness} title={t('common.businessOnlyTitle')} description={t('modules.businessOnlyDescription')} /></PageContainer>
 
   return (
     <PageContainer>
       <PageHeader title={t('stock.title')} description={`${t('stock.description')} · ${currentCompany.name}`}>
         <div className="flex flex-wrap gap-2">
-          <Link href="/products"><Button variant="outline">{t('products.title')}</Button></Link>
+          <Link href="/app/products"><Button variant="outline">{t('products.title')}</Button></Link>
           <Button onClick={() => setShowForm((value) => !value)}><Plus className="h-4 w-4" />{showForm ? t('common.cancel') : t('stock.add')}</Button>
         </div>
       </PageHeader>
@@ -133,7 +133,7 @@ export default function StockMovementsPage() {
           <CardHeader><CardTitle>{t('stock.add')}</CardTitle></CardHeader>
           <CardContent>
             {products.length === 0 ? (
-              <EmptyState title={t('stock.noProducts')} description={t('stock.noProductsDescription')} action={{ label: t('products.add'), onClick: () => router.push('/products') }} />
+              <EmptyState title={t('stock.noProducts')} description={t('stock.noProductsDescription')} action={{ label: t('products.add'), onClick: () => router.push('/app/products') }} />
             ) : (
               <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <label className="space-y-1"><span className="text-sm font-medium">{t('stock.product')}</span><AppSelect value={form.product_id} onChange={(value) => setForm({ ...form, product_id: value })} options={[{ value: '', label: t('stock.selectProduct'), disabled: true }, ...products.map((product) => ({ value: product.id, label: `${product.name} (${product.current_stock})` }))]} /></label>

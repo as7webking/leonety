@@ -248,8 +248,8 @@ export default function ShiftsPage() {
       <div className="mb-5 flex flex-wrap items-end gap-3 rounded-lg border bg-white p-3">
         <label className="space-y-1 text-sm"><span>{t('common.from')}</span><input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded-md border px-3 py-2" /></label>
         <label className="space-y-1 text-sm"><span>{t('common.to')}</span><input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded-md border px-3 py-2" /></label>
-        <Link href="/employees"><Button variant="outline">{t('employees.title')}</Button></Link>
-        <Link href="/locations"><Button variant="outline">{t('locations.title')}</Button></Link>
+        <Link href="/app/employees"><Button variant="outline">{t('employees.title')}</Button></Link>
+        <Link href="/app/locations"><Button variant="outline">{t('locations.title')}</Button></Link>
       </div>
 
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}

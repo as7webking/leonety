@@ -30,10 +30,10 @@ export default async function Home() {
                 {user ? (
                   <>
                     <Button size="lg" asChild>
-                      <Link href="/dashboard"><T k="home.openApp" /></Link>
+                      <Link href="/app/dashboard"><T k="home.openApp" /></Link>
                     </Button>
                     <Button size="lg" variant="outline" asChild>
-                      <Link href="/profile"><T k="nav.profile" /></Link>
+                      <Link href="/app/profile"><T k="nav.profile" /></Link>
                     </Button>
                   </>
                 ) : (
