@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowDownCircle, ArrowUpCircle, Building2, Printer, Plus } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, Building2, Copy, Printer, Plus } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -191,6 +191,30 @@ export default function TransactionsPage() {
       date: new Date().toISOString().split('T')[0],
       currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'),
     })
+    await loadTransactions()
+  }
+
+  const handleCopyTransaction = async (transaction: TransactionRow) => {
+    if (!currentCompany) return
+    setMessage('')
+    setErrorMessage('')
+
+    const table = transaction.type === 'income' ? 'incomes' : 'expenses'
+    const { error } = await supabase.from(table).insert({
+      company_id: currentCompany.id,
+      amount: Number(transaction.amount.toFixed(2)),
+      description: transaction.description,
+      category: transaction.category,
+      date: new Date().toISOString().split('T')[0],
+      currency: normalizeCurrencyCode(transaction.currency),
+    })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setMessage(t('transactions.copied'))
     await loadTransactions()
   }
 
@@ -810,12 +834,13 @@ export default function TransactionsPage() {
         <EmptyState title={t('common.noTransactions')} description={t('transactions.emptyDescription')} />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <div className="grid grid-cols-[auto_auto_1fr_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid-cols-[auto_auto_1fr_160px_160px]">
+          <div className="grid grid-cols-[auto_auto_1fr_auto_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid-cols-[auto_auto_1fr_160px_160px_auto]">
             <span>{t('transactions.select')}</span>
             <span>{t('transactions.type')}</span>
             <span>{t('common.description')}</span>
             <span className="hidden md:block">{t('common.category')}</span>
             <span className="text-right">{t('common.amount')}</span>
+            <span className="sr-only">{t('common.copy')}</span>
           </div>
           {sortedTransactions.map((transaction) => {
             const isIncome = transaction.type === 'income'
@@ -824,7 +849,7 @@ export default function TransactionsPage() {
             return (
               <div
                 key={`${transaction.type}-${transaction.id}`}
-                className="grid grid-cols-[auto_auto_1fr_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_1fr_160px_160px]"
+                className="grid grid-cols-[auto_auto_1fr_auto_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_1fr_160px_160px_auto]"
               >
                 <input
                   type="checkbox"
@@ -850,6 +875,10 @@ export default function TransactionsPage() {
                 <span className="text-right font-semibold">
                   {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency))}
                 </span>
+                <Button size="sm" variant="outline" onClick={() => void handleCopyTransaction(transaction)}>
+                  <Copy className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t('common.copy')}</span>
+                </Button>
               </div>
             )
           })}

@@ -74,7 +74,10 @@ export async function wooRequest<T>(
   const data = text ? JSON.parse(text) : null
 
   if (!response.ok) {
-    const message = typeof data?.message === 'string' ? data.message : `WooCommerce request failed with ${response.status}`
+    const rawMessage = typeof data?.message === 'string' ? data.message : `WooCommerce request failed with ${response.status}`
+    const message = /schreibrechte|write permission|cannot create|cannot edit/i.test(rawMessage)
+      ? `${rawMessage} Make sure the WooCommerce REST API key has Read/Write permissions.`
+      : rawMessage
     throw new Error(message)
   }
 

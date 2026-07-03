@@ -43,7 +43,7 @@ const content = {
 export default function PrivacyPage() {
   const { locale } = useI18n()
   const contactEmail = getContactEmail()
-  const page = content[locale]
+  const page = content[locale as keyof typeof content] ?? content.en
 
   return (
     <LegalPage

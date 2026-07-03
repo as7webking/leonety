@@ -89,7 +89,7 @@ async function findOrCreateCategory(connection: WooConnection, categoryName: str
   return created.id
 }
 
-function buildBasePayload(product: ProductRow, categoryId?: number): WooProductPayload {
+function buildBasePayload(product: ProductRow, categoryId?: number, includeImage = true): WooProductPayload {
   const productType = product.woo_product_type === 'variable' ? 'variable' : 'simple'
   const price = toWooPrice(product.selling_price === null ? null : Number(product.selling_price))
   const stock = toWooStock(Number(product.current_stock))
@@ -115,7 +115,7 @@ function buildBasePayload(product: ProductRow, categoryId?: number): WooProductP
     short_description: product.category ?? '',
     sku: product.sku ?? undefined,
     categories: categoryId ? [{ id: categoryId }] : undefined,
-    images: product.image_url ? [{ src: product.image_url }] : undefined,
+    images: includeImage && product.image_url ? [{ src: product.image_url }] : undefined,
     meta_data: [
       { key: 'leonety_product_id', value: product.id },
       { key: 'barcode', value: product.barcode ?? '' },
@@ -155,11 +155,38 @@ function buildVariationPayloads(product: ProductRow): WooVariationPayload[] {
     .filter(Boolean) as WooVariationPayload[]
 }
 
+async function getWooImageWarning(imageUrl: string | null | undefined) {
+  if (!imageUrl) return null
+
+  const url = imageUrl.split('?')[0].toLowerCase()
+  if (!url.endsWith('.jpg') && !url.endsWith('.jpeg')) {
+    return 'Product synced without image because WooCommerce publishing requires JPG/JPEG. Upload the image through Leonety to compress it.'
+  }
+
+  try {
+    const response = await fetch(imageUrl, { method: 'HEAD', cache: 'no-store' })
+    const contentType = response.headers.get('content-type') ?? ''
+    const contentLength = Number(response.headers.get('content-length') ?? 0)
+
+    if (contentType && !contentType.toLowerCase().includes('jpeg')) {
+      return 'Product synced without image because the image response is not JPEG.'
+    }
+
+    if (contentLength > 200 * 1024) {
+      return 'Product synced without image because WooCommerce product images must be 200 KB or smaller.'
+    }
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Product synced without image because the image could not be checked.'
+  }
+
+  return null
+}
+
 async function upsertSyncStatus(
   adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
   companyId: string,
   productId: string,
-  payload: {
+    payload: {
     woo_product_id?: number | null
     sync_status: 'synced' | 'failed'
     error_message?: string | null
@@ -225,8 +252,9 @@ export async function POST(request: Request) {
 
     const wooConnection = connection as WooConnectionRow
     const productRow = product as ProductRow
+    const imageWarning = await getWooImageWarning(productRow.image_url)
     const categoryId = await findOrCreateCategory(wooConnection, productRow.category)
-    const payload = buildBasePayload(productRow, categoryId)
+    const payload = buildBasePayload(productRow, categoryId, !imageWarning)
     const existingWooId = Number((syncRow as ProductSyncRow | null)?.external_product_id ?? 0) || null
     const wooProduct = existingWooId
       ? await wooRequest<WooProductResponse>(wooConnection, `/products/${existingWooId}`, { method: 'PUT', body: payload })
@@ -261,9 +289,10 @@ export async function POST(request: Request) {
     await upsertSyncStatus(auth.adminSupabase, companyId, productId, {
       woo_product_id: wooProduct.id,
       sync_status: 'synced',
+      error_message: imageWarning,
     })
 
-    return NextResponse.json({ ok: true, wooProductId: wooProduct.id })
+    return NextResponse.json({ ok: true, wooProductId: wooProduct.id, warning: imageWarning })
   } catch (error) {
     const message = formatApiError(error)
     console.error('WooCommerce product sync failed:', { companyId, productId, message })

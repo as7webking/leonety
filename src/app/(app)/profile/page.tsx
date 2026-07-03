@@ -43,6 +43,18 @@ interface ManagedProfile {
   lastSignInAt: string | null
 }
 
+interface UpgradeRequest {
+  id: string
+  user_id: string
+  company_id: string
+  requested_plan: 'pro'
+  status: 'pending' | 'approved' | 'rejected'
+  message: string | null
+  created_at: string
+  company_name?: string
+  user_email?: string
+}
+
 interface PrintableTransaction {
   id: string
   type: 'Income' | 'Expense'
@@ -66,7 +78,9 @@ export default function ProfilePage() {
   const [workspaceAddress, setWorkspaceAddress] = useState('')
   const [message, setMessage] = useState('')
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([])
+  const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([])
   const [adminLoading, setAdminLoading] = useState(false)
+  const [adminError, setAdminError] = useState('')
   const [monthsByProfile, setMonthsByProfile] = useState<Record<string, number>>({})
   const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
   const [reportFromDate, setReportFromDate] = useState(() => {
@@ -204,6 +218,7 @@ export default function ProfilePage() {
 
     const loadManagedProfiles = async () => {
       setAdminLoading(true)
+      setAdminError('')
 
       try {
         const response = await fetch('/api/admin/access', { cache: 'no-store' })
@@ -213,10 +228,11 @@ export default function ProfilePage() {
         }
         if (active) {
           setManagedProfiles(data.profiles ?? [])
+          setUpgradeRequests(data.upgradeRequests ?? [])
         }
       } catch (error) {
         if (active) {
-          setMessage(error instanceof Error ? error.message : 'Failed to load admin controls')
+          setAdminError(error instanceof Error ? error.message : 'Failed to load admin controls')
         }
       } finally {
         if (active) {
@@ -328,10 +344,14 @@ export default function ProfilePage() {
     targetUserId: string,
     makeAdmin: boolean,
     makePro: boolean,
-    deactivateAccount?: boolean
+    deactivateAccount?: boolean,
+    noExpiry?: boolean,
+    upgradeRequestId?: string,
+    upgradeRequestStatus?: 'approved' | 'rejected'
   ) => {
     setAdminLoading(true)
     setMessage('')
+    setAdminError('')
 
     try {
       const response = await fetch('/api/admin/access', {
@@ -344,6 +364,9 @@ export default function ProfilePage() {
           makeAdmin,
           makePro,
           deactivateAccount,
+          noExpiry,
+          upgradeRequestId,
+          upgradeRequestStatus,
           monthsPaid: monthsByProfile[targetUserId] ?? 1,
         }),
       })
@@ -355,10 +378,45 @@ export default function ProfilePage() {
       }
 
       setManagedProfiles(data.profiles ?? [])
+      setUpgradeRequests(data.upgradeRequests ?? [])
       setMessage('Access updated successfully!')
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
       setMessage(error instanceof Error ? `Error: ${error.message}` : 'Error updating access')
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
+  const handleUpgradeRequestReview = async (request: UpgradeRequest, status: 'approved' | 'rejected') => {
+    setAdminLoading(true)
+    setMessage('')
+    setAdminError('')
+
+    try {
+      const response = await fetch('/api/admin/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUserId: request.user_id,
+          ...(status === 'approved' ? { makePro: true, noExpiry: true } : {}),
+          noExpiry: status === 'approved',
+          upgradeRequestId: request.id,
+          upgradeRequestStatus: status,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update upgrade request')
+      }
+
+      setManagedProfiles(data.profiles ?? [])
+      setUpgradeRequests(data.upgradeRequests ?? [])
+      setMessage(status === 'approved' ? 'Pro request approved.' : 'Pro request rejected.')
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'Failed to update upgrade request')
     } finally {
       setAdminLoading(false)
     }
@@ -1038,6 +1096,47 @@ export default function ProfilePage() {
               <CardDescription>{t('profile.adminAccessDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {adminError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {adminError}
+                </div>
+              )}
+              <div className="rounded-lg border border-slate-200 p-4">
+                <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium text-slate-900">{t('profile.upgradeRequests')}</p>
+                    <p className="text-sm text-slate-500">{t('profile.upgradeRequestsDescription')}</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                    {upgradeRequests.length}
+                  </span>
+                </div>
+                {upgradeRequests.length === 0 ? (
+                  <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">{t('profile.noUpgradeRequests')}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {upgradeRequests.map((request) => (
+                      <div key={request.id} className="flex flex-col gap-3 rounded-md border border-slate-200 p-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="space-y-1">
+                          <p className="font-medium text-slate-900">{request.user_email || request.user_id}</p>
+                          <p className="text-sm text-slate-500">
+                            {request.company_name || request.company_id} · Pro · {new Date(request.created_at).toLocaleDateString()}
+                          </p>
+                          {request.message && <p className="text-sm text-slate-600">{request.message}</p>}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="outline" disabled={adminLoading} onClick={() => void handleUpgradeRequestReview(request, 'approved')}>
+                            {t('profile.approvePro')}
+                          </Button>
+                          <Button type="button" variant="outline" disabled={adminLoading} onClick={() => void handleUpgradeRequestReview(request, 'rejected')}>
+                            {t('profile.rejectRequest')}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               {adminLoading && managedProfiles.length === 0 ? (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                   {t('profile.loadingProfiles')}
@@ -1060,8 +1159,10 @@ export default function ProfilePage() {
                           <p className="text-sm text-slate-500">{managedProfile.email}</p>
                           <p className="text-sm text-slate-500">
                             Subscription: {managedProfile.plan.toUpperCase()}
-                            {managedProfile.subscriptionEndsAt
-                              ? ` · until ${new Date(managedProfile.subscriptionEndsAt).toLocaleDateString()}`
+                            {managedProfile.isPro
+                              ? managedProfile.subscriptionEndsAt
+                                ? ` · until ${new Date(managedProfile.subscriptionEndsAt).toLocaleDateString()}`
+                                : ' · no expiry'
                               : ''}
                           </p>
                           <p className="text-sm text-slate-500">
@@ -1138,14 +1239,31 @@ export default function ProfilePage() {
                               +
                             </button>
                           </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={adminLoading}
-                            onClick={() => handleAccessUpdate(managedProfile.id, managedProfile.isAdmin, !managedProfile.isPro)}
-                          >
-                            {managedProfile.isPro ? 'Remove Pro' : 'Grant Pro'}
-                          </Button>
+                          {managedProfile.subscriptionSource !== 'payment' && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={adminLoading}
+                              onClick={() => handleAccessUpdate(managedProfile.id, managedProfile.isAdmin, !managedProfile.isPro)}
+                            >
+                              {managedProfile.isPro ? 'Remove Pro' : 'Grant Pro'}
+                            </Button>
+                          )}
+                          {managedProfile.subscriptionSource === 'payment' && (
+                            <span className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                              Paid subscription
+                            </span>
+                          )}
+                          {!managedProfile.isPro && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={adminLoading}
+                              onClick={() => handleAccessUpdate(managedProfile.id, managedProfile.isAdmin, true, undefined, true)}
+                            >
+                              Grant Pro now
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             variant="outline"

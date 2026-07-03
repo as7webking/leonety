@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
@@ -17,6 +17,7 @@ import { ChevronDown, Menu, X, User } from 'lucide-react'
 const WORKSPACE_ACTION_VALUE = '__workspace_action__'
 
 export function Nav() {
+  const navRef = useRef<HTMLElement | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [transactionsOpen, setTransactionsOpen] = useState(false)
   const [businessOpen, setBusinessOpen] = useState(false)
@@ -65,6 +66,18 @@ export function Nav() {
     }
   }, [supabase])
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!navRef.current?.contains(event.target as Node)) {
+        setTransactionsOpen(false)
+        setBusinessOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
@@ -84,11 +97,11 @@ export function Nav() {
   }
 
   return (
-    <nav className="bg-card border-b">
+    <nav ref={navRef} className="bg-card border-b">
       <div className="mx-auto w-[90%] max-w-7xl py-2.5">
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={() => setIsOpen(false)}>
-            <img src="/logo.png" alt="Leonety" className="h-9 w-9 object-contain" />
+            <img src="/logo.png" alt="Leonety" className="h-10 w-10 shrink-0 object-contain" />
           </Link>
           
           {/* Desktop menu */}
@@ -98,7 +111,10 @@ export function Nav() {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setTransactionsOpen((open) => !open)}
+                  onClick={() => {
+                    setTransactionsOpen((open) => !open)
+                    setBusinessOpen(false)
+                  }}
                   className="inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950"
                   aria-expanded={transactionsOpen}
                 >
@@ -127,7 +143,10 @@ export function Nav() {
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setBusinessOpen((open) => !open)}
+                      onClick={() => {
+                        setBusinessOpen((open) => !open)
+                        setTransactionsOpen(false)
+                      }}
                       className="inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950"
                       aria-expanded={businessOpen}
                     >

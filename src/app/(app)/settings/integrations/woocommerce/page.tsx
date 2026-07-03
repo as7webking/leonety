@@ -13,6 +13,8 @@ import { useI18n } from '@/contexts/i18n-context'
 interface WooConnectionStatus {
   connected: boolean
   storeUrl: string
+  consumerKeyPreview: string
+  consumerSecretPreview: string
   inventorySyncEnabled: boolean
   updatedAt: string | null
 }
@@ -20,6 +22,8 @@ interface WooConnectionStatus {
 const emptyStatus: WooConnectionStatus = {
   connected: false,
   storeUrl: '',
+  consumerKeyPreview: '',
+  consumerSecretPreview: '',
   inventorySyncEnabled: false,
   updatedAt: null,
 }
@@ -36,6 +40,7 @@ export default function WooCommerceSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -158,6 +163,29 @@ export default function WooCommerceSettingsPage() {
     setSaving(false)
   }
 
+  const handleImportProducts = async () => {
+    if (!currentCompany) return
+
+    setImporting(true)
+    setMessage('')
+    setError('')
+
+    const response = await fetch('/api/woocommerce/products/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId: currentCompany.id }),
+    })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      setError(payload.error ?? t('woocommerce.importFailed'))
+    } else {
+      setMessage(t('woocommerce.importSuccess').replace('{count}', String(payload.imported ?? 0)))
+    }
+
+    setImporting(false)
+  }
+
   if (companyLoading || loading) {
     return <PageContainer><PageHeader title={t('woocommerce.title')} /><LoadingSkeleton /></PageContainer>
   }
@@ -191,6 +219,24 @@ export default function WooCommerceSettingsPage() {
 
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}
       {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+
+      <Card className="mb-5">
+        <CardHeader>
+          <CardTitle>{t('integrations.storeIntegrations')}</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          {[
+            { name: 'WooCommerce', status: status.connected ? t('woocommerce.connected') : t('woocommerce.notConnected') },
+            { name: 'Shopify', status: t('integrations.comingSoon') },
+            { name: 'OpenCart', status: t('integrations.comingSoon') },
+          ].map((integration) => (
+            <div key={integration.name} className="rounded-lg border border-slate-200 p-4">
+              <p className="font-semibold text-slate-950">{integration.name}</p>
+              <p className="mt-1 text-sm text-slate-500">{integration.status}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -239,6 +285,23 @@ export default function WooCommerceSettingsPage() {
               </label>
             </div>
 
+            {status.connected && (
+              <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 md:grid-cols-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">{t('woocommerce.savedStore')}</p>
+                  <p className="break-all">{status.storeUrl}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">{t('woocommerce.savedConsumerKey')}</p>
+                  <p>{status.consumerKeyPreview}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">{t('woocommerce.savedConsumerSecret')}</p>
+                  <p>{status.consumerSecretPreview}</p>
+                </div>
+              </div>
+            )}
+
             <label className="flex items-start gap-3 rounded-md border bg-slate-50 p-3">
               <input
                 type="checkbox"
@@ -262,6 +325,11 @@ export default function WooCommerceSettingsPage() {
               {status.connected && (
                 <Button type="button" variant="outline" onClick={handleDisconnect} disabled={saving}>
                   {t('woocommerce.disconnect')}
+                </Button>
+              )}
+              {status.connected && (
+                <Button type="button" variant="outline" onClick={handleImportProducts} disabled={importing || saving}>
+                  {importing ? t('common.loading') : t('woocommerce.importProducts')}
                 </Button>
               )}
             </div>

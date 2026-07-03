@@ -41,7 +41,7 @@ const content = {
 
 export default function TermsPage() {
   const { locale } = useI18n()
-  const page = content[locale]
+  const page = content[locale as keyof typeof content] ?? content.en
 
   return <LegalPage title={page.title} intro={<p>{page.intro}</p>} sections={page.sections.map(([title, text]) => ({ title, content: <p>{text}</p> }))} />
 }

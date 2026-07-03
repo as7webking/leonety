@@ -15,9 +15,16 @@ interface ConnectionRow {
 }
 
 function publicConnection(row: ConnectionRow | null) {
+  const maskSecret = (value?: string | null) => {
+    if (!value) return ''
+    return value.length <= 8 ? '••••••••' : `${value.slice(0, 4)}••••${value.slice(-4)}`
+  }
+
   return {
     connected: Boolean(row?.active),
     storeUrl: row?.store_url ?? '',
+    consumerKeyPreview: maskSecret(row?.consumer_key),
+    consumerSecretPreview: maskSecret(row?.consumer_secret),
     inventorySyncEnabled: Boolean(row?.inventory_sync_enabled),
     updatedAt: row?.updated_at ?? null,
   }
