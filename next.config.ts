@@ -18,6 +18,7 @@ const appRoutes = [
   '/products',
   '/inventory',
   '/stock-movements',
+  '/settings/integrations',
   '/settings/integrations/woocommerce',
 ]
 

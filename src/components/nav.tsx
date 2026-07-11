@@ -21,6 +21,7 @@ export function Nav() {
   const [isOpen, setIsOpen] = useState(false)
   const [transactionsOpen, setTransactionsOpen] = useState(false)
   const [businessOpen, setBusinessOpen] = useState(false)
+  const [wooConnected, setWooConnected] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [supabase] = useState(() => createClient())
@@ -39,6 +40,31 @@ export function Nav() {
   const showBusinessModules = currentCompanyId
     ? companies.find((company) => company.id === currentCompanyId)?.type === 'business'
     : false
+
+  useEffect(() => {
+    if (!currentCompanyId || !showBusinessModules) {
+      setWooConnected(false)
+      return
+    }
+
+    let active = true
+    const loadWooConnection = async () => {
+      try {
+        const response = await fetch(`/api/woocommerce/connection?companyId=${encodeURIComponent(currentCompanyId)}`, { cache: 'no-store' })
+        const data = await response.json().catch(() => ({}))
+        if (active) {
+          setWooConnected(Boolean(response.ok && data.connected))
+        }
+      } catch {
+        if (active) setWooConnected(false)
+      }
+    }
+
+    void loadWooConnection()
+    return () => {
+      active = false
+    }
+  }, [currentCompanyId, showBusinessModules])
 
   useEffect(() => {
     let mounted = true
@@ -78,6 +104,31 @@ export function Nav() {
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    const previousTouchAction = document.body.style.touchAction
+    document.body.style.overflow = 'hidden'
+    document.body.style.touchAction = 'none'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.body.style.touchAction = previousTouchAction
+    }
+  }, [isOpen])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
@@ -97,16 +148,16 @@ export function Nav() {
   }
 
   return (
-    <nav ref={navRef} className="bg-card border-b">
-      <div className="mx-auto w-[90%] max-w-7xl py-2.5">
+    <nav ref={navRef} className="fixed inset-x-0 top-0 z-50 w-full max-w-[100vw] overflow-x-clip border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85">
+      <div className="mx-auto w-[90%] max-w-7xl min-w-0 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={() => setIsOpen(false)}>
             <img src="/logo.png" alt="Leonety" className="h-10 w-10 shrink-0 object-contain" />
           </Link>
           
           {/* Desktop menu */}
-          <div className="hidden flex-1 items-center justify-between gap-2 lg:flex">
-            <div className="flex items-center gap-0.5 rounded-md bg-slate-50 p-0.5">
+          <div className="hidden min-w-0 flex-1 items-center justify-between gap-2 lg:flex">
+            <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-md bg-slate-50 p-0.5">
               <Link href="/app/dashboard" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.dashboard')}</Link>
               <div className="relative">
                 <button
@@ -163,7 +214,10 @@ export function Nav() {
                         <Link href="/app/inventory" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.inventoryOverview')}</Link>
                         <Link href="/app/products" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.products')}</Link>
                         <Link href="/app/stock-movements" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.stockMovements')}</Link>
-                        <Link href="/app/settings/integrations/woocommerce" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.woocommerce')}</Link>
+                        <Link href="/app/settings/integrations" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('integrations.storeIntegrations')}</Link>
+                        {wooConnected && (
+                          <Link href="/app/settings/integrations/woocommerce" className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setBusinessOpen(false)}>{t('nav.woocommerce')}</Link>
+                        )}
                       </div>
                     )}
                   </div>
@@ -212,8 +266,8 @@ export function Nav() {
 
         {/* Mobile menu */}
         {isOpen && (
-          <div className="mt-4 border-t pt-4 pb-4 lg:hidden">
-            <div className="flex flex-col space-y-3">
+          <div className="mt-4 max-h-[calc(100dvh-72px)] overflow-y-auto border-t pb-4 pt-4 lg:hidden">
+            <div className="flex flex-col space-y-3 pb-4">
               <AppSearch />
               <AppSelect
                 value={currentCompanyId ?? ''}
@@ -250,7 +304,10 @@ export function Nav() {
                       <Link href="/app/inventory" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.inventoryOverview')}</Link>
                       <Link href="/app/products" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.products')}</Link>
                       <Link href="/app/stock-movements" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.stockMovements')}</Link>
-                      <Link href="/app/settings/integrations/woocommerce" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.woocommerce')}</Link>
+                      <Link href="/app/settings/integrations" className="hover:underline" onClick={() => setIsOpen(false)}>{t('integrations.storeIntegrations')}</Link>
+                      {wooConnected && (
+                        <Link href="/app/settings/integrations/woocommerce" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.woocommerce')}</Link>
+                      )}
                     </div>
                   </div>
                 </>

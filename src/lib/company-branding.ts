@@ -1,6 +1,8 @@
 export interface CompanyBranding {
   logo: string
   address: string
+  email: string
+  iban: string
 }
 
 const prefix = 'leonety-company-branding'
@@ -11,7 +13,7 @@ function getKey(companyId: string) {
 
 export function loadCompanyBranding(companyId: string | null | undefined): CompanyBranding {
   if (!companyId || typeof window === 'undefined') {
-    return { logo: '', address: '' }
+    return { logo: '', address: '', email: '', iban: '' }
   }
 
   try {
@@ -19,13 +21,18 @@ export function loadCompanyBranding(companyId: string | null | undefined): Compa
     return {
       logo: typeof parsed.logo === 'string' ? parsed.logo : '',
       address: typeof parsed.address === 'string' ? parsed.address : '',
+      email: typeof parsed.email === 'string' ? parsed.email : '',
+      iban: typeof parsed.iban === 'string' ? parsed.iban : '',
     }
   } catch {
-    return { logo: '', address: '' }
+    return { logo: '', address: '', email: '', iban: '' }
   }
 }
 
-export function saveCompanyBranding(companyId: string, branding: CompanyBranding) {
+export function saveCompanyBranding(companyId: string, branding: Partial<CompanyBranding>) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(getKey(companyId), JSON.stringify(branding))
+  window.localStorage.setItem(getKey(companyId), JSON.stringify({
+    ...loadCompanyBranding(companyId),
+    ...branding,
+  }))
 }

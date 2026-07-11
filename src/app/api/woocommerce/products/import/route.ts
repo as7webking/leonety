@@ -26,6 +26,23 @@ interface ProductSyncRow {
   external_product_id: string | null
 }
 
+async function fetchAllWooProducts(connection: WooConnectionRow) {
+  const products: WooProductImportRow[] = []
+
+  for (let page = 1; page <= 50; page += 1) {
+    const nextPage = await wooRequest<WooProductImportRow[]>(
+      connection,
+      `/products?per_page=100&page=${page}&status=any`
+    )
+
+    products.push(...nextPage)
+
+    if (nextPage.length < 100) break
+  }
+
+  return products
+}
+
 async function createCategoryIfPossible(
   adminSupabase: { from: (table: string) => any },
   companyId: string,
@@ -64,10 +81,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'WooCommerce connection is not configured.' }, { status: 400 })
     }
 
-    const products = await wooRequest<WooProductImportRow[]>(
-      connection as WooConnectionRow,
-      '/products?per_page=100&status=any'
-    )
+    const products = await fetchAllWooProducts(connection as WooConnectionRow)
     let imported = 0
 
     for (const wooProduct of products) {

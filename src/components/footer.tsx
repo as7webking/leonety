@@ -54,7 +54,7 @@ export function Footer() {
                 <p className="font-semibold text-slate-900 mb-4">{t('footer.product')}</p>
                 <ul className="space-y-2 text-sm text-slate-600">
                   <li><Link href="/#features" className="hover:text-slate-900 transition">{t('footer.features')}</Link></li>
-                  <li><Link href="/#pricing" className="hover:text-slate-900 transition">{t('footer.pricing')}</Link></li>
+                  <li><Link href="/pricing" className="hover:text-slate-900 transition">{t('footer.pricing')}</Link></li>
                   <li><Link href="/onboarding" className="hover:text-slate-900 transition">{t('footer.getStarted')}</Link></li>
                 </ul>
               </div>

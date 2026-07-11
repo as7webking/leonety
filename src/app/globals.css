@@ -145,6 +145,7 @@ html {
 @media print {
   @page {
     margin: 8mm;
+    size: A4 portrait;
   }
 
   html,
@@ -160,6 +161,16 @@ html {
     display: none !important;
   }
 
+  body:has(.print-area),
+  body:has(.print-area) main,
+  body:has(.print-area) .container {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  body:has(.print-area) main > :not(.print-area),
   body:has(.print-area) .container > :not(.print-area) {
     display: none !important;
   }
@@ -168,9 +179,15 @@ html {
     display: block !important;
     position: static !important;
     width: 100%;
+    max-width: none !important;
     padding: 0;
+    margin: 0 !important;
     background: white;
     color: black;
+    font-size: 11px;
+    line-height: 1.35;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .print-area h1 {
@@ -178,12 +195,17 @@ html {
   }
 
   .print-area table {
+    width: 100% !important;
+    table-layout: fixed !important;
     border-collapse: collapse !important;
+    page-break-after: auto;
   }
 
   .print-area th,
   .print-area td {
     padding: 4px 6px !important;
+    vertical-align: top !important;
+    word-break: break-word;
   }
 
   .print-area section {
@@ -204,6 +226,24 @@ html {
   .print-area.print-compact section {
     break-inside: auto;
     page-break-inside: auto;
+  }
+
+  .print-area.print-compact {
+    display: block !important;
+  }
+
+  .print-area.print-compact table {
+    table-layout: fixed !important;
+  }
+
+  .print-area.print-compact td,
+  .print-area.print-compact th {
+    width: 50% !important;
+  }
+
+  .print-area.print-compact tr {
+    break-after: auto;
+    page-break-after: auto;
   }
 
   .print-area.print-compact thead {

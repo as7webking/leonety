@@ -12,7 +12,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
     <CompanyProvider>
       <div className="min-h-screen bg-background">
         <Nav />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 pt-[72px]">{children}</main>
         <SupportWidget />
       </div>
     </CompanyProvider>

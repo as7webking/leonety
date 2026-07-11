@@ -76,6 +76,8 @@ export default function ProfilePage() {
   const [workspaceCurrency, setWorkspaceCurrency] = useState('USD')
   const [workspaceLogo, setWorkspaceLogo] = useState('')
   const [workspaceAddress, setWorkspaceAddress] = useState('')
+  const [workspaceEmail, setWorkspaceEmail] = useState('')
+  const [workspaceIban, setWorkspaceIban] = useState('')
   const [message, setMessage] = useState('')
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([])
   const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([])
@@ -182,14 +184,23 @@ export default function ProfilePage() {
       const branding = loadCompanyBranding(currentCompany.id)
       setWorkspaceLogo(branding.logo)
       setWorkspaceAddress(branding.address)
+      setWorkspaceEmail(branding.email)
+      setWorkspaceIban(branding.iban)
     }
   }, [currentCompany])
 
-  const persistWorkspaceBranding = (nextLogo = workspaceLogo, nextAddress = workspaceAddress) => {
+  const persistWorkspaceBranding = (
+    nextLogo = workspaceLogo,
+    nextAddress = workspaceAddress,
+    nextEmail = workspaceEmail,
+    nextIban = workspaceIban
+  ) => {
     if (!currentCompany) return
     saveCompanyBranding(currentCompany.id, {
       logo: nextLogo,
       address: nextAddress,
+      email: nextEmail,
+      iban: nextIban,
     })
   }
 
@@ -206,7 +217,7 @@ export default function ProfilePage() {
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : ''
       setWorkspaceLogo(result)
-      persistWorkspaceBranding(result, workspaceAddress)
+      persistWorkspaceBranding(result, workspaceAddress, workspaceEmail, workspaceIban)
     }
     reader.readAsDataURL(file)
   }
@@ -915,7 +926,7 @@ export default function ProfilePage() {
                         size="sm"
                         onClick={() => {
                           setWorkspaceLogo('')
-                          persistWorkspaceBranding('', workspaceAddress)
+                          persistWorkspaceBranding('', workspaceAddress, workspaceEmail, workspaceIban)
                         }}
                       >
                         {t('common.delete')}
@@ -928,12 +939,39 @@ export default function ProfilePage() {
                       value={workspaceAddress}
                       onChange={(event) => {
                         setWorkspaceAddress(event.target.value)
-                        persistWorkspaceBranding(workspaceLogo, event.target.value)
+                        persistWorkspaceBranding(workspaceLogo, event.target.value, workspaceEmail, workspaceIban)
                       }}
                       className="min-h-20 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder={t('profile.companyAddressPlaceholder')}
                     />
                   </label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium">{t('profile.companyEmail')}</span>
+                      <input
+                        type="email"
+                        value={workspaceEmail}
+                        onChange={(event) => {
+                          setWorkspaceEmail(event.target.value)
+                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, event.target.value, workspaceIban)
+                        }}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="company@example.com"
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium">{t('profile.companyIban')}</span>
+                      <input
+                        value={workspaceIban}
+                        onChange={(event) => {
+                          setWorkspaceIban(event.target.value)
+                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, event.target.value)
+                        }}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="DE00 0000 0000 0000 0000 00"
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 sm:flex-row">

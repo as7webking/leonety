@@ -19,6 +19,16 @@ interface WooConnectionStatus {
   updatedAt: string | null
 }
 
+interface WooPreviewProduct {
+  id: number
+  name: string
+  sku: string
+  price: string
+  stock: number
+  category: string
+  image: string
+}
+
 const emptyStatus: WooConnectionStatus = {
   connected: false,
   storeUrl: '',
@@ -41,6 +51,9 @@ export default function WooCommerceSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewProducts, setPreviewProducts] = useState<WooPreviewProduct[]>([])
+  const [previewCategories, setPreviewCategories] = useState<string[]>([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -130,6 +143,8 @@ export default function WooCommerceSettingsPage() {
       setConsumerKey('')
       setConsumerSecret('')
       setMessage(t('woocommerce.connectionSaved'))
+      await handleImportProducts({ silent: true })
+      await handlePreviewCatalog()
     }
 
     setSaving(false)
@@ -163,11 +178,11 @@ export default function WooCommerceSettingsPage() {
     setSaving(false)
   }
 
-  const handleImportProducts = async () => {
+  const handleImportProducts = async (options?: { silent?: boolean }) => {
     if (!currentCompany) return
 
     setImporting(true)
-    setMessage('')
+    if (!options?.silent) setMessage('')
     setError('')
 
     const response = await fetch('/api/woocommerce/products/import', {
@@ -184,6 +199,29 @@ export default function WooCommerceSettingsPage() {
     }
 
     setImporting(false)
+  }
+
+  const handlePreviewCatalog = async () => {
+    if (!currentCompany) return
+
+    setPreviewLoading(true)
+    setError('')
+    setMessage('')
+
+    const response = await fetch(`/api/woocommerce/products/preview?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      setError(payload.error ?? t('woocommerce.previewFailed'))
+      setPreviewProducts([])
+      setPreviewCategories([])
+    } else {
+      setPreviewProducts(payload.products ?? [])
+      setPreviewCategories(payload.categories ?? [])
+      setMessage(t('woocommerce.previewLoaded').replace('{count}', String((payload.products ?? []).length)))
+    }
+
+    setPreviewLoading(false)
   }
 
   if (companyLoading || loading) {
@@ -328,14 +366,51 @@ export default function WooCommerceSettingsPage() {
                 </Button>
               )}
               {status.connected && (
-                <Button type="button" variant="outline" onClick={handleImportProducts} disabled={importing || saving}>
+                <Button type="button" variant="outline" onClick={() => void handleImportProducts()} disabled={importing || saving}>
                   {importing ? t('common.loading') : t('woocommerce.importProducts')}
+                </Button>
+              )}
+              {status.connected && (
+                <Button type="button" variant="outline" onClick={handlePreviewCatalog} disabled={previewLoading || saving}>
+                  {previewLoading ? t('common.loading') : t('woocommerce.previewCatalog')}
                 </Button>
               )}
             </div>
           </form>
         </CardContent>
       </Card>
+
+      {(previewProducts.length > 0 || previewCategories.length > 0) && (
+        <Card className="mt-5">
+          <CardHeader>
+            <CardTitle>{t('woocommerce.storeCatalog')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {previewCategories.length > 0 && (
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">{t('products.category')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {previewCategories.map((category) => (
+                    <span key={category} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{category}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {previewProducts.map((product) => (
+                <div key={product.id} className="flex gap-3 rounded-lg border border-slate-200 p-3">
+                  {product.image ? <img src={product.image} alt="" className="h-14 w-14 rounded-md object-cover" /> : <div className="h-14 w-14 rounded-md bg-slate-100" />}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-950">{product.name}</p>
+                    <p className="text-xs text-slate-500">{[product.sku, product.category].filter(Boolean).join(' · ') || '-'}</p>
+                    <p className="text-xs text-slate-500">{product.price} · {t('products.currentStock')}: {product.stock}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </PageContainer>
   )
 }

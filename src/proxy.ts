@@ -54,6 +54,7 @@ export async function proxy(request: NextRequest) {
     '/products',
     '/inventory',
     '/stock-movements',
+    '/settings/integrations',
     '/settings/integrations/woocommerce',
   ]
   const matchingLegacyRoute = appRouteRedirects.find((route) => pathname === route || pathname.startsWith(`${route}/`))

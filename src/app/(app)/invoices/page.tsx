@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, Edit, FileText, Printer, Trash2 } from 'lucide-react'
+import { Building2, Edit, FileText, PackagePlus, Printer, Trash2 } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -80,6 +80,15 @@ interface ClientOption {
   client_company: string | null
 }
 
+interface ProductOption {
+  id: string
+  name: string
+  sku: string | null
+  selling_price: number | string | null
+  currency: string
+  current_stock: number | string
+}
+
 interface InvoiceItem {
   id?: string
   description: string
@@ -117,10 +126,42 @@ interface InvoiceFormState {
   notes: string
   tax_country: TaxCountryCode
   tax_type: TaxType
+  payment_method: 'cash' | 'card'
+  amount_paid: string
   items: InvoiceItem[]
 }
 
 type InvoiceNumberFormat = 'yy-seq' | 'yyyy-seq'
+
+interface InvoicePaymentMeta {
+  method: 'cash' | 'card'
+  amountPaid: string
+}
+
+function getInvoicePaymentKey(invoiceId: string) {
+  return `leonety-invoice-payment:${invoiceId}`
+}
+
+function loadInvoicePaymentMeta(invoiceId: string | null | undefined): InvoicePaymentMeta {
+  if (!invoiceId || typeof window === 'undefined') {
+    return { method: 'card', amountPaid: '' }
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(getInvoicePaymentKey(invoiceId)) ?? '{}') as Partial<InvoicePaymentMeta>
+    return {
+      method: parsed.method === 'cash' ? 'cash' : 'card',
+      amountPaid: typeof parsed.amountPaid === 'string' ? parsed.amountPaid : '',
+    }
+  } catch {
+    return { method: 'card', amountPaid: '' }
+  }
+}
+
+function saveInvoicePaymentMeta(invoiceId: string, meta: InvoicePaymentMeta) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(getInvoicePaymentKey(invoiceId), JSON.stringify(meta))
+}
 
 const newItem = (taxRate = 19): InvoiceItem => ({
   description: '',
@@ -219,6 +260,8 @@ export default function InvoicesPage() {
   const { t } = useI18n()
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
+  const [products, setProducts] = useState<ProductOption[]>([])
+  const [quickClient, setQuickClient] = useState({ name: '', phone: '', interested_in: '' })
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null)
@@ -228,6 +271,8 @@ export default function InvoicesPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
+  const [companyEmail, setCompanyEmail] = useState('')
+  const [companyIban, setCompanyIban] = useState('')
   const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
   const [formData, setFormData] = useState<InvoiceFormState>({
     client_id: '',
@@ -239,6 +284,8 @@ export default function InvoicesPage() {
     notes: '',
     tax_country: 'DE',
     tax_type: 'standard',
+    payment_method: 'card',
+    amount_paid: '',
     items: [newItem()],
   })
 
@@ -250,6 +297,8 @@ export default function InvoicesPage() {
     const branding = loadCompanyBranding(currentCompany.id)
     setCompanyLogo(branding.logo)
     setCompanyAddress(branding.address)
+    setCompanyEmail(branding.email)
+    setCompanyIban(branding.iban)
     setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
   }, [currentCompany])
 
@@ -273,9 +322,12 @@ export default function InvoicesPage() {
       notes: '',
       tax_country: 'DE',
       tax_type: 'standard',
+      payment_method: 'card',
+      amount_paid: '',
       items: [newItem(defaultTaxRate)],
     })
     setShowForm(false)
+    setQuickClient({ name: '', phone: '', interested_in: '' })
   }, [currentCompany, invoices])
 
   const openCreateForm = () => {
@@ -291,8 +343,11 @@ export default function InvoicesPage() {
       notes: '',
       tax_country: 'DE',
       tax_type: 'standard',
+      payment_method: 'card',
+      amount_paid: '',
       items: [newItem(defaultTaxRate)],
     })
+    setQuickClient({ name: '', phone: '', interested_in: '' })
     setShowForm(true)
   }
 
@@ -307,7 +362,7 @@ export default function InvoicesPage() {
       setErrorMessage('')
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
-      const [invoiceRes, clientRes] = await Promise.all([
+      const [invoiceRes, clientRes, productRes] = await Promise.all([
         supabase
           .from('invoices')
           .select('*, clients(id, name, email, phone, client_company), invoice_items(*)')
@@ -318,10 +373,17 @@ export default function InvoicesPage() {
           .select('id, name, email, phone, client_company')
           .eq('company_id', currentCompany.id)
           .order('name', { ascending: true }),
+        supabase
+          .from('products')
+          .select('id, name, sku, selling_price, currency, current_stock')
+          .eq('company_id', currentCompany.id)
+          .eq('status', 'active')
+          .order('name', { ascending: true }),
       ])
 
       if (invoiceRes.error) throw invoiceRes.error
       if (clientRes.error) throw clientRes.error
+      if (productRes.error && !['42P01', 'PGRST205'].includes(productRes.error.code ?? '')) throw productRes.error
 
       setInvoices(((invoiceRes.data ?? []) as InvoiceRecord[]).map((invoice) => ({
         ...invoice,
@@ -337,6 +399,11 @@ export default function InvoicesPage() {
         })),
       })))
       setClients((clientRes.data ?? []) as ClientOption[])
+      setProducts(((productRes.data ?? []) as ProductOption[]).map((product) => ({
+        ...product,
+        selling_price: product.selling_price === null ? null : Number(product.selling_price),
+        current_stock: Number(product.current_stock),
+      })))
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load invoices')
     } finally {
@@ -362,6 +429,16 @@ export default function InvoicesPage() {
     }))
   }
 
+  const applyProductToItem = (index: number, productId: string) => {
+    const product = products.find((item) => item.id === productId)
+    if (!product) return
+
+    updateItem(index, {
+      description: product.name,
+      unit_price: Number(product.selling_price ?? 0),
+    })
+  }
+
   const handleEdit = (invoice: InvoiceRecord) => {
     const invoiceItems = invoice.invoice_items && invoice.invoice_items.length > 0
       ? invoice.invoice_items
@@ -377,6 +454,8 @@ export default function InvoicesPage() {
       notes: invoice.notes ?? '',
       tax_country: 'DE',
       tax_type: 'standard',
+      payment_method: loadInvoicePaymentMeta(invoice.id).method,
+      amount_paid: loadInvoicePaymentMeta(invoice.id).amountPaid,
       items: invoiceItems,
     })
     setShowForm(true)
@@ -405,10 +484,43 @@ export default function InvoicesPage() {
       return
     }
 
+    let clientId = formData.client_id || null
+
+    if (!clientId && quickClient.name.trim()) {
+      const { data: createdClient, error: clientCreateError } = await supabase
+        .from('clients')
+        .insert({
+          company_id: currentCompany.id,
+          name: quickClient.name.trim(),
+          phone: quickClient.phone.trim() || null,
+          interested_in: quickClient.interested_in.trim() || null,
+          status: 'client',
+        })
+        .select('id')
+        .single()
+
+      if (clientCreateError) {
+        setErrorMessage(clientCreateError.message)
+        return
+      }
+
+      clientId = createdClient.id
+      setClients((current) => [
+        ...current,
+        {
+          id: createdClient.id,
+          name: quickClient.name.trim(),
+          phone: quickClient.phone.trim() || null,
+          email: null,
+          client_company: null,
+        },
+      ].sort((left, right) => left.name.localeCompare(right.name)))
+    }
+
     const totals = calculateItems(formData.items)
     const invoicePayload = {
       company_id: currentCompany.id,
-      client_id: formData.client_id || null,
+      client_id: clientId,
       invoice_number: formData.invoice_number.trim(),
       issue_date: formData.issue_date,
       due_date: formData.due_date || null,
@@ -458,6 +570,13 @@ export default function InvoicesPage() {
 
       const { error: itemError } = await supabase.from('invoice_items').insert(itemPayload)
       if (itemError) throw itemError
+
+      if (invoiceId) {
+        saveInvoicePaymentMeta(invoiceId, {
+          method: formData.payment_method,
+          amountPaid: formData.amount_paid.trim(),
+        })
+      }
 
       if (formData.status === 'paid') {
         const existingIncome = await supabase
@@ -601,6 +720,9 @@ export default function InvoicesPage() {
                 {includeCompanyAddress && companyAddress && (
                   <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>
                 )}
+                {includeCompanyAddress && companyEmail && (
+                  <p className="text-xs text-slate-600">{companyEmail}</p>
+                )}
               </div>
             </div>
             <div className="text-right text-sm">
@@ -643,6 +765,23 @@ export default function InvoicesPage() {
             <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(printingInvoice.tax_amount, printingInvoice.currency)}</span></div>
             <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(printingInvoice.total, printingInvoice.currency)}</span></div>
           </div>
+          {printingInvoice.status === 'paid' && (
+            <div className="mt-4 rounded-md border p-3 text-sm">
+              <p className="font-semibold">{t('invoices.payment')}</p>
+              <p>
+                {t('invoices.paymentMethod')}: {loadInvoicePaymentMeta(printingInvoice.id).method === 'cash' ? t('invoices.paymentCash') : t('invoices.paymentCard')}
+              </p>
+              <p>
+                {t('invoices.amountPaid')}: {formatCurrency(
+                  Number(loadInvoicePaymentMeta(printingInvoice.id).amountPaid || printingInvoice.total),
+                  printingInvoice.currency
+                )}
+              </p>
+              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyIban && (
+                <p>IBAN: {companyIban}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -668,6 +807,35 @@ export default function InvoicesPage() {
                     ]}
                   />
                 </label>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <PackagePlus className="h-4 w-4" />
+                    {t('invoices.quickClient')}
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <input
+                      value={quickClient.name}
+                      onChange={(event) => setQuickClient({ ...quickClient, name: event.target.value })}
+                      className="rounded-md border bg-white px-3 py-2 text-sm"
+                      placeholder={t('clients.name')}
+                      disabled={Boolean(formData.client_id)}
+                    />
+                    <input
+                      value={quickClient.phone}
+                      onChange={(event) => setQuickClient({ ...quickClient, phone: event.target.value })}
+                      className="rounded-md border bg-white px-3 py-2 text-sm"
+                      placeholder={t('clients.phone')}
+                      disabled={Boolean(formData.client_id)}
+                    />
+                    <input
+                      value={quickClient.interested_in}
+                      onChange={(event) => setQuickClient({ ...quickClient, interested_in: event.target.value })}
+                      className="rounded-md border bg-white px-3 py-2 text-sm"
+                      placeholder={t('clients.interestedIn')}
+                      disabled={Boolean(formData.client_id)}
+                    />
+                  </div>
+                </div>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.invoiceNumber')}</span>
                   <input value={formData.invoice_number} onChange={(event) => setFormData({ ...formData, invoice_number: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
@@ -717,6 +885,37 @@ export default function InvoicesPage() {
                 </label>
               </div>
 
+              {formData.status === 'paid' && (
+                <div className="grid gap-4 rounded-md border border-slate-200 bg-slate-50 p-3 md:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-sm font-medium">{t('invoices.paymentMethod')}</span>
+                    <AppSelect
+                      value={formData.payment_method}
+                      onChange={(value) => setFormData({ ...formData, payment_method: value === 'cash' ? 'cash' : 'card' })}
+                      options={[
+                        { value: 'card', label: t('invoices.paymentCard') },
+                        { value: 'cash', label: t('invoices.paymentCash') },
+                      ]}
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-sm font-medium">{t('invoices.amountPaid')}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.amount_paid}
+                      onChange={(event) => setFormData({ ...formData, amount_paid: event.target.value })}
+                      className="w-full rounded-md border bg-white px-3 py-2"
+                      placeholder={String(calculated.total)}
+                    />
+                    {formData.payment_method === 'card' && companyIban && (
+                      <p className="text-xs text-slate-500">IBAN: {companyIban}</p>
+                    )}
+                  </label>
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium">{t('invoices.items')}</h3>
@@ -728,6 +927,20 @@ export default function InvoicesPage() {
                     <div key={index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_150px_120px_170px_120px_auto]">
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-600">{t('invoices.product')}</span>
+                        {products.length > 0 && (
+                          <AppSelect
+                            value=""
+                            onChange={(value) => applyProductToItem(index, value)}
+                            options={[
+                              { value: '', label: t('invoices.selectProduct'), disabled: true },
+                              ...products.map((product) => ({
+                                value: product.id,
+                                label: `${product.name}${product.sku ? ` · ${product.sku}` : ''}`,
+                              })),
+                            ]}
+                            ariaLabel={t('invoices.selectProduct')}
+                          />
+                        )}
                         <input value={item.description} onChange={(event) => updateItem(index, { description: event.target.value })} className="w-full rounded-md border px-3 py-2 text-sm" placeholder={t('common.description')} required />
                       </label>
                       <label className="space-y-1">

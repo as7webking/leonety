@@ -21,7 +21,7 @@ export function PublicHeader({ user }: PublicHeaderProps) {
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
           <Link href="/#product" className="transition hover:text-slate-900">{t('public.product')}</Link>
           <Link href="/#features" className="transition hover:text-slate-900">{t('public.features')}</Link>
-          <Link href="/#pricing" className="transition hover:text-slate-900">{t('public.pricing')}</Link>
+          <Link href="/pricing" className="transition hover:text-slate-900">{t('public.pricing')}</Link>
           <Link href="/#workflows" className="transition hover:text-slate-900">{t('public.workflows')}</Link>
           <Link href="/#support" className="transition hover:text-slate-900">{t('public.support')}</Link>
           <Link href="/#help-center" className="transition hover:text-slate-900">{t('public.helpCenter')}</Link>
@@ -31,7 +31,7 @@ export function PublicHeader({ user }: PublicHeaderProps) {
 
         <div className="flex items-center gap-3">
           <LanguageSwitcher />
-          <Link href={user ? '/profile' : '/login'} className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
+          <Link href={user ? '/app/profile' : '/login'} className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
             {user ? t('nav.profile') : t('nav.login')}
           </Link>
         </div>

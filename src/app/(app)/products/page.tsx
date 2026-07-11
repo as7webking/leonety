@@ -154,7 +154,7 @@ function getVariants(value: unknown): Array<{ sku?: string; price?: string | num
   return Array.isArray(value) ? value as Array<{ sku?: string; price?: string | number; stock_quantity?: string | number; attributes?: Record<string, string> }> : []
 }
 
-async function compressImageToJpeg(file: File) {
+async function compressImageToJpeg(file: File, cropSquare = false) {
   const bitmap = await createImageBitmap(file)
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
@@ -170,10 +170,25 @@ async function compressImageToJpeg(file: File) {
 
   const renderBlob = () => new Promise<Blob>((resolve, reject) => {
     const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+    canvas.width = cropSquare ? Math.max(1, Math.round(Math.min(bitmap.width, bitmap.height) * scale)) : Math.max(1, Math.round(bitmap.width * scale))
+    canvas.height = cropSquare ? canvas.width : Math.max(1, Math.round(bitmap.height * scale))
     context.clearRect(0, 0, canvas.width, canvas.height)
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    if (cropSquare) {
+      const sourceSize = Math.min(bitmap.width, bitmap.height)
+      context.drawImage(
+        bitmap,
+        Math.round((bitmap.width - sourceSize) / 2),
+        Math.round((bitmap.height - sourceSize) / 2),
+        sourceSize,
+        sourceSize,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      )
+    } else {
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    }
     canvas.toBlob((nextBlob) => {
       if (nextBlob) {
         resolve(nextBlob)
@@ -186,10 +201,25 @@ async function compressImageToJpeg(file: File) {
   for (let attempt = 0; attempt < 9; attempt += 1) {
     const blob = await new Promise<Blob>((resolve, reject) => {
       const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+      canvas.width = cropSquare ? Math.max(1, Math.round(Math.min(bitmap.width, bitmap.height) * scale)) : Math.max(1, Math.round(bitmap.width * scale))
+      canvas.height = cropSquare ? canvas.width : Math.max(1, Math.round(bitmap.height * scale))
       context.clearRect(0, 0, canvas.width, canvas.height)
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      if (cropSquare) {
+        const sourceSize = Math.min(bitmap.width, bitmap.height)
+        context.drawImage(
+          bitmap,
+          Math.round((bitmap.width - sourceSize) / 2),
+          Math.round((bitmap.height - sourceSize) / 2),
+          sourceSize,
+          sourceSize,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        )
+      } else {
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      }
       canvas.toBlob((nextBlob) => {
         if (nextBlob) {
           resolve(nextBlob)
@@ -234,9 +264,11 @@ export default function ProductsPage() {
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
   const [bulkForm, setBulkForm] = useState<BulkEditForm>({ category: '', selling_price: '', current_stock: '', status: '' })
   const [compressingImage, setCompressingImage] = useState(false)
+  const [cropProductImage, setCropProductImage] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductForm>(makeEmptyForm())
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categoriesAvailable, setCategoriesAvailable] = useState(true)
@@ -355,7 +387,7 @@ export default function ProductsPage() {
     setCompressingImage(true)
 
     try {
-      const { blob, dataUrl } = await compressImageToJpeg(file)
+      const { blob, dataUrl } = await compressImageToJpeg(file, cropProductImage)
       const storagePath = currentCompany
         ? `${currentCompany.id}/products/${Date.now()}-${file.name.replace(/\.[^.]+$/, '')}.jpg`
         : ''
@@ -814,6 +846,13 @@ export default function ProductsPage() {
     )
   }
 
+  const getWooActionLabel = (product: Product) => {
+    const sync = syncs[product.id]
+    return sync?.external_product_id && sync.sync_status === 'synced'
+      ? t('woocommerce.updateProduct')
+      : t('woocommerce.publishProduct')
+  }
+
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('products.title')} /><LoadingSkeleton /></PageContainer>
   if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/app/onboarding') }} /></PageContainer>
   if (currentCompany.type !== 'business') return <PageContainer><PageHeader title={t('products.title')} /><EmptyState icon={BriefcaseBusiness} title={t('common.businessOnlyTitle')} description={t('modules.businessOnlyDescription')} /></PageContainer>
@@ -931,6 +970,15 @@ export default function ProductsPage() {
               <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">{t('woocommerce.imageUrl')}</span><input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="https://example.com/product.jpg" /></label>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('products.uploadImage')}</span>
+                <label className="mb-2 flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={cropProductImage}
+                    onChange={(event) => setCropProductImage(event.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  {t('products.cropSquare')}
+                </label>
                 <input
                   type="file"
                   accept="image/*"
@@ -947,18 +995,23 @@ export default function ProductsPage() {
                 </div>
               )}
               <label className="space-y-1 md:col-span-2 xl:col-span-3"><span className="text-sm font-medium">{t('products.descriptionField')}</span><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" /></label>
-              <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <input
-                  type="checkbox"
-                  checked={form.publish_to_woocommerce}
-                  onChange={(event) => setForm({ ...form, publish_to_woocommerce: event.target.checked })}
-                  className="mt-1 h-4 w-4"
-                />
-                <span>
-                  <span className="block text-sm font-medium">{t('woocommerce.prepareForWoo')}</span>
-                  <span className="block text-xs text-slate-500">{t('woocommerce.prepareForWooDescription')}</span>
-                </span>
-              </label>
+              <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-3 md:grid-cols-3">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.publish_to_woocommerce}
+                    onChange={(event) => setForm({ ...form, publish_to_woocommerce: event.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  {t('products.publishWoo')}
+                </label>
+                {['Google Business / Merchant', 'WhatsApp Business Catalog', 'OpenCart / Lieferando / Uber Eats'].map((label) => (
+                  <label key={label} className="flex items-center gap-2 text-sm text-slate-400">
+                    <input type="checkbox" disabled className="h-4 w-4" />
+                    {label} · {t('integrations.comingSoon')}
+                  </label>
+                ))}
+              </div>
               {form.publish_to_woocommerce && (
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('woocommerce.productType')}</span>
@@ -1012,11 +1065,12 @@ export default function ProductsPage() {
                     <div><p className="text-slate-500">{t('products.sellingPrice')}</p><p className="font-medium">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</p></div>
                   </div>
                   <div className="mt-4 flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}>{t('products.view')}</Button>
                     <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
                     <Button size="sm" variant="outline" onClick={() => void handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
                     <Button size="sm" variant="outline" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)}>
                       {syncingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                      {t('woocommerce.exportProduct')}
+                      {getWooActionLabel(product)}
                     </Button>
                     {product.status !== 'archived' && <Button size="sm" variant="outline" onClick={() => void handleArchive(product)}><Archive className="h-4 w-4" />{t('products.archive')}</Button>}
                   </div>
@@ -1024,6 +1078,53 @@ export default function ProductsPage() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {viewingProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 px-4 py-6">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white shadow-2xl">
+            <div className="grid gap-0 md:grid-cols-[260px_1fr]">
+              <div className="bg-slate-50 p-5">
+                {viewingProduct.image_url ? (
+                  <img src={viewingProduct.image_url} alt="" className="aspect-square w-full rounded-lg border object-cover" />
+                ) : (
+                  <div className="flex aspect-square w-full items-center justify-center rounded-lg border bg-white text-sm text-slate-400">
+                    {t('products.imagePreview')}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-4 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-950">{viewingProduct.name}</h2>
+                    <p className="text-sm text-slate-500">{[viewingProduct.sku, viewingProduct.barcode, viewingProduct.category].filter(Boolean).join(' · ')}</p>
+                  </div>
+                  <button type="button" className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100" onClick={() => setViewingProduct(null)}>
+                    ×
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-slate-500">{t('products.sellingPrice')}</p>
+                    <p className="font-semibold">{viewingProduct.selling_price === null ? '-' : formatCurrency(viewingProduct.selling_price, viewingProduct.currency)}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-slate-500">{t('products.currentStock')}</p>
+                    <p className="font-semibold">{viewingProduct.current_stock}</p>
+                  </div>
+                </div>
+                {viewingProduct.description && <p className="whitespace-pre-line text-sm text-slate-700">{viewingProduct.description}</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => { handleEdit(viewingProduct); setViewingProduct(null) }}>{t('common.edit')}</Button>
+                  <Button variant="outline" disabled={syncingProductId === viewingProduct.id} onClick={() => void handleWooExport(viewingProduct)}>
+                    {syncingProductId === viewingProduct.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                    {getWooActionLabel(viewingProduct)}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </PageContainer>
