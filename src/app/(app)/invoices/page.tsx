@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase-client'
 
 const invoiceStatuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const
 type InvoiceStatus = typeof invoiceStatuses[number]
+const visibleInvoiceStatuses = ['sent', 'cancelled', 'paid'] as const
 
 const taxCountries = [
   { code: 'AL', label: 'Albania', standardRate: 20, reducedRate: 6 },
@@ -273,6 +274,8 @@ export default function InvoicesPage() {
   const [companyAddress, setCompanyAddress] = useState('')
   const [companyEmail, setCompanyEmail] = useState('')
   const [companyIban, setCompanyIban] = useState('')
+  const [companyBic, setCompanyBic] = useState('')
+  const [companyTaxNumber, setCompanyTaxNumber] = useState('')
   const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
   const [formData, setFormData] = useState<InvoiceFormState>({
     client_id: '',
@@ -280,7 +283,7 @@ export default function InvoicesPage() {
     issue_date: today(),
     due_date: '',
     currency: 'USD',
-    status: 'draft',
+    status: 'sent',
     notes: '',
     tax_country: 'DE',
     tax_type: 'standard',
@@ -299,6 +302,8 @@ export default function InvoicesPage() {
     setCompanyAddress(branding.address)
     setCompanyEmail(branding.email)
     setCompanyIban(branding.iban)
+    setCompanyBic(branding.bic)
+    setCompanyTaxNumber(branding.taxNumber)
     setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
   }, [currentCompany])
 
@@ -318,7 +323,7 @@ export default function InvoicesPage() {
       issue_date: today(),
       due_date: '',
       currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
-      status: 'draft',
+      status: 'sent',
       notes: '',
       tax_country: 'DE',
       tax_type: 'standard',
@@ -339,7 +344,7 @@ export default function InvoicesPage() {
       issue_date: today(),
       due_date: '',
       currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
-      status: 'draft',
+      status: 'sent',
       notes: '',
       tax_country: 'DE',
       tax_type: 'standard',
@@ -723,6 +728,15 @@ export default function InvoicesPage() {
                 {includeCompanyAddress && companyEmail && (
                   <p className="text-xs text-slate-600">{companyEmail}</p>
                 )}
+                {includeCompanyAddress && companyTaxNumber && (
+                  <p className="text-xs text-slate-600">{t('profile.companyTaxNumber')}: {companyTaxNumber}</p>
+                )}
+                {includeCompanyAddress && companyIban && (
+                  <p className="text-xs text-slate-600">IBAN: {companyIban}</p>
+                )}
+                {includeCompanyAddress && companyBic && (
+                  <p className="text-xs text-slate-600">BIC: {companyBic}</p>
+                )}
               </div>
             </div>
             <div className="text-right text-sm">
@@ -777,9 +791,8 @@ export default function InvoicesPage() {
                   printingInvoice.currency
                 )}
               </p>
-              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyIban && (
-                <p>IBAN: {companyIban}</p>
-              )}
+              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyIban && <p>IBAN: {companyIban}</p>}
+              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyBic && <p>BIC: {companyBic}</p>}
             </div>
           )}
         </div>
@@ -845,7 +858,7 @@ export default function InvoicesPage() {
                   <AppSelect
                     value={formData.status}
                     onChange={(value) => setFormData({ ...formData, status: value as InvoiceStatus })}
-                    options={invoiceStatuses.map((status) => ({ value: status, label: formatInvoiceStatus(status, t) }))}
+                    options={visibleInvoiceStatuses.map((status) => ({ value: status, label: formatInvoiceStatus(status, t) }))}
                   />
                 </label>
                 <label className="space-y-1">

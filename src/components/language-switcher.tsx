@@ -5,10 +5,13 @@ import { useI18n } from '@/contexts/i18n-context'
 import { AppSelect } from '@/components/app-select'
 
 const labels: Record<Locale, string> = {
-  en: 'EN',
-  de: 'DE',
-  ru: 'RU',
-  tr: 'TR',
+  en: 'EN - English',
+  de: 'DE - Deutsch',
+  tr: 'TR - Türkçe',
+  ru: 'RU - Русский',
+  ua: 'UA - Українська',
+  pl: 'PL - Polski',
+  fr: 'FR - Français',
 }
 
 export function LanguageSwitcher() {
@@ -22,7 +25,7 @@ export function LanguageSwitcher() {
         onChange={(value) => setLocale(value as Locale)}
         options={locales.map((item) => ({ value: item, label: labels[item] }))}
         ariaLabel={t('language.label')}
-        className="w-20"
+        className="w-40"
       />
     </div>
   )

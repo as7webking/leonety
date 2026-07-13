@@ -78,6 +78,8 @@ export default function ProfilePage() {
   const [workspaceAddress, setWorkspaceAddress] = useState('')
   const [workspaceEmail, setWorkspaceEmail] = useState('')
   const [workspaceIban, setWorkspaceIban] = useState('')
+  const [workspaceBic, setWorkspaceBic] = useState('')
+  const [workspaceTaxNumber, setWorkspaceTaxNumber] = useState('')
   const [message, setMessage] = useState('')
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([])
   const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([])
@@ -186,6 +188,8 @@ export default function ProfilePage() {
       setWorkspaceAddress(branding.address)
       setWorkspaceEmail(branding.email)
       setWorkspaceIban(branding.iban)
+      setWorkspaceBic(branding.bic)
+      setWorkspaceTaxNumber(branding.taxNumber)
     }
   }, [currentCompany])
 
@@ -193,7 +197,9 @@ export default function ProfilePage() {
     nextLogo = workspaceLogo,
     nextAddress = workspaceAddress,
     nextEmail = workspaceEmail,
-    nextIban = workspaceIban
+    nextIban = workspaceIban,
+    nextBic = workspaceBic,
+    nextTaxNumber = workspaceTaxNumber
   ) => {
     if (!currentCompany) return
     saveCompanyBranding(currentCompany.id, {
@@ -201,6 +207,8 @@ export default function ProfilePage() {
       address: nextAddress,
       email: nextEmail,
       iban: nextIban,
+      bic: nextBic,
+      taxNumber: nextTaxNumber,
     })
   }
 
@@ -217,7 +225,7 @@ export default function ProfilePage() {
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : ''
       setWorkspaceLogo(result)
-      persistWorkspaceBranding(result, workspaceAddress, workspaceEmail, workspaceIban)
+      persistWorkspaceBranding(result, workspaceAddress, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
     }
     reader.readAsDataURL(file)
   }
@@ -926,7 +934,7 @@ export default function ProfilePage() {
                         size="sm"
                         onClick={() => {
                           setWorkspaceLogo('')
-                          persistWorkspaceBranding('', workspaceAddress, workspaceEmail, workspaceIban)
+                          persistWorkspaceBranding('', workspaceAddress, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
                         }}
                       >
                         {t('common.delete')}
@@ -939,7 +947,7 @@ export default function ProfilePage() {
                       value={workspaceAddress}
                       onChange={(event) => {
                         setWorkspaceAddress(event.target.value)
-                        persistWorkspaceBranding(workspaceLogo, event.target.value, workspaceEmail, workspaceIban)
+                        persistWorkspaceBranding(workspaceLogo, event.target.value, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
                       }}
                       className="min-h-20 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder={t('profile.companyAddressPlaceholder')}
@@ -953,7 +961,7 @@ export default function ProfilePage() {
                         value={workspaceEmail}
                         onChange={(event) => {
                           setWorkspaceEmail(event.target.value)
-                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, event.target.value, workspaceIban)
+                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, event.target.value, workspaceIban, workspaceBic, workspaceTaxNumber)
                         }}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         placeholder="company@example.com"
@@ -965,10 +973,34 @@ export default function ProfilePage() {
                         value={workspaceIban}
                         onChange={(event) => {
                           setWorkspaceIban(event.target.value)
-                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, event.target.value)
+                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, event.target.value, workspaceBic, workspaceTaxNumber)
                         }}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         placeholder="DE00 0000 0000 0000 0000 00"
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium">{t('profile.companyBic')}</span>
+                      <input
+                        value={workspaceBic}
+                        onChange={(event) => {
+                          setWorkspaceBic(event.target.value)
+                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, workspaceIban, event.target.value, workspaceTaxNumber)
+                        }}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="GENODEF1..."
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium">{t('profile.companyTaxNumber')}</span>
+                      <input
+                        value={workspaceTaxNumber}
+                        onChange={(event) => {
+                          setWorkspaceTaxNumber(event.target.value)
+                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, workspaceIban, workspaceBic, event.target.value)
+                        }}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Tax number / VAT ID"
                       />
                     </label>
                   </div>

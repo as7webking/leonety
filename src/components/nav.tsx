@@ -108,17 +108,6 @@ export function Nav() {
     if (!isOpen) return
 
     const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    const previousOverflow = document.body.style.overflow
     const previousTouchAction = document.body.style.touchAction
     document.body.style.overflow = 'hidden'
     document.body.style.touchAction = 'none'
@@ -152,12 +141,12 @@ export function Nav() {
       <div className="mx-auto w-[90%] max-w-7xl min-w-0 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={() => setIsOpen(false)}>
-            <img src="/logo.png" alt="Leonety" className="h-10 w-10 shrink-0 object-contain" />
+            <img src="/icon-192.png" alt="Leonety" className="h-10 w-10 shrink-0 object-contain" />
           </Link>
           
           {/* Desktop menu */}
           <div className="hidden min-w-0 flex-1 items-center justify-between gap-2 lg:flex">
-            <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-md bg-slate-50 p-0.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-0.5 rounded-md bg-slate-50 p-0.5">
               <Link href="/app/dashboard" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.dashboard')}</Link>
               <div className="relative">
                 <button

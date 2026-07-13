@@ -119,6 +119,8 @@ function buildBasePayload(product: ProductRow, categoryId?: number, includeImage
     meta_data: [
       { key: 'leonety_product_id', value: product.id },
       { key: 'barcode', value: product.barcode ?? '' },
+      { key: 'leonety_yay_attributes', value: JSON.stringify(product.woo_attributes ?? []) },
+      { key: 'leonety_yay_variants', value: JSON.stringify(product.woo_variants ?? []) },
     ],
   }
 

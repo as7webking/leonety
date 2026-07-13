@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Edit, Trash2 } from "lucide-react"
@@ -621,6 +622,9 @@ export default function ExpensesPage() {
                       </p>
                     )}
                   </div>
+                  <Link href="/app/transactions">
+                    <Button variant="outline" size="sm">{t('nav.transactions')}</Button>
+                  </Link>
                   <Button variant="outline" size="icon" onClick={() => handleEdit(expense)}><Edit className="h-4 w-4" /></Button>
                   <Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>

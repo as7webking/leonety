@@ -168,6 +168,8 @@ html {
     padding: 0 !important;
     width: 100% !important;
     max-width: none !important;
+    background: white !important;
+    color: black !important;
   }
 
   body:has(.print-area) main > :not(.print-area),
@@ -190,22 +192,53 @@ html {
     print-color-adjust: exact;
   }
 
+  .print-area,
+  .print-area * {
+    background-color: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .print-area img[alt="Leonety"],
+  .print-area .app-logo,
+  body:has(.print-area) img[alt="Leonety"] {
+    display: none !important;
+  }
+
   .print-area h1 {
     margin-top: 0 !important;
   }
 
   .print-area table {
     width: 100% !important;
+    min-width: 100% !important;
     table-layout: fixed !important;
     border-collapse: collapse !important;
     page-break-after: auto;
+    display: table !important;
+    background: white !important;
+  }
+
+  .print-area thead {
+    display: table-header-group !important;
+  }
+
+  .print-area tbody {
+    display: table-row-group !important;
+  }
+
+  .print-area tr {
+    display: table-row !important;
   }
 
   .print-area th,
   .print-area td {
+    display: table-cell !important;
     padding: 4px 6px !important;
     vertical-align: top !important;
     word-break: break-word;
+    border-color: #000 !important;
   }
 
   .print-area section {
