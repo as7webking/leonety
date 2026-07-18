@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
+import { getIntlLocale } from '@/lib/i18n'
 
 interface Expense extends ExpenseForm {
   id: string
@@ -28,7 +29,8 @@ export default function ExpensesPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
+  const intlLocale = getIntlLocale(locale)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -220,14 +222,14 @@ export default function ExpensesPage() {
   }
 
   const handleExportCSV = () => {
-    if (expenses.length === 0) {
-      setErrorMessage('No data to export')
+    if (sortedExpenses.length === 0) {
+      setErrorMessage(t('time.noDataExport'))
       window.setTimeout(() => setErrorMessage(''), 3000)
       return
     }
 
-    const headers = ['Date', 'Description', 'Category', 'Amount', 'Currency']
-    const rows = expenses.map((expense) => [expense.date, expense.description, expense.category, expense.amount, expense.currency])
+    const headers = [t('common.date'), t('common.description'), t('common.category'), t('common.amount'), t('common.currency')]
+    const rows = sortedExpenses.map((expense) => [expense.date, expense.description, formatCategoryLabel(expense.category, t), expense.amount, expense.currency])
     const csv = buildCsv([headers, ...rows])
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -270,13 +272,13 @@ export default function ExpensesPage() {
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
     const [year, month] = monthKey.split('-').map(Number)
-    return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    return new Date(year, month - 1, 1).toLocaleDateString(intlLocale, { month: 'long', year: 'numeric' })
   }
 
   const renderPrintAmount = (expense: Expense) => {
     const originalAmount = `${Number(expense.amount).toFixed(2)} ${expense.currency}`
     const workspaceCurrency = normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
-    const convertedAmount = formatCurrency(getWorkspaceAmount(expense), workspaceCurrency)
+    const convertedAmount = formatCurrency(getWorkspaceAmount(expense), workspaceCurrency, intlLocale)
 
     if (normalizeCurrencyCode(expense.currency) === workspaceCurrency) {
       return originalAmount
@@ -286,8 +288,8 @@ export default function ExpensesPage() {
   }
 
   const handlePrint = () => {
-    if (expenses.length === 0) {
-      setErrorMessage('No data to print')
+    if (sortedExpenses.length === 0) {
+      setErrorMessage(t('time.noDataPrint'))
       window.setTimeout(() => setErrorMessage(''), 3000)
       return
     }
@@ -479,7 +481,7 @@ export default function ExpensesPage() {
         </div>
       </PageHeader>
 
-      <div className="print-area print-compact hidden">
+      <div className="print-area print-compact print-report hidden">
         <div className="mb-2 flex items-start gap-3">
           {companyLogo ? (
             <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
@@ -491,6 +493,10 @@ export default function ExpensesPage() {
           <div>
             <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
             <p className="text-sm text-slate-600">{t('expenses.report')}</p>
+            <p className="text-xs text-slate-600">{t('common.workspaceType')}: {currentCompany.type}</p>
+            <p className="text-xs text-slate-600">{t('common.generated')}: {new Date().toLocaleString(intlLocale)}</p>
+            <p className="text-xs text-slate-600">{t('common.period')}: {filterFromDate || '...'} - {filterToDate || '...'}</p>
+            <p className="text-xs text-slate-600">{t('common.filters')}: {t('common.sortBy')} {sortBy}, {t('common.sortDirection')} {sortDirection}</p>
             {companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>}
           </div>
         </div>
@@ -509,7 +515,7 @@ export default function ExpensesPage() {
               <tbody>
                 {groupItems.map((expense) => (
                   <tr key={`print-${expense.id}`}>
-                    <td className="border p-2">{expense.date}</td>
+                    <td className="border p-2">{new Date(`${expense.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
                     <td className="border p-2">{expense.description}</td>
                     <td className="border p-2">{formatCategoryLabel(expense.category, t)}</td>
                     <td className="border p-2 text-right">{renderPrintAmount(expense)}</td>
@@ -521,7 +527,7 @@ export default function ExpensesPage() {
         ))}
 
         <p className="mt-2 text-right font-semibold">
-          {t('common.total')}: {formatCurrency(sortedExpenses.reduce((sum, expense) => sum + getWorkspaceAmount(expense), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
+          {t('common.total')}: {formatCurrency(sortedExpenses.reduce((sum, expense) => sum + getWorkspaceAmount(expense), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'), intlLocale)}
         </p>
       </div>
 

@@ -156,6 +156,7 @@ html {
   }
 
   body:has(.print-area) nav,
+  body:has(.print-area) header,
   body:has(.print-area) footer,
   body:has(.print-area) .no-print {
     display: none !important;
@@ -172,8 +173,8 @@ html {
     color: black !important;
   }
 
-  body:has(.print-area) main > :not(.print-area),
-  body:has(.print-area) .container > :not(.print-area) {
+  body:has(.print-area) main > :not(.print-area):not(:has(.print-area)),
+  body:has(.print-area) .container > :not(.print-area):not(:has(.print-area)) {
     display: none !important;
   }
 
@@ -194,7 +195,6 @@ html {
 
   .print-area,
   .print-area * {
-    background-color: white !important;
     color: black !important;
     box-shadow: none !important;
     text-shadow: none !important;
@@ -285,6 +285,135 @@ html {
 
   .print-area.print-compact tfoot {
     display: table-row-group;
+  }
+
+  .print-area.print-report {
+    background: #fff !important;
+    color: #0f172a !important;
+  }
+
+  .print-area.print-report * {
+    color: #0f172a !important;
+  }
+
+  .print-area.print-report h1,
+  .print-area.print-report h2 {
+    color: #020617 !important;
+  }
+
+  .print-area.print-report table {
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .print-area.print-report th {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .print-area.print-report td {
+    background: #fff !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .print-area.print-report tr:nth-child(even) td {
+    background: #f8fafc !important;
+  }
+
+  .print-area.print-invoice {
+    display: block !important;
+    width: 190mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .print-area.print-invoice,
+  .print-area.print-invoice * {
+    color: #000 !important;
+  }
+
+  .print-area.print-invoice h1,
+  .print-area.print-invoice p,
+  .print-area.print-invoice span,
+  .print-area.print-invoice div {
+    background: transparent !important;
+  }
+
+  .print-area.print-invoice .invoice-print-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 16px !important;
+    align-items: start !important;
+    margin-bottom: 18px !important;
+  }
+
+  .print-area.print-invoice .invoice-print-brand {
+    display: grid !important;
+    grid-template-columns: 52px minmax(0, 1fr) !important;
+    gap: 12px !important;
+    align-items: start !important;
+  }
+
+  .print-area.print-invoice .invoice-print-meta {
+    text-align: right !important;
+    white-space: nowrap !important;
+  }
+
+  .print-area.print-invoice .invoice-print-client,
+  .print-area.print-invoice .invoice-print-payment {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+    margin: 0 0 14px 0 !important;
+    background: #fff !important;
+  }
+
+  .print-area.print-invoice table {
+    margin-top: 12px !important;
+    table-layout: auto !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .print-area.print-invoice th,
+  .print-area.print-invoice td {
+    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+    padding: 7px 8px !important;
+  }
+
+  .print-area.print-invoice img {
+    display: block !important;
+    width: 44px !important;
+    height: 44px !important;
+    object-fit: contain !important;
+  }
+
+  .print-area.print-invoice .invoice-print-logo-fallback {
+    display: flex !important;
+    width: 44px !important;
+    height: 44px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+  }
+
+  .print-area.print-invoice .invoice-print-totals {
+    width: 92mm !important;
+    max-width: 92mm !important;
+    margin-left: auto !important;
+    margin-top: 16px !important;
+  }
+
+  .print-area.print-invoice .invoice-print-totals > div {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 24px !important;
+    padding: 4px 0 !important;
   }
 
   .no-print {

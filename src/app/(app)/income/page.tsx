@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
+import { getIntlLocale } from '@/lib/i18n'
 
 interface Income extends IncomeForm {
   id: string
@@ -27,7 +28,8 @@ export default function IncomePage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
+  const intlLocale = getIntlLocale(locale)
   const [incomes, setIncomes] = useState<Income[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -227,14 +229,14 @@ export default function IncomePage() {
   }
 
   const handleExportCSV = () => {
-    if (incomes.length === 0) {
-      setErrorMessage('No data to export')
+    if (sortedIncomes.length === 0) {
+      setErrorMessage(t('time.noDataExport'))
       window.setTimeout(() => setErrorMessage(''), 3000)
       return
     }
 
-    const headers = ['Date', 'Description', 'Category', 'Amount', 'Currency']
-    const rows = incomes.map((income) => [income.date, income.description, income.category, income.amount, income.currency])
+    const headers = [t('common.date'), t('common.description'), t('common.category'), t('common.amount'), t('common.currency')]
+    const rows = sortedIncomes.map((income) => [income.date, income.description, formatCategoryLabel(income.category, t), income.amount, income.currency])
     const csv = buildCsv([headers, ...rows])
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -277,13 +279,13 @@ export default function IncomePage() {
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
     const [year, month] = monthKey.split('-').map(Number)
-    return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    return new Date(year, month - 1, 1).toLocaleDateString(intlLocale, { month: 'long', year: 'numeric' })
   }
 
   const renderPrintAmount = (income: Income) => {
     const originalAmount = `${Number(income.amount).toFixed(2)} ${income.currency}`
     const workspaceCurrency = normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
-    const convertedAmount = formatCurrency(getWorkspaceAmount(income), workspaceCurrency)
+    const convertedAmount = formatCurrency(getWorkspaceAmount(income), workspaceCurrency, intlLocale)
 
     if (normalizeCurrencyCode(income.currency) === workspaceCurrency) {
       return originalAmount
@@ -293,8 +295,8 @@ export default function IncomePage() {
   }
 
   const handlePrint = () => {
-    if (incomes.length === 0) {
-      setErrorMessage('No data to print')
+    if (sortedIncomes.length === 0) {
+      setErrorMessage(t('time.noDataPrint'))
       window.setTimeout(() => setErrorMessage(''), 3000)
       return
     }
@@ -486,7 +488,7 @@ export default function IncomePage() {
         </div>
       </PageHeader>
 
-      <div className="print-area hidden">
+      <div className="print-area print-report hidden">
         <div className="mb-4 flex items-start gap-3">
           {companyLogo ? (
             <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
@@ -498,6 +500,10 @@ export default function IncomePage() {
           <div>
             <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
             <p className="text-sm text-slate-600">{t('income.report')}</p>
+            <p className="text-xs text-slate-600">{t('common.workspaceType')}: {currentCompany.type}</p>
+            <p className="text-xs text-slate-600">{t('common.generated')}: {new Date().toLocaleString(intlLocale)}</p>
+            <p className="text-xs text-slate-600">{t('common.period')}: {filterFromDate || '...'} - {filterToDate || '...'}</p>
+            <p className="text-xs text-slate-600">{t('common.filters')}: {t('common.sortBy')} {sortBy}, {t('common.sortDirection')} {sortDirection}</p>
             {companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>}
           </div>
         </div>
@@ -516,7 +522,7 @@ export default function IncomePage() {
               <tbody>
                 {groupItems.map((income) => (
                   <tr key={`print-${income.id}`}>
-                    <td className="border p-2">{income.date}</td>
+                    <td className="border p-2">{new Date(`${income.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
                     <td className="border p-2">{income.description}</td>
                     <td className="border p-2">{formatCategoryLabel(income.category, t)}</td>
                     <td className="border p-2 text-right">{renderPrintAmount(income)}</td>
@@ -528,7 +534,7 @@ export default function IncomePage() {
         ))}
 
         <p className="mt-4 text-right font-semibold">
-          {t('common.total')}: {formatCurrency(sortedIncomes.reduce((sum, income) => sum + getWorkspaceAmount(income), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
+          {t('common.total')}: {formatCurrency(sortedIncomes.reduce((sum, income) => sum + getWorkspaceAmount(income), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'), intlLocale)}
         </p>
       </div>
 

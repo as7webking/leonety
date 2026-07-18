@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { CookieNotice } from "@/components/cookie-notice";
 import { Footer } from "@/components/footer";
 import { NumberInputWheelGuard } from "@/components/number-input-wheel-guard";
 import { PwaInstaller } from "@/components/pwa-installer";
 import { I18nProvider } from "@/contexts/i18n-context";
+import { LOCALE_COOKIE, normalizeLocale } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -39,16 +41,19 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const initialLocale = normalizeLocale(cookieStore.get(LOCALE_COOKIE)?.value);
+
   return (
-    <html lang="en" className="h-full antialiased scroll-smooth" data-scroll-behavior="smooth">
-      <body suppressHydrationWarning className="min-h-screen bg-background font-sans">
+    <html lang={initialLocale} className="h-full antialiased scroll-smooth" data-scroll-behavior="smooth">
+      <body className="min-h-screen bg-background font-sans">
         <div className="flex min-h-screen flex-col bg-background">
-          <I18nProvider>
+          <I18nProvider initialLocale={initialLocale}>
             <PwaInstaller />
             <NumberInputWheelGuard />
             <div className="flex-1">

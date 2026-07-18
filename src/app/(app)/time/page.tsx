@@ -11,6 +11,7 @@ import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
+import { getIntlLocale } from '@/lib/i18n'
 
 interface TimeEntry {
   id: string
@@ -72,7 +73,8 @@ export default function TimePage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
+  const intlLocale = getIntlLocale(locale)
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,11 +132,11 @@ export default function TimePage() {
   const getFirstStartedAt = (timer: ActiveTimer) => timer.first_started_at || timer.started_at
 
   const formatPauseEvent = (event: TimerPauseEvent, index: number) => {
-    const startedAt = event.started_at ? new Date(event.started_at).toLocaleString() : 'unknown start'
-    const pausedAt = event.paused_at ? new Date(event.paused_at).toLocaleString() : 'unknown pause'
-    const resumedAt = event.resumed_at ? new Date(event.resumed_at).toLocaleString() : null
+    const startedAt = event.started_at ? new Date(event.started_at).toLocaleString(intlLocale) : t('common.none')
+    const pausedAt = event.paused_at ? new Date(event.paused_at).toLocaleString(intlLocale) : t('common.none')
+    const resumedAt = event.resumed_at ? new Date(event.resumed_at).toLocaleString(intlLocale) : null
 
-    return `Pause ${index + 1}: ${startedAt} to ${pausedAt}${resumedAt ? ` · resumed ${resumedAt}` : ''}`
+    return `${t('time.paused')} ${index + 1}: ${startedAt} - ${pausedAt}${resumedAt ? ` · ${t('time.resume')} ${resumedAt}` : ''}`
   }
 
   const completeActiveTimer = async (timerId: string) => {
@@ -562,14 +564,14 @@ export default function TimePage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!currentCompany || !confirm('Are you sure you want to delete this time entry?')) return
+    if (!currentCompany || !confirm(t('time.deleteConfirm'))) return
 
     try {
       const { error } = await supabase.from('time_entries').delete().eq('id', id).eq('company_id', currentCompany.id)
       if (error) throw error
       await loadTimePageData()
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'An error occurred')
+      alert(error instanceof Error ? error.message : t('common.error'))
     }
   }
 
@@ -577,11 +579,11 @@ export default function TimePage() {
 
   const handleExportCSV = () => {
     if (timeEntries.length === 0) {
-      alert('No data to export')
+      alert(t('time.noDataExport'))
       return
     }
 
-    const headers = ['Date', 'Description', 'Hours']
+    const headers = [t('common.date'), t('common.description'), t('time.hours')]
     const rows = timeEntries.map((entry) => [entry.date, entry.description, entry.hours])
     const csv = [headers, ...rows].map((row) => row.map((value) => `"${value}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -593,10 +595,24 @@ export default function TimePage() {
     URL.revokeObjectURL(url)
   }
 
+  const handlePrint = () => {
+    if (timeEntries.length === 0) {
+      setTimerError(t('time.noDataPrint'))
+      return
+    }
+
+    const previousTitle = document.title
+    document.title = ' '
+    window.print()
+    window.setTimeout(() => {
+      document.title = previousTitle
+    }, 500)
+  }
+
   if (companyLoading || loading) {
     return (
       <PageContainer>
-        <PageHeader title={t('time.title')} description="Track your work hours" />
+        <PageHeader title={t('time.title')} description={t('time.description')} />
         <LoadingSkeleton />
       </PageContainer>
     )
@@ -605,12 +621,12 @@ export default function TimePage() {
   if (!currentCompany) {
     return (
       <PageContainer>
-        <PageHeader title={t('time.title')} description="Track your work hours" />
+        <PageHeader title={t('time.title')} description={t('time.description')} />
         <EmptyState
           icon={Building2}
-          title="No workspace selected"
-          description="Create your first workspace before tracking time."
-          action={{ label: 'Go to onboarding', onClick: () => router.push('/onboarding') }}
+          title={t('common.noWorkspaceSelected')}
+          description={t('time.noWorkspaceDescription')}
+          action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }}
         />
       </PageContainer>
     )
@@ -618,7 +634,7 @@ export default function TimePage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('time.title')} description={`Track your work hours for ${currentCompany.name}`}>
+      <PageHeader title={t('time.title')} description={t('time.pageDescription').replace('{workspace}', currentCompany.name)}>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             <input
@@ -629,53 +645,85 @@ export default function TimePage() {
               onChange={handleImportCSV}
             />
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-              {importing ? 'Importing...' : 'Import CSV'}
+              {importing ? t('common.loading') : t('common.importCsv')}
             </Button>
             <Button variant="outline" onClick={handleExportCSV} size="sm" disabled={timeEntries.length === 0}>
-              Export CSV
+              {t('common.exportCsv')}
+            </Button>
+            <Button variant="outline" onClick={handlePrint} size="sm" disabled={timeEntries.length === 0}>
+              {t('common.print')}
             </Button>
           </div>
           <div className="text-right text-sm text-muted-foreground">
-            Active timers: {activeTimers.length}/{MAX_ACTIVE_TIMERS}
+            {t('time.activeTimersCount').replace('{count}', String(activeTimers.length)).replace('{max}', String(MAX_ACTIVE_TIMERS))}
           </div>
         </div>
       </PageHeader>
+
+      <div className="print-area print-report hidden">
+        <div className="mb-4">
+          <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
+          <p className="text-sm text-slate-600">{t('time.report')}</p>
+          <p className="text-xs text-slate-600">{t('common.workspaceType')}: {currentCompany.type}</p>
+          <p className="text-xs text-slate-600">{t('common.generated')}: {new Date().toLocaleString(intlLocale)}</p>
+          <p className="text-xs text-slate-600">{t('common.period')}: {t('common.all')}</p>
+        </div>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="border p-2 text-left">{t('common.date')}</th>
+              <th className="border p-2 text-left">{t('common.description')}</th>
+              <th className="border p-2 text-right">{t('time.hours')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {timeEntries.map((entry) => (
+              <tr key={`print-${entry.id}`}>
+                <td className="border p-2">{new Date(entry.date).toLocaleDateString(intlLocale)}</td>
+                <td className="border p-2">{entry.description}</td>
+                <td className="border p-2 text-right">{formatHours(Number(entry.hours))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-4 text-right font-semibold">{t('common.total')}: {formatHours(totalHours)}</p>
+      </div>
 
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Active Timers
+            {t('time.activeTimers')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div className="grid flex-1 gap-3 md:grid-cols-[1fr_auto]">
               <div className="space-y-1">
-                <label className="block text-sm font-medium">Timer name</label>
+                <label className="block text-sm font-medium">{t('time.timerName')}</label>
                 <input
                   type="text"
                   value={newTimerDescription}
                   onChange={(e) => setNewTimerDescription(e.target.value)}
-                  placeholder="Enter timer label"
+                  placeholder={t('time.timerPlaceholder')}
                   className="w-full rounded-md border px-3 py-2"
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-sm font-medium">Round to</label>
+                <label className="block text-sm font-medium">{t('time.roundTo')}</label>
                 <AppSelect
                   value={rounding}
                   onChange={(value) => setRounding(value as 'none' | 'hour' | 'day')}
                   options={[
-                    { value: 'none', label: 'Exact minutes' },
-                    { value: 'hour', label: 'Hours' },
-                    { value: 'day', label: 'Days' },
+                    { value: 'none', label: t('time.exactMinutes') },
+                    { value: 'hour', label: t('time.hours') },
+                    { value: 'day', label: t('time.days') },
                   ]}
                 />
               </div>
             </div>
             <Button onClick={startNewTimer} disabled={startingTimer || activeTimers.length >= MAX_ACTIVE_TIMERS}>
-              <Play className="h-4 w-4" /> Start timer
+              <Play className="h-4 w-4" /> {t('time.startTimer')}
             </Button>
           </div>
 
@@ -699,7 +747,7 @@ export default function TimePage() {
 
           {activeTimers.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-              No active timers. Start one to begin tracking.
+              {t('time.noActiveTimers')}
             </div>
           ) : (
             <div className="space-y-4">
@@ -715,12 +763,12 @@ export default function TimePage() {
                         <div className="flex items-center gap-2">
                           <p className="text-base font-semibold">{timer.description}</p>
                           <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
-                            {isPaused ? 'Paused' : 'Running'}
+                            {isPaused ? t('time.paused') : t('time.running')}
                           </span>
                         </div>
                         <p className="mt-2 text-sm text-slate-500">
-                          Started: {new Date(getFirstStartedAt(timer)).toLocaleString()}
-                          {isPaused ? ` · paused since ${new Date(timer.paused_at ?? timer.started_at).toLocaleString()}` : ''}
+                          {t('time.started')}: {new Date(getFirstStartedAt(timer)).toLocaleString(intlLocale)}
+                          {isPaused ? ` · ${t('time.pausedSince')} ${new Date(timer.paused_at ?? timer.started_at).toLocaleString(intlLocale)}` : ''}
                         </p>
                         {Array.isArray(timer.pause_events) && timer.pause_events.length > 0 && (
                           <div className="mt-2 space-y-1 text-xs text-slate-500">
@@ -737,15 +785,15 @@ export default function TimePage() {
                       <div className="flex items-center justify-end gap-2">
                         {isPaused ? (
                           <Button variant="outline" size="sm" onClick={() => resumeTimer(timer.id)}>
-                            <Play className="h-4 w-4" /> Resume
+                            <Play className="h-4 w-4" /> {t('time.resume')}
                           </Button>
                         ) : (
                           <Button variant="outline" size="sm" onClick={() => stopTimer(timer.id)}>
-                            <Pause className="h-4 w-4" /> Stop
+                            <Pause className="h-4 w-4" /> {t('time.stop')}
                           </Button>
                         )}
                         <Button variant="destructive" size="sm" onClick={() => completeTimer(timer.id)}>
-                          <CheckCircle2 className="h-4 w-4" /> Complete
+                          <CheckCircle2 className="h-4 w-4" /> {t('time.complete')}
                         </Button>
                       </div>
                     </CardContent>
@@ -760,7 +808,7 @@ export default function TimePage() {
       <Card className="mb-6">
         <CardContent className="pt-6">
           <div className="text-center">
-            <p className="text-sm text-muted-foreground">Total Hours Tracked</p>
+            <p className="text-sm text-muted-foreground">{t('time.totalTracked')}</p>
             <p className="text-3xl font-bold">{formatHours(totalHours)}</p>
           </div>
         </CardContent>
@@ -769,12 +817,12 @@ export default function TimePage() {
       {showForm && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>{editingEntry ? 'Edit Time Entry' : 'Add Time Entry'}</CardTitle>
+            <CardTitle>{editingEntry ? t('time.editEntry') : t('time.addEntry')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium">Description</label>
+                <label className="mb-1 block text-sm font-medium">{t('common.description')}</label>
                 <input
                   type="text"
                   value={formData.description}
@@ -785,7 +833,7 @@ export default function TimePage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Hours</label>
+                  <label className="mb-1 block text-sm font-medium">{t('time.hours')}</label>
                   <input
                     type="number"
                     step="1"
@@ -797,7 +845,7 @@ export default function TimePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Minutes</label>
+                  <label className="mb-1 block text-sm font-medium">{t('time.minutes')}</label>
                   <input
                     type="number"
                     step="1"
@@ -811,7 +859,7 @@ export default function TimePage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Date</label>
+                <label className="mb-1 block text-sm font-medium">{t('common.date')}</label>
                 <input
                   type="date"
                   value={formData.date}
@@ -821,7 +869,7 @@ export default function TimePage() {
                 />
               </div>
               <Button type="submit">
-                {editingEntry ? 'Save Changes' : 'Save Time Entry'}
+                {editingEntry ? t('common.saveChanges') : t('time.saveEntry')}
               </Button>
             </form>
           </CardContent>
@@ -830,12 +878,12 @@ export default function TimePage() {
 
       <div className="mb-6 flex justify-end">
         <Button onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
-          {showForm ? 'Cancel' : 'Add Time Entry'}
+          {showForm ? t('common.cancel') : t('time.addEntry')}
         </Button>
       </div>
 
       {timeEntries.length === 0 ? (
-        <EmptyState title="No time entries yet" description="Start a timer or add a manual time entry for this workspace." />
+        <EmptyState title={t('time.noEntries')} description={t('time.noEntriesDescription')} />
       ) : (
         <div className="space-y-4">
           {timeEntries.map((entry) => (
@@ -846,8 +894,8 @@ export default function TimePage() {
                   <p className="text-sm text-muted-foreground">{entry.date}</p>
                   {entry.timer_started_at && (
                     <p className="text-xs text-muted-foreground">
-                      Started {new Date(entry.timer_started_at).toLocaleString()}
-                      {entry.timer_completed_at ? ` · completed ${new Date(entry.timer_completed_at).toLocaleString()}` : ''}
+                      {t('time.started')} {new Date(entry.timer_started_at).toLocaleString(intlLocale)}
+                      {entry.timer_completed_at ? ` · ${t('time.complete')} ${new Date(entry.timer_completed_at).toLocaleString(intlLocale)}` : ''}
                     </p>
                   )}
                 </div>

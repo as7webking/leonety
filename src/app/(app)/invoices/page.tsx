@@ -12,6 +12,7 @@ import { useI18n } from '@/contexts/i18n-context'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { createClient } from '@/lib/supabase-client'
+import { getIntlLocale } from '@/lib/i18n'
 
 const invoiceStatuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const
 type InvoiceStatus = typeof invoiceStatuses[number]
@@ -258,7 +259,8 @@ export default function InvoicesPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
+  const intlLocale = getIntlLocale(locale)
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [products, setProducts] = useState<ProductOption[]>([])
@@ -709,17 +711,17 @@ export default function InvoicesPage() {
       </PageHeader>
 
       {printingInvoice && (
-        <div className="print-area hidden">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
+        <div className="print-area print-invoice hidden">
+          <div className="invoice-print-header">
+            <div className="invoice-print-brand">
               {companyLogo ? (
-                <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
+                <img src={companyLogo} alt={currentCompany.name} className="invoice-print-logo h-12 w-12 object-contain" />
               ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
+                <div className="invoice-print-logo-fallback flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
                   {currentCompany.name.slice(0, 1).toUpperCase()}
                 </div>
               )}
-              <div>
+              <div className="invoice-print-company">
                 <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
                 <p className="text-sm text-slate-600">{printingInvoice.invoice_number}</p>
                 {includeCompanyAddress && companyAddress && (
@@ -739,12 +741,15 @@ export default function InvoicesPage() {
                 )}
               </div>
             </div>
-            <div className="text-right text-sm">
+            <div className="invoice-print-meta text-right text-sm">
               <p>{t('invoices.status')}: {formatInvoiceStatus(printingInvoice.status, t)}</p>
-              <p>{t('invoices.issueDate')}: {printingInvoice.issue_date}</p>
+              <p>{t('invoices.issueDate')}: {new Date(`${printingInvoice.issue_date}T00:00:00`).toLocaleDateString(intlLocale)}</p>
+              {printingInvoice.due_date && (
+                <p>{t('invoices.dueDate')}: {new Date(`${printingInvoice.due_date}T00:00:00`).toLocaleDateString(intlLocale)}</p>
+              )}
             </div>
           </div>
-          <div className="mb-3 rounded-md border p-3 text-sm">
+          <div className="invoice-print-client mb-3 rounded-md border p-3 text-sm">
             <p className="font-semibold">{t('invoices.client')}</p>
             <p>{printingInvoice.clients?.name ?? t('invoices.noClient')}</p>
             {printingInvoice.clients?.client_company && <p>{printingInvoice.clients.client_company}</p>}
@@ -752,7 +757,7 @@ export default function InvoicesPage() {
             {printingInvoice.clients?.phone && <p>{printingInvoice.clients.phone}</p>}
             {printingInvoice.notes && <p className="mt-2 whitespace-pre-line text-slate-700">{printingInvoice.notes}</p>}
           </div>
-          <table className="w-full border-collapse text-sm">
+          <table className="invoice-print-table w-full border-collapse text-sm">
             <thead>
               <tr>
                 <th className="border p-2 text-left">{t('common.description')}</th>
@@ -767,20 +772,20 @@ export default function InvoicesPage() {
                 <tr key={item.id ?? item.description}>
                   <td className="border p-2">{item.description}</td>
                   <td className="border p-2 text-right">{item.quantity}</td>
-                  <td className="border p-2 text-right">{formatCurrency(item.unit_price, printingInvoice.currency)}</td>
+                  <td className="border p-2 text-right">{formatCurrency(item.unit_price, printingInvoice.currency, intlLocale)}</td>
                   <td className="border p-2 text-right">{item.tax_rate}%</td>
-                  <td className="border p-2 text-right">{formatCurrency(item.line_total, printingInvoice.currency)}</td>
+                  <td className="border p-2 text-right">{formatCurrency(item.line_total, printingInvoice.currency, intlLocale)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="ml-auto mt-4 w-full max-w-xs space-y-2 text-sm">
-            <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(printingInvoice.subtotal, printingInvoice.currency)}</span></div>
-            <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(printingInvoice.tax_amount, printingInvoice.currency)}</span></div>
-            <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(printingInvoice.total, printingInvoice.currency)}</span></div>
+          <div className="invoice-print-totals ml-auto mt-4 w-full max-w-xs space-y-2 text-sm">
+            <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(printingInvoice.subtotal, printingInvoice.currency, intlLocale)}</span></div>
+            <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(printingInvoice.tax_amount, printingInvoice.currency, intlLocale)}</span></div>
+            <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(printingInvoice.total, printingInvoice.currency, intlLocale)}</span></div>
           </div>
           {printingInvoice.status === 'paid' && (
-            <div className="mt-4 rounded-md border p-3 text-sm">
+            <div className="invoice-print-payment mt-4 rounded-md border p-3 text-sm">
               <p className="font-semibold">{t('invoices.payment')}</p>
               <p>
                 {t('invoices.paymentMethod')}: {loadInvoicePaymentMeta(printingInvoice.id).method === 'cash' ? t('invoices.paymentCash') : t('invoices.paymentCard')}
@@ -788,7 +793,8 @@ export default function InvoicesPage() {
               <p>
                 {t('invoices.amountPaid')}: {formatCurrency(
                   Number(loadInvoicePaymentMeta(printingInvoice.id).amountPaid || printingInvoice.total),
-                  printingInvoice.currency
+                  printingInvoice.currency,
+                  intlLocale
                 )}
               </p>
               {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyIban && <p>IBAN: {companyIban}</p>}

@@ -16,12 +16,14 @@ interface AppSelectProps {
   disabled?: boolean
   ariaLabel?: string
   className?: string
+  placement?: 'bottom' | 'top'
 }
 
-export function AppSelect({ value, options, onChange, disabled, ariaLabel, className = '' }: AppSelectProps) {
+export function AppSelect({ value, options, onChange, disabled, ariaLabel, className = '', placement = 'bottom' }: AppSelectProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
   const selected = options.find((option) => option.value === value)
+  const menuPlacementClass = placement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -30,8 +32,18 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
       }
     }
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
     window.addEventListener('pointerdown', handlePointerDown)
-    return () => window.removeEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
   }, [])
 
   return (
@@ -41,6 +53,7 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
         disabled={disabled}
         aria-label={ariaLabel}
         aria-expanded={open}
+        aria-haspopup="listbox"
         onClick={() => setOpen((value) => !value)}
         className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
       >
@@ -49,11 +62,13 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+        <div role="listbox" className={`absolute left-0 z-[80] max-h-72 w-full overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ${menuPlacementClass}`}>
           {options.map((option, index) => (
             <button
               key={`${option.value}-${option.label}-${index}`}
               type="button"
+              role="option"
+              aria-selected={option.value === value}
               disabled={option.disabled}
               onClick={() => {
                 if (option.disabled) return

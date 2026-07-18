@@ -44,7 +44,9 @@ async function fetchAllWooProducts(connection: WooConnectionRow) {
 }
 
 async function createCategoryIfPossible(
-  adminSupabase: { from: (table: string) => any },
+  adminSupabase: ReturnType<typeof requireOwnedCompany> extends Promise<infer AuthResult>
+    ? AuthResult extends { adminSupabase: infer Client } ? Client : never
+    : never,
   companyId: string,
   name: string | null
 ) {

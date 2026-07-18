@@ -13,6 +13,7 @@ import { useAccountAccess } from '@/hooks/use-account-access'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
 import { Plus, Trash2 } from 'lucide-react'
 import { AppSelect } from '@/components/app-select'
+import { useI18n } from '@/contexts/i18n-context'
 
 type WorkspaceType = 'personal' | 'business'
 
@@ -31,6 +32,7 @@ const relatedTables: RelatedCount[] = [
 export default function WorkspacesPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
+  const { t } = useI18n()
   const { companies, currentCompanyId, loading, setCurrentCompanyId, refreshCompanies } = useCompany()
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -47,8 +49,8 @@ export default function WorkspacesPage() {
   const canAddWorkspace = canCreateWorkspace(companies.length, accountAccess)
 
   const currentWorkspaceName = useMemo(
-    () => companies.find((company) => company.id === currentCompanyId)?.name ?? 'No workspace selected',
-    [companies, currentCompanyId],
+    () => companies.find((company) => company.id === currentCompanyId)?.name ?? t('nav.noWorkspace'),
+    [companies, currentCompanyId, t],
   )
 
   useEffect(() => {
@@ -87,23 +89,23 @@ export default function WorkspacesPage() {
 
     try {
       if (!userId) {
-        setMessage('Please sign in to create a workspace.')
+        setMessage(t('workspaces.signInCreate'))
         return
       }
 
       if (!canAddWorkspace) {
-        setMessage('Workspace limit reached. Upgrade Plan to add more workspaces.')
+        setMessage(t('workspaces.limitReached'))
         return
       }
 
       const trimmedName = workspaceName.trim()
 
       if (workspaceType === 'business' && !trimmedName) {
-        setMessage('Company name is required for a business workspace.')
+        setMessage(t('workspaces.companyNameRequired'))
         return
       }
 
-      const name = trimmedName || 'Personal Workspace'
+      const name = trimmedName || t('workspaces.personalWorkspace')
       const { data, error } = await supabase
         .from('companies')
         .insert({
@@ -120,9 +122,9 @@ export default function WorkspacesPage() {
       setWorkspaceName('')
       setWorkspaceType('personal')
       await refreshCompanies(data.id)
-      setMessage('Workspace created.')
+      setMessage(t('workspaces.created'))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to create workspace.')
+      setMessage(error instanceof Error ? error.message : t('workspaces.createFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -151,12 +153,12 @@ export default function WorkspacesPage() {
 
     try {
       if (!userId) {
-        setMessage('Please sign in to delete a workspace.')
+        setMessage(t('workspaces.signInDelete'))
         return
       }
 
       if (companies.length <= 1) {
-        setMessage('You cannot delete your last remaining workspace.')
+        setMessage(t('workspaces.cannotDeleteLast'))
         return
       }
 
@@ -164,7 +166,7 @@ export default function WorkspacesPage() {
 
       if (blockingCounts.length > 0) {
         const details = blockingCounts.map((item) => `${item.count} ${item.label}`).join(', ')
-        setMessage(`This workspace contains ${details}. Delete or move those records before deleting the workspace.`)
+        setMessage(t('workspaces.deleteBlocked').replace('{details}', details))
         setConfirmDeleteId(null)
         return
       }
@@ -180,9 +182,9 @@ export default function WorkspacesPage() {
       const nextWorkspaceId = companies.find((company) => company.id !== companyId)?.id ?? null
       await refreshCompanies(nextWorkspaceId)
       setConfirmDeleteId(null)
-      setMessage('Workspace deleted.')
+      setMessage(t('workspaces.deleted'))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to delete workspace.')
+      setMessage(error instanceof Error ? error.message : t('workspaces.deleteFailed'))
     } finally {
       setDeletingId(null)
     }
@@ -191,8 +193,8 @@ export default function WorkspacesPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Workspaces"
-        description={`Current workspace: ${currentWorkspaceName}`}
+        title={t('workspaces.title')}
+        description={`${t('workspaces.currentWorkspace')}: ${currentWorkspaceName}`}
       />
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
@@ -205,17 +207,17 @@ export default function WorkspacesPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Your Workspaces</CardTitle>
-              <CardDescription>Switch between workspaces or safely remove empty workspaces.</CardDescription>
+              <CardTitle>{t('workspaces.yourWorkspaces')}</CardTitle>
+              <CardDescription>{t('workspaces.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {loading ? (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  Loading workspaces...
+                  {t('workspaces.loading')}
                 </div>
               ) : companies.length === 0 ? (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  No workspaces yet. Create your first workspace to continue.
+                  {t('workspaces.empty')}
                 </div>
               ) : (
                 companies.map((company) => {
@@ -229,14 +231,14 @@ export default function WorkspacesPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <h2 className="font-semibold text-slate-900">{company.name}</h2>
                             {isCurrent && (
-                              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs text-white">Current</span>
+                              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs text-white">{t('workspaces.current')}</span>
                             )}
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs capitalize text-slate-600">
                               {company.type}
                             </span>
                           </div>
                           <p className="text-sm text-slate-500">
-                            Created {new Date(company.created_at).toLocaleDateString()} · {company.currency ?? 'USD'}
+                            {t('workspaces.createdAt')} {new Date(company.created_at).toLocaleDateString()} · {company.currency ?? 'USD'}
                           </p>
                         </div>
 
@@ -250,7 +252,7 @@ export default function WorkspacesPage() {
                               setMessage('Workspace switched.')
                             }}
                           >
-                            Switch Workspace
+                            {t('workspaces.switchWorkspace')}
                           </Button>
                           {isConfirming ? (
                             <>
@@ -260,10 +262,10 @@ export default function WorkspacesPage() {
                                 disabled={deletingId === company.id}
                                 onClick={() => handleDeleteWorkspace(company.id)}
                               >
-                                Confirm Delete
+                                {t('workspaces.confirmDelete')}
                               </Button>
                               <Button type="button" variant="outline" onClick={() => setConfirmDeleteId(null)}>
-                                Cancel
+                                {t('common.cancel')}
                               </Button>
                             </>
                           ) : (
@@ -274,7 +276,7 @@ export default function WorkspacesPage() {
                               onClick={() => setConfirmDeleteId(company.id)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
+                              {t('common.delete')}
                             </Button>
                           )}
                         </div>
@@ -290,23 +292,23 @@ export default function WorkspacesPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Create Workspace</CardTitle>
-              <CardDescription>Add a personal or business workspace.</CardDescription>
+              <CardTitle>{t('workspaces.createWorkspace')}</CardTitle>
+              <CardDescription>{t('workspaces.createDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               {!canAddWorkspace ? (
                 <div className="space-y-4">
                   <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                    Workspace limit reached. Upgrade Plan to add more workspaces.
+                    {t('workspaces.limitReached')}
                   </div>
                   <Button asChild>
-                    <Link href="/app/upgrade">Upgrade Plan</Link>
+                    <Link href="/app/upgrade">{t('workspaces.upgradePlan')}</Link>
                   </Button>
                 </div>
               ) : (
                 <form onSubmit={handleCreateWorkspace} className="space-y-4">
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium">Workspace type</label>
+                    <label className="block text-sm font-medium">{t('workspaces.type')}</label>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {(['personal', 'business'] as WorkspaceType[]).map((type) => (
                         <button
@@ -325,20 +327,20 @@ export default function WorkspacesPage() {
 
                   <div className="space-y-2">
                     <label className="block text-sm font-medium">
-                      {workspaceType === 'business' ? 'Company name' : 'Workspace name'}
+                      {workspaceType === 'business' ? t('workspaces.companyName') : t('workspaces.workspaceName')}
                     </label>
                     <input
                       type="text"
                       value={workspaceName}
                       onChange={(event) => setWorkspaceName(event.target.value)}
                       className="w-full rounded-md border px-3 py-2"
-                      placeholder={workspaceType === 'business' ? 'Acme Studio LLC' : 'Personal Workspace'}
+                      placeholder={workspaceType === 'business' ? 'Acme Studio LLC' : t('workspaces.personalWorkspace')}
                       required={workspaceType === 'business'}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium">Workspace currency</label>
+                    <label className="block text-sm font-medium">{t('workspaces.currency')}</label>
                     <AppSelect
                       value={workspaceCurrency}
                       onChange={(value) => setWorkspaceCurrency(normalizeCurrencyCode(value))}
@@ -348,7 +350,7 @@ export default function WorkspacesPage() {
 
                   <Button type="submit" disabled={submitting}>
                     <Plus className="mr-2 h-4 w-4" />
-                    {submitting ? 'Creating...' : 'Create Workspace'}
+                    {submitting ? t('workspaces.creating') : t('workspaces.createWorkspace')}
                   </Button>
                 </form>
               )}

@@ -118,17 +118,17 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <PageContainer>
-        <PageHeader title={t('onboarding.title')} description="Setting up your workspace" />
+        <PageHeader title={t('onboarding.title')} description={t('onboarding.loadingDescription')} />
       </PageContainer>
     )
   }
 
   return (
     <PageContainer>
-      <PageHeader title={t('onboarding.title')} description="Create your first workspace to start tracking your business." />
+      <PageHeader title={t('onboarding.title')} description={t('onboarding.description')} />
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Workspace setup</CardTitle>
+          <CardTitle>{t('onboarding.workspaceSetup')}</CardTitle>
         </CardHeader>
         <CardContent>
           {companies.length > 0 && (

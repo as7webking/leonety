@@ -63,7 +63,7 @@ interface ProductForm {
 
 interface ProductSync {
   product_id: string
-  channel: 'woocommerce' | 'shopify'
+  channel: 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant'
   external_product_id: string | null
   sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'
   last_synced_at: string | null
@@ -258,7 +258,7 @@ export default function ProductsPage() {
   const { t } = useI18n()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<ProductCategory[]>([])
-  const [syncs, setSyncs] = useState<Record<string, ProductSync>>({})
+  const [syncs, setSyncs] = useState<Record<string, ProductSync[]>>({})
   const [syncingProductId, setSyncingProductId] = useState<string | null>(null)
   const [syncingAll, setSyncingAll] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
@@ -288,8 +288,7 @@ export default function ProductsPage() {
       supabase
         .from('product_syncs')
         .select('product_id, channel, external_product_id, sync_status, last_synced_at, error_message')
-        .eq('company_id', currentCompany.id)
-        .eq('channel', 'woocommerce'),
+        .eq('company_id', currentCompany.id),
       supabase
         .from('product_categories')
         .select('id, company_id, name')
@@ -298,7 +297,7 @@ export default function ProductsPage() {
     ])
     const { data, error: loadError } = productResult
     if (loadError) {
-      setError(loadError.code === '42P01' ? t('modules.databaseRequired') : loadError.message)
+      setError(loadError.code === '42P01' ? 'Products database table is required.' : loadError.message)
       setProducts([])
     } else {
       setProducts(((data ?? []) as Product[]).map((product) => ({
@@ -310,10 +309,14 @@ export default function ProductsPage() {
       })))
     }
     if (!syncResult.error) {
-      setSyncs(Object.fromEntries(((syncResult.data ?? []) as ProductSync[]).map((sync) => [sync.product_id, sync])))
+      const grouped: Record<string, ProductSync[]> = {}
+      for (const sync of (syncResult.data ?? []) as ProductSync[]) {
+        grouped[sync.product_id] = [...(grouped[sync.product_id] ?? []), sync]
+      }
+      setSyncs(grouped)
     } else if (['42P01', 'PGRST205'].includes(syncResult.error.code ?? '')) {
       setSyncs({})
-      setError(t('woocommerce.databaseRequired'))
+      setError('Product sync database table is required.')
     } else {
       setError(syncResult.error.message)
     }
@@ -327,7 +330,7 @@ export default function ProductsPage() {
       setError(categoryResult.error.message)
     }
     setLoading(false)
-  }, [currentCompany, supabase, t])
+  }, [currentCompany, supabase])
 
   useEffect(() => { void loadProducts() }, [loadProducts])
 
@@ -829,7 +832,8 @@ export default function ProductsPage() {
   }
 
   const renderSyncBadge = (product: Product) => {
-    const sync = syncs[product.id]
+    const productSyncs = syncs[product.id] ?? []
+    const sync = productSyncs.find((item) => item.channel === 'woocommerce') ?? productSyncs[0]
     const status = sync?.sync_status ?? 'not_synced'
     const className = status === 'synced'
       ? 'bg-green-100 text-green-800'
@@ -840,14 +844,28 @@ export default function ProductsPage() {
         : 'bg-slate-100 text-slate-600'
 
     return (
-      <span title={sync?.error_message ?? undefined} className={`rounded-full px-2 py-1 text-xs ${className}`}>
-        {t(`woocommerce.syncStatus.${status}`)}
-      </span>
+      <div className="flex flex-wrap justify-end gap-1">
+        {productSyncs.length === 0 ? (
+          <span className={`rounded-full px-2 py-1 text-xs ${className}`}>{t(`woocommerce.syncStatus.${status}`)}</span>
+        ) : productSyncs.map((item) => (
+          <span key={`${item.product_id}-${item.channel}`} title={item.error_message ?? undefined} className={`rounded-full px-2 py-1 text-xs ${
+            item.sync_status === 'synced'
+              ? 'bg-green-100 text-green-800'
+              : item.sync_status === 'failed'
+                ? 'bg-red-100 text-red-800'
+                : item.sync_status === 'pending'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-slate-100 text-slate-600'
+          }`}>
+            {item.channel.replace('_', ' ')} · {t(`woocommerce.syncStatus.${item.sync_status}`)}
+          </span>
+        ))}
+      </div>
     )
   }
 
   const getWooActionLabel = (product: Product) => {
-    const sync = syncs[product.id]
+    const sync = (syncs[product.id] ?? []).find((item) => item.channel === 'woocommerce')
     return sync?.external_product_id && sync.sync_status === 'synced'
       ? t('woocommerce.updateProduct')
       : t('woocommerce.publishProduct')

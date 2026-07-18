@@ -273,7 +273,7 @@ export function AppSearch() {
 
   return (
     <div ref={wrapperRef} className="relative w-full md:w-64">
-      <label htmlFor="app-search" className="sr-only">Search app</label>
+      <label htmlFor="app-search" className="sr-only">{t('search.label')}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
@@ -293,13 +293,13 @@ export function AppSearch() {
       {open && trimmedQuery.length > 0 && (
         <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
           {trimmedQuery.length < 2 ? (
-            <div className="px-4 py-3 text-sm text-slate-500">Type at least 2 characters.</div>
+            <div className="px-4 py-3 text-sm text-slate-500">{t('search.minChars')}</div>
           ) : loading ? (
-            <div className="px-4 py-3 text-sm text-slate-500">Searching...</div>
+            <div className="px-4 py-3 text-sm text-slate-500">{t('search.loading')}</div>
           ) : error ? (
             <div className="px-4 py-3 text-sm text-red-700">{error}</div>
           ) : groupedResults.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-slate-500">No results found.</div>
+            <div className="px-4 py-3 text-sm text-slate-500">{t('search.noResults')}</div>
           ) : (
             <div className="py-2">
               {groupedResults.map((section) => (

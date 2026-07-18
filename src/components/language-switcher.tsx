@@ -7,9 +7,9 @@ import { AppSelect } from '@/components/app-select'
 const labels: Record<Locale, string> = {
   en: 'EN - English',
   de: 'DE - Deutsch',
-  tr: 'TR - Türkçe',
   ru: 'RU - Русский',
-  ua: 'UA - Українська',
+  tr: 'TR - Türkçe',
+  uk: 'UA - Українська',
   pl: 'PL - Polski',
   fr: 'FR - Français',
 }
@@ -26,6 +26,7 @@ export function LanguageSwitcher() {
         options={locales.map((item) => ({ value: item, label: labels[item] }))}
         ariaLabel={t('language.label')}
         className="w-40"
+        placement="top"
       />
     </div>
   )

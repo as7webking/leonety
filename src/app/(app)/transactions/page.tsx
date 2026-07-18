@@ -13,6 +13,7 @@ import { formatCategoryLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { createClient } from '@/lib/supabase-client'
+import { getIntlLocale } from '@/lib/i18n'
 
 interface TransactionRow {
   id: string
@@ -41,6 +42,7 @@ export default function TransactionsPage() {
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
+  const intlLocale = getIntlLocale(locale)
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -407,10 +409,10 @@ export default function TransactionsPage() {
   const formatTotalsByCurrency = (items: TransactionRow[]) => {
     const totals = getTotalsByCurrency(items)
     const totalText = Object.entries(totals)
-      .map(([currency, amount]) => formatCurrency(amount, currency))
+      .map(([currency, amount]) => formatCurrency(amount, currency, intlLocale))
       .join(' · ')
 
-    return totalText || formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'))
+    return totalText || formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'), intlLocale)
   }
 
   const getTotalsByCurrency = (items: TransactionRow[]) =>
@@ -426,11 +428,11 @@ export default function TransactionsPage() {
     const currencies = Array.from(new Set([...Object.keys(incomeTotals), ...Object.keys(expenseTotals)]))
 
     if (currencies.length === 0) {
-      return formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'))
+      return formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'), intlLocale)
     }
 
     return currencies
-      .map((currency) => formatCurrency((incomeTotals[currency] ?? 0) - (expenseTotals[currency] ?? 0), currency))
+      .map((currency) => formatCurrency((incomeTotals[currency] ?? 0) - (expenseTotals[currency] ?? 0), currency, intlLocale))
       .join(' · ')
   }
 
@@ -453,16 +455,16 @@ export default function TransactionsPage() {
         <div className="flex justify-between gap-3">
           <span className="font-medium">
             {isDefaultBusinessIncome
-              ? new Date(`${transaction.date}T00:00:00`).toLocaleDateString(locale)
+              ? new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)
               : transaction.description || transaction.date}
           </span>
           <span className="whitespace-nowrap font-semibold">
-            {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency))}
+            {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
           </span>
         </div>
         {!isDefaultBusinessIncome && (
           <div className="text-xs text-slate-600">
-            {new Date(`${transaction.date}T00:00:00`).toLocaleDateString(locale)}
+            {new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)}
             {transaction.type === 'expense' && transaction.category ? ` · ${categoryLabel}` : ''}
           </div>
         )}
@@ -561,7 +563,7 @@ export default function TransactionsPage() {
         </div>
       </PageHeader>
 
-      <div className="print-area print-compact hidden">
+      <div className="print-area print-compact print-report hidden">
         <div className="mb-2 flex items-start gap-3">
           {companyLogo ? (
             <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
@@ -766,7 +768,7 @@ export default function TransactionsPage() {
                               {transaction.type === 'income' ? t('income.title') : t('expenses.title')} · {transaction.date}
                             </span>
                             <span className="block truncate text-slate-600">
-                              {transaction.description || '-'} · {formatCategoryLabel(transaction.category, t)} · {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency))}
+                              {transaction.description || '-'} · {formatCategoryLabel(transaction.category, t)} · {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
                             </span>
                           </span>
                         </label>
@@ -873,7 +875,7 @@ export default function TransactionsPage() {
                 </span>
                 <span className="hidden text-slate-600 md:block">{formatCategoryLabel(transaction.category, t)}</span>
                 <span className="text-right font-semibold">
-                  {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency))}
+                  {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
                 </span>
                 <Button size="sm" variant="outline" onClick={() => void handleCopyTransaction(transaction)}>
                   <Copy className="h-4 w-4" />
