@@ -15,39 +15,39 @@ import {
 
 export type NavigationItem = {
   href: string
-  label: string
+  labelKey: string
   icon: React.ComponentType<{ className?: string }>
 }
 
 export type NavigationGroup = {
-  label: string
+  labelKey: string
   items: NavigationItem[]
 }
 
 export const primaryNavigation: NavigationItem[] = [
-  { href: '/app/dashboard', label: 'Dashboard', icon: BarChart3 },
-  { href: '/app/time', label: 'Time', icon: Clock3 },
-  { href: '/app/clients', label: 'Clients', icon: Users },
-  { href: '/app/invoices', label: 'Invoices', icon: FileText },
+  { href: '/app/dashboard', labelKey: 'nav.dashboard', icon: BarChart3 },
+  { href: '/app/time', labelKey: 'nav.time', icon: Clock3 },
+  { href: '/app/clients', labelKey: 'nav.clients', icon: Users },
+  { href: '/app/invoices', labelKey: 'nav.invoices', icon: FileText },
 ]
 
 export const navigationGroups: NavigationGroup[] = [
   {
-    label: 'Transactions',
+    labelKey: 'nav.transactions',
     items: [
-      { href: '/app/transactions', label: 'All Transactions', icon: Repeat2 },
-      { href: '/app/income', label: 'Income', icon: WalletCards },
-      { href: '/app/expenses', label: 'Expenses', icon: ReceiptText },
+      { href: '/app/transactions', labelKey: 'nav.allTransactions', icon: Repeat2 },
+      { href: '/app/income', labelKey: 'nav.income', icon: WalletCards },
+      { href: '/app/expenses', labelKey: 'nav.expenses', icon: ReceiptText },
     ],
   },
   {
-    label: 'Business',
+    labelKey: 'nav.business',
     items: [
-      { href: '/app/workspaces', label: 'Workspaces', icon: Building2 },
-      { href: '/app/products', label: 'Products', icon: Package },
-      { href: '/app/inventory', label: 'Inventory', icon: Landmark },
-      { href: '/app/stock-movements', label: 'Stock Movements', icon: Timer },
-      { href: '/app/settings/integrations', label: 'Store Integrations', icon: BriefcaseBusiness },
+      { href: '/app/workspaces', labelKey: 'nav.workspaces', icon: Building2 },
+      { href: '/app/products', labelKey: 'nav.products', icon: Package },
+      { href: '/app/inventory', labelKey: 'nav.inventory', icon: Landmark },
+      { href: '/app/stock-movements', labelKey: 'nav.stockMovements', icon: Timer },
+      { href: '/app/settings/integrations', labelKey: 'nav.storeIntegrations', icon: BriefcaseBusiness },
     ],
   },
 ]

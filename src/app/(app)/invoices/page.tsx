@@ -7,6 +7,7 @@ import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/compon
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
+import { Logo } from '@/components/logo'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { loadCompanyBranding } from '@/lib/company-branding'
@@ -80,6 +81,12 @@ interface ClientOption {
   email: string | null
   phone: string | null
   client_company: string | null
+  street: string | null
+  house_number: string | null
+  postal_code: string | null
+  city: string | null
+  country: string | null
+  tax_number: string | null
 }
 
 interface ProductOption {
@@ -140,6 +147,22 @@ interface InvoicePaymentMeta {
   amountPaid: string
 }
 
+interface InvoiceClientPrintFields {
+  company: boolean
+  email: boolean
+  phone: boolean
+  address: boolean
+  taxNumber: boolean
+}
+
+const defaultClientPrintFields: InvoiceClientPrintFields = {
+  company: true,
+  email: true,
+  phone: true,
+  address: true,
+  taxNumber: true,
+}
+
 function getInvoicePaymentKey(invoiceId: string) {
   return `leonety-invoice-payment:${invoiceId}`
 }
@@ -163,6 +186,32 @@ function loadInvoicePaymentMeta(invoiceId: string | null | undefined): InvoicePa
 function saveInvoicePaymentMeta(invoiceId: string, meta: InvoicePaymentMeta) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(getInvoicePaymentKey(invoiceId), JSON.stringify(meta))
+}
+
+function getClientPrintFieldsKey(companyId: string) {
+  return `leonety-invoice-client-print-fields:${companyId}`
+}
+
+function loadClientPrintFields(companyId: string | null | undefined): InvoiceClientPrintFields {
+  if (!companyId || typeof window === 'undefined') return defaultClientPrintFields
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(getClientPrintFieldsKey(companyId)) ?? '{}') as Partial<InvoiceClientPrintFields>
+    return {
+      company: typeof parsed.company === 'boolean' ? parsed.company : true,
+      email: typeof parsed.email === 'boolean' ? parsed.email : true,
+      phone: typeof parsed.phone === 'boolean' ? parsed.phone : true,
+      address: typeof parsed.address === 'boolean' ? parsed.address : true,
+      taxNumber: typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : true,
+    }
+  } catch {
+    return defaultClientPrintFields
+  }
+}
+
+function saveClientPrintFields(companyId: string, fields: InvoiceClientPrintFields) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(getClientPrintFieldsKey(companyId), JSON.stringify(fields))
 }
 
 const newItem = (taxRate = 19): InvoiceItem => ({
@@ -255,6 +304,14 @@ function getVatOptions(countryCode: TaxCountryCode, t: (key: string) => string) 
   ]
 }
 
+function getClientAddressLines(client: ClientOption | null | undefined) {
+  if (!client) return []
+  const streetLine = [client.street, client.house_number].filter(Boolean).join(' ')
+  const cityLine = [client.postal_code, client.city].filter(Boolean).join(' ')
+
+  return [streetLine, cityLine, client.country].filter(Boolean)
+}
+
 export default function InvoicesPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -279,6 +336,8 @@ export default function InvoicesPage() {
   const [companyBic, setCompanyBic] = useState('')
   const [companyTaxNumber, setCompanyTaxNumber] = useState('')
   const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
+  const [supportsClientDetails, setSupportsClientDetails] = useState(true)
+  const [clientPrintFields, setClientPrintFields] = useState<InvoiceClientPrintFields>(defaultClientPrintFields)
   const [formData, setFormData] = useState<InvoiceFormState>({
     client_id: '',
     invoice_number: makeInvoiceNumber(),
@@ -307,6 +366,7 @@ export default function InvoicesPage() {
     setCompanyBic(branding.bic)
     setCompanyTaxNumber(branding.taxNumber)
     setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
+    setClientPrintFields(loadClientPrintFields(currentCompany.id))
   }, [currentCompany])
 
   const handleIncludeCompanyAddressChange = (checked: boolean) => {
@@ -314,6 +374,16 @@ export default function InvoicesPage() {
     if (currentCompany) {
       window.localStorage.setItem(`leonety-include-company-address:${currentCompany.id}`, String(checked))
     }
+  }
+
+  const handleClientPrintFieldChange = (field: keyof InvoiceClientPrintFields, checked: boolean) => {
+    setClientPrintFields((current) => {
+      const next = { ...current, [field]: checked }
+      if (currentCompany) {
+        saveClientPrintFields(currentCompany.id, next)
+      }
+      return next
+    })
   }
 
   const resetForm = useCallback(() => {
@@ -369,24 +439,51 @@ export default function InvoicesPage() {
       setErrorMessage('')
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
-      const [invoiceRes, clientRes, productRes] = await Promise.all([
-        supabase
-          .from('invoices')
-          .select('*, clients(id, name, email, phone, client_company), invoice_items(*)')
-          .eq('company_id', currentCompany.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('clients')
-          .select('id, name, email, phone, client_company')
-          .eq('company_id', currentCompany.id)
-          .order('name', { ascending: true }),
-        supabase
-          .from('products')
-          .select('id, name, sku, selling_price, currency, current_stock')
-          .eq('company_id', currentCompany.id)
-          .eq('status', 'active')
-          .order('name', { ascending: true }),
+      const extendedInvoiceQuery = supabase
+        .from('invoices')
+        .select('*, clients(id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number), invoice_items(*)')
+        .eq('company_id', currentCompany.id)
+        .order('created_at', { ascending: false })
+      const extendedClientQuery = supabase
+        .from('clients')
+        .select('id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number')
+        .eq('company_id', currentCompany.id)
+        .order('name', { ascending: true })
+
+      let [invoiceRes, clientRes]: Array<{
+        data: unknown[] | null
+        error: { code?: string; message?: string } | null
+      }> = await Promise.all([
+        extendedInvoiceQuery,
+        extendedClientQuery,
       ])
+      const productRes = await supabase
+        .from('products')
+        .select('id, name, sku, selling_price, currency, current_stock')
+        .eq('company_id', currentCompany.id)
+        .eq('status', 'active')
+        .order('name', { ascending: true })
+
+      if (
+        (invoiceRes.error && ['42703', 'PGRST204', 'PGRST205'].includes(invoiceRes.error.code ?? '')) ||
+        (clientRes.error && ['42703', 'PGRST204', 'PGRST205'].includes(clientRes.error.code ?? ''))
+      ) {
+        setSupportsClientDetails(false)
+        ;[invoiceRes, clientRes] = await Promise.all([
+          supabase
+            .from('invoices')
+            .select('*, clients(id, name, email, phone, client_company), invoice_items(*)')
+            .eq('company_id', currentCompany.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('clients')
+            .select('id, name, email, phone, client_company')
+            .eq('company_id', currentCompany.id)
+            .order('name', { ascending: true }),
+        ])
+      } else {
+        setSupportsClientDetails(true)
+      }
 
       if (invoiceRes.error) throw invoiceRes.error
       if (clientRes.error) throw clientRes.error
@@ -394,6 +491,17 @@ export default function InvoicesPage() {
 
       setInvoices(((invoiceRes.data ?? []) as InvoiceRecord[]).map((invoice) => ({
         ...invoice,
+        clients: invoice.clients
+          ? {
+            ...invoice.clients,
+            street: invoice.clients.street ?? null,
+            house_number: invoice.clients.house_number ?? null,
+            postal_code: invoice.clients.postal_code ?? null,
+            city: invoice.clients.city ?? null,
+            country: invoice.clients.country ?? null,
+            tax_number: invoice.clients.tax_number ?? null,
+          }
+          : null,
         subtotal: Number(invoice.subtotal),
         tax_amount: Number(invoice.tax_amount),
         total: Number(invoice.total),
@@ -405,7 +513,15 @@ export default function InvoicesPage() {
           line_total: Number(item.line_total),
         })),
       })))
-      setClients((clientRes.data ?? []) as ClientOption[])
+      setClients(((clientRes.data ?? []) as ClientOption[]).map((client) => ({
+        ...client,
+        street: client.street ?? null,
+        house_number: client.house_number ?? null,
+        postal_code: client.postal_code ?? null,
+        city: client.city ?? null,
+        country: client.country ?? null,
+        tax_number: client.tax_number ?? null,
+      })))
       setProducts(((productRes.data ?? []) as ProductOption[]).map((product) => ({
         ...product,
         selling_price: product.selling_price === null ? null : Number(product.selling_price),
@@ -520,6 +636,12 @@ export default function InvoicesPage() {
           phone: quickClient.phone.trim() || null,
           email: null,
           client_company: null,
+          street: null,
+          house_number: null,
+          postal_code: null,
+          city: null,
+          country: null,
+          tax_number: null,
         },
       ].sort((left, right) => left.name.localeCompare(right.name)))
     }
@@ -715,7 +837,7 @@ export default function InvoicesPage() {
           <div className="invoice-print-header">
             <div className="invoice-print-brand">
               {companyLogo ? (
-                <img src={companyLogo} alt={currentCompany.name} className="invoice-print-logo h-12 w-12 object-contain" />
+                <Logo src={companyLogo} alt={currentCompany.name} size="print" className="invoice-print-logo" correctArtworkOffset={false} />
               ) : (
                 <div className="invoice-print-logo-fallback flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
                   {currentCompany.name.slice(0, 1).toUpperCase()}
@@ -752,9 +874,15 @@ export default function InvoicesPage() {
           <div className="invoice-print-client mb-3 rounded-md border p-3 text-sm">
             <p className="font-semibold">{t('invoices.client')}</p>
             <p>{printingInvoice.clients?.name ?? t('invoices.noClient')}</p>
-            {printingInvoice.clients?.client_company && <p>{printingInvoice.clients.client_company}</p>}
-            {printingInvoice.clients?.email && <p>{printingInvoice.clients.email}</p>}
-            {printingInvoice.clients?.phone && <p>{printingInvoice.clients.phone}</p>}
+            {clientPrintFields.company && printingInvoice.clients?.client_company && <p>{printingInvoice.clients.client_company}</p>}
+            {clientPrintFields.email && printingInvoice.clients?.email && <p>{printingInvoice.clients.email}</p>}
+            {clientPrintFields.phone && printingInvoice.clients?.phone && <p>{printingInvoice.clients.phone}</p>}
+            {clientPrintFields.address && getClientAddressLines(printingInvoice.clients).map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+            {clientPrintFields.taxNumber && printingInvoice.clients?.tax_number && (
+              <p>{t('clients.taxNumber')}: {printingInvoice.clients.tax_number}</p>
+            )}
             {printingInvoice.notes && <p className="mt-2 whitespace-pre-line text-slate-700">{printingInvoice.notes}</p>}
           </div>
           <table className="invoice-print-table w-full border-collapse text-sm">
@@ -1035,6 +1163,32 @@ export default function InvoicesPage() {
                 />
                 {t('invoices.includeCompanyAddress')}
               </label>
+
+              <fieldset className="rounded-md border border-slate-200 p-3">
+                <legend className="px-1 text-sm font-medium text-slate-700">{t('invoices.clientPrintFields')}</legend>
+                {!supportsClientDetails && (
+                  <p className="mb-2 text-xs text-amber-700">{t('clients.detailsMigrationRequired')}</p>
+                )}
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  {([
+                    ['company', 'invoices.includeClientCompany'],
+                    ['email', 'invoices.includeClientEmail'],
+                    ['phone', 'invoices.includeClientPhone'],
+                    ['address', 'invoices.includeClientAddress'],
+                    ['taxNumber', 'invoices.includeClientTaxNumber'],
+                  ] as Array<[keyof InvoiceClientPrintFields, string]>).map(([field, labelKey]) => (
+                    <label key={field} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={clientPrintFields[field]}
+                        onChange={(event) => handleClientPrintFieldChange(field, event.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      {t(labelKey)}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
 
               <div className="ml-auto max-w-xs space-y-2 rounded-md border bg-slate-50 p-4 text-sm">
                 <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(calculated.subtotal, formData.currency)}</span></div>

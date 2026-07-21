@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { Logo } from '@/components/logo'
 import { useI18n } from '@/contexts/i18n-context'
 
 interface PublicHeaderProps {
@@ -15,7 +16,7 @@ export function PublicHeader({ user }: PublicHeaderProps) {
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-3">
-          <img src="/icon-192.png" alt="Leonety" className="h-10 w-10 object-contain" />
+          <Logo size="md" />
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">

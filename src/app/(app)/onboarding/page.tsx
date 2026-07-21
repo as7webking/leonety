@@ -49,11 +49,11 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (!loading && !canCreateWorkspace(companies.length, accountAccess)) {
-      setMessage('Workspace limit reached. Switch to Pro to add more workspaces.')
+      setMessage(t('workspaces.limitReached'))
     } else if (!loading) {
       setMessage('')
     }
-  }, [accountAccess, companies.length, loading, router])
+  }, [accountAccess, companies.length, loading, router, t])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -82,13 +82,13 @@ export default function OnboardingPage() {
 
       const trimmedName = workspaceName.trim()
       if (workspaceType === 'business' && !trimmedName) {
-        setMessage('Company name is required for a business workspace.')
+        setMessage(t('workspaces.companyNameRequired'))
         setSubmitting(false)
         return
       }
 
       const name =
-        trimmedName || (profile?.full_name?.trim() ? `${profile.full_name.trim()}'s Workspace` : 'Personal Workspace')
+        trimmedName || (profile?.full_name?.trim() ? t('onboarding.namedWorkspace').replace('{name}', profile.full_name.trim()) : t('workspaces.personalWorkspace'))
 
       const { data, error } = await supabase
         .from('companies')
@@ -109,7 +109,7 @@ export default function OnboardingPage() {
       router.push('/app/dashboard')
     } catch (error) {
       console.error('Onboarding failed:', error)
-      setMessage(error instanceof Error ? error.message : 'Failed to create workspace')
+      setMessage(error instanceof Error ? error.message : t('workspaces.createFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -134,7 +134,7 @@ export default function OnboardingPage() {
           {companies.length > 0 && (
             <div className="mb-6 space-y-3">
               <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                Choose a profile/workspace or create a new one:
+                {t('onboarding.chooseWorkspace')}
               </div>
               <div className="space-y-2">
                 {companies.map((company) => (
@@ -142,7 +142,7 @@ export default function OnboardingPage() {
                     <div>
                       <p className="font-medium text-slate-900">{company.name}</p>
                       <p className="text-sm text-slate-500">
-                        {company.type === 'business' ? 'Business workspace' : 'Personal workspace'}
+                        {company.type === 'business' ? t('workspaces.businessWorkspace') : t('workspaces.personalWorkspace')}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export default function OnboardingPage() {
                           router.push('/app/dashboard')
                         }}
                       >
-                        Use this
+                        {t('onboarding.useThis')}
                       </Button>
                     </div>
                   </div>
@@ -169,12 +169,12 @@ export default function OnboardingPage() {
           {!canCreateWorkspace(companies.length, accountAccess) ? (
             <div className="space-y-4">
               <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                {message || 'Workspace limit reached. Switch to Pro to add more workspaces.'}
+                {message || t('workspaces.limitReached')}
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button onClick={() => router.push('/app/dashboard')}>Go to dashboard</Button>
-                <Button variant="outline" onClick={() => router.push('/app/workspaces')}>Open workspace settings</Button>
-                <Button variant="outline" onClick={() => router.push('/app/upgrade')}>Switch to Pro</Button>
+                <Button onClick={() => router.push('/app/dashboard')}>{t('onboarding.goToDashboard')}</Button>
+                <Button variant="outline" onClick={() => router.push('/app/workspaces')}>{t('onboarding.openWorkspaceSettings')}</Button>
+                <Button variant="outline" onClick={() => router.push('/app/upgrade')}>{t('nav.switchToPro')}</Button>
               </div>
             </div>
           ) : (
@@ -186,43 +186,43 @@ export default function OnboardingPage() {
             )}
 
             <div className="space-y-3">
-              <label className="block text-sm font-medium">Workspace type</label>
+              <label className="block text-sm font-medium">{t('workspaces.type')}</label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setWorkspaceType('personal')}
                   className={`rounded-lg border px-4 py-4 text-left ${workspaceType === 'personal' ? 'border-slate-900 bg-slate-50' : 'border-slate-200'}`}
                 >
-                  <p className="font-medium text-slate-900">Personal</p>
-                  <p className="mt-1 text-sm text-slate-600">Use one workspace for your own freelance or solo work.</p>
+                  <p className="font-medium text-slate-900">{t('workspaces.personalWorkspace')}</p>
+                  <p className="mt-1 text-sm text-slate-600">{t('onboarding.personalDescription')}</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setWorkspaceType('business')}
                   className={`rounded-lg border px-4 py-4 text-left ${workspaceType === 'business' ? 'border-slate-900 bg-slate-50' : 'border-slate-200'}`}
                 >
-                  <p className="font-medium text-slate-900">Business</p>
-                  <p className="mt-1 text-sm text-slate-600">Use a named company workspace for a registered business.</p>
+                  <p className="font-medium text-slate-900">{t('workspaces.businessWorkspace')}</p>
+                  <p className="mt-1 text-sm text-slate-600">{t('onboarding.businessDescription')}</p>
                 </button>
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">
-                {workspaceType === 'business' ? 'Company name' : 'Workspace name'}
+                {workspaceType === 'business' ? t('workspaces.companyName') : t('workspaces.workspaceName')}
               </label>
               <input
                 type="text"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
                 className="w-full rounded-md border px-3 py-2"
-                placeholder={workspaceType === 'business' ? 'Acme Studio LLC' : 'Personal Workspace'}
+                placeholder={workspaceType === 'business' ? t('onboarding.companyPlaceholder') : t('workspaces.personalWorkspace')}
                 required={workspaceType === 'business'}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium">Workspace currency</label>
+              <label className="block text-sm font-medium">{t('workspaces.currency')}</label>
               <AppSelect
                 value={workspaceCurrency}
                 onChange={(value) => setWorkspaceCurrency(normalizeCurrencyCode(value))}
@@ -231,7 +231,7 @@ export default function OnboardingPage() {
             </div>
 
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Creating workspace...' : 'Continue to dashboard'}
+              {submitting ? t('workspaces.creating') : t('onboarding.continueToDashboard')}
             </Button>
           </form>
           )}

@@ -137,12 +137,37 @@ export async function upsertProductSync(
   if (error) throw error
 }
 
-export async function syncProductToShopify(connection: StoreIntegrationConnection, product: ProductForSync) {
+export async function getExistingProductSync(
+  adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
+  companyId: string,
+  productId: string,
+  channel: StoreProvider
+) {
+  const { data, error } = await adminSupabase
+    .from('product_syncs')
+    .select('external_product_id, external_variant_id')
+    .eq('company_id', companyId)
+    .eq('product_id', productId)
+    .eq('channel', channel)
+    .maybeSingle()
+
+  if (error) throw error
+
+  return {
+    externalProductId: data?.external_product_id ?? null,
+    externalVariantId: data?.external_variant_id ?? null,
+  }
+}
+
+export async function syncProductToShopify(connection: StoreIntegrationConnection, product: ProductForSync, externalProductId?: string | null) {
   const token = requireAccessToken(connection)
   const shop = normalizeShopifyShop(connection.external_account_id || connection.store_url || '')
   const apiVersion = process.env.SHOPIFY_API_VERSION || '2025-10'
-  const response = await fetch(`https://${shop}/admin/api/${apiVersion}/products.json`, {
-    method: 'POST',
+  const endpoint = externalProductId
+    ? `https://${shop}/admin/api/${apiVersion}/products/${encodeURIComponent(externalProductId)}.json`
+    : `https://${shop}/admin/api/${apiVersion}/products.json`
+  const response = await fetch(endpoint, {
+    method: externalProductId ? 'PUT' : 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Shopify-Access-Token': token,
@@ -179,7 +204,7 @@ export async function syncProductToShopify(connection: StoreIntegrationConnectio
   }
 }
 
-export async function syncProductToGoogleMerchant(connection: StoreIntegrationConnection, product: ProductForSync) {
+export async function syncProductToGoogleMerchant(connection: StoreIntegrationConnection, product: ProductForSync, externalProductId?: string | null) {
   const token = requireAccessToken(connection)
   const merchantId = connection.merchant_id
   if (!merchantId) {
@@ -187,8 +212,11 @@ export async function syncProductToGoogleMerchant(connection: StoreIntegrationCo
   }
 
   const productId = product.sku || product.id
-  const response = await fetch(`https://shoppingcontent.googleapis.com/content/v2.1/${encodeURIComponent(merchantId)}/products`, {
-    method: 'POST',
+  const endpoint = externalProductId
+    ? `https://shoppingcontent.googleapis.com/content/v2.1/${encodeURIComponent(merchantId)}/products/${encodeURIComponent(externalProductId)}`
+    : `https://shoppingcontent.googleapis.com/content/v2.1/${encodeURIComponent(merchantId)}/products`
+  const response = await fetch(endpoint, {
+    method: externalProductId ? 'PUT' : 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',

@@ -144,7 +144,7 @@ html {
 
 @media print {
   @page {
-    margin: 8mm;
+    margin: 12mm;
     size: A4 portrait;
   }
 
@@ -153,12 +153,22 @@ html {
     height: auto !important;
     overflow: visible !important;
     background: white !important;
+    color: #000 !important;
   }
 
   body:has(.print-area) nav,
   body:has(.print-area) header,
   body:has(.print-area) footer,
-  body:has(.print-area) .no-print {
+  body:has(.print-area) aside,
+  body:has(.print-area) .no-print,
+  body:has(.print-area) [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+
+  body:has(.print-area) button,
+  body:has(.print-area) input,
+  body:has(.print-area) select,
+  body:has(.print-area) textarea {
     display: none !important;
   }
 
@@ -181,16 +191,30 @@ html {
   .print-area {
     display: block !important;
     position: static !important;
-    width: 100%;
-    max-width: none !important;
-    padding: 0;
+    width: 90% !important;
+    max-width: 168mm !important;
+    padding: 0 !important;
     margin: 0 !important;
-    background: white;
-    color: black;
+    margin-inline: auto !important;
+    background: #fff !important;
+    color: #000 !important;
     font-size: 11px;
     line-height: 1.35;
+    box-shadow: none !important;
+    border-radius: 0 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .print-document {
+    width: 90% !important;
+    max-width: 168mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
   }
 
   .print-area,
@@ -198,6 +222,7 @@ html {
     color: black !important;
     box-shadow: none !important;
     text-shadow: none !important;
+    background-image: none !important;
   }
 
   .print-area img[alt="Leonety"],
@@ -246,11 +271,15 @@ html {
   }
 
   .print-area table,
-  .print-area tr,
-  .print-area section,
   .print-area .break-inside-avoid {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .print-area tr,
+  .print-area section {
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   .print-area.print-compact table,
@@ -322,7 +351,8 @@ html {
 
   .print-area.print-invoice {
     display: block !important;
-    width: 190mm !important;
+    width: 90% !important;
+    max-width: 168mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     background: #fff !important;
@@ -366,7 +396,7 @@ html {
   .print-area.print-invoice .invoice-print-client,
   .print-area.print-invoice .invoice-print-payment {
     border: 1px solid #cbd5e1 !important;
-    border-radius: 6px !important;
+    border-radius: 0 !important;
     padding: 12px !important;
     margin: 0 0 14px 0 !important;
     background: #fff !important;

@@ -26,6 +26,8 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
   const menuPlacementClass = placement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
 
   useEffect(() => {
+    if (!open) return
+
     const handlePointerDown = (event: PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) {
         setOpen(false)
@@ -44,7 +46,7 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
       window.removeEventListener('pointerdown', handlePointerDown)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [])
+  }, [open])
 
   return (
     <div ref={ref} className={`relative ${className}`}>

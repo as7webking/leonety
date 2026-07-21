@@ -9,7 +9,10 @@ import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
+import { Logo } from '@/components/logo'
 import { Eye, EyeOff } from 'lucide-react'
+
+type OAuthProvider = 'google' | 'facebook'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -21,6 +24,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null)
   const [isSignUp, setIsSignUp] = useState(false)
   const [confirmationEmail, setConfirmationEmail] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
@@ -50,10 +54,10 @@ export default function LoginPage() {
       if (isSignUp) {
         // Signup with email confirmation
         if (!fullName.trim()) {
-          throw new Error('Full name is required')
+          throw new Error(t('auth.fullNameRequired'))
         }
         if (password.length < 6) {
-          throw new Error('Password must be at least 6 characters')
+          throw new Error(t('auth.passwordMinLength'))
         }
         if (!acceptedLegal) {
           throw new Error(t('auth.acceptLegalRequired'))
@@ -69,7 +73,7 @@ export default function LoginPage() {
               currency: currency,
               phone: phone.trim() || null,
             },
-            emailRedirectTo: getAuthCallbackUrl('/profile'),
+            emailRedirectTo: getAuthCallbackUrl('/app/profile'),
           },
         })
 
@@ -85,7 +89,7 @@ export default function LoginPage() {
         if (data.user) {
           setConfirmationEmail(normalizedEmail)
           setResendCooldown(60)
-          setSuccess('Check your email for confirmation link. You should be able to sign in once you confirm your email.')
+          setSuccess(t('auth.checkEmailConfirmation'))
           // Reset form
           setEmail('')
           setPassword('')
@@ -114,7 +118,7 @@ export default function LoginPage() {
       if (error instanceof Error) {
         setError(error.message)
       } else {
-        setError('An error occurred. Please try again.')
+        setError(t('auth.genericError'))
       }
     } finally {
       setIsLoading(false)
@@ -132,7 +136,7 @@ export default function LoginPage() {
     setSuccess('')
 
     if (!targetEmail) {
-      setError('Enter your email address to request another confirmation email.')
+      setError(t('auth.enterEmailForConfirmation'))
       return
     }
 
@@ -143,18 +147,40 @@ export default function LoginPage() {
         type: 'signup',
         email: targetEmail,
         options: {
-          emailRedirectTo: getAuthCallbackUrl('/profile'),
+          emailRedirectTo: getAuthCallbackUrl('/app/profile'),
         },
       })
 
       if (resendError) throw resendError
 
       setResendCooldown(60)
-      setSuccess('Confirmation email sent. Please check your inbox.')
+      setSuccess(t('auth.confirmationSent'))
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'Failed to resend confirmation email.')
+      setError(error instanceof Error ? error.message : t('auth.confirmationFailed'))
     } finally {
       setIsResending(false)
+    }
+  }
+
+  const handleOAuthSignIn = async (provider: OAuthProvider) => {
+    setOauthLoading(provider)
+    setError('')
+    setSuccess('')
+
+    try {
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: getAuthCallbackUrl('/app/dashboard'),
+          queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
+        },
+      })
+
+      if (oauthError) throw oauthError
+    } catch {
+      const providerName = provider === 'google' ? 'Google' : 'Facebook'
+      setError(t('auth.oauthFailed').replace('{provider}', providerName))
+      setOauthLoading(null)
     }
   }
 
@@ -162,13 +188,49 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <div className="mb-3 flex justify-center">
+            <Logo size="lg" />
+          </div>
           <CardTitle>{isSignUp ? t('auth.createAccount') : t('auth.signIn')}</CardTitle>
           <CardDescription>
             {isSignUp ? t('auth.signUpSubtitle') : t('auth.signInSubtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center gap-2"
+              disabled={isLoading || oauthLoading !== null}
+              onClick={() => handleOAuthSignIn('google')}
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-blue-600">
+                G
+              </span>
+              {oauthLoading === 'google' ? t('auth.oauthRedirecting') : t('auth.continueWithGoogle')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center gap-2"
+              disabled={isLoading || oauthLoading !== null}
+              onClick={() => handleOAuthSignIn('facebook')}
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                f
+              </span>
+              {oauthLoading === 'facebook' ? t('auth.oauthRedirecting') : t('auth.continueWithFacebook')}
+            </Button>
+          </div>
+
+          <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+            <span className="h-px flex-1 bg-slate-200" />
+            <span>{t('auth.orContinueWithEmail')}</span>
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="on">
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
                 {error}
@@ -183,8 +245,8 @@ export default function LoginPage() {
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                 <p>
                   {resendCooldown > 0
-                    ? 'Please wait 60 seconds before requesting another confirmation email.'
-                    : 'Need another confirmation link? Enter your email and request it here.'}
+                    ? t('auth.confirmationCooldown')
+                    : t('auth.needAnotherConfirmation')}
                 </p>
                 <Button
                   type="button"
@@ -194,7 +256,11 @@ export default function LoginPage() {
                   disabled={resendCooldown > 0 || isResending}
                   onClick={handleResendConfirmation}
                 >
-                  {resendCooldown > 0 ? `You can resend in ${resendCooldown}s` : isResending ? 'Sending...' : 'Resend confirmation email'}
+                  {resendCooldown > 0
+                    ? t('auth.resendCountdown').replace('{seconds}', String(resendCooldown))
+                    : isResending
+                      ? t('auth.sending')
+                      : t('auth.resendConfirmation')}
                 </Button>
               </div>
             )}
@@ -202,11 +268,14 @@ export default function LoginPage() {
             <div>
               <label className="block text-sm font-medium mb-1">{t('auth.email')}</label>
               <input
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="you@example.com"
+                autoComplete="email"
+                inputMode="email"
                 required
               />
             </div>
@@ -215,11 +284,13 @@ export default function LoginPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">{t('auth.fullName')}</label>
                 <input
+                  name="name"
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Your name"
+                  placeholder={t('auth.fullNamePlaceholder')}
+                  autoComplete="name"
                   required
                 />
               </div>
@@ -229,11 +300,13 @@ export default function LoginPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">{t('profile.phone')}</label>
                 <input
+                  name="tel"
                   type="tel"
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="+49 ..."
+                  autoComplete="tel"
                 />
               </div>
             )}
@@ -242,11 +315,13 @@ export default function LoginPage() {
               <label className="block text-sm font-medium mb-1">{t('auth.password')}</label>
               <div className="relative">
                 <input
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary pr-10"
-                  placeholder="Enter your password"
+                  placeholder={t('auth.passwordPlaceholder')}
+                  autoComplete={isSignUp ? 'new-password' : 'current-password'}
                   required
                 />
                 <button
@@ -263,7 +338,7 @@ export default function LoginPage() {
               </div>
               {isSignUp && (
                 <p className="text-xs text-gray-500 mt-1">
-                  At least 6 characters
+                  {t('auth.passwordHint')}
                 </p>
               )}
             </div>

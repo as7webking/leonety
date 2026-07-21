@@ -12,7 +12,7 @@ export function getSiteUrl() {
   return process.env.NODE_ENV === 'production' ? 'https://leonety.vercel.app' : 'http://localhost:3000'
 }
 
-export function getAuthCallbackUrl(next = '/profile') {
+export function getAuthCallbackUrl(next = '/app/profile') {
   const url = new URL('/auth/callback', getSiteUrl())
   url.searchParams.set('next', next)
   return url.toString()

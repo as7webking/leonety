@@ -3,6 +3,7 @@ import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_util
 import { isStoreProvider, type StoreProvider } from '@/lib/store-integrations'
 import {
   fetchProductsForSync,
+  getExistingProductSync,
   getStoreIntegration,
   syncProductToGoogleMerchant,
   syncProductToShopify,
@@ -11,13 +12,18 @@ import {
 
 export const runtime = 'nodejs'
 
-async function syncOne(provider: StoreProvider, connection: Awaited<ReturnType<typeof getStoreIntegration>>, product: Awaited<ReturnType<typeof fetchProductsForSync>>[number]) {
+async function syncOne(
+  provider: StoreProvider,
+  connection: Awaited<ReturnType<typeof getStoreIntegration>>,
+  product: Awaited<ReturnType<typeof fetchProductsForSync>>[number],
+  externalProductId?: string | null
+) {
   if (provider === 'shopify') {
-    return syncProductToShopify(connection, product)
+    return syncProductToShopify(connection, product, externalProductId)
   }
 
   if (provider === 'google_merchant') {
-    return syncProductToGoogleMerchant(connection, product)
+    return syncProductToGoogleMerchant(connection, product, externalProductId)
   }
 
   throw new Error(`${provider} direct product sync is not implemented yet.`)
@@ -51,10 +57,11 @@ export async function POST(request: Request) {
 
     for (const product of products) {
       try {
-        const result = await syncOne(provider, connection, product)
+        const existingSync = await getExistingProductSync(auth.adminSupabase, companyId, product.id, provider)
+        const result = await syncOne(provider, connection, product, existingSync.externalProductId)
         await upsertProductSync(auth.adminSupabase, companyId, product.id, provider, {
-          externalProductId: result.externalProductId,
-          externalVariantId: result.externalVariantId,
+          externalProductId: result.externalProductId ?? existingSync.externalProductId,
+          externalVariantId: result.externalVariantId ?? existingSync.externalVariantId,
           syncStatus: 'synced',
         })
         synced += 1

@@ -29,14 +29,34 @@ export async function POST(request: Request) {
     for (const shopifyProduct of shopifyProducts) {
       const mapped = mapShopifyProductToLeonety(companyId, shopifyProduct)
       const sku = mapped.sku
-      const existingQuery = sku
-        ? auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('sku', sku).maybeSingle()
-        : Promise.resolve({ data: null, error: null })
-      const { data: existing, error: existingError } = await existingQuery
-      if (existingError) throw existingError
+      const externalProductId = shopifyProduct.id ? String(shopifyProduct.id) : ''
+      const { data: existingSync, error: existingSyncError } = externalProductId
+        ? await auth.adminSupabase
+          .from('product_syncs')
+          .select('product_id')
+          .eq('company_id', companyId)
+          .eq('channel', provider)
+          .eq('external_product_id', externalProductId)
+          .maybeSingle()
+        : { data: null, error: null }
 
-      const result = existing?.id
-        ? await auth.adminSupabase.from('products').update(mapped).eq('id', existing.id).eq('company_id', companyId).select('id').single()
+      if (existingSyncError) throw existingSyncError
+
+      const { data: existingBySku, error: existingBySkuError } = !existingSync?.product_id && sku
+        ? await auth.adminSupabase
+          .from('products')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('sku', sku)
+          .maybeSingle()
+        : { data: null, error: null }
+
+      if (existingBySkuError) throw existingBySkuError
+
+      const existingProductId = existingSync?.product_id ?? existingBySku?.id
+
+      const result = existingProductId
+        ? await auth.adminSupabase.from('products').update(mapped).eq('id', existingProductId).eq('company_id', companyId).select('id').single()
         : await auth.adminSupabase.from('products').insert(mapped).select('id').single()
 
       if (result.error) throw result.error

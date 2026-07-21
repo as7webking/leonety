@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useI18n } from '@/contexts/i18n-context'
+import { Logo } from '@/components/logo'
 
 export function Footer() {
   const { t } = useI18n()
@@ -15,7 +16,7 @@ export function Footer() {
       <footer className="border-t border-slate-200 bg-white py-5">
         <div className="mx-auto flex w-[90%] max-w-7xl flex-col items-center justify-between gap-2 text-sm text-slate-500 sm:flex-row">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Leonety" className="h-7 w-7 object-contain" />
+            <Logo src="/logo.png" size="sm" />
             <span className="font-medium text-slate-700">Leonety</span>
           </div>
           <p>© 2026 Leonety. {t('footer.rights')}</p>
@@ -45,7 +46,7 @@ export function Footer() {
             <div className="grid gap-8 md:grid-cols-4">
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <img src="/logo.png" alt="Leonety" className="h-10 w-10 object-contain" />
+                  <Logo src="/logo.png" size="md" />
                   <span className="text-lg font-semibold">Leonety</span>
                 </div>
                 <p className="text-sm text-slate-600">{t('footer.description')}</p>
@@ -67,7 +68,7 @@ export function Footer() {
                 </ul>
               </div>
               <div>
-                <p className="font-semibold text-slate-900 mb-4">Legal</p>
+                <p className="font-semibold text-slate-900 mb-4">{t('footer.legal')}</p>
                 <ul className="space-y-2 text-sm text-slate-600">
                   <li><Link href="/privacy" className="hover:text-slate-900 transition">{t('legal.privacy')}</Link></li>
                   <li><Link href="/terms" className="hover:text-slate-900 transition">{t('legal.terms')}</Link></li>
