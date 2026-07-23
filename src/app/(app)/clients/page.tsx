@@ -8,6 +8,7 @@ import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/compon
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
+import { AddressAutocomplete } from '@/components/address-autocomplete'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
@@ -443,6 +444,19 @@ export default function ClientsPage() {
               </label>
               {supportsClientDetails && (
                 <>
+                  <div className="md:col-span-2 xl:col-span-3">
+                    <AddressAutocomplete
+                      country={formData.country}
+                      onSelect={(suggestion) => setFormData({
+                        ...formData,
+                        street: suggestion.street || formData.street,
+                        house_number: suggestion.houseNumber || formData.house_number,
+                        postal_code: suggestion.postalCode || formData.postal_code,
+                        city: suggestion.city || formData.city,
+                        country: suggestion.country || formData.country,
+                      })}
+                    />
+                  </div>
                   <label className="space-y-1">
                     <span className="text-sm font-medium">{t('clients.street')}</span>
                     <input value={formData.street} onChange={(event) => setFormData({ ...formData, street: event.target.value })} className="w-full rounded-md border px-3 py-2" />

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { decryptSecret } from '@/lib/credential-encryption'
 import { wooRequest, type WooConnection } from '@/lib/woocommerce'
 
 export const runtime = 'nodejs'
@@ -51,7 +52,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'WooCommerce connection is not configured.' }, { status: 400 })
     }
 
-    const products = await fetchAllPreviewProducts(connection as WooConnectionRow)
+    const savedConnection = connection as WooConnectionRow
+    const products = await fetchAllPreviewProducts({
+      ...savedConnection,
+      consumer_key: decryptSecret(savedConnection.consumer_key),
+      consumer_secret: decryptSecret(savedConnection.consumer_secret),
+    })
     const categories = Array.from(new Set(products.flatMap((product) => product.categories?.map((category) => category.name) ?? []))).sort()
 
     return NextResponse.json({

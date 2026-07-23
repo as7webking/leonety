@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { BriefcaseBusiness, Building2, Plug, Unplug } from 'lucide-react'
+import { BriefcaseBusiness, Building2, ExternalLink, HelpCircle, Plug, Unplug } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -82,7 +82,13 @@ export default function WooCommerceSettingsPage() {
     setLoading(false)
   }, [currentCompany, t])
 
-  useEffect(() => { void loadConnection() }, [loadConnection])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadConnection()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [loadConnection])
 
   const handleTest = async () => {
     if (!currentCompany) return
@@ -143,8 +149,6 @@ export default function WooCommerceSettingsPage() {
       setConsumerKey('')
       setConsumerSecret('')
       setMessage(t('woocommerce.connectionSaved'))
-      await handleImportProducts({ silent: true })
-      await handlePreviewCatalog()
     }
 
     setSaving(false)
@@ -288,6 +292,28 @@ export default function WooCommerceSettingsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-5">
+            <details className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+              <summary className="flex cursor-pointer items-center gap-2 font-medium">
+                <HelpCircle className="h-4 w-4" />
+                {t('woocommerce.keysHelpTitle')}
+              </summary>
+              <ol className="mt-3 list-decimal space-y-1 pl-5">
+                {Array.from({ length: 11 }, (_, index) => (
+                  <li key={index}>{t(`woocommerce.keysHelp.step${index + 1}`)}</li>
+                ))}
+              </ol>
+              <p className="mt-3 font-medium text-blue-900">{t('woocommerce.secretWarning')}</p>
+              <a
+                href="https://woocommerce.com/document/woocommerce-rest-api/"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1 font-medium text-blue-700 hover:underline"
+              >
+                {t('woocommerce.officialDocs')}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </details>
+
             <label className="block space-y-1">
               <span className="text-sm font-medium">{t('woocommerce.storeUrl')}</span>
               <input

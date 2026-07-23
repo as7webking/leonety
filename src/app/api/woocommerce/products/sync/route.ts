@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { decryptSecret } from '@/lib/credential-encryption'
 import {
   toWooPrice,
   toWooStock,
@@ -252,7 +253,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'WooCommerce connection is not configured.' }, { status: 400 })
     }
 
-    const wooConnection = connection as WooConnectionRow
+    const savedConnection = connection as WooConnectionRow
+    const wooConnection = {
+      ...savedConnection,
+      consumer_key: decryptSecret(savedConnection.consumer_key),
+      consumer_secret: decryptSecret(savedConnection.consumer_secret),
+    }
     const productRow = product as ProductRow
     const imageWarning = await getWooImageWarning(productRow.image_url)
     const categoryId = await findOrCreateCategory(wooConnection, productRow.category)

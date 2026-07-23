@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { decryptSecret } from '@/lib/credential-encryption'
 import { toWooStock, wooRequest, type WooConnection } from '@/lib/woocommerce'
 
 export const runtime = 'nodejs'
@@ -68,7 +69,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ skipped: true, reason: 'Variable product stock is managed per variation.' })
     }
 
-    await wooRequest(wooConnection, `/products/${wooProductId}`, {
+    await wooRequest({
+      ...wooConnection,
+      consumer_key: decryptSecret(wooConnection.consumer_key),
+      consumer_secret: decryptSecret(wooConnection.consumer_secret),
+    }, `/products/${wooProductId}`, {
       method: 'PUT',
       body: {
         manage_stock: true,

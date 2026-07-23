@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { decryptSecret } from '@/lib/credential-encryption'
 import { wooRequest, type WooConnection } from '@/lib/woocommerce'
 
 export const runtime = 'nodejs'
@@ -83,67 +84,82 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'WooCommerce connection is not configured.' }, { status: 400 })
     }
 
-    const products = await fetchAllWooProducts(connection as WooConnectionRow)
-    let imported = 0
+    const wooConnection = connection as WooConnectionRow
+    const products = await fetchAllWooProducts({
+      ...wooConnection,
+      consumer_key: decryptSecret(wooConnection.consumer_key),
+      consumer_secret: decryptSecret(wooConnection.consumer_secret),
+    })
+    let created = 0
+    let updated = 0
+    let failed = 0
 
     for (const wooProduct of products) {
-      const categoryName = wooProduct.categories?.[0]?.name ?? null
-      await createCategoryIfPossible(auth.adminSupabase, companyId, categoryName).catch(() => undefined)
+      try {
+        const categoryName = wooProduct.categories?.[0]?.name ?? null
+        await createCategoryIfPossible(auth.adminSupabase, companyId, categoryName).catch(() => undefined)
 
-      const { data: syncRow } = await auth.adminSupabase
-        .from('product_syncs')
-        .select('product_id, external_product_id')
-        .eq('company_id', companyId)
-        .eq('channel', 'woocommerce')
-        .eq('external_product_id', String(wooProduct.id))
-        .maybeSingle<ProductSyncRow>()
+        const { data: syncRow } = await auth.adminSupabase
+          .from('product_syncs')
+          .select('product_id, external_product_id')
+          .eq('company_id', companyId)
+          .eq('channel', 'woocommerce')
+          .eq('external_product_id', String(wooProduct.id))
+          .maybeSingle<ProductSyncRow>()
 
-      const sku = wooProduct.sku?.trim() || null
-      const existingProductQuery = syncRow?.product_id
-        ? auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('id', syncRow.product_id).maybeSingle()
-        : sku
-          ? auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('sku', sku).maybeSingle()
-          : Promise.resolve({ data: null, error: null })
+        const sku = wooProduct.sku?.trim() || null
+        const existingProductQuery = syncRow?.product_id
+          ? auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('id', syncRow.product_id).maybeSingle()
+          : sku
+            ? auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('sku', sku).maybeSingle()
+            : Promise.resolve({ data: null, error: null })
 
-      const { data: existingProduct, error: existingError } = await existingProductQuery
-      if (existingError) throw existingError
+        const { data: existingProduct, error: existingError } = await existingProductQuery
+        if (existingError) throw existingError
 
-      const payload = {
-        company_id: companyId,
-        name: wooProduct.name || `WooCommerce #${wooProduct.id}`,
-        sku,
-        category: categoryName,
-        description: wooProduct.description || wooProduct.short_description || null,
-        selling_price: Number(wooProduct.regular_price || wooProduct.price || 0),
-        current_stock: Math.max(0, Number(wooProduct.stock_quantity ?? 0)),
-        image_url: wooProduct.images?.[0]?.src ?? null,
-        woo_product_type: 'simple',
-        status: 'active',
-        updated_at: new Date().toISOString(),
-      }
-
-      const productResult = existingProduct?.id
-        ? await auth.adminSupabase.from('products').update(payload).eq('id', existingProduct.id).select('id').single()
-        : await auth.adminSupabase.from('products').insert(payload).select('id').single()
-
-      if (productResult.error) throw productResult.error
-
-      await auth.adminSupabase
-        .from('product_syncs')
-        .upsert({
+        const payload = {
           company_id: companyId,
-          product_id: productResult.data.id,
-          channel: 'woocommerce',
-          external_product_id: String(wooProduct.id),
-          sync_status: 'synced',
-          last_synced_at: new Date().toISOString(),
+          name: wooProduct.name || `WooCommerce #${wooProduct.id}`,
+          sku,
+          category: categoryName,
+          description: wooProduct.description || wooProduct.short_description || null,
+          selling_price: Number(wooProduct.regular_price || wooProduct.price || 0),
+          current_stock: Math.max(0, Number(wooProduct.stock_quantity ?? 0)),
+          image_url: wooProduct.images?.[0]?.src ?? null,
+          woo_product_type: 'simple',
+          status: 'active',
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'company_id,product_id,channel' })
+        }
 
-      imported += 1
+        const productResult = existingProduct?.id
+          ? await auth.adminSupabase.from('products').update(payload).eq('id', existingProduct.id).select('id').single()
+          : await auth.adminSupabase.from('products').insert(payload).select('id').single()
+
+        if (productResult.error) throw productResult.error
+
+        await auth.adminSupabase
+          .from('product_syncs')
+          .upsert({
+            company_id: companyId,
+            product_id: productResult.data.id,
+            channel: 'woocommerce',
+            external_product_id: String(wooProduct.id),
+            sync_status: 'synced',
+            last_synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'company_id,product_id,channel' })
+
+        if (existingProduct?.id) {
+          updated += 1
+        } else {
+          created += 1
+        }
+      } catch {
+        failed += 1
+      }
     }
 
-    return NextResponse.json({ imported })
+    return NextResponse.json({ imported: created + updated, created, updated, failed })
   } catch (error) {
     return NextResponse.json({ error: formatApiError(error) }, { status: 500 })
   }

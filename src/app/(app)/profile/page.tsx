@@ -11,6 +11,7 @@ import { loadCompanyBranding, saveCompanyBranding } from '@/lib/company-branding
 import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AppSelect } from '@/components/app-select'
+import { AddressAutocomplete } from '@/components/address-autocomplete'
 import { useI18n } from '@/contexts/i18n-context'
 import { LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
@@ -941,8 +942,20 @@ export default function ProfilePage() {
                       </Button>
                     )}
                   </div>
-                  <label className="block space-y-1">
+                  <div className="block space-y-1">
                     <span className="text-sm font-medium">{t('profile.companyAddress')}</span>
+                    <AddressAutocomplete
+                      onSelect={(suggestion) => {
+                        const nextAddress = [
+                          [suggestion.street, suggestion.houseNumber].filter(Boolean).join(' '),
+                          [suggestion.postalCode, suggestion.city].filter(Boolean).join(' '),
+                          suggestion.state,
+                          suggestion.country,
+                        ].filter(Boolean).join('\n')
+                        setWorkspaceAddress(nextAddress)
+                        persistWorkspaceBranding(workspaceLogo, nextAddress, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
+                      }}
+                    />
                     <textarea
                       value={workspaceAddress}
                       onChange={(event) => {
@@ -952,7 +965,7 @@ export default function ProfilePage() {
                       className="min-h-20 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder={t('profile.companyAddressPlaceholder')}
                     />
-                  </label>
+                  </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     <label className="block space-y-1">
                       <span className="text-sm font-medium">{t('profile.companyEmail')}</span>

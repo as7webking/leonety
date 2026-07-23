@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { decryptSecret } from '@/lib/credential-encryption'
 import { normalizeWooStoreUrl, wooRequest, type WooConnection } from '@/lib/woocommerce'
 
 export const runtime = 'nodejs'
@@ -38,7 +39,12 @@ export async function POST(request: Request) {
 
       if (error) throw error
       if (data?.active) {
-        connection = data as ConnectionRow
+        const savedConnection = data as ConnectionRow
+        connection = {
+          store_url: savedConnection.store_url,
+          consumer_key: decryptSecret(savedConnection.consumer_key),
+          consumer_secret: decryptSecret(savedConnection.consumer_secret),
+        }
       }
     }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { maskSecret as maskStoredSecret } from '@/lib/credential-encryption'
 import { isStoreProvider, normalizeStoreUrl, type StoreProvider } from '@/lib/store-integrations'
 
 export const runtime = 'nodejs'
@@ -79,8 +80,8 @@ export async function GET(request: Request) {
           storeName: 'WooCommerce',
           storeUrl: wooConnection.store_url ?? '',
           externalAccountId: '',
-          apiKeyPreview: maskSecret(wooConnection.consumer_key),
-          apiSecretPreview: maskSecret(wooConnection.consumer_secret),
+          apiKeyPreview: maskStoredSecret(wooConnection.consumer_key),
+          apiSecretPreview: maskStoredSecret(wooConnection.consumer_secret),
           merchantId: '',
           accessTokenPreview: '',
           refreshTokenPreview: '',

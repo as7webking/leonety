@@ -2,7 +2,8 @@
   "name": "Leonety",
   "short_name": "Leonety",
   "description": "Modern bookkeeping for freelancers and small businesses. Track income, expenses, time, and cash flow without spreadsheets.",
-  "start_url": "/",
+  "id": "/app",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -54,7 +55,7 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "View your financial dashboard",
-      "url": "/dashboard",
+      "url": "/app/dashboard",
       "icons": [
         {
           "src": "/icon-96.png",
@@ -67,7 +68,7 @@
       "name": "Income",
       "short_name": "Income",
       "description": "Track your income",
-      "url": "/income",
+      "url": "/app/income",
       "icons": [
         {
           "src": "/icon-96.png",
@@ -80,7 +81,7 @@
       "name": "Expenses",
       "short_name": "Expenses",
       "description": "Manage your expenses",
-      "url": "/expenses",
+      "url": "/app/expenses",
       "icons": [
         {
           "src": "/icon-96.png",

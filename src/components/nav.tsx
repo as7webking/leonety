@@ -10,6 +10,7 @@ import { canCreateWorkspace } from '@/lib/account-access'
 import { AppSearch } from '@/components/app-search'
 import { AppSelect } from '@/components/app-select'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { Logo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/contexts/i18n-context'
 import { ChevronDown, Menu, X, User } from 'lucide-react'
@@ -43,8 +44,8 @@ export function Nav() {
 
   useEffect(() => {
     if (!currentCompanyId || !showBusinessModules) {
-      setWooConnected(false)
-      return
+      const timer = window.setTimeout(() => setWooConnected(false), 0)
+      return () => window.clearTimeout(timer)
     }
 
     let active = true
@@ -141,7 +142,7 @@ export function Nav() {
       <div className="mx-auto w-[90%] max-w-7xl min-w-0 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={() => setIsOpen(false)}>
-            <img src="/icon-192.png" alt="Leonety" className="h-10 w-10 shrink-0 object-contain" />
+            <Logo size="md" />
           </Link>
           
           {/* Desktop menu */}

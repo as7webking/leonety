@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { encryptSecret, maskSecret } from '@/lib/credential-encryption'
 import { normalizeWooStoreUrl } from '@/lib/woocommerce'
 
 export const runtime = 'nodejs'
@@ -15,16 +16,11 @@ interface ConnectionRow {
 }
 
 function publicConnection(row: ConnectionRow | null) {
-  const maskSecret = (value?: string | null) => {
-    if (!value) return ''
-    return value.length <= 8 ? '••••••••' : `${value.slice(0, 4)}••••${value.slice(-4)}`
-  }
-
   return {
     connected: Boolean(row?.active),
     storeUrl: row?.store_url ?? '',
-    consumerKeyPreview: maskSecret(row?.consumer_key),
-    consumerSecretPreview: maskSecret(row?.consumer_secret),
+    consumerKeyPreview: row ? maskSecret(row.consumer_key) : '',
+    consumerSecretPreview: row ? maskSecret(row.consumer_secret) : '',
     inventorySyncEnabled: Boolean(row?.inventory_sync_enabled),
     updatedAt: row?.updated_at ?? null,
   }
@@ -77,8 +73,8 @@ export async function POST(request: Request) {
     const payload = {
       company_id: companyId,
       store_url: normalizedStoreUrl,
-      consumer_key: consumerKey || (existing as ConnectionRow | null)?.consumer_key,
-      consumer_secret: consumerSecret || (existing as ConnectionRow | null)?.consumer_secret,
+      consumer_key: consumerKey ? encryptSecret(consumerKey) : (existing as ConnectionRow | null)?.consumer_key,
+      consumer_secret: consumerSecret ? encryptSecret(consumerSecret) : (existing as ConnectionRow | null)?.consumer_secret,
       inventory_sync_enabled: inventorySyncEnabled,
       active: true,
       updated_at: new Date().toISOString(),

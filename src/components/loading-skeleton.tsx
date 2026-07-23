@@ -2,6 +2,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton"
 import { useI18n } from "@/contexts/i18n-context"
+import { Logo } from "@/components/logo"
 import { cn } from "@/lib/utils"
 
 interface LoadingSkeletonProps {
@@ -15,7 +16,7 @@ export function LoadingSkeleton({ className }: LoadingSkeletonProps) {
     <div className={cn("flex min-h-56 flex-col items-center justify-center gap-5 rounded-lg border border-slate-200 bg-white p-8", className)}>
       <div className="relative flex h-16 w-16 items-center justify-center">
         <div className="absolute inset-0 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
-        <img src="/logo.png" alt="" className="h-10 w-10 object-contain" />
+        <Logo size="md" />
       </div>
       <div className="text-center">
         <p className="font-medium text-slate-900">{t('common.loading')}</p>
