@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { buildAccountAccess, getAccountAccess } from '@/lib/account-access'
+import { getPlanRank, type AppPlan } from '@/lib/billing/plans'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
@@ -9,14 +10,14 @@ interface CompanyRow {
 
 interface AppAccessRow {
   company_id: string
-  tier: 'free' | 'starter' | 'pro' | 'business'
+  tier: AppPlan
   manual_override: boolean
   active: boolean
   expires_at: string | null
 }
 
-function isActiveProAccess(access: AppAccessRow | undefined) {
-  if (!access || !access.active || access.tier !== 'pro') {
+function isActivePaidAccess(access: AppAccessRow | undefined) {
+  if (!access || !access.active || getPlanRank(access.tier) === 0) {
     return false
   }
 
@@ -61,11 +62,13 @@ export async function GET() {
           .in('company_id', companyIds)
       : { data: [] }
 
-    const activeProAccess = ((appAccessRows ?? []) as AppAccessRow[]).find((access) => isActiveProAccess(access))
+    const activePaidAccess = ((appAccessRows ?? []) as AppAccessRow[])
+      .filter((access) => isActivePaidAccess(access))
+      .sort((left, right) => getPlanRank(right.tier) - getPlanRank(left.tier))[0]
     const isAdmin = fallbackAccess.isAdmin || Boolean(adminAccount) || Boolean(configuredAdminEmail && userEmail === configuredAdminEmail)
-    const isPro = Boolean(activeProAccess) || fallbackAccess.plan === 'pro'
-    const overrideSource = activeProAccess
-      ? activeProAccess.manual_override ? 'manual' : 'payment'
+    const isPro = Boolean(activePaidAccess) || getPlanRank(fallbackAccess.plan) > 0
+    const overrideSource = activePaidAccess
+      ? activePaidAccess.manual_override ? 'manual' : 'payment'
       : fallbackAccess.overrideSource
 
     return NextResponse.json({
@@ -73,6 +76,7 @@ export async function GET() {
         isAdmin,
         isPro,
         overrideSource,
+        activePlan: activePaidAccess?.tier,
       }),
     })
   } catch (error) {

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BriefcaseBusiness, Building2, Clock3, KeyRound, Plug, Store, Unplug } from 'lucide-react'
 import { EmptyState, PageContainer, PageHeader } from '@/components'
@@ -12,8 +12,8 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import type { Locale } from '@/lib/i18n'
 
-type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant'
-type IntegrationStatus = 'not_connected' | 'connected' | 'error'
+type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'iss_pos'
+type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
 
 interface StoreIntegration {
   id: string
@@ -65,6 +65,11 @@ const providerOptions: Array<{ value: Provider; label: string; fields: Array<key
     label: 'Google Merchant / Maps',
     fields: ['storeName', 'externalAccountId', 'merchantId', 'accessToken', 'refreshToken'],
   },
+  {
+    value: 'iss_pos',
+    label: 'ISS POS',
+    fields: ['storeName', 'storeUrl', 'externalAccountId'],
+  },
 ]
 
 const emptyForm: IntegrationForm = {
@@ -113,6 +118,9 @@ const copy: Record<Locale, Record<string, string>> = {
     syncProducts: 'Sync products',
     imported: 'Imported products: {count}.',
     synced: 'Synced: {synced}. Failed: {failed}.',
+    openConnection: 'Open connection',
+    schemaUnavailable: 'Store integrations are temporarily unavailable. Run the Supabase migration and try again.',
+    issSetup: 'ISS POS requires official API documentation and credentials before Leonety can test or sync it.',
   },
   de: {
     title: 'Shop-Integrationen',
@@ -148,6 +156,9 @@ const copy: Record<Locale, Record<string, string>> = {
     syncProducts: 'Produkte synchronisieren',
     imported: 'Importierte Produkte: {count}.',
     synced: 'Synchronisiert: {synced}. Fehlgeschlagen: {failed}.',
+    openConnection: 'Verbindung öffnen',
+    schemaUnavailable: 'Shop-Integrationen sind vorübergehend nicht verfügbar. Führe die Supabase-Migration aus und versuche es erneut.',
+    issSetup: 'ISS POS benötigt offizielle API-Dokumentation und Zugangsdaten, bevor Leonety testen oder synchronisieren kann.',
   },
   tr: {
     title: 'Mağaza entegrasyonları',
@@ -183,6 +194,9 @@ const copy: Record<Locale, Record<string, string>> = {
     syncProducts: 'Ürünleri senkronize et',
     imported: 'İçe aktarılan ürünler: {count}.',
     synced: 'Senkronize: {synced}. Hatalı: {failed}.',
+    openConnection: 'Bağlantıyı aç',
+    schemaUnavailable: 'Mağaza entegrasyonları geçici olarak kullanılamıyor. Supabase migration çalıştırıp tekrar deneyin.',
+    issSetup: 'Leonety test veya senkronizasyon yapmadan önce ISS POS için resmi API dokümantasyonu ve erişim bilgileri gerekir.',
   },
   ru: {
     title: 'Интеграции магазинов',
@@ -218,6 +232,9 @@ const copy: Record<Locale, Record<string, string>> = {
     syncProducts: 'Синхронизировать товары',
     imported: 'Импортировано товаров: {count}.',
     synced: 'Синхронизировано: {synced}. Ошибок: {failed}.',
+    openConnection: 'Открыть подключение',
+    schemaUnavailable: 'Интеграции магазинов временно недоступны. Выполните Supabase migration и попробуйте снова.',
+    issSetup: 'Для ISS POS нужна официальная API-документация и учетные данные, прежде чем Leonety сможет тестировать или синхронизировать подключение.',
   },
   uk: {
     title: 'Інтеграції магазинів',
@@ -253,6 +270,9 @@ const copy: Record<Locale, Record<string, string>> = {
     syncProducts: 'Синхронізувати товари',
     imported: 'Імпортовано товарів: {count}.',
     synced: 'Синхронізовано: {synced}. Помилок: {failed}.',
+    openConnection: 'Відкрити підключення',
+    schemaUnavailable: 'Інтеграції магазинів тимчасово недоступні. Виконайте Supabase migration і спробуйте ще раз.',
+    issSetup: 'Для ISS POS потрібна офіційна API-документація та облікові дані, перш ніж Leonety зможе тестувати або синхронізувати підключення.',
   },
   pl: {
     title: 'Integracje sklepów',
@@ -288,6 +308,9 @@ const copy: Record<Locale, Record<string, string>> = {
     syncProducts: 'Synchronizuj produkty',
     imported: 'Zaimportowano produkty: {count}.',
     synced: 'Zsynchronizowano: {synced}. Błędy: {failed}.',
+    openConnection: 'Otwórz połączenie',
+    schemaUnavailable: 'Integracje sklepów są tymczasowo niedostępne. Uruchom migrację Supabase i spróbuj ponownie.',
+    issSetup: 'ISS POS wymaga oficjalnej dokumentacji API i danych dostępu, zanim Leonety będzie mogło testować lub synchronizować połączenie.',
   },
   fr: {
     title: 'Intégrations de boutiques',
@@ -323,18 +346,28 @@ const copy: Record<Locale, Record<string, string>> = {
     syncProducts: 'Synchroniser les produits',
     imported: 'Produits importés : {count}.',
     synced: 'Synchronisés : {synced}. Échecs : {failed}.',
+    openConnection: 'Ouvrir la connexion',
+    schemaUnavailable: 'Les intégrations de boutiques sont temporairement indisponibles. Exécutez la migration Supabase puis réessayez.',
+    issSetup: 'ISS POS nécessite une documentation API officielle et des identifiants avant que Leonety puisse tester ou synchroniser la connexion.',
   },
 }
 
 function statusLabel(status: IntegrationStatus, labels: Record<string, string>) {
   if (status === 'connected') return labels.connected
   if (status === 'error') return labels.error
+  if (status === 'disabled') return labels.notConnected
   return labels.notConnected
 }
 
 function formatDate(value: string | null, locale: Locale) {
   if (!value) return ''
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function localizedApiError(payload: { code?: string; error?: string }, labels: Record<string, string>) {
+  if (payload.code === 'STORE_INTEGRATIONS_SCHEMA_REQUIRED') return labels.schemaUnavailable
+  if (payload.error?.includes('external_account_id') || payload.error?.includes('42703')) return labels.schemaUnavailable
+  return payload.error ?? labels.error
 }
 
 export default function StoreIntegrationsPage() {
@@ -353,6 +386,7 @@ export default function StoreIntegrationsPage() {
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const integrationRequestRef = useRef<AbortController | null>(null)
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
 
@@ -362,28 +396,44 @@ export default function StoreIntegrationsPage() {
       return
     }
 
+    integrationRequestRef.current?.abort()
+    const controller = new AbortController()
+    integrationRequestRef.current = controller
+
     setLoadingIntegrations(true)
     setError('')
 
-    const response = await fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
-    const payload = await response.json().catch(() => ({}))
+    try {
+      const response = await fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      const payload = await response.json().catch(() => ({}))
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setIntegrations([])
+        setError(localizedApiError(payload, copy.en))
+      } else {
+        setIntegrations((payload.integrations ?? []) as StoreIntegration[])
+      }
+    } catch (loadError) {
+      if (loadError instanceof DOMException && loadError.name === 'AbortError') return
       setIntegrations([])
-      setError(payload.error ?? copy.en.dbRequired)
-    } else {
-      setIntegrations((payload.integrations ?? []) as StoreIntegration[])
+      setError(loadError instanceof Error ? loadError.message : copy.en.schemaUnavailable)
+    } finally {
+      if (integrationRequestRef.current === controller) {
+        integrationRequestRef.current = null
+        setLoadingIntegrations(false)
+      }
     }
-
-    setLoadingIntegrations(false)
   }, [currentCompany])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadIntegrations()
-    }, 0)
+    void loadIntegrations()
 
-    return () => window.clearTimeout(timer)
+    return () => {
+      integrationRequestRef.current?.abort()
+    }
   }, [loadIntegrations])
 
   useEffect(() => {
@@ -391,34 +441,26 @@ export default function StoreIntegrationsPage() {
     const nextMessage = params.get('message')
     const nextError = params.get('error')
 
-    const timer = window.setTimeout(() => {
-      if (nextMessage) setMessage(nextMessage)
-      if (nextError) setError(nextError)
-    }, 0)
-
-    return () => window.clearTimeout(timer)
+    if (nextMessage) setMessage(nextMessage)
+    if (nextError) setError(nextError)
   }, [])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (!currentIntegration) {
-        setForm(emptyForm)
-        return
-      }
+    if (!currentIntegration) {
+      setForm(emptyForm)
+      return
+    }
 
-      setForm({
-        storeName: currentIntegration.storeName,
-        storeUrl: currentIntegration.storeUrl,
-        externalAccountId: currentIntegration.externalAccountId,
-        apiKey: '',
-        apiSecret: '',
-        merchantId: currentIntegration.merchantId,
-        accessToken: '',
-        refreshToken: '',
-      })
-    }, 0)
-
-    return () => window.clearTimeout(timer)
+    setForm({
+      storeName: currentIntegration.storeName,
+      storeUrl: currentIntegration.storeUrl,
+      externalAccountId: currentIntegration.externalAccountId,
+      apiKey: '',
+      apiSecret: '',
+      merchantId: currentIntegration.merchantId,
+      accessToken: '',
+      refreshToken: '',
+    })
   }, [currentIntegration])
 
   const updateForm = (field: keyof IntegrationForm, value: string) => {
@@ -445,7 +487,7 @@ export default function StoreIntegrationsPage() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      setError(payload.error ?? labels.dbRequired)
+      setError(localizedApiError(payload, labels))
     } else {
       setMessage(labels.saved)
       await loadIntegrations()
@@ -469,7 +511,7 @@ export default function StoreIntegrationsPage() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      setError(payload.error ?? labels.dbRequired)
+      setError(localizedApiError(payload, labels))
     } else {
       setMessage(labels.removed)
       await loadIntegrations()
@@ -509,7 +551,7 @@ export default function StoreIntegrationsPage() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      setError(payload.error ?? labels.error)
+      setError(localizedApiError(payload, labels))
     } else {
       setMessage(payload.message ?? 'OpenCart API responded.')
     }
@@ -531,7 +573,7 @@ export default function StoreIntegrationsPage() {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}))
-      setError(payload.error ?? labels.error)
+      setError(localizedApiError(payload, labels))
       setExporting(false)
       return
     }
@@ -561,7 +603,7 @@ export default function StoreIntegrationsPage() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      setError(payload.error ?? labels.error)
+      setError(localizedApiError(payload, labels))
     } else {
       setMessage(labels.imported.replace('{count}', String(payload.imported ?? 0)))
       await loadIntegrations()
@@ -585,7 +627,7 @@ export default function StoreIntegrationsPage() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      setError(payload.error ?? labels.error)
+      setError(localizedApiError(payload, labels))
     } else {
       setMessage(labels.synced
         .replace('{synced}', String(payload.synced ?? 0))
@@ -643,6 +685,7 @@ export default function StoreIntegrationsPage() {
               <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
                 <p>{labels.serverOnly}</p>
                 <p className="mt-1">{labels.setupNote}</p>
+                {provider === 'iss_pos' && <p className="mt-2 font-medium">{labels.issSetup}</p>}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -716,6 +759,9 @@ export default function StoreIntegrationsPage() {
                 {provider === 'opencart' && (
                   <Button type="button" variant="outline" disabled={testing || saving} onClick={handleOpenCartTest}>{testing ? t('common.loading') : labels.testOpenCart}</Button>
                 )}
+                {provider === 'iss_pos' && (
+                  <Button type="button" variant="outline" disabled>{labels.issSetup}</Button>
+                )}
                 <Button type="button" variant="outline" disabled={exporting} onClick={handleExportProducts}>
                   {exporting ? t('common.loading') : labels.exportProducts}
                 </Button>
@@ -759,6 +805,11 @@ export default function StoreIntegrationsPage() {
                         <Clock3 className="h-3.5 w-3.5" />
                         {labels.lastSync}: {formatDate(integration?.lastSyncAt ?? null, locale) || labels.neverSynced}
                       </p>
+                      {integration && (
+                        <Link href={`/app/settings/integrations/${encodeURIComponent(integration.id)}`} className="mt-3 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700">
+                          {labels.openConnection}
+                        </Link>
+                      )}
                     </div>
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
                       status === 'connected'

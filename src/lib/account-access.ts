@@ -1,4 +1,6 @@
-export type AppPlan = 'free' | 'pro'
+import { getPlanRank, planDefinitions, type AppPlan } from '@/lib/billing/plans'
+
+export type { AppPlan }
 
 export interface AccountAccess {
   isAdmin: boolean
@@ -14,7 +16,7 @@ export function getAccountAccess(_email: string | null | undefined): AccountAcce
   return {
     isAdmin: false,
     plan: 'free',
-    workspaceLimit: 1,
+    workspaceLimit: planDefinitions.free.workspaceLimit,
     badgeLabel: 'Free plan: 1 workspace',
     overrideSource: 'default',
   }
@@ -28,27 +30,36 @@ export function buildAccountAccess({
   isAdmin,
   isPro,
   overrideSource,
+  activePlan,
 }: {
   isAdmin: boolean
   isPro: boolean
   overrideSource: 'default' | 'manual' | 'payment'
+  activePlan?: AppPlan
 }): AccountAccess {
   if (isAdmin) {
     return {
       isAdmin: true,
-      plan: 'pro',
+      plan: 'business',
       workspaceLimit: null,
       badgeLabel: 'Admin override',
       overrideSource,
     }
   }
 
-  if (isPro) {
+  const paidPlan = activePlan && getPlanRank(activePlan) > 0
+    ? activePlan
+    : isPro
+      ? 'pro'
+      : null
+
+  if (paidPlan) {
+    const definition = planDefinitions[paidPlan]
     return {
       isAdmin: false,
-      plan: 'pro',
-      workspaceLimit: null,
-      badgeLabel: 'Pro access',
+      plan: paidPlan,
+      workspaceLimit: definition.workspaceLimit,
+      badgeLabel: `${paidPlan.charAt(0).toUpperCase()}${paidPlan.slice(1)} access`,
       overrideSource,
     }
   }
@@ -56,7 +67,7 @@ export function buildAccountAccess({
   return {
     isAdmin: false,
     plan: 'free',
-    workspaceLimit: 1,
+    workspaceLimit: planDefinitions.free.workspaceLimit,
     badgeLabel: 'Free plan: 1 workspace',
     overrideSource: 'default',
   }

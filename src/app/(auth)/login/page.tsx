@@ -205,9 +205,12 @@ export default function LoginPage() {
               disabled={isLoading || oauthLoading !== null}
               onClick={() => handleOAuthSignIn('google')}
             >
-              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-blue-600">
-                G
-              </span>
+              <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M21.6 12.23c0-.74-.07-1.45-.19-2.13H12v4.03h5.38a4.6 4.6 0 0 1-1.99 3.02v2.51h3.23c1.89-1.74 2.98-4.3 2.98-7.43z" />
+                <path fill="#34A853" d="M12 22c2.7 0 4.96-.89 6.62-2.34l-3.23-2.51c-.9.6-2.04.95-3.39.95-2.6 0-4.81-1.76-5.6-4.12H3.06v2.59A10 10 0 0 0 12 22z" />
+                <path fill="#FBBC05" d="M6.4 13.98A6.02 6.02 0 0 1 6.08 12c0-.69.12-1.35.32-1.98V7.43H3.06A10 10 0 0 0 2 12c0 1.61.39 3.14 1.06 4.57l3.34-2.59z" />
+                <path fill="#EA4335" d="M12 5.9c1.47 0 2.78.5 3.82 1.49l2.87-2.87C16.96 2.91 14.7 2 12 2a10 10 0 0 0-8.94 5.43l3.34 2.59C7.19 7.66 9.4 5.9 12 5.9z" />
+              </svg>
               {oauthLoading === 'google' ? t('auth.oauthRedirecting') : t('auth.continueWithGoogle')}
             </Button>
             <Button

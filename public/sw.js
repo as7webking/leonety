@@ -1,4 +1,4 @@
-const CACHE_NAME = 'leonety-v3'
+const CACHE_NAME = 'leonety-v4'
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/icon-192x192.png',

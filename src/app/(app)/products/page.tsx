@@ -1,13 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, PackagePlus, RefreshCw, Search, UploadCloud } from 'lucide-react'
+import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, PackagePlus, RefreshCw, RotateCcw, Search, Trash2, UploadCloud, X } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
@@ -35,6 +35,8 @@ interface Product {
   woo_product_type?: 'simple' | 'variable' | null
   woo_attributes?: unknown
   woo_variants?: unknown
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 interface ProductCategory {
@@ -63,7 +65,7 @@ interface ProductForm {
 
 interface ProductSync {
   product_id: string
-  channel: 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant'
+  channel: 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'iss_pos'
   external_product_id: string | null
   sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'
   last_synced_at: string | null
@@ -76,6 +78,42 @@ interface BulkEditForm {
   current_stock: string
   status: '' | ProductStatus
 }
+
+type ProductSort =
+  | 'name_asc'
+  | 'name_desc'
+  | 'sku_asc'
+  | 'sku_desc'
+  | 'barcode_asc'
+  | 'barcode_desc'
+  | 'stock_asc'
+  | 'stock_desc'
+  | 'price_asc'
+  | 'price_desc'
+  | 'newest'
+  | 'oldest'
+
+const productSortOptions: ProductSort[] = [
+  'name_asc',
+  'name_desc',
+  'sku_asc',
+  'sku_desc',
+  'barcode_asc',
+  'barcode_desc',
+  'stock_asc',
+  'stock_desc',
+  'price_asc',
+  'price_desc',
+  'newest',
+  'oldest',
+]
+
+type ProductEditorSection = 'general' | 'pricing' | 'inventory' | 'image' | 'integration' | 'advanced'
+type ProductStockFilter = 'all' | 'low'
+type ProductProviderFilter = 'all' | ProductSync['channel'] | 'none'
+type ProductImageFilter = 'all' | 'has_image' | 'missing_image'
+
+const productEditorSections: ProductEditorSection[] = ['general', 'pricing', 'inventory', 'image', 'integration', 'advanced']
 
 const makeEmptyForm = (currency = 'EUR'): ProductForm => ({
   name: '',
@@ -133,6 +171,57 @@ function downloadCsv(filename: string, rows: unknown[][]) {
   URL.revokeObjectURL(url)
 }
 
+function decodeHtmlText(value: string) {
+  if (!value) return ''
+  const withoutTags = value.replace(/<[^>]*>/g, ' ')
+  const textarea = typeof document !== 'undefined' ? document.createElement('textarea') : null
+  if (!textarea) return withoutTags
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  textarea.innerHTML = withoutTags
+  return textarea.value.replace(/\s+/g, ' ').trim()
+}
+
+function compareOptionalText(left: string | null | undefined, right: string | null | undefined, direction: 'asc' | 'desc') {
+  const leftText = String(left ?? '').trim()
+  const rightText = String(right ?? '').trim()
+
+  if (!leftText && !rightText) return 0
+  if (!leftText) return 1
+  if (!rightText) return -1
+
+  const comparison = leftText.localeCompare(rightText, undefined, { numeric: true, sensitivity: 'base' })
+  return direction === 'asc' ? comparison : -comparison
+}
+
+function sortProducts(products: Product[], sort: ProductSort) {
+  const sorted = [...products]
+
+  sorted.sort((left, right) => {
+    if (sort === 'name_asc') return compareOptionalText(left.name, right.name, 'asc')
+    if (sort === 'name_desc') return compareOptionalText(left.name, right.name, 'desc')
+    if (sort === 'sku_asc') return compareOptionalText(left.sku, right.sku, 'asc')
+    if (sort === 'sku_desc') return compareOptionalText(left.sku, right.sku, 'desc')
+    if (sort === 'barcode_asc') return compareOptionalText(left.barcode, right.barcode, 'asc')
+    if (sort === 'barcode_desc') return compareOptionalText(left.barcode, right.barcode, 'desc')
+    if (sort === 'stock_asc') return left.current_stock - right.current_stock
+    if (sort === 'stock_desc') return right.current_stock - left.current_stock
+    if (sort === 'price_asc') return Number(left.selling_price ?? Number.MAX_SAFE_INTEGER) - Number(right.selling_price ?? Number.MAX_SAFE_INTEGER)
+    if (sort === 'price_desc') return Number(right.selling_price ?? -1) - Number(left.selling_price ?? -1)
+    if (sort === 'newest') return new Date(right.created_at ?? right.updated_at ?? 0).getTime() - new Date(left.created_at ?? left.updated_at ?? 0).getTime()
+    if (sort === 'oldest') return new Date(left.created_at ?? left.updated_at ?? 0).getTime() - new Date(right.created_at ?? right.updated_at ?? 0).getTime()
+    return 0
+  })
+
+  return sorted
+}
+
 function handleFromName(name: string) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product'
 }
@@ -154,7 +243,11 @@ function getVariants(value: unknown): Array<{ sku?: string; price?: string | num
   return Array.isArray(value) ? value as Array<{ sku?: string; price?: string | number; stock_quantity?: string | number; attributes?: Record<string, string> }> : []
 }
 
-async function compressImageToJpeg(file: File, cropSquare = false) {
+async function compressImageToJpeg(
+  file: File,
+  cropSquare = false,
+  crop: { zoom: number; offsetX: number; offsetY: number } = { zoom: 1, offsetX: 0, offsetY: 0 }
+) {
   const bitmap = await createImageBitmap(file)
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
@@ -168,48 +261,23 @@ async function compressImageToJpeg(file: File, cropSquare = false) {
   let quality = 0.84
   let bestBlob: Blob | null = null
 
-  const renderBlob = () => new Promise<Blob>((resolve, reject) => {
-    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
-    canvas.width = cropSquare ? Math.max(1, Math.round(Math.min(bitmap.width, bitmap.height) * scale)) : Math.max(1, Math.round(bitmap.width * scale))
-    canvas.height = cropSquare ? canvas.width : Math.max(1, Math.round(bitmap.height * scale))
-    context.clearRect(0, 0, canvas.width, canvas.height)
-    if (cropSquare) {
-      const sourceSize = Math.min(bitmap.width, bitmap.height)
-      context.drawImage(
-        bitmap,
-        Math.round((bitmap.width - sourceSize) / 2),
-        Math.round((bitmap.height - sourceSize) / 2),
-        sourceSize,
-        sourceSize,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      )
-    } else {
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    }
-    canvas.toBlob((nextBlob) => {
-      if (nextBlob) {
-        resolve(nextBlob)
-      } else {
-        reject(new Error('Image compression failed.'))
-      }
-    }, 'image/jpeg', 0.84)
-  })
-
   for (let attempt = 0; attempt < 9; attempt += 1) {
     const blob = await new Promise<Blob>((resolve, reject) => {
       const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
-      canvas.width = cropSquare ? Math.max(1, Math.round(Math.min(bitmap.width, bitmap.height) * scale)) : Math.max(1, Math.round(bitmap.width * scale))
+      canvas.width = cropSquare ? Math.min(800, Math.max(1, Math.round(Math.min(bitmap.width, bitmap.height) * scale))) : Math.max(1, Math.round(bitmap.width * scale))
       canvas.height = cropSquare ? canvas.width : Math.max(1, Math.round(bitmap.height * scale))
-      context.clearRect(0, 0, canvas.width, canvas.height)
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, canvas.width, canvas.height)
       if (cropSquare) {
-        const sourceSize = Math.min(bitmap.width, bitmap.height)
+        const sourceSize = Math.max(1, Math.min(bitmap.width, bitmap.height) / Math.max(1, crop.zoom))
+        const maxX = Math.max(0, bitmap.width - sourceSize)
+        const maxY = Math.max(0, bitmap.height - sourceSize)
+        const sourceX = Math.min(maxX, Math.max(0, (bitmap.width - sourceSize) / 2 + crop.offsetX * maxX * 0.5))
+        const sourceY = Math.min(maxY, Math.max(0, (bitmap.height - sourceSize) / 2 + crop.offsetY * maxY * 0.5))
         context.drawImage(
           bitmap,
-          Math.round((bitmap.width - sourceSize) / 2),
-          Math.round((bitmap.height - sourceSize) / 2),
+          Math.round(sourceX),
+          Math.round(sourceY),
           sourceSize,
           sourceSize,
           0,
@@ -240,7 +308,10 @@ async function compressImageToJpeg(file: File, cropSquare = false) {
 
   bitmap.close()
 
-  const blob = bestBlob ?? await renderBlob()
+  const blob = bestBlob
+  if (!blob) {
+    throw new Error('Image compression failed.')
+  }
   if (blob.size > targetBytes) {
     throw new Error('Image must be compressed below 200 KB for WooCommerce publishing.')
   }
@@ -265,17 +336,27 @@ export default function ProductsPage() {
   const [bulkForm, setBulkForm] = useState<BulkEditForm>({ category: '', selling_price: '', current_stock: '', status: '' })
   const [compressingImage, setCompressingImage] = useState(false)
   const [cropProductImage, setCropProductImage] = useState(false)
+  const [imageCrop, setImageCrop] = useState({ zoom: 1, offsetX: 0, offsetY: 0 })
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
+  const [editorSection, setEditorSection] = useState<ProductEditorSection>('general')
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductForm>(makeEmptyForm())
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categoriesAvailable, setCategoriesAvailable] = useState(true)
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ProductStatus>('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [stockFilter, setStockFilter] = useState<ProductStockFilter>('all')
+  const [providerFilter, setProviderFilter] = useState<ProductProviderFilter>('all')
+  const [imageFilter, setImageFilter] = useState<ProductImageFilter>('all')
+  const [sortBy, setSortBy] = useState<ProductSort>('name_asc')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const editorRef = useRef<HTMLDivElement | null>(null)
+  const firstEditorInputRef = useRef<HTMLInputElement | null>(null)
 
   const loadProducts = useCallback(async () => {
     if (!currentCompany) {
@@ -335,31 +416,60 @@ export default function ProductsPage() {
   useEffect(() => { void loadProducts() }, [loadProducts])
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 180)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
     if (currentCompany && !editing) {
       setForm(makeEmptyForm(normalizeCurrencyCode(currentCompany.currency ?? 'EUR')))
     }
   }, [currentCompany, editing])
 
   const filteredProducts = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
+    const normalized = debouncedQuery.trim().toLowerCase()
     return products.filter((product) => (
       (statusFilter === 'all' || product.status === statusFilter) &&
+      (categoryFilter === 'all' || product.category === categoryFilter) &&
+      (stockFilter === 'all' || (product.status === 'active' && product.current_stock <= product.low_stock_threshold)) &&
+      (imageFilter === 'all' || (imageFilter === 'has_image' ? Boolean(product.image_url) : !product.image_url)) &&
+      (providerFilter === 'all' ||
+        (providerFilter === 'none'
+          ? !(syncs[product.id]?.length)
+          : Boolean(syncs[product.id]?.some((sync) => sync.channel === providerFilter)))) &&
       (!normalized || [product.name, product.sku, product.barcode, product.category]
         .some((value) => String(value ?? '').toLowerCase().includes(normalized)))
     ))
-  }, [products, query, statusFilter])
+  }, [categoryFilter, debouncedQuery, imageFilter, products, providerFilter, statusFilter, stockFilter, syncs])
+
+  const visibleProducts = useMemo(() => sortProducts(filteredProducts, sortBy), [filteredProducts, sortBy])
 
   const selectedProducts = useMemo(
-    () => filteredProducts.filter((product) => selectedProductIds.has(product.id)),
-    [filteredProducts, selectedProductIds]
+    () => visibleProducts.filter((product) => selectedProductIds.has(product.id)),
+    [visibleProducts, selectedProductIds]
   )
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setEditing(null)
     setForm(makeEmptyForm(normalizeCurrencyCode(currentCompany?.currency ?? 'EUR')))
     setShowForm(false)
     setNewCategoryName('')
-  }
+    setEditorSection('general')
+    setImageCrop({ zoom: 1, offsetX: 0, offsetY: 0 })
+  }, [currentCompany?.currency])
+
+  useEffect(() => {
+    if (!showForm) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        resetForm()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [resetForm, showForm])
 
   const handleEdit = (product: Product) => {
     setEditing(product)
@@ -368,7 +478,7 @@ export default function ProductsPage() {
       sku: product.sku ?? '',
       barcode: product.barcode ?? '',
       category: product.category ?? '',
-      description: product.description ?? '',
+      description: decodeHtmlText(product.description ?? ''),
       purchase_price: product.purchase_price === null ? '' : String(product.purchase_price),
       selling_price: product.selling_price === null ? '' : String(product.selling_price),
       currency: product.currency,
@@ -381,16 +491,33 @@ export default function ProductsPage() {
       woo_variants: stringifyJson(product.woo_variants),
     })
     setShowForm(true)
+    setEditorSection('general')
+    requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      firstEditorInputRef.current?.focus()
+    })
   }
 
   const handleImageFileChange = async (file: File | null) => {
     if (!file) return
     setMessage('')
     setError('')
-    setCompressingImage(true)
+  setCompressingImage(true)
 
-    try {
-      const { blob, dataUrl } = await compressImageToJpeg(file, cropProductImage)
+  try {
+    const lowerName = file.name.toLowerCase()
+    const supportedByType = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type)
+    const supportedByExtension = /\.(jpe?g|png|webp|heic|heif)$/i.test(lowerName)
+
+    if (!supportedByType && !supportedByExtension) {
+      throw new Error(t('products.unsupportedImageType'))
+    }
+
+    if (file.size > 12 * 1024 * 1024) {
+      throw new Error(t('products.imageTooLarge'))
+    }
+
+    const { blob, dataUrl } = await compressImageToJpeg(file, true, cropProductImage ? imageCrop : { zoom: 1, offsetX: 0, offsetY: 0 })
       const storagePath = currentCompany
         ? `${currentCompany.id}/products/${Date.now()}-${file.name.replace(/\.[^.]+$/, '')}.jpg`
         : ''
@@ -414,7 +541,10 @@ export default function ProductsPage() {
       setForm((current) => ({ ...current, image_url: dataUrl }))
       setMessage(t('products.imageCompressed'))
     } catch (compressionError) {
-      setError(compressionError instanceof Error ? compressionError.message : t('products.imageCompressionFailed'))
+      const knownMessage = compressionError instanceof Error ? compressionError.message : ''
+      setError(knownMessage === t('products.unsupportedImageType') || knownMessage === t('products.imageTooLarge')
+        ? knownMessage
+        : t('products.imageCompressionFailed'))
     } finally {
       setCompressingImage(false)
     }
@@ -596,13 +726,13 @@ export default function ProductsPage() {
   }
 
   const handleWooExportAll = async () => {
-    if (!currentCompany || filteredProducts.length === 0) return
+    if (!currentCompany || visibleProducts.length === 0) return
     setSyncingAll(true)
     setMessage('')
     setError('')
     let completed = true
 
-    for (const product of filteredProducts) {
+    for (const product of visibleProducts) {
       setSyncingProductId(product.id)
       const response = await fetch('/api/woocommerce/products/sync', {
         method: 'POST',
@@ -640,14 +770,14 @@ export default function ProductsPage() {
 
   const toggleAllVisibleProducts = () => {
     setSelectedProductIds((current) => {
-      const allVisibleSelected = filteredProducts.every((product) => current.has(product.id))
+      const allVisibleSelected = visibleProducts.every((product) => current.has(product.id))
       if (allVisibleSelected) return new Set()
-      return new Set(filteredProducts.map((product) => product.id))
+      return new Set(visibleProducts.map((product) => product.id))
     })
   }
 
   const exportProducts = (format: 'generic' | 'woocommerce' | 'shopify' | 'google', list: Product[]) => {
-    const productsToExport = list.length > 0 ? list : filteredProducts
+    const productsToExport = list.length > 0 ? list : visibleProducts
 
     if (productsToExport.length === 0) return
 
@@ -663,7 +793,7 @@ export default function ProductsPage() {
             1,
             'visible',
             product.category,
-            product.description,
+            decodeHtmlText(product.description ?? ''),
             product.selling_price ?? '',
             product.category,
             product.image_url,
@@ -689,7 +819,7 @@ export default function ProductsPage() {
             return variants.map((variant) => [
               handleFromName(product.name),
               product.name,
-              product.description,
+              decodeHtmlText(product.description ?? ''),
               '',
               product.category,
               product.category,
@@ -708,7 +838,7 @@ export default function ProductsPage() {
           return [[
             handleFromName(product.name),
             product.name,
-            product.description,
+            decodeHtmlText(product.description ?? ''),
             '',
             product.category,
             product.category,
@@ -734,7 +864,7 @@ export default function ProductsPage() {
           currentCompany?.name ?? '',
           product.sku ?? product.id,
           product.name,
-          product.description,
+          decodeHtmlText(product.description ?? ''),
           product.selling_price ?? '',
           product.currency,
           product.current_stock,
@@ -751,7 +881,7 @@ export default function ProductsPage() {
       ['name', 'description', 'sku', 'barcode', 'category', 'price', 'currency', 'stock', 'image_url', 'product_type', 'attributes', 'variants'],
       ...productsToExport.map((product) => [
         product.name,
-        product.description,
+        decodeHtmlText(product.description ?? ''),
         product.sku,
         product.barcode,
         product.category,
@@ -881,19 +1011,19 @@ export default function ProductsPage() {
         <div className="flex flex-wrap gap-2">
           <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
           <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
-          <Button variant="outline" onClick={() => exportProducts('generic', filteredProducts)} disabled={filteredProducts.length === 0}>
+          <Button variant="outline" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}>
             <Download className="h-4 w-4" />
             {t('products.exportGeneric')}
           </Button>
-          <Button variant="outline" onClick={() => exportProducts('shopify', filteredProducts)} disabled={filteredProducts.length === 0}>
+          <Button variant="outline" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}>
             <Download className="h-4 w-4" />
             {t('products.exportShopify')}
           </Button>
-          <Button variant="outline" onClick={() => exportProducts('google', filteredProducts)} disabled={filteredProducts.length === 0}>
+          <Button variant="outline" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}>
             <Download className="h-4 w-4" />
             {t('products.exportGoogle')}
           </Button>
-          <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || filteredProducts.length === 0}>
+          <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
             {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
             {t('woocommerce.exportAll')}
           </Button>
@@ -901,17 +1031,62 @@ export default function ProductsPage() {
         </div>
       </PageHeader>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_200px]">
+      <div className="mb-5 grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_220px_180px_180px_190px_170px]">
         <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-md border py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} /></div>
         <AppSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | ProductStatus)} options={[{ value: 'all', label: t('common.all') }, ...productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))]} />
+        <AppSelect
+          value={sortBy}
+          onChange={(value) => setSortBy(value as ProductSort)}
+          ariaLabel={t('common.sortBy')}
+          options={productSortOptions.map((option) => ({ value: option, label: t(`products.sort.${option}`) }))}
+        />
+        <AppSelect
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+          ariaLabel={t('products.category')}
+          options={[{ value: 'all', label: t('products.allCategories') }, ...categories.map((category) => ({ value: category.name, label: category.name }))]}
+        />
+        <AppSelect
+          value={stockFilter}
+          onChange={(value) => setStockFilter(value as ProductStockFilter)}
+          ariaLabel={t('products.stockFilter')}
+          options={[
+            { value: 'all', label: t('products.allStock') },
+            { value: 'low', label: t('products.lowStockOnly') },
+          ]}
+        />
+        <AppSelect
+          value={providerFilter}
+          onChange={(value) => setProviderFilter(value as ProductProviderFilter)}
+          ariaLabel={t('products.providerFilter')}
+          options={[
+            { value: 'all', label: t('products.allProviders') },
+            { value: 'woocommerce', label: 'WooCommerce' },
+            { value: 'shopify', label: 'Shopify' },
+            { value: 'opencart', label: 'OpenCart' },
+            { value: 'google_merchant', label: 'Google Merchant' },
+            { value: 'iss_pos', label: 'ISS POS' },
+            { value: 'none', label: t('products.noProvider') },
+          ]}
+        />
+        <AppSelect
+          value={imageFilter}
+          onChange={(value) => setImageFilter(value as ProductImageFilter)}
+          ariaLabel={t('products.imageFilter')}
+          options={[
+            { value: 'all', label: t('products.allImages') },
+            { value: 'has_image', label: t('products.hasImage') },
+            { value: 'missing_image', label: t('products.missingImage') },
+          ]}
+        />
       </div>
 
-      {filteredProducts.length > 0 && (
+      {visibleProducts.length > 0 && (
         <Card className="mb-5">
           <CardContent className="space-y-4 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <label className="flex items-center gap-2 text-sm font-medium">
-                <input type="checkbox" checked={filteredProducts.every((product) => selectedProductIds.has(product.id))} onChange={toggleAllVisibleProducts} />
+                <input type="checkbox" checked={visibleProducts.every((product) => selectedProductIds.has(product.id))} onChange={toggleAllVisibleProducts} />
                 {t('products.selectVisible')}
               </label>
               <span className="text-sm text-slate-500">{selectedProducts.length} {t('products.selected')}</span>
@@ -948,11 +1123,38 @@ export default function ProductsPage() {
       {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
       {showForm && (
-        <Card className="mb-6">
-          <CardHeader><CardTitle>{editing ? t('products.edit') : t('products.add')}</CardTitle></CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <label className="space-y-1"><span className="text-sm font-medium">{t('products.name')}</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" role="presentation">
+          <div ref={editorRef} role="dialog" aria-modal="true" aria-labelledby="product-editor-title" className="flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh] sm:max-w-5xl sm:rounded-xl">
+            <div className="flex items-start justify-between gap-4 border-b p-4 sm:p-5">
+              <div className="min-w-0">
+                <h2 id="product-editor-title" className="truncate text-xl font-semibold text-slate-950">{editing ? `${t('products.edit')}: ${editing.name}` : t('products.add')}</h2>
+                <p className="mt-1 text-sm text-slate-500">{t('products.editorDescription')}</p>
+              </div>
+              <button type="button" onClick={resetForm} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={t('common.cancel')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto border-b px-4 py-3 sm:px-5">
+              {productEditorSections.map((section) => (
+                <button
+                  key={section}
+                  type="button"
+                  onClick={() => setEditorSection(section)}
+                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
+                    editorSection === section ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {t(`products.editor.${section}`)}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                {editorSection === 'general' && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-1"><span className="text-sm font-medium">{t('products.name')}</span><input ref={firstEditorInputRef} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('products.sku')}</span><input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('products.barcode')}</span><div className="relative"><Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="w-full rounded-md border py-2 pl-9 pr-3" /></div></label>
               <div className="space-y-1">
@@ -980,13 +1182,31 @@ export default function ProductsPage() {
                   </div>
                 )}
               </div>
-              <label className="space-y-1"><span className="text-sm font-medium">{t('products.purchasePrice')}</span><input type="number" min="0" step="0.01" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
+                    <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">{t('products.descriptionField')}</span><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-28 w-full rounded-md border px-3 py-2" /></label>
+                  </div>
+                )}
+
+                {editorSection === 'pricing' && (
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <label className="space-y-1"><span className="text-sm font-medium">{t('products.purchasePrice')}</span><input type="number" min="0" step="0.01" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('products.sellingPrice')}</span><input type="number" min="0" step="0.01" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('common.currency')}</span><AppSelect value={form.currency} onChange={(value) => setForm({ ...form, currency: value })} options={currencyOptions.map((item) => ({ value: item.code, label: `${item.code} - ${item.label}` }))} /></label>
-              <label className="space-y-1"><span className="text-sm font-medium">{t('products.lowStockThreshold')}</span><input type="number" min="0" step="0.001" value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
+                  </div>
+                )}
+
+                {editorSection === 'inventory' && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-1"><span className="text-sm font-medium">{t('products.lowStockThreshold')}</span><input type="number" min="0" step="0.001" value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('products.status')}</span><AppSelect value={form.status} onChange={(value) => setForm({ ...form, status: value as ProductStatus })} options={productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))} /></label>
-              <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">{t('woocommerce.imageUrl')}</span><input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="https://example.com/product.jpg" /></label>
-              <label className="space-y-1">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 md:col-span-2">{t('products.stockManagedByMovements')}</div>
+                  </div>
+                )}
+
+                {editorSection === 'image' && (
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+                    <div className="space-y-4">
+                      <label className="space-y-1"><span className="text-sm font-medium">{t('woocommerce.imageUrl')}</span><input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="https://example.com/product.jpg" /></label>
+                      <label className="space-y-1">
                 <span className="text-sm font-medium">{t('products.uploadImage')}</span>
                 <label className="mb-2 flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
                   <input
@@ -997,6 +1217,23 @@ export default function ProductsPage() {
                   />
                   {t('products.cropSquare')}
                 </label>
+                {cropProductImage && (
+                  <div className="mb-3 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <label className="space-y-1">
+                      <span className="font-medium">{t('products.cropZoom')}</span>
+                      <input type="range" min="1" max="2.5" step="0.05" value={imageCrop.zoom} onChange={(event) => setImageCrop((current) => ({ ...current, zoom: Number(event.target.value) }))} className="w-full" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="font-medium">{t('products.cropX')}</span>
+                      <input type="range" min="-1" max="1" step="0.05" value={imageCrop.offsetX} onChange={(event) => setImageCrop((current) => ({ ...current, offsetX: Number(event.target.value) }))} className="w-full" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="font-medium">{t('products.cropY')}</span>
+                      <input type="range" min="-1" max="1" step="0.05" value={imageCrop.offsetY} onChange={(event) => setImageCrop((current) => ({ ...current, offsetY: Number(event.target.value) }))} className="w-full" />
+                    </label>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setImageCrop({ zoom: 1, offsetX: 0, offsetY: 0 })}><RotateCcw className="h-4 w-4" />{t('products.resetCrop')}</Button>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept="image/*"
@@ -1005,15 +1242,21 @@ export default function ProductsPage() {
                 />
                 <span className="text-xs text-slate-500">{compressingImage ? t('products.compressingImage') : t('products.jpgOnly')}</span>
               </label>
-              {form.image_url && (
+                    </div>
+                    {form.image_url && (
                 <div className="space-y-1">
                   <span className="text-sm font-medium">{t('products.imagePreview')}</span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={form.image_url} alt="" className="h-24 w-24 rounded-md border object-cover" />
+                  <img src={form.image_url} alt="" className="aspect-square w-full rounded-md border object-cover" />
+                  <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, image_url: '' })}><Trash2 className="h-4 w-4" />{t('products.removeImage')}</Button>
                 </div>
               )}
-              <label className="space-y-1 md:col-span-2 xl:col-span-3"><span className="text-sm font-medium">{t('products.descriptionField')}</span><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" /></label>
-              <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-3 md:grid-cols-3">
+                  </div>
+                )}
+
+                {editorSection === 'integration' && (
+                  <div className="space-y-4">
+                    <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:grid-cols-3">
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
@@ -1023,13 +1266,13 @@ export default function ProductsPage() {
                   />
                   {t('products.publishWoo')}
                 </label>
-                {['Google Business / Merchant', 'WhatsApp Business Catalog', 'OpenCart / Lieferando / Uber Eats'].map((label) => (
-                  <label key={label} className="flex items-center gap-2 text-sm text-slate-400">
+                {['googleMerchant', 'whatsappCatalog', 'openCommerce'].map((provider) => (
+                  <label key={provider} className="flex items-center gap-2 text-sm text-slate-400">
                     <input type="checkbox" disabled className="h-4 w-4" />
-                    {label} · {t('integrations.comingSoon')}
+                    {t(`products.futureProvider.${provider}`)} · {t('integrations.comingSoon')}
                   </label>
                 ))}
-              </div>
+                    </div>
               {form.publish_to_woocommerce && (
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('woocommerce.productType')}</span>
@@ -1049,40 +1292,65 @@ export default function ProductsPage() {
                   </label>
                 </>
               )}
-              <div className="flex gap-2 md:col-span-2 xl:col-span-3"><Button type="submit">{t('common.save')}</Button><Button type="button" variant="outline" onClick={resetForm}>{t('common.cancel')}</Button></div>
+                  </div>
+                )}
+
+                {editorSection === 'advanced' && (
+                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    <p>{t('products.advancedNote')}</p>
+                    {editing && <p className="break-all">ID: {editing.id}</p>}
+                  </div>
+                )}
+              </div>
+
+              <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t bg-white p-4 sm:p-5">
+                <Button type="button" variant="outline" onClick={resetForm}>{t('common.cancel')}</Button>
+                <Button type="submit">{t('common.save')}</Button>
+              </div>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      {filteredProducts.length === 0 ? (
+      {visibleProducts.length === 0 ? (
         <EmptyState title={t('products.empty')} description={t('products.emptyDescription')} />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredProducts.map((product) => {
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {visibleProducts.map((product) => {
             const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
+            const descriptionPreview = decodeHtmlText(product.description ?? '')
+            const providerNames = (syncs[product.id] ?? []).map((sync) => sync.channel.replace('_', ' '))
             return (
-              <Card key={product.id} className={lowStock ? 'border-amber-300' : ''}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} className="mt-1" aria-label={`Select ${product.name}`} />
-                      <div>
-                        {product.image_url && <img src={product.image_url} alt="" className="mb-2 h-14 w-14 rounded-md border object-cover" />}
-                        <h2 className="font-semibold">{product.name}</h2>
-                        <p className="text-sm text-slate-500">{[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}</p>
+              <Card key={product.id} className={`${lowStock ? 'border-amber-300' : ''} ${editing?.id === product.id ? 'ring-2 ring-blue-200' : ''}`}>
+                <CardContent className="p-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} className="mt-1 shrink-0" aria-label={`${t('transactions.select')} ${product.name}`} />
+                    {product.image_url ? (
+                      <img src={product.image_url} alt="" className="h-16 w-16 shrink-0 rounded-md border object-cover" />
+                    ) : (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-slate-50 text-xs text-slate-400">
+                        {t('products.imagePreview')}
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={`rounded-full px-2 py-1 text-xs ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span>
-                      {renderSyncBadge(product)}
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <h2 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug" title={product.name}>{product.name}</h2>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-500" title={[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}>{[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}</p>
+                      {product.category && <p className="mt-1 truncate text-xs text-slate-500" title={product.category}>{product.category}</p>}
+                      {descriptionPreview && <p className="mt-1 line-clamp-2 text-xs text-slate-600" title={descriptionPreview}>{descriptionPreview}</p>}
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div><p className="text-slate-500">{t('products.currentStock')}</p><p className="text-lg font-semibold">{product.current_stock}</p></div>
-                    <div><p className="text-slate-500">{t('products.sellingPrice')}</p><p className="font-medium">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</p></div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.currentStock')}</p><p className="font-semibold">{product.current_stock} {t('products.unitPiece')}</p></div>
+                    <div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.sellingPrice')}</p><p className="font-semibold">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</p></div>
                   </div>
-                  <div className="mt-4 flex gap-2">
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {providerNames.map((name) => <span key={name} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">{name}</span>)}
+                    {renderSyncBadge(product)}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}>{t('products.view')}</Button>
                     <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
                     <Button size="sm" variant="outline" onClick={() => void handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
@@ -1132,7 +1400,7 @@ export default function ProductsPage() {
                     <p className="font-semibold">{viewingProduct.current_stock}</p>
                   </div>
                 </div>
-                {viewingProduct.description && <p className="whitespace-pre-line text-sm text-slate-700">{viewingProduct.description}</p>}
+                {viewingProduct.description && <p className="whitespace-pre-line text-sm text-slate-700">{decodeHtmlText(viewingProduct.description)}</p>}
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => { handleEdit(viewingProduct); setViewingProduct(null) }}>{t('common.edit')}</Button>
                   <Button variant="outline" disabled={syncingProductId === viewingProduct.id} onClick={() => void handleWooExport(viewingProduct)}>
