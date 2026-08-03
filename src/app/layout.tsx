@@ -9,12 +9,27 @@ import { LOCALE_COOKIE, normalizeLocale } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://leonety.vercel.app"),
   title: {
     default: "Leonety",
     template: "%s | Leonety",
   },
   description: "Modern bookkeeping for freelancers and small businesses. Track income, expenses, time, and cash flow without spreadsheets.",
   manifest: "/manifest.json",
+  applicationName: "Leonety",
+  openGraph: {
+    title: "Leonety",
+    description: "Modern bookkeeping for freelancers and small businesses.",
+    siteName: "Leonety",
+    images: [{ url: "/brand/og-leonety.png", width: 1200, height: 630, alt: "Leonety" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Leonety",
+    description: "Modern bookkeeping for freelancers and small businesses.",
+    images: ["/brand/og-leonety.png"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -24,9 +39,11 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: [
-    { rel: "icon", url: "/icon-96.png", type: "image/png", sizes: "96x96" },
-    { rel: "shortcut icon", url: "/favicon.ico" },
-    { rel: "apple-touch-icon", url: "/icon-192x192.png" },
+    { rel: "icon", url: "/brand/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+    { rel: "icon", url: "/brand/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+    { rel: "icon", url: "/brand/icon-96.png", type: "image/png", sizes: "96x96" },
+    { rel: "shortcut icon", url: "/brand/favicon-32x32.png" },
+    { rel: "apple-touch-icon", url: "/brand/apple-touch-icon.png" },
   ],
 };
 
