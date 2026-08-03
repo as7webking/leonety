@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
-import { getAuthCallbackUrl } from '@/lib/site-url'
+import { getAuthCallbackUrl, getSafeAppRedirectPath } from '@/lib/site-url'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -111,7 +111,8 @@ export default function LoginPage() {
         }
 
         if (data.session) {
-          router.push('/app/dashboard')
+          const nextPath = getSafeAppRedirectPath(new URLSearchParams(window.location.search).get('next'))
+          router.push(nextPath)
         }
       }
     } catch (error: unknown) {
@@ -171,7 +172,7 @@ export default function LoginPage() {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: getAuthCallbackUrl('/app/dashboard'),
+          redirectTo: getAuthCallbackUrl(getSafeAppRedirectPath(new URLSearchParams(window.location.search).get('next'))),
           queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
         },
       })

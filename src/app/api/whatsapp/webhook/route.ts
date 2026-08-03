@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import crypto from 'node:crypto'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 
 interface WhatsAppMessage {
@@ -35,6 +36,21 @@ function getMessageText(message: WhatsAppMessage) {
   ).trim()
 }
 
+function isValidMetaSignature(rawBody: string, signature: string | null, secret: string) {
+  if (!signature?.startsWith('sha256=')) return false
+
+  const expected = `sha256=${crypto
+    .createHmac('sha256', secret)
+    .update(rawBody, 'utf8')
+    .digest('hex')}`
+
+  const signatureBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expected)
+
+  return signatureBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const mode = url.searchParams.get('hub.mode')
@@ -50,10 +66,25 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (!appSecret) {
+    return NextResponse.json({
+      received: false,
+      error: 'WhatsApp Business setup required.',
+    }, { status: 503 })
+  }
+
+  const rawBody = await request.text()
+  const signature = request.headers.get('x-hub-signature-256')
+
+  if (!isValidMetaSignature(rawBody, signature, appSecret)) {
+    return NextResponse.json({ received: false, error: 'Invalid WhatsApp signature.' }, { status: 401 })
+  }
+
   let payload: WhatsAppPayload
 
   try {
-    payload = await request.json()
+    payload = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ received: true })
   }
@@ -123,8 +154,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ received: true })
-  } catch (error) {
-    console.error('WhatsApp webhook failed:', error)
+  } catch {
     return NextResponse.json({ received: true })
   }
 }

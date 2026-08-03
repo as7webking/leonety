@@ -121,6 +121,14 @@ const copy: Record<Locale, Record<string, string>> = {
     openConnection: 'Open connection',
     schemaUnavailable: 'Store integrations are temporarily unavailable. Run the Supabase migration and try again.',
     issSetup: 'ISS POS requires official API documentation and credentials before Leonety can test or sync it.',
+    setupRequired: 'Setup required',
+    integrationGuideTitle: 'Connection guide',
+    googleLoginGuide: 'Google login is configured in Supabase Auth, not here. Create a Google OAuth web client, paste Client ID and Client Secret into Supabase, and allow /auth/callback for local and production.',
+    facebookLoginGuide: 'Facebook login is configured in Supabase Auth. Create a Meta app, add Facebook Login, paste App ID and App Secret into Supabase, and test with allowed test users before going live.',
+    googleMapsGuide: 'Google Maps address autocomplete is separate from Google login. Use a restricted server-side Google Maps key only if ADDRESS_PROVIDER=google_maps is enabled; otherwise Leonety uses the default address provider.',
+    whatsappGuide: 'WhatsApp Business cannot read personal contacts or chats. MVP support is manual/CSV client capture; Cloud API webhooks require Meta Business setup and signature verification.',
+    issGuide: 'ISS POS is disabled until the vendor provides API documentation, base URL, auth method, product/stock/sales endpoints, branch identifier, webhooks or polling rules, rate limits and a test account.',
+    credentialsNeverExposed: 'Credentials are submitted to server routes only, encrypted per workspace where stored, and shown back only as masked metadata.',
   },
   de: {
     title: 'Shop-Integrationen',
@@ -159,6 +167,14 @@ const copy: Record<Locale, Record<string, string>> = {
     openConnection: 'Verbindung öffnen',
     schemaUnavailable: 'Shop-Integrationen sind vorübergehend nicht verfügbar. Führe die Supabase-Migration aus und versuche es erneut.',
     issSetup: 'ISS POS benötigt offizielle API-Dokumentation und Zugangsdaten, bevor Leonety testen oder synchronisieren kann.',
+    setupRequired: 'Einrichtung erforderlich',
+    integrationGuideTitle: 'Verbindungsanleitung',
+    googleLoginGuide: 'Google Login wird in Supabase Auth konfiguriert, nicht hier. Erstelle einen Google OAuth Web Client, füge Client ID und Client Secret in Supabase ein und erlaube /auth/callback lokal und in Produktion.',
+    facebookLoginGuide: 'Facebook Login wird in Supabase Auth konfiguriert. Erstelle eine Meta-App, füge Facebook Login hinzu, trage App ID und App Secret in Supabase ein und teste mit erlaubten Testnutzern vor Live-Schaltung.',
+    googleMapsGuide: 'Google Maps Adresssuche ist getrennt von Google Login. Nutze einen eingeschränkten serverseitigen Google Maps Key nur mit ADDRESS_PROVIDER=google_maps; sonst verwendet Leonety den Standard-Adressanbieter.',
+    whatsappGuide: 'WhatsApp Business kann keine privaten Kontakte oder Chats lesen. MVP ist manuelle/CSV-Erfassung; Cloud-API-Webhooks brauchen Meta Business Setup und Signaturprüfung.',
+    issGuide: 'ISS POS bleibt deaktiviert, bis der Anbieter API-Dokumentation, Base URL, Auth-Methode, Produkt-/Bestands-/Sales-Endpunkte, Filial-ID, Webhooks oder Polling, Rate Limits und Testkonto liefert.',
+    credentialsNeverExposed: 'Zugangsdaten werden nur an Server-Routen gesendet, pro Workspace verschlüsselt gespeichert und nur maskiert angezeigt.',
   },
   tr: {
     title: 'Mağaza entegrasyonları',
@@ -197,6 +213,14 @@ const copy: Record<Locale, Record<string, string>> = {
     openConnection: 'Bağlantıyı aç',
     schemaUnavailable: 'Mağaza entegrasyonları geçici olarak kullanılamıyor. Supabase migration çalıştırıp tekrar deneyin.',
     issSetup: 'Leonety test veya senkronizasyon yapmadan önce ISS POS için resmi API dokümantasyonu ve erişim bilgileri gerekir.',
+    setupRequired: 'Kurulum gerekli',
+    integrationGuideTitle: 'Bağlantı kılavuzu',
+    googleLoginGuide: 'Google girişi burada değil Supabase Auth içinde yapılandırılır. Google OAuth web client oluşturun, Client ID ve Client Secret değerlerini Supabase’e girin ve yerel/production /auth/callback adreslerini izinli yapın.',
+    facebookLoginGuide: 'Facebook girişi Supabase Auth içinde yapılandırılır. Meta app oluşturun, Facebook Login ekleyin, App ID ve App Secret değerlerini Supabase’e girin ve canlıya almadan önce test kullanıcılarıyla deneyin.',
+    googleMapsGuide: 'Google Maps adres tamamlama Google girişinden ayrıdır. ADDRESS_PROVIDER=google_maps etkinse yalnızca kısıtlı server-side Google Maps key kullanın; aksi halde Leonety varsayılan adres sağlayıcıyı kullanır.',
+    whatsappGuide: 'WhatsApp Business kişisel rehberi veya sohbetleri okuyamaz. MVP manuel/CSV müşteri kaydıdır; Cloud API webhookları Meta Business kurulumu ve imza doğrulaması ister.',
+    issGuide: 'ISS POS, satıcı API dokümantasyonu, base URL, auth yöntemi, ürün/stok/satış endpointleri, şube ID, webhook veya polling kuralları, rate limit ve test hesabı vermeden devre dışıdır.',
+    credentialsNeverExposed: 'Kimlik bilgileri yalnızca server route’lara gönderilir, workspace bazında şifrelenir ve UI’da sadece maskeli metadata olarak gösterilir.',
   },
   ru: {
     title: 'Интеграции магазинов',
@@ -235,6 +259,14 @@ const copy: Record<Locale, Record<string, string>> = {
     openConnection: 'Открыть подключение',
     schemaUnavailable: 'Интеграции магазинов временно недоступны. Выполните Supabase migration и попробуйте снова.',
     issSetup: 'Для ISS POS нужна официальная API-документация и учетные данные, прежде чем Leonety сможет тестировать или синхронизировать подключение.',
+    setupRequired: 'Нужна настройка',
+    integrationGuideTitle: 'Инструкция подключения',
+    googleLoginGuide: 'Google login настраивается в Supabase Auth, не на этой странице. Создайте Google OAuth web client, вставьте Client ID и Client Secret в Supabase и разрешите /auth/callback для local и production.',
+    facebookLoginGuide: 'Facebook login настраивается через Supabase Auth. Создайте Meta app, добавьте Facebook Login, вставьте App ID и App Secret в Supabase и проверьте test users перед live.',
+    googleMapsGuide: 'Google Maps для адресов отдельный от Google login. Включайте server-side Google Maps key только при ADDRESS_PROVIDER=google_maps; иначе Leonety использует стандартного address provider.',
+    whatsappGuide: 'WhatsApp Business не может читать личные контакты и чаты. MVP: ручное/CSV добавление клиентов; Cloud API webhooks требуют Meta Business setup и проверки подписи.',
+    issGuide: 'ISS POS отключен, пока вендор не даст API-документацию, base URL, метод auth, endpoints товаров/склада/продаж, branch/store ID, webhooks или polling, rate limits и test account.',
+    credentialsNeverExposed: 'Credentials отправляются только на server routes, хранятся encrypted per workspace и показываются обратно только masked.',
   },
   uk: {
     title: 'Інтеграції магазинів',
@@ -273,6 +305,14 @@ const copy: Record<Locale, Record<string, string>> = {
     openConnection: 'Відкрити підключення',
     schemaUnavailable: 'Інтеграції магазинів тимчасово недоступні. Виконайте Supabase migration і спробуйте ще раз.',
     issSetup: 'Для ISS POS потрібна офіційна API-документація та облікові дані, перш ніж Leonety зможе тестувати або синхронізувати підключення.',
+    setupRequired: 'Потрібне налаштування',
+    integrationGuideTitle: 'Інструкція підключення',
+    googleLoginGuide: 'Google login налаштовується в Supabase Auth, не тут. Створіть Google OAuth web client, вставте Client ID і Client Secret у Supabase та дозвольте /auth/callback для local і production.',
+    facebookLoginGuide: 'Facebook login налаштовується через Supabase Auth. Створіть Meta app, додайте Facebook Login, вставте App ID і App Secret у Supabase та протестуйте test users перед live.',
+    googleMapsGuide: 'Google Maps для адрес окремий від Google login. Використовуйте server-side Google Maps key тільки з ADDRESS_PROVIDER=google_maps; інакше Leonety використовує стандартного address provider.',
+    whatsappGuide: 'WhatsApp Business не може читати приватні контакти чи чати. MVP: ручне/CSV додавання клієнтів; Cloud API webhooks потребують Meta Business setup і перевірки підпису.',
+    issGuide: 'ISS POS вимкнено, доки вендор не надасть API-документацію, base URL, auth method, endpoints товарів/складу/продажів, branch/store ID, webhooks або polling, rate limits і test account.',
+    credentialsNeverExposed: 'Credentials надсилаються тільки на server routes, зберігаються encrypted per workspace і показуються лише masked.',
   },
   pl: {
     title: 'Integracje sklepów',
@@ -311,6 +351,14 @@ const copy: Record<Locale, Record<string, string>> = {
     openConnection: 'Otwórz połączenie',
     schemaUnavailable: 'Integracje sklepów są tymczasowo niedostępne. Uruchom migrację Supabase i spróbuj ponownie.',
     issSetup: 'ISS POS wymaga oficjalnej dokumentacji API i danych dostępu, zanim Leonety będzie mogło testować lub synchronizować połączenie.',
+    setupRequired: 'Wymagana konfiguracja',
+    integrationGuideTitle: 'Instrukcja połączenia',
+    googleLoginGuide: 'Google login konfiguruje się w Supabase Auth, nie tutaj. Utwórz Google OAuth web client, wklej Client ID i Client Secret w Supabase oraz dopuść /auth/callback dla local i production.',
+    facebookLoginGuide: 'Facebook login konfiguruje się przez Supabase Auth. Utwórz Meta app, dodaj Facebook Login, wklej App ID i App Secret w Supabase i przetestuj konta testowe przed trybem live.',
+    googleMapsGuide: 'Google Maps dla adresów jest oddzielne od Google login. Używaj server-side Google Maps key tylko przy ADDRESS_PROVIDER=google_maps; inaczej Leonety używa domyślnego dostawcy adresów.',
+    whatsappGuide: 'WhatsApp Business nie czyta prywatnych kontaktów ani czatów. MVP to ręczny/CSV import klientów; Cloud API webhooks wymagają Meta Business setup i weryfikacji podpisu.',
+    issGuide: 'ISS POS jest wyłączony, dopóki dostawca nie przekaże dokumentacji API, base URL, metody auth, endpointów produktów/stanu/sprzedaży, branch/store ID, webhooków lub polling, limitów i konta testowego.',
+    credentialsNeverExposed: 'Dane dostępu trafiają tylko do server routes, są szyfrowane per workspace i pokazywane tylko jako zamaskowane metadata.',
   },
   fr: {
     title: 'Intégrations de boutiques',
@@ -349,6 +397,14 @@ const copy: Record<Locale, Record<string, string>> = {
     openConnection: 'Ouvrir la connexion',
     schemaUnavailable: 'Les intégrations de boutiques sont temporairement indisponibles. Exécutez la migration Supabase puis réessayez.',
     issSetup: 'ISS POS nécessite une documentation API officielle et des identifiants avant que Leonety puisse tester ou synchroniser la connexion.',
+    setupRequired: 'Configuration requise',
+    integrationGuideTitle: 'Guide de connexion',
+    googleLoginGuide: 'Google login se configure dans Supabase Auth, pas ici. Créez un client web Google OAuth, collez Client ID et Client Secret dans Supabase et autorisez /auth/callback en local et production.',
+    facebookLoginGuide: 'Facebook login se configure via Supabase Auth. Créez une app Meta, ajoutez Facebook Login, collez App ID et App Secret dans Supabase et testez avec des utilisateurs autorisés avant le mode live.',
+    googleMapsGuide: 'Google Maps pour les adresses est séparé de Google login. Utilisez une clé Google Maps server-side restreinte seulement avec ADDRESS_PROVIDER=google_maps; sinon Leonety utilise le fournisseur d’adresse par défaut.',
+    whatsappGuide: 'WhatsApp Business ne peut pas lire les contacts ou chats personnels. MVP : capture manuelle/CSV; les webhooks Cloud API nécessitent Meta Business setup et vérification de signature.',
+    issGuide: 'ISS POS reste désactivé tant que le fournisseur ne donne pas documentation API, base URL, méthode auth, endpoints produits/stock/ventes, branch/store ID, webhooks ou polling, rate limits et compte test.',
+    credentialsNeverExposed: 'Les identifiants sont envoyés uniquement aux server routes, chiffrés par workspace et affichés seulement sous forme masquée.',
   },
 }
 
@@ -474,6 +530,12 @@ export default function StoreIntegrationsPage() {
     setSaving(true)
     setMessage('')
     setError('')
+
+    if (provider === 'iss_pos') {
+      setError(labels.issSetup)
+      setSaving(false)
+      return
+    }
 
     const response = await fetch('/api/store-integrations', {
       method: 'POST',
@@ -686,6 +748,18 @@ export default function StoreIntegrationsPage() {
                 <p>{labels.serverOnly}</p>
                 <p className="mt-1">{labels.setupNote}</p>
                 {provider === 'iss_pos' && <p className="mt-2 font-medium">{labels.issSetup}</p>}
+              </div>
+
+              <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                <h3 className="font-semibold text-slate-950">{labels.integrationGuideTitle}</h3>
+                <p className="mt-2">{labels.credentialsNeverExposed}</p>
+                <div className="mt-3 grid gap-3">
+                  <p><span className="font-medium">Google Login:</span> {labels.googleLoginGuide}</p>
+                  <p><span className="font-medium">Facebook Login:</span> {labels.facebookLoginGuide}</p>
+                  <p><span className="font-medium">Google Maps:</span> {labels.googleMapsGuide}</p>
+                  <p><span className="font-medium">WhatsApp Business:</span> {labels.whatsappGuide}</p>
+                  <p><span className="font-medium">ISS POS:</span> {labels.issGuide}</p>
+                </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
