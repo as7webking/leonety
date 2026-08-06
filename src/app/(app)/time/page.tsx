@@ -735,7 +735,7 @@ export default function TimePage() {
 
           {activeTimers.length >= MAX_ACTIVE_TIMERS && !timerError && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              You can run up to {MAX_ACTIVE_TIMERS} active timers at the same time. Complete one before starting another.
+              {t('time.activeTimerLimitReached').replace('{count}', String(MAX_ACTIVE_TIMERS))}
             </div>
           )}
 

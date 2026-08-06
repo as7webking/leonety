@@ -22,7 +22,7 @@ export function WorkspaceSelectorClient() {
 
   return (
     <div className="min-w-0">
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Workspace</p>
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{t('workspaces.workspace')}</p>
       <AppSelect
         value={currentCompanyId ?? ''}
         onChange={(value) => {

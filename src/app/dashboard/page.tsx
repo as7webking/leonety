@@ -235,7 +235,7 @@ export default function DashboardPage() {
     <PageContainer>
       <PageHeader title={t('dashboard.title')} description={`${currentCompany.name} · ${currency}`}>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-          {planLabel} plan
+          {t('billing.planSuffix').replace('{plan}', planLabel)}
         </span>
       </PageHeader>
       <div className="mb-6 grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto_auto]">

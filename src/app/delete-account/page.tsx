@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { LegalPage } from '@/components/legal-page'
+import { T } from '@/components/t'
 import { getContactEmail } from '@/lib/contact'
 
 export const metadata: Metadata = {
@@ -15,47 +16,32 @@ export default function DeleteAccountPage() {
 
   return (
     <LegalPage
-      title="Delete Account or Request Data Deletion"
-      intro={
-        <p>
-          Leonety does not run automatic account deletion from the public website yet. This prevents accidental deletion
-          of bookkeeping records while the MVP is still manual-review based.
-        </p>
-      }
+      titleKey="legal.delete.title"
+      introKey="legal.delete.intro"
       sections={[
         {
-          title: '1. How to Request Deletion',
+          titleKey: 'legal.delete.requestTitle',
           content: (
             <p>
-              Send an email to{' '}
+              <T k="legal.delete.sendEmailPrefix" />{' '}
               {deletionHref ? (
                 <a className="font-medium text-slate-900 underline" href={deletionHref}>
                   {contactEmail}
                 </a>
               ) : (
-                'the contact email configured by the service operator'
+                <T k="legal.delete.configuredContactEmail" />
               )}{' '}
-              from the email address connected to your Leonety account. Include the workspace names you want reviewed.
+              <T k="legal.delete.sendEmailSuffix" />
             </p>
           ),
         },
         {
-          title: '2. What Happens Next',
-          content: (
-            <p>
-              We will verify the request, review whether legal or security retention requirements apply, and then delete
-              or anonymize eligible account and workspace data where possible.
-            </p>
-          ),
+          titleKey: 'legal.delete.nextTitle',
+          contentKey: 'legal.delete.nextContent',
         },
         {
-          title: '3. Important Records',
-          content: (
-            <p>
-              If your workspace contains business, tax, or bookkeeping records, export or save any records you need
-              before requesting deletion. Deletion may be permanent once completed.
-            </p>
-          ),
+          titleKey: 'legal.delete.recordsTitle',
+          contentKey: 'legal.delete.recordsContent',
         },
       ]}
     />

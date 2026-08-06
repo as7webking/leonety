@@ -7,9 +7,11 @@ import { createClient } from '@/lib/supabase-client'
 import { getAuthCallbackUrl } from '@/lib/site-url'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useI18n } from '@/contexts/i18n-context'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const { t } = useI18n()
   const [supabase] = useState(() => createClient())
   const [email, setEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -69,7 +71,7 @@ export default function ResetPasswordPage() {
       setMessage('Password updated successfully. Redirecting to your profile...')
       window.setTimeout(() => router.push('/app/profile'), 800)
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Failed to update password.')
+      setError(updateError instanceof Error ? updateError.message : t('auth.passwordUpdateFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -79,11 +81,11 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>{isUpdateMode ? 'Set New Password' : 'Reset Password'}</CardTitle>
+          <CardTitle>{isUpdateMode ? t('auth.setNewPassword') : t('auth.resetPassword')}</CardTitle>
           <CardDescription>
             {isUpdateMode
-              ? 'Enter your new password to finish the reset.'
-              : 'Enter your email and we will send a secure reset link.'}
+              ? t('auth.resetPasswordUpdateDescription')
+              : t('auth.resetPasswordEmailDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -93,47 +95,47 @@ export default function ResetPasswordPage() {
             {isUpdateMode ? (
               <>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">New password</label>
+                  <label className="mb-1 block text-sm font-medium">{t('auth.newPassword')}</label>
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter your new password"
+                    placeholder={t('auth.newPasswordPlaceholder')}
                     required
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Confirm password</label>
+                  <label className="mb-1 block text-sm font-medium">{t('auth.confirmPassword')}</label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Confirm your new password"
+                    placeholder={t('auth.confirmPasswordPlaceholder')}
                     required
                   />
                 </div>
               </>
             ) : (
               <div>
-                <label className="mb-1 block text-sm font-medium">Email</label>
+                <label className="mb-1 block text-sm font-medium">{t('auth.email')}</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="you@example.com"
+                  placeholder={t('auth.emailPlaceholder')}
                   required
                 />
               </div>
             )}
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Please wait...' : isUpdateMode ? 'Update Password' : 'Send Reset Link'}
+              {isLoading ? t('auth.pleaseWait') : isUpdateMode ? t('auth.updatePassword') : t('auth.sendResetLink')}
             </Button>
           </form>
           <Link href="/login" className="mt-4 block text-center text-sm font-medium text-blue-600 hover:underline">
-            Back to sign in
+            {t('auth.backToSignIn')}
           </Link>
         </CardContent>
       </Card>

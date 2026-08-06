@@ -357,6 +357,7 @@ export default function ProductsPage() {
   const [error, setError] = useState('')
   const editorRef = useRef<HTMLDivElement | null>(null)
   const firstEditorInputRef = useRef<HTMLInputElement | null>(null)
+  const productImageInputRef = useRef<HTMLInputElement | null>(null)
 
   const loadProducts = useCallback(async () => {
     if (!currentCompany) {
@@ -1235,11 +1236,16 @@ export default function ProductsPage() {
                   </div>
                 )}
                 <input
+                  ref={productImageInputRef}
                   type="file"
                   accept="image/*"
                   onChange={(event) => void handleImageFileChange(event.target.files?.[0] ?? null)}
-                  className="block w-full cursor-pointer rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:bg-slate-100"
+                  className="hidden"
                 />
+                <Button type="button" variant="outline" size="sm" onClick={() => productImageInputRef.current?.click()}>
+                  <UploadCloud className="h-4 w-4" />
+                  {t('common.chooseFile')}
+                </Button>
                 <span className="text-xs text-slate-500">{compressingImage ? t('products.compressingImage') : t('products.jpgOnly')}</span>
               </label>
                     </div>

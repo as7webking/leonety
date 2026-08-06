@@ -192,7 +192,7 @@ export default async function Home() {
               {/* Free Plan */}
               <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-lg">
                 <div className="min-h-[4.5rem]">
-                  <h3 className="text-lg font-semibold text-slate-900">Free</h3>
+                  <h3 className="text-lg font-semibold text-slate-900"><T k="billing.status.free" /></h3>
                   <p className="mt-1 text-sm text-slate-600"><T k="home.freePlanText" /></p>
                 </div>
                 
@@ -232,13 +232,13 @@ export default async function Home() {
               {/* Starter Plan */}
               <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-lg">
                 <div className="min-h-[4.5rem]">
-                  <h3 className="text-lg font-semibold text-slate-900">Starter</h3>
+                  <h3 className="text-lg font-semibold text-slate-900"><T k="billing.status.starter" /></h3>
                   <p className="mt-1 text-sm text-slate-600"><T k="home.starterPlanText" /></p>
                 </div>
                 
                 <div className="mb-8 min-h-[5.5rem]">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-bold text-slate-900">7 €</span>
+                    <span className="text-4xl font-bold text-slate-900">11.99 €</span>
                     <span className="text-slate-600">/<T k="home.month" /></span>
                   </div>
                   <p className="mt-2 text-sm text-slate-600"><T k="home.billedMonthly" /></p>
@@ -279,13 +279,13 @@ export default async function Home() {
                 </div>
 
                 <div className="min-h-[4.5rem]">
-                  <h3 className="text-lg font-semibold text-slate-900">Pro</h3>
+                  <h3 className="text-lg font-semibold text-slate-900"><T k="billing.status.pro" /></h3>
                   <p className="mt-1 text-sm font-medium text-blue-700"><T k="home.proPlanText" /></p>
                 </div>
                 
                 <div className="mb-8 min-h-[5.5rem]">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-bold text-slate-900">19 €</span>
+                    <span className="text-4xl font-bold text-slate-900">29.99 €</span>
                     <span className="text-slate-600">/<T k="home.month" /></span>
                   </div>
                   <p className="mt-2 text-sm text-slate-600"><T k="home.billedMonthly" /></p>
@@ -320,13 +320,13 @@ export default async function Home() {
               {/* Business Plan */}
               <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-lg">
                 <div className="min-h-[4.5rem]">
-                  <h3 className="text-lg font-semibold text-slate-900">Business</h3>
+                  <h3 className="text-lg font-semibold text-slate-900"><T k="billing.status.business" /></h3>
                   <p className="mt-1 text-sm text-slate-600"><T k="home.businessPlanText" /></p>
                 </div>
                 
                 <div className="mb-8 min-h-[5.5rem]">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-bold text-slate-900">29 €</span>
+                    <span className="text-4xl font-bold text-slate-900">49.99 €</span>
                     <span className="text-slate-600">/<T k="home.month" /></span>
                   </div>
                   <p className="mt-2 text-sm text-slate-600"><T k="home.billedMonthly" /></p>

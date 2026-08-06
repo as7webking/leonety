@@ -258,32 +258,42 @@ function calculateItems(items: InvoiceItem[]) {
 
 function getInvoiceNumberSettings() {
   if (typeof window === 'undefined') {
-    return { format: 'yy-seq' as InvoiceNumberFormat, digits: 3 }
+    return { format: 'yy-seq' as InvoiceNumberFormat, digits: 3, prefix: '', separator: '-', nextNumber: 1, resetAnnually: true }
   }
 
   const savedFormat = window.localStorage.getItem('leonety-invoice-number-format') as InvoiceNumberFormat | null
   const savedDigits = Number(window.localStorage.getItem('leonety-invoice-number-digits'))
+  const savedNextNumber = Number(window.localStorage.getItem('leonety-invoice-number-next'))
+  const savedSeparator = window.localStorage.getItem('leonety-invoice-number-separator') ?? '-'
 
   return {
     format: savedFormat === 'yyyy-seq' ? savedFormat : 'yy-seq',
     digits: [3, 4, 5].includes(savedDigits) ? savedDigits : 3,
+    prefix: (window.localStorage.getItem('leonety-invoice-number-prefix') ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase(),
+    separator: ['-', '/', '.'].includes(savedSeparator) ? savedSeparator : '-',
+    nextNumber: Number.isFinite(savedNextNumber) && savedNextNumber > 0 ? Math.floor(savedNextNumber) : 1,
+    resetAnnually: window.localStorage.getItem('leonety-invoice-number-reset-annually') !== 'false',
   }
 }
 
 function makeInvoiceNumber(existingInvoices: InvoiceRecord[] = []) {
   const date = new Date()
   const settings = getInvoiceNumberSettings()
-  const prefix = settings.format === 'yyyy-seq'
+  const yearToken = settings.format === 'yyyy-seq'
     ? String(date.getFullYear())
     : String(date.getFullYear()).slice(-2)
-  const pattern = new RegExp(`^${prefix}-(\\d+)$`)
+  const prefixParts = [settings.prefix, yearToken].filter(Boolean)
+  const numberPrefix = prefixParts.join(settings.separator)
+  const escapedPrefix = numberPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapedSeparator = settings.separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`^${escapedPrefix}${escapedSeparator}(\\d+)$`)
   const highestSequence = existingInvoices.reduce((highest, invoice) => {
     const match = invoice.invoice_number.match(pattern)
     if (!match) return highest
     return Math.max(highest, Number(match[1]) || 0)
-  }, 0)
+  }, settings.resetAnnually ? settings.nextNumber - 1 : 0)
 
-  return `${prefix}-${String(highestSequence + 1).padStart(settings.digits, '0')}`
+  return `${numberPrefix}${settings.separator}${String(highestSequence + 1).padStart(settings.digits, '0')}`
 }
 
 function getTaxRate(countryCode: TaxCountryCode, taxType: TaxType) {
@@ -1097,7 +1107,7 @@ export default function InvoicesPage() {
                             type="button"
                             className="px-3 text-sm font-semibold hover:bg-slate-50"
                             onClick={() => updateItem(index, { quantity: Number((item.quantity + 1).toFixed(2)) })}
-                            aria-label="Increase quantity"
+                            aria-label={t('invoices.increaseQuantity')}
                           >
                             +
                           </button>
@@ -1113,7 +1123,7 @@ export default function InvoicesPage() {
                             type="button"
                             className="px-3 text-sm font-semibold hover:bg-slate-50"
                             onClick={() => updateItem(index, { quantity: Math.max(0, Number((item.quantity - 1).toFixed(2))) })}
-                            aria-label="Decrease quantity"
+                            aria-label={t('invoices.decreaseQuantity')}
                           >
                             -
                           </button>

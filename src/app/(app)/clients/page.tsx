@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Building2, Edit, FileUp, Search, Trash2, UserRoundPlus, X } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
@@ -215,6 +215,7 @@ export default function ClientsPage() {
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { t } = useI18n()
+  const importFileInputRef = useRef<HTMLInputElement | null>(null)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
   const [clients, setClients] = useState<ClientRecord[]>([])
@@ -614,7 +615,7 @@ export default function ClientsPage() {
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
           {errorMessage}
           {errorMessage.includes('Free plan limit') && (
-            <Link href="/app/upgrade" className="ml-2 font-medium underline">Upgrade to Pro</Link>
+            <Link href="/app/upgrade" className="ml-2 font-medium underline">{t('workspaces.upgradePlan')}</Link>
           )}
         </div>
       )}
@@ -636,11 +637,16 @@ export default function ClientsPage() {
                 {t('clients.importPrivacyNote')}
               </div>
               <input
+                ref={importFileInputRef}
                 type="file"
                 accept=".csv,.vcf,text/csv,text/vcard"
                 onChange={(event) => void handleImportFile(event.target.files?.[0] ?? null)}
-                className="block w-full cursor-pointer rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:bg-slate-100"
+                className="hidden"
               />
+              <Button type="button" variant="outline" onClick={() => importFileInputRef.current?.click()}>
+                <FileUp className="h-4 w-4" />
+                {t('common.chooseFile')}
+              </Button>
               {importRows.length > 0 && (
                 <div className="overflow-x-auto rounded-md border">
                   <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -702,7 +708,7 @@ export default function ClientsPage() {
               </label>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('clients.email')}</span>
-                <input type="email" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="client@example.com" />
+                <input type="email" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('auth.emailPlaceholder')} />
               </label>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('clients.phone')}</span>
