@@ -16,12 +16,30 @@ interface AppAccessRow {
   expires_at: string | null
 }
 
+interface BillingSubscriptionRow {
+  company_id: string
+  plan: AppPlan
+  status: 'trialing' | 'active' | 'past_due' | 'paused' | 'cancelled' | 'expired'
+  current_period_end: string | null
+  cancel_at_period_end: boolean
+}
+
+function isUnexpiredDate(value: string | null) {
+  return !value || new Date(value) > new Date()
+}
+
 function isActivePaidAccess(access: AppAccessRow | undefined) {
   if (!access || !access.active || getPlanRank(access.tier) === 0) {
     return false
   }
 
-  return !access.expires_at || new Date(access.expires_at) > new Date()
+  return isUnexpiredDate(access.expires_at)
+}
+
+function isEntitledSubscription(subscription: BillingSubscriptionRow | undefined) {
+  if (!subscription || getPlanRank(subscription.plan) === 0) return false
+  if (!['trialing', 'active'].includes(subscription.status)) return false
+  return isUnexpiredDate(subscription.current_period_end)
 }
 
 function getConfiguredAdminEmail() {
@@ -55,20 +73,38 @@ export async function GET() {
     ])
 
     const companyIds = ((companies ?? []) as CompanyRow[]).map((company) => company.id)
-    const { data: appAccessRows } = companyIds.length > 0
-      ? await adminSupabase
-          .from('app_access')
-          .select('company_id, tier, manual_override, active, expires_at')
-          .in('company_id', companyIds)
-      : { data: [] }
+    const [{ data: appAccessRows }, { data: subscriptionRows }] = companyIds.length > 0
+      ? await Promise.all([
+          adminSupabase
+            .from('app_access')
+            .select('company_id, tier, manual_override, active, expires_at')
+            .in('company_id', companyIds),
+          adminSupabase
+            .from('billing_subscriptions')
+            .select('company_id, plan, status, current_period_end, cancel_at_period_end')
+            .in('company_id', companyIds),
+        ])
+      : [{ data: [] }, { data: [] }]
 
-    const activePaidAccess = ((appAccessRows ?? []) as AppAccessRow[])
-      .filter((access) => isActivePaidAccess(access))
+    const manualAccess = ((appAccessRows ?? []) as AppAccessRow[])
+      .filter((access) => access.manual_override && isActivePaidAccess(access))
       .sort((left, right) => getPlanRank(right.tier) - getPlanRank(left.tier))[0]
+    const paidSubscription = ((subscriptionRows ?? []) as BillingSubscriptionRow[])
+      .filter((subscription) => isEntitledSubscription(subscription))
+      .sort((left, right) => getPlanRank(right.plan) - getPlanRank(left.plan))[0]
+    const storedAccess = ((appAccessRows ?? []) as AppAccessRow[])
+      .filter((access) => !access.manual_override && isActivePaidAccess(access))
+      .sort((left, right) => getPlanRank(right.tier) - getPlanRank(left.tier))[0]
+    const activeAccess = manualAccess ?? (paidSubscription ? undefined : storedAccess)
+    const activePlan = manualAccess?.tier ?? paidSubscription?.plan ?? storedAccess?.tier
     const isAdmin = fallbackAccess.isAdmin || Boolean(adminAccount) || Boolean(configuredAdminEmail && userEmail === configuredAdminEmail)
-    const isPro = Boolean(activePaidAccess) || getPlanRank(fallbackAccess.plan) > 0
-    const overrideSource = activePaidAccess
-      ? activePaidAccess.manual_override ? 'manual' : 'payment'
+    const isPro = Boolean(activePlan && getPlanRank(activePlan) > 0) || getPlanRank(fallbackAccess.plan) > 0
+    const overrideSource = manualAccess
+      ? 'manual'
+      : paidSubscription
+        ? 'payment'
+        : storedAccess
+          ? 'payment'
       : fallbackAccess.overrideSource
 
     return NextResponse.json({
@@ -76,7 +112,11 @@ export async function GET() {
         isAdmin,
         isPro,
         overrideSource,
-        activePlan: activePaidAccess?.tier,
+        activePlan,
+        status: manualAccess ? 'manual' : paidSubscription?.status ?? (storedAccess ? 'active' : undefined),
+        currentPeriodEnd: paidSubscription?.current_period_end ?? activeAccess?.expires_at ?? null,
+        trialEndsAt: paidSubscription?.status === 'trialing' ? paidSubscription.current_period_end : null,
+        cancelAtPeriodEnd: paidSubscription?.cancel_at_period_end ?? false,
       }),
     })
   } catch (error) {

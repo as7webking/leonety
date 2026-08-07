@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { getConfiguredBillingProvider, getProviderApiKey, getProviderPriceId, getSiteUrl } from '@/lib/billing/server-config'
-import { isBillingProvider, isPaidAppPlan, type BillingProvider } from '@/lib/billing/plans'
+import { getConfiguredBillingProvider, getPaddleApiBaseUrl, getProviderApiKey, getProviderPriceId, getSiteUrl } from '@/lib/billing/server-config'
+import { isPaidAppPlan, type BillingProvider } from '@/lib/billing/plans'
 
 export const runtime = 'nodejs'
 
@@ -21,6 +21,73 @@ function jsonError(message: string, status: number, requestId: string) {
 
 function safeLog(level: 'info' | 'warn' | 'error', message: string, meta: Record<string, unknown>) {
   console[level](`[billing.checkout] ${message}`, meta)
+}
+
+function getSafeReturnUrl(path: 'success' | 'cancelled') {
+  const siteUrl = getSiteUrl()
+  return `${siteUrl}/app/upgrade?checkout=${path}`
+}
+
+async function createPaddleCheckout({
+  apiKey,
+  priceId,
+  companyId,
+  userId,
+  plan,
+  existingCustomerId,
+  requestId,
+}: {
+  apiKey: string
+  priceId: string
+  companyId: string
+  userId: string
+  plan: string
+  existingCustomerId?: string | null
+  requestId: string
+}) {
+  const payload: Record<string, unknown> = {
+    items: [{ price_id: priceId, quantity: 1 }],
+    collection_mode: 'automatic',
+    custom_data: {
+      company_id: companyId,
+      user_id: userId,
+      plan,
+    },
+    checkout: {
+      url: getSafeReturnUrl('success'),
+    },
+  }
+
+  if (existingCustomerId) {
+    payload.customer_id = existingCustomerId
+  }
+
+  const response = await fetch(`${getPaddleApiBaseUrl()}/transactions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const data = await response.json().catch(() => ({})) as {
+    data?: { checkout?: { url?: string | null } }
+    error?: { type?: string; code?: string; detail?: string }
+  }
+
+  const checkoutUrl = data.data?.checkout?.url ?? null
+  if (!response.ok || !checkoutUrl) {
+    safeLog('warn', 'Paddle checkout creation failed', {
+      requestId,
+      status: response.status,
+      providerErrorType: data.error?.type ?? null,
+      providerErrorCode: data.error?.code ?? null,
+    })
+    return null
+  }
+
+  return checkoutUrl
 }
 
 export async function POST(request: Request) {
@@ -42,9 +109,7 @@ export async function POST(request: Request) {
 
     const companyId = typeof body?.companyId === 'string' ? body.companyId : ''
     const plan = isPaidAppPlan(body?.plan) ? body.plan : null
-    const provider: BillingProvider = isBillingProvider(body?.provider)
-      ? body.provider
-      : getConfiguredBillingProvider()
+    const provider: BillingProvider = getConfiguredBillingProvider()
 
     if (!companyId) {
       return jsonError('Workspace is required', 400, requestId)
@@ -79,8 +144,8 @@ export async function POST(request: Request) {
       return jsonError('Workspace access denied', 403, requestId)
     }
 
-    if (provider !== 'stripe') {
-      return jsonError('Checkout creation for this provider is not enabled yet', 501, requestId)
+    if (provider !== 'paddle') {
+      return jsonError('Paddle billing is not selected', 500, requestId)
     }
 
     const { data: existingCustomer } = await adminSupabase
@@ -90,49 +155,22 @@ export async function POST(request: Request) {
       .eq('provider', provider)
       .maybeSingle<BillingCustomerRow>()
 
-    const siteUrl = getSiteUrl()
-    const form = new URLSearchParams()
-    form.set('mode', 'subscription')
-    form.set('success_url', `${siteUrl}/app/upgrade?checkout=success`)
-    form.set('cancel_url', `${siteUrl}/app/upgrade?checkout=cancelled`)
-    form.set('client_reference_id', companyId)
-    form.set('line_items[0][price]', priceId)
-    form.set('line_items[0][quantity]', '1')
-    form.set('metadata[company_id]', companyId)
-    form.set('metadata[user_id]', authData.user.id)
-    form.set('metadata[plan]', plan)
-    form.set('subscription_data[metadata][company_id]', companyId)
-    form.set('subscription_data[metadata][user_id]', authData.user.id)
-    form.set('subscription_data[metadata][plan]', plan)
-
-    if (existingCustomer?.provider_customer_id) {
-      form.set('customer', existingCustomer.provider_customer_id)
-    } else if (authData.user.email) {
-      form.set('customer_email', authData.user.email)
-    }
-
-    const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: form,
+    const checkoutUrl = await createPaddleCheckout({
+      apiKey,
+      priceId,
+      companyId,
+      userId: authData.user.id,
+      plan,
+      existingCustomerId: existingCustomer?.provider_customer_id ?? null,
+      requestId,
     })
 
-    const data = await response.json().catch(() => ({})) as { url?: string; error?: { message?: string; type?: string } }
-    if (!response.ok || !data.url) {
-      safeLog('warn', 'Provider checkout creation failed', {
-        requestId,
-        provider,
-        status: response.status,
-        providerErrorType: data.error?.type ?? null,
-      })
+    if (!checkoutUrl) {
       return jsonError('Could not create checkout session', 502, requestId)
     }
 
     safeLog('info', 'Checkout session created', { requestId, provider, companyId, plan })
-    return NextResponse.json({ url: data.url, requestId })
+    return NextResponse.json({ url: checkoutUrl, requestId })
   } catch (error) {
     safeLog('error', 'Checkout route failed', {
       requestId,

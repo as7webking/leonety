@@ -21,7 +21,7 @@ const paddlePrices: ProviderPriceConfig = {
 
 export function getConfiguredBillingProvider(): BillingProvider {
   const provider = process.env.BILLING_PROVIDER?.trim().toLowerCase()
-  return provider === 'paddle' ? 'paddle' : 'stripe'
+  return provider === 'stripe' ? 'stripe' : 'paddle'
 }
 
 export function getProviderApiKey(provider: BillingProvider) {
@@ -51,4 +51,15 @@ export function getPlanFromProviderPriceId(provider: BillingProvider, priceId: s
 
 export function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || 'http://localhost:3000'
+}
+
+export function getPaddleApiBaseUrl() {
+  const environment = process.env.PADDLE_ENVIRONMENT?.trim().toLowerCase()
+  if (environment === 'sandbox') return 'https://sandbox-api.paddle.com'
+  if (environment === 'production') return 'https://api.paddle.com'
+
+  const apiKey = process.env.PADDLE_API_KEY?.trim().toLowerCase() ?? ''
+  return apiKey.includes('sandbox') || apiKey.includes('sdbx')
+    ? 'https://sandbox-api.paddle.com'
+    : 'https://api.paddle.com'
 }

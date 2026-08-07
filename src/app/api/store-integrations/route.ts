@@ -19,7 +19,10 @@ interface StoreIntegrationRow {
   refresh_token: string | null
   status: 'not_connected' | 'connected' | 'error' | 'disabled'
   last_sync_at: string | null
+  connected_at?: string | null
+  last_webhook_at?: string | null
   error_message: string | null
+  metadata?: Record<string, unknown> | null
   updated_at: string | null
 }
 
@@ -99,7 +102,10 @@ function publicIntegration(row: StoreIntegrationRow) {
     refreshTokenPreview: maskStoredSecret(row.refresh_token),
     status: row.status,
     lastSyncAt: row.last_sync_at,
+    connectedAt: row.connected_at ?? null,
+    lastWebhookAt: row.last_webhook_at ?? null,
     errorMessage: row.error_message ?? '',
+    metadata: row.metadata ?? null,
     updatedAt: row.updated_at,
   }
 }
@@ -114,7 +120,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await auth.adminSupabase
       .from('store_integrations')
-      .select('id, provider, store_name, store_url, external_account_id, api_key, api_secret, merchant_id, access_token, refresh_token, status, last_sync_at, error_message, updated_at')
+      .select('id, provider, store_name, store_url, external_account_id, api_key, api_secret, merchant_id, access_token, refresh_token, status, last_sync_at, connected_at, last_webhook_at, error_message, metadata, updated_at')
       .eq('company_id', companyId)
       .order('provider', { ascending: true })
 
@@ -161,7 +167,10 @@ export async function GET(request: Request) {
           refreshTokenPreview: '',
           status: 'connected',
           lastSyncAt: null,
+          connectedAt: wooConnection.updated_at ?? null,
+          lastWebhookAt: null,
           errorMessage: '',
+          metadata: null,
           updatedAt: wooConnection.updated_at ?? null,
         })
       }
@@ -203,6 +212,7 @@ export async function POST(request: Request) {
     const accessToken = typeof body.accessToken === 'string' ? body.accessToken.trim() : ''
     const refreshToken = typeof body.refreshToken === 'string' ? body.refreshToken.trim() : ''
     const merchantId = typeof body.merchantId === 'string' ? body.merchantId.trim() : ''
+    const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata as Record<string, unknown> : null
 
     const payload = {
       company_id: companyId,
@@ -215,6 +225,7 @@ export async function POST(request: Request) {
       access_token: secretForStorage(accessToken, existingSecrets?.access_token),
       refresh_token: secretForStorage(refreshToken, existingSecrets?.refresh_token),
       merchant_id: merchantId,
+      metadata,
       status: 'not_connected',
       error_message: null,
       updated_at: new Date().toISOString(),
@@ -223,7 +234,7 @@ export async function POST(request: Request) {
     const { data, error } = await auth.adminSupabase
       .from('store_integrations')
       .upsert(payload, { onConflict: 'company_id,provider' })
-      .select('id, provider, store_name, store_url, external_account_id, api_key, api_secret, merchant_id, access_token, refresh_token, status, last_sync_at, error_message, updated_at')
+      .select('id, provider, store_name, store_url, external_account_id, api_key, api_secret, merchant_id, access_token, refresh_token, status, last_sync_at, connected_at, last_webhook_at, error_message, metadata, updated_at')
       .single()
 
     if (error) throw error
@@ -249,13 +260,25 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Integration provider is required.' }, { status: 400 })
     }
 
-    const { error } = await auth.adminSupabase
-      .from('store_integrations')
-      .delete()
-      .eq('company_id', companyId)
-      .eq('provider', provider)
+    const result = provider === 'whatsapp_business'
+      ? await auth.adminSupabase
+        .from('store_integrations')
+        .update({
+          status: 'disabled',
+          access_token: '',
+          refresh_token: '',
+          error_message: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('company_id', companyId)
+        .eq('provider', provider)
+      : await auth.adminSupabase
+        .from('store_integrations')
+        .delete()
+        .eq('company_id', companyId)
+        .eq('provider', provider)
 
-    if (error) throw error
+    if (result.error) throw result.error
 
     return NextResponse.json({ ok: true })
   } catch (error) {

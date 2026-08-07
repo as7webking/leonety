@@ -11,7 +11,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import type { Locale } from '@/lib/i18n'
 
-type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'iss_pos'
+type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'whatsapp_business' | 'iss_pos'
 type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
 
 interface StoreIntegration {
@@ -27,7 +27,10 @@ interface StoreIntegration {
   refreshTokenPreview: string
   status: IntegrationStatus
   lastSyncAt: string | null
+  connectedAt: string | null
+  lastWebhookAt: string | null
   errorMessage: string
+  metadata: Record<string, unknown> | null
   updatedAt: string | null
 }
 
@@ -36,6 +39,7 @@ const providerLabels: Record<Provider, string> = {
   shopify: 'Shopify',
   opencart: 'OpenCart',
   google_merchant: 'Google Merchant',
+  whatsapp_business: 'WhatsApp Business',
   iss_pos: 'ISS POS',
 }
 
@@ -73,6 +77,12 @@ const copy: Record<Locale, Record<string, string>> = {
     unsupported: 'This action is not available for this connector yet.',
     schemaUnavailable: 'Store integrations are temporarily unavailable. Run the Supabase migration and try again.',
     issSetup: 'ISS POS API configuration is required before testing or synchronization.',
+    whatsappNumber: 'Connected number',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    lastWebhook: 'Last webhook event',
+    noWebhookYet: 'No webhook event yet',
+    whatsappUnsupported: 'WhatsApp Business receives messages and can create leads. Product import/export is not available for this connector.',
   },
   de: {
     back: 'Zurück zu Integrationen',
@@ -107,6 +117,12 @@ const copy: Record<Locale, Record<string, string>> = {
     unsupported: 'Diese Aktion ist für diesen Connector noch nicht verfügbar.',
     schemaUnavailable: 'Shop-Integrationen sind vorübergehend nicht verfügbar. Führe die Supabase-Migration aus und versuche es erneut.',
     issSetup: 'ISS POS benötigt eine API-Konfiguration, bevor Tests oder Synchronisierung möglich sind.',
+    whatsappNumber: 'Verbundene Nummer',
+    whatsappWaba: 'WABA-ID',
+    whatsappPhoneId: 'Phone Number ID',
+    lastWebhook: 'Letztes Webhook-Event',
+    noWebhookYet: 'Noch kein Webhook-Event',
+    whatsappUnsupported: 'WhatsApp Business empfängt Nachrichten und kann Leads erstellen. Produktimport/-export ist für diesen Connector nicht verfügbar.',
   },
   ru: {
     back: 'Назад к интеграциям',
@@ -141,6 +157,12 @@ const copy: Record<Locale, Record<string, string>> = {
     unsupported: 'Это действие для данного connector пока недоступно.',
     schemaUnavailable: 'Интеграции магазинов временно недоступны. Выполните Supabase migration и попробуйте снова.',
     issSetup: 'Для ISS POS нужна API-конфигурация перед тестом или синхронизацией.',
+    whatsappNumber: 'Подключенный номер',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    lastWebhook: 'Последнее webhook-событие',
+    noWebhookYet: 'Webhook-событий еще нет',
+    whatsappUnsupported: 'WhatsApp Business принимает сообщения и может создавать лиды. Импорт/экспорт товаров для этого connector недоступен.',
   },
   tr: {
     back: 'Entegrasyonlara dön',
@@ -175,6 +197,12 @@ const copy: Record<Locale, Record<string, string>> = {
     unsupported: 'Bu işlem bu connector için henüz kullanılamıyor.',
     schemaUnavailable: 'Mağaza entegrasyonları geçici olarak kullanılamıyor. Supabase migration çalıştırıp tekrar deneyin.',
     issSetup: 'ISS POS için test veya senkronizasyon öncesinde API yapılandırması gerekir.',
+    whatsappNumber: 'Bağlı numara',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    lastWebhook: 'Son webhook olayı',
+    noWebhookYet: 'Henüz webhook olayı yok',
+    whatsappUnsupported: 'WhatsApp Business mesaj alır ve lead oluşturabilir. Bu connector için ürün içe/dışa aktarma yoktur.',
   },
   uk: {
     back: 'Назад до інтеграцій',
@@ -209,6 +237,12 @@ const copy: Record<Locale, Record<string, string>> = {
     unsupported: 'Ця дія для цього connector поки недоступна.',
     schemaUnavailable: 'Інтеграції магазинів тимчасово недоступні. Виконайте Supabase migration і спробуйте ще раз.',
     issSetup: 'Для ISS POS потрібна API-конфігурація перед тестом або синхронізацією.',
+    whatsappNumber: 'Підключений номер',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    lastWebhook: 'Остання webhook-подія',
+    noWebhookYet: 'Webhook-подій ще немає',
+    whatsappUnsupported: 'WhatsApp Business приймає повідомлення та може створювати ліди. Імпорт/експорт товарів для цього connector недоступний.',
   },
   pl: {
     back: 'Wróć do integracji',
@@ -243,6 +277,12 @@ const copy: Record<Locale, Record<string, string>> = {
     unsupported: 'Ta akcja nie jest jeszcze dostępna dla tego connectora.',
     schemaUnavailable: 'Integracje sklepów są tymczasowo niedostępne. Uruchom migrację Supabase i spróbuj ponownie.',
     issSetup: 'ISS POS wymaga konfiguracji API przed testem lub synchronizacją.',
+    whatsappNumber: 'Połączony numer',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    lastWebhook: 'Ostatnie zdarzenie webhook',
+    noWebhookYet: 'Brak zdarzeń webhook',
+    whatsappUnsupported: 'WhatsApp Business odbiera wiadomości i może tworzyć leady. Import/eksport produktów nie jest dostępny dla tego connectora.',
   },
   fr: {
     back: 'Retour aux intégrations',
@@ -277,6 +317,12 @@ const copy: Record<Locale, Record<string, string>> = {
     unsupported: 'Cette action n’est pas encore disponible pour ce connecteur.',
     schemaUnavailable: 'Les intégrations de boutiques sont temporairement indisponibles. Exécutez la migration Supabase puis réessayez.',
     issSetup: 'ISS POS nécessite une configuration API avant le test ou la synchronisation.',
+    whatsappNumber: 'Numéro connecté',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    lastWebhook: 'Dernier événement webhook',
+    noWebhookYet: 'Aucun événement webhook',
+    whatsappUnsupported: 'WhatsApp Business reçoit des messages et peut créer des leads. L’import/export produits n’est pas disponible pour ce connecteur.',
   },
 }
 
@@ -394,6 +440,7 @@ export default function StoreIntegrationDetailPage() {
     void runAction('test', async () => {
       if (connection.provider !== 'woocommerce') {
         if (connection.provider === 'iss_pos') return labels.issSetup
+        if (connection.provider === 'whatsapp_business') return labels.whatsappUnsupported
         return labels.unsupported
       }
 
@@ -411,6 +458,7 @@ export default function StoreIntegrationDetailPage() {
     if (!currentCompany || !connection) return
 
     void runAction('import', async () => {
+      if (connection.provider === 'whatsapp_business') return labels.whatsappUnsupported
       const endpoint = connection.provider === 'woocommerce'
         ? '/api/woocommerce/products/import'
         : '/api/store-integrations/products/import'
@@ -428,6 +476,7 @@ export default function StoreIntegrationDetailPage() {
     if (!currentCompany || !connection) return
 
     void runAction('export', async () => {
+      if (connection.provider === 'whatsapp_business') return labels.whatsappUnsupported
       const response = await fetch('/api/store-integrations/products/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -456,6 +505,7 @@ export default function StoreIntegrationDetailPage() {
       if (connection.provider === 'woocommerce' || connection.provider === 'opencart') {
         return labels.unsupported
       }
+      if (connection.provider === 'whatsapp_business') return labels.whatsappUnsupported
       if (connection.provider === 'iss_pos') return labels.issSetup
 
       const response = await fetch('/api/store-integrations/products/sync', {
@@ -547,6 +597,14 @@ export default function StoreIntegrationDetailPage() {
               <Info label={labels.storeName} value={connection.storeName || '-'} />
               <Info label={labels.storeUrl} value={connection.storeUrl || connection.externalAccountId || '-'} />
               <Info label={labels.lastSync} value={formatDate(connection.lastSyncAt, locale) || labels.neverSynced} />
+              {connection.provider === 'whatsapp_business' && (
+                <>
+                  <Info label={labels.whatsappNumber} value={String(connection.metadata?.displayPhoneNumber ?? connection.storeName ?? '-')} />
+                  <Info label={labels.whatsappWaba} value={connection.externalAccountId || '-'} />
+                  <Info label={labels.whatsappPhoneId} value={connection.merchantId || '-'} />
+                  <Info label={labels.lastWebhook} value={formatDate(connection.lastWebhookAt, locale) || labels.noWebhookYet} />
+                </>
+              )}
             </div>
 
             {connection.errorMessage && (

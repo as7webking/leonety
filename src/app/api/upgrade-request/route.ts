@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getPlanRank } from '@/lib/billing/plans'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
@@ -42,8 +43,8 @@ function formatError(error: unknown) {
   return 'Unknown error'
 }
 
-function isActiveProAccess(access: AppAccessRow | undefined) {
-  if (!access || !access.active || access.tier !== 'pro') {
+function isActivePaidAccess(access: AppAccessRow | undefined) {
+  if (!access || !access.active || getPlanRank(access.tier) === 0) {
     return false
   }
 
@@ -89,12 +90,14 @@ async function loadUpgradeContext(userId: string) {
   if (accessError) throw accessError
   if (requestError) throw requestError
 
-  const activeAccess = ((accessRows ?? []) as AppAccessRow[]).find((access) => access.active)
-  const isPro = isActiveProAccess(activeAccess)
+  const activeAccess = ((accessRows ?? []) as AppAccessRow[])
+    .filter((access) => access.active)
+    .sort((left, right) => getPlanRank(right.tier) - getPlanRank(left.tier))[0]
+  const isPro = isActivePaidAccess(activeAccess)
 
   return {
     company,
-    currentPlan: isPro ? 'pro' as const : activeAccess?.tier ?? 'free' as const,
+    currentPlan: isPro ? activeAccess?.tier ?? 'pro' as const : activeAccess?.tier ?? 'free' as const,
     pendingRequest: pendingRequest ?? null,
     isPro,
   }

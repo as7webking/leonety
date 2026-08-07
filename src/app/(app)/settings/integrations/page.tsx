@@ -12,8 +12,22 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import type { Locale } from '@/lib/i18n'
 
-type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'iss_pos'
+type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'whatsapp_business' | 'iss_pos'
 type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
+type WhatsAppClientCreationMode = 'ask' | 'auto_create_lead' | 'never'
+
+declare global {
+  interface Window {
+    FB?: {
+      init: (options: { appId: string; autoLogAppEvents?: boolean; xfbml?: boolean; version: string }) => void
+      login: (
+        callback: (response: { authResponse?: { code?: string }; status?: string }) => void,
+        options: Record<string, unknown>
+      ) => void
+    }
+    fbAsyncInit?: () => void
+  }
+}
 
 interface StoreIntegration {
   id: string
@@ -28,7 +42,10 @@ interface StoreIntegration {
   refreshTokenPreview: string
   status: IntegrationStatus
   lastSyncAt: string | null
+  connectedAt: string | null
+  lastWebhookAt: string | null
   errorMessage: string
+  metadata: Record<string, unknown> | null
   updatedAt: string | null
 }
 
@@ -41,6 +58,7 @@ interface IntegrationForm {
   merchantId: string
   accessToken: string
   refreshToken: string
+  clientCreationMode: WhatsAppClientCreationMode
 }
 
 const providerOptions: Array<{ value: Provider; label: string; fields: Array<keyof IntegrationForm>; directSettings?: string }> = [
@@ -66,6 +84,11 @@ const providerOptions: Array<{ value: Provider; label: string; fields: Array<key
     fields: ['storeName', 'externalAccountId', 'merchantId', 'accessToken', 'refreshToken'],
   },
   {
+    value: 'whatsapp_business',
+    label: 'WhatsApp Business',
+    fields: [],
+  },
+  {
     value: 'iss_pos',
     label: 'ISS POS',
     fields: ['storeName', 'storeUrl', 'externalAccountId'],
@@ -81,6 +104,7 @@ const emptyForm: IntegrationForm = {
   merchantId: '',
   accessToken: '',
   refreshToken: '',
+  clientCreationMode: 'ask',
 }
 
 const copy: Record<Locale, Record<string, string>> = {
@@ -129,6 +153,20 @@ const copy: Record<Locale, Record<string, string>> = {
     whatsappGuide: 'WhatsApp Business cannot read personal contacts or chats. MVP support is manual/CSV client capture; Cloud API webhooks require Meta Business setup and signature verification.',
     issGuide: 'ISS POS is disabled until the vendor provides API documentation, base URL, auth method, product/stock/sales endpoints, branch identifier, webhooks or polling rules, rate limits and a test account.',
     credentialsNeverExposed: 'Credentials are submitted to server routes only, encrypted per workspace where stored, and shown back only as masked metadata.',
+    connectWhatsapp: 'Connect WhatsApp Business',
+    whatsappSignupRunning: 'Opening Meta Embedded Signup...',
+    whatsappConnected: 'WhatsApp Business connected.',
+    whatsappSetupRequired: 'Meta Embedded Signup is not configured yet.',
+    whatsappClientMode: 'Client creation mode',
+    whatsappClientModeAsk: 'Ask before creating',
+    whatsappClientModeAuto: 'Automatically create lead',
+    whatsappClientModeNever: 'Never create automatically',
+    whatsappNumber: 'Connected number',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    webhookStatus: 'Webhook status',
+    lastWebhook: 'Last webhook event',
+    noWebhookYet: 'No webhook event yet',
   },
   de: {
     title: 'Shop-Integrationen',
@@ -175,6 +213,20 @@ const copy: Record<Locale, Record<string, string>> = {
     whatsappGuide: 'WhatsApp Business kann keine privaten Kontakte oder Chats lesen. MVP ist manuelle/CSV-Erfassung; Cloud-API-Webhooks brauchen Meta Business Setup und Signaturprüfung.',
     issGuide: 'ISS POS bleibt deaktiviert, bis der Anbieter API-Dokumentation, Base URL, Auth-Methode, Produkt-/Bestands-/Sales-Endpunkte, Filial-ID, Webhooks oder Polling, Rate Limits und Testkonto liefert.',
     credentialsNeverExposed: 'Zugangsdaten werden nur an Server-Routen gesendet, pro Workspace verschlüsselt gespeichert und nur maskiert angezeigt.',
+    connectWhatsapp: 'WhatsApp Business verbinden',
+    whatsappSignupRunning: 'Meta Embedded Signup wird geöffnet...',
+    whatsappConnected: 'WhatsApp Business verbunden.',
+    whatsappSetupRequired: 'Meta Embedded Signup ist noch nicht konfiguriert.',
+    whatsappClientMode: 'Kundenerstellung',
+    whatsappClientModeAsk: 'Vor dem Erstellen fragen',
+    whatsappClientModeAuto: 'Lead automatisch erstellen',
+    whatsappClientModeNever: 'Nie automatisch erstellen',
+    whatsappNumber: 'Verbundene Nummer',
+    whatsappWaba: 'WABA-ID',
+    whatsappPhoneId: 'Phone Number ID',
+    webhookStatus: 'Webhook-Status',
+    lastWebhook: 'Letztes Webhook-Event',
+    noWebhookYet: 'Noch kein Webhook-Event',
   },
   tr: {
     title: 'Mağaza entegrasyonları',
@@ -221,6 +273,20 @@ const copy: Record<Locale, Record<string, string>> = {
     whatsappGuide: 'WhatsApp Business kişisel rehberi veya sohbetleri okuyamaz. MVP manuel/CSV müşteri kaydıdır; Cloud API webhookları Meta Business kurulumu ve imza doğrulaması ister.',
     issGuide: 'ISS POS, satıcı API dokümantasyonu, base URL, auth yöntemi, ürün/stok/satış endpointleri, şube ID, webhook veya polling kuralları, rate limit ve test hesabı vermeden devre dışıdır.',
     credentialsNeverExposed: 'Kimlik bilgileri yalnızca server route’lara gönderilir, workspace bazında şifrelenir ve UI’da sadece maskeli metadata olarak gösterilir.',
+    connectWhatsapp: 'WhatsApp Business bağla',
+    whatsappSignupRunning: 'Meta Embedded Signup açılıyor...',
+    whatsappConnected: 'WhatsApp Business bağlandı.',
+    whatsappSetupRequired: 'Meta Embedded Signup henüz yapılandırılmadı.',
+    whatsappClientMode: 'Müşteri oluşturma modu',
+    whatsappClientModeAsk: 'Oluşturmadan önce sor',
+    whatsappClientModeAuto: 'Lead otomatik oluştur',
+    whatsappClientModeNever: 'Asla otomatik oluşturma',
+    whatsappNumber: 'Bağlı numara',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    webhookStatus: 'Webhook durumu',
+    lastWebhook: 'Son webhook olayı',
+    noWebhookYet: 'Henüz webhook olayı yok',
   },
   ru: {
     title: 'Интеграции магазинов',
@@ -267,6 +333,20 @@ const copy: Record<Locale, Record<string, string>> = {
     whatsappGuide: 'WhatsApp Business не может читать личные контакты и чаты. MVP: ручное/CSV добавление клиентов; Cloud API webhooks требуют Meta Business setup и проверки подписи.',
     issGuide: 'ISS POS отключен, пока вендор не даст API-документацию, base URL, метод auth, endpoints товаров/склада/продаж, branch/store ID, webhooks или polling, rate limits и test account.',
     credentialsNeverExposed: 'Credentials отправляются только на server routes, хранятся encrypted per workspace и показываются обратно только masked.',
+    connectWhatsapp: 'Подключить WhatsApp Business',
+    whatsappSignupRunning: 'Открывается Meta Embedded Signup...',
+    whatsappConnected: 'WhatsApp Business подключен.',
+    whatsappSetupRequired: 'Meta Embedded Signup еще не настроен.',
+    whatsappClientMode: 'Создание клиентов',
+    whatsappClientModeAsk: 'Спрашивать перед созданием',
+    whatsappClientModeAuto: 'Автоматически создавать lead',
+    whatsappClientModeNever: 'Никогда не создавать автоматически',
+    whatsappNumber: 'Подключенный номер',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    webhookStatus: 'Статус webhook',
+    lastWebhook: 'Последнее webhook-событие',
+    noWebhookYet: 'Webhook-событий еще нет',
   },
   uk: {
     title: 'Інтеграції магазинів',
@@ -313,6 +393,20 @@ const copy: Record<Locale, Record<string, string>> = {
     whatsappGuide: 'WhatsApp Business не може читати приватні контакти чи чати. MVP: ручне/CSV додавання клієнтів; Cloud API webhooks потребують Meta Business setup і перевірки підпису.',
     issGuide: 'ISS POS вимкнено, доки вендор не надасть API-документацію, base URL, auth method, endpoints товарів/складу/продажів, branch/store ID, webhooks або polling, rate limits і test account.',
     credentialsNeverExposed: 'Credentials надсилаються тільки на server routes, зберігаються encrypted per workspace і показуються лише masked.',
+    connectWhatsapp: 'Підключити WhatsApp Business',
+    whatsappSignupRunning: 'Відкривається Meta Embedded Signup...',
+    whatsappConnected: 'WhatsApp Business підключено.',
+    whatsappSetupRequired: 'Meta Embedded Signup ще не налаштовано.',
+    whatsappClientMode: 'Створення клієнтів',
+    whatsappClientModeAsk: 'Запитувати перед створенням',
+    whatsappClientModeAuto: 'Автоматично створювати lead',
+    whatsappClientModeNever: 'Ніколи не створювати автоматично',
+    whatsappNumber: 'Підключений номер',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    webhookStatus: 'Статус webhook',
+    lastWebhook: 'Остання webhook-подія',
+    noWebhookYet: 'Webhook-подій ще немає',
   },
   pl: {
     title: 'Integracje sklepów',
@@ -359,6 +453,20 @@ const copy: Record<Locale, Record<string, string>> = {
     whatsappGuide: 'WhatsApp Business nie czyta prywatnych kontaktów ani czatów. MVP to ręczny/CSV import klientów; Cloud API webhooks wymagają Meta Business setup i weryfikacji podpisu.',
     issGuide: 'ISS POS jest wyłączony, dopóki dostawca nie przekaże dokumentacji API, base URL, metody auth, endpointów produktów/stanu/sprzedaży, branch/store ID, webhooków lub polling, limitów i konta testowego.',
     credentialsNeverExposed: 'Dane dostępu trafiają tylko do server routes, są szyfrowane per workspace i pokazywane tylko jako zamaskowane metadata.',
+    connectWhatsapp: 'Połącz WhatsApp Business',
+    whatsappSignupRunning: 'Otwieranie Meta Embedded Signup...',
+    whatsappConnected: 'WhatsApp Business połączony.',
+    whatsappSetupRequired: 'Meta Embedded Signup nie jest jeszcze skonfigurowany.',
+    whatsappClientMode: 'Tworzenie klientów',
+    whatsappClientModeAsk: 'Pytaj przed utworzeniem',
+    whatsappClientModeAuto: 'Automatycznie twórz lead',
+    whatsappClientModeNever: 'Nigdy nie twórz automatycznie',
+    whatsappNumber: 'Połączony numer',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    webhookStatus: 'Status webhooka',
+    lastWebhook: 'Ostatnie zdarzenie webhook',
+    noWebhookYet: 'Brak zdarzeń webhook',
   },
   fr: {
     title: 'Intégrations de boutiques',
@@ -405,6 +513,20 @@ const copy: Record<Locale, Record<string, string>> = {
     whatsappGuide: 'WhatsApp Business ne peut pas lire les contacts ou chats personnels. MVP : capture manuelle/CSV; les webhooks Cloud API nécessitent Meta Business setup et vérification de signature.',
     issGuide: 'ISS POS reste désactivé tant que le fournisseur ne donne pas documentation API, base URL, méthode auth, endpoints produits/stock/ventes, branch/store ID, webhooks ou polling, rate limits et compte test.',
     credentialsNeverExposed: 'Les identifiants sont envoyés uniquement aux server routes, chiffrés par workspace et affichés seulement sous forme masquée.',
+    connectWhatsapp: 'Connecter WhatsApp Business',
+    whatsappSignupRunning: 'Ouverture de Meta Embedded Signup...',
+    whatsappConnected: 'WhatsApp Business connecté.',
+    whatsappSetupRequired: 'Meta Embedded Signup n’est pas encore configuré.',
+    whatsappClientMode: 'Création de clients',
+    whatsappClientModeAsk: 'Demander avant de créer',
+    whatsappClientModeAuto: 'Créer automatiquement un lead',
+    whatsappClientModeNever: 'Ne jamais créer automatiquement',
+    whatsappNumber: 'Numéro connecté',
+    whatsappWaba: 'WABA ID',
+    whatsappPhoneId: 'Phone Number ID',
+    webhookStatus: 'Statut webhook',
+    lastWebhook: 'Dernier événement webhook',
+    noWebhookYet: 'Aucun événement webhook',
   },
 }
 
@@ -440,9 +562,11 @@ export default function StoreIntegrationsPage() {
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [whatsAppConnecting, setWhatsAppConnecting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const integrationRequestRef = useRef<AbortController | null>(null)
+  const whatsAppSignupDataRef = useRef<Record<string, unknown>>({})
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
 
@@ -516,6 +640,10 @@ export default function StoreIntegrationsPage() {
       merchantId: currentIntegration.merchantId,
       accessToken: '',
       refreshToken: '',
+      clientCreationMode: (currentIntegration.metadata?.clientCreationMode === 'auto_create_lead' ||
+        currentIntegration.metadata?.clientCreationMode === 'never'
+        ? currentIntegration.metadata.clientCreationMode
+        : 'ask') as WhatsAppClientCreationMode,
     })
   }, [currentIntegration])
 
@@ -533,6 +661,12 @@ export default function StoreIntegrationsPage() {
 
     if (provider === 'iss_pos') {
       setError(labels.issSetup)
+      setSaving(false)
+      return
+    }
+
+    if (provider === 'whatsapp_business') {
+      setError(labels.whatsappSetupRequired)
       setSaving(false)
       return
     }
@@ -700,6 +834,127 @@ export default function StoreIntegrationsPage() {
     setSyncing(false)
   }
 
+  const loadFacebookSdk = useCallback((appId: string, graphVersion: string) => {
+    return new Promise<void>((resolve, reject) => {
+      if (window.FB) {
+        window.FB.init({ appId, autoLogAppEvents: true, xfbml: false, version: graphVersion })
+        resolve()
+        return
+      }
+
+      const existingScript = document.getElementById('facebook-jssdk')
+      window.fbAsyncInit = () => {
+        window.FB?.init({ appId, autoLogAppEvents: true, xfbml: false, version: graphVersion })
+        resolve()
+      }
+
+      if (existingScript) {
+        existingScript.addEventListener('load', () => {
+          window.FB?.init({ appId, autoLogAppEvents: true, xfbml: false, version: graphVersion })
+          resolve()
+        }, { once: true })
+        existingScript.addEventListener('error', () => reject(new Error(labels.whatsappSetupRequired)), { once: true })
+        return
+      }
+
+      const script = document.createElement('script')
+      script.id = 'facebook-jssdk'
+      script.src = 'https://connect.facebook.net/en_US/sdk.js'
+      script.async = true
+      script.defer = true
+      script.onerror = () => reject(new Error(labels.whatsappSetupRequired))
+      document.body.appendChild(script)
+    })
+  }, [labels.whatsappSetupRequired])
+
+  const startWhatsAppSignup = async () => {
+    if (!currentCompany || whatsAppConnecting) return
+
+    setWhatsAppConnecting(true)
+    setMessage('')
+    setError('')
+    whatsAppSignupDataRef.current = {}
+
+    const handleSignupMessage = (event: MessageEvent) => {
+      if (!event.origin.endsWith('facebook.com')) return
+
+      try {
+        const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+        if (payload?.type === 'WA_EMBEDDED_SIGNUP' || payload?.event === 'FINISH') {
+          whatsAppSignupDataRef.current = {
+            ...whatsAppSignupDataRef.current,
+            ...(payload?.data ?? payload),
+          }
+        }
+      } catch {
+        // Meta sends non-JSON events as well; ignore them.
+      }
+    }
+
+    window.addEventListener('message', handleSignupMessage)
+
+    try {
+      const configResponse = await fetch(`/api/store-integrations/whatsapp/embedded-signup/config?companyId=${encodeURIComponent(currentCompany.id)}`, {
+        cache: 'no-store',
+      })
+      const config = await configResponse.json().catch(() => ({}))
+
+      if (!configResponse.ok) {
+        setError(localizedApiError(config, labels))
+        return
+      }
+
+      await loadFacebookSdk(config.appId, config.graphVersion)
+      setMessage(labels.whatsappSignupRunning)
+
+      await new Promise<void>((resolve) => {
+        window.FB?.login(async (response) => {
+          const code = response.authResponse?.code
+
+          if (!code) {
+            setError(labels.whatsappSetupRequired)
+            resolve()
+            return
+          }
+
+          const completeResponse = await fetch('/api/store-integrations/whatsapp/embedded-signup/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              companyId: currentCompany.id,
+              code,
+              signupData: whatsAppSignupDataRef.current,
+              clientCreationMode: form.clientCreationMode,
+            }),
+          })
+          const completePayload = await completeResponse.json().catch(() => ({}))
+
+          if (!completeResponse.ok) {
+            setError(localizedApiError(completePayload, labels))
+          } else {
+            setMessage(labels.whatsappConnected)
+            await loadIntegrations()
+          }
+
+          resolve()
+        }, {
+          config_id: config.configId,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            sessionInfoVersion: '3',
+          },
+        })
+      })
+    } catch (signupError) {
+      setError(signupError instanceof Error ? signupError.message : labels.whatsappSetupRequired)
+    } finally {
+      window.removeEventListener('message', handleSignupMessage)
+      setWhatsAppConnecting(false)
+    }
+  }
+
   if (loading || loadingIntegrations) {
     return <PageContainer><PageHeader title={labels.title} description={labels.description} /></PageContainer>
   }
@@ -747,6 +1002,7 @@ export default function StoreIntegrationsPage() {
               <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
                 <p>{labels.serverOnly}</p>
                 <p className="mt-1">{labels.setupNote}</p>
+                {provider === 'whatsapp_business' && <p className="mt-2 font-medium">{labels.whatsappGuide}</p>}
                 {provider === 'iss_pos' && <p className="mt-2 font-medium">{labels.issSetup}</p>}
               </div>
 
@@ -754,15 +1010,29 @@ export default function StoreIntegrationsPage() {
                 <h3 className="font-semibold text-slate-950">{labels.integrationGuideTitle}</h3>
                 <p className="mt-2">{labels.credentialsNeverExposed}</p>
                 <div className="mt-3 grid gap-3">
-                  <p><span className="font-medium">Google Login:</span> {labels.googleLoginGuide}</p>
-                  <p><span className="font-medium">Facebook Login:</span> {labels.facebookLoginGuide}</p>
-                  <p><span className="font-medium">Google Maps:</span> {labels.googleMapsGuide}</p>
-                  <p><span className="font-medium">WhatsApp Business:</span> {labels.whatsappGuide}</p>
+                  <p><span className="font-medium">{t('integrations.googleLogin')}:</span> {labels.googleLoginGuide}</p>
+                  <p><span className="font-medium">{t('integrations.facebookLogin')}:</span> {labels.facebookLoginGuide}</p>
+                  <p><span className="font-medium">{t('integrations.googleMaps')}:</span> {labels.googleMapsGuide}</p>
+                  <p><span className="font-medium">{t('integrations.whatsappBusiness')}:</span> {labels.whatsappGuide}</p>
                   <p><span className="font-medium">ISS POS:</span> {labels.issGuide}</p>
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
+                {provider === 'whatsapp_business' && (
+                  <label className="block space-y-1 md:col-span-2">
+                    <span className="text-sm font-medium">{labels.whatsappClientMode}</span>
+                    <AppSelect
+                      value={form.clientCreationMode}
+                      onChange={(value) => updateForm('clientCreationMode', value)}
+                      options={[
+                        { value: 'ask', label: labels.whatsappClientModeAsk },
+                        { value: 'auto_create_lead', label: labels.whatsappClientModeAuto },
+                        { value: 'never', label: labels.whatsappClientModeNever },
+                      ]}
+                    />
+                  </label>
+                )}
                 {selectedProvider.fields.includes('storeName') && (
                   <label className="block space-y-1">
                     <span className="text-sm font-medium">{labels.storeName}</span>
@@ -817,6 +1087,14 @@ export default function StoreIntegrationsPage() {
                 <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                   <p className="mb-2 font-medium text-slate-950">{labels.previews}</p>
                   <div className="grid gap-2 md:grid-cols-2">
+                    {provider === 'whatsapp_business' && (
+                      <>
+                        <p>{labels.whatsappNumber}: {String(currentIntegration.metadata?.displayPhoneNumber ?? currentIntegration.storeName ?? '-')}</p>
+                        <p>{labels.whatsappWaba}: {currentIntegration.externalAccountId || '-'}</p>
+                        <p>{labels.whatsappPhoneId}: {currentIntegration.merchantId || '-'}</p>
+                        <p>{labels.lastWebhook}: {formatDate(currentIntegration.lastWebhookAt, locale) || labels.noWebhookYet}</p>
+                      </>
+                    )}
                     {currentIntegration.apiKeyPreview && <p><KeyRound className="mr-1 inline h-3.5 w-3.5" />{labels.apiKey}: {currentIntegration.apiKeyPreview}</p>}
                     {currentIntegration.apiSecretPreview && <p><KeyRound className="mr-1 inline h-3.5 w-3.5" />{labels.apiSecret}: {currentIntegration.apiSecretPreview}</p>}
                     {currentIntegration.accessTokenPreview && <p><KeyRound className="mr-1 inline h-3.5 w-3.5" />{labels.accessToken}: {currentIntegration.accessTokenPreview}</p>}
@@ -826,7 +1104,14 @@ export default function StoreIntegrationsPage() {
               )}
 
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={saving}>{saving ? t('common.loading') : labels.save}</Button>
+                {provider !== 'whatsapp_business' && (
+                  <Button type="submit" disabled={saving}>{saving ? t('common.loading') : labels.save}</Button>
+                )}
+                {provider === 'whatsapp_business' && (
+                  <Button type="button" disabled={whatsAppConnecting || saving} onClick={startWhatsAppSignup}>
+                    {whatsAppConnecting ? t('common.loading') : labels.connectWhatsapp}
+                  </Button>
+                )}
                 {provider === 'shopify' || provider === 'google_merchant' ? (
                   <Button type="button" variant="outline" disabled={saving} onClick={handleOAuthConnect}>{labels.oauthConnect}</Button>
                 ) : null}
@@ -836,9 +1121,11 @@ export default function StoreIntegrationsPage() {
                 {provider === 'iss_pos' && (
                   <Button type="button" variant="outline" disabled>{labels.issSetup}</Button>
                 )}
-                <Button type="button" variant="outline" disabled={exporting} onClick={handleExportProducts}>
-                  {exporting ? t('common.loading') : labels.exportProducts}
-                </Button>
+                {provider !== 'whatsapp_business' && provider !== 'iss_pos' && (
+                  <Button type="button" variant="outline" disabled={exporting} onClick={handleExportProducts}>
+                    {exporting ? t('common.loading') : labels.exportProducts}
+                  </Button>
+                )}
                 {provider === 'shopify' && (
                   <Button type="button" variant="outline" disabled={importing || !currentIntegration} onClick={handleImportProducts}>
                     {importing ? t('common.loading') : labels.importProducts}

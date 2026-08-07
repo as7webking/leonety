@@ -10,6 +10,8 @@ export interface PlanDefinition {
   plan: AppPlan
   monthlyPriceEur: number
   workspaceLimit: number | null
+  trialDays: number
+  recommended?: boolean
 }
 
 export const planDefinitions: Record<AppPlan, PlanDefinition> = {
@@ -17,21 +19,26 @@ export const planDefinitions: Record<AppPlan, PlanDefinition> = {
     plan: 'free',
     monthlyPriceEur: 0,
     workspaceLimit: 1,
+    trialDays: 0,
   },
   starter: {
     plan: 'starter',
-    monthlyPriceEur: 7,
+    monthlyPriceEur: 11.99,
     workspaceLimit: 2,
+    trialDays: 7,
   },
   pro: {
     plan: 'pro',
-    monthlyPriceEur: 19,
+    monthlyPriceEur: 29.99,
     workspaceLimit: null,
+    trialDays: 7,
+    recommended: true,
   },
   business: {
     plan: 'business',
-    monthlyPriceEur: 29,
+    monthlyPriceEur: 49.99,
     workspaceLimit: null,
+    trialDays: 7,
   },
 }
 
