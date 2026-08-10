@@ -34,7 +34,7 @@ export function WorkspaceSelectorClient() {
         }}
         disabled={loading}
         options={options}
-        ariaLabel="Current workspace"
+        ariaLabel={t('nav.currentCompany')}
         className="w-full"
       />
     </div>

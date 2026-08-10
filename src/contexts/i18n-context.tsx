@@ -10,7 +10,6 @@ interface I18nContextValue {
 }
 
 const I18nContext = createContext<I18nContextValue | undefined>(undefined)
-const STORAGE_KEY = LOCALE_COOKIE
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 const warnedMissingKeys = new Set<string>()
 
@@ -34,7 +33,6 @@ export function I18nProvider({
 
   useEffect(() => {
     document.documentElement.lang = locale
-    window.localStorage.setItem(STORAGE_KEY, locale)
   }, [locale])
 
   const setLocale = (nextLocale: Locale) => {

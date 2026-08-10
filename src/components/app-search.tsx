@@ -7,13 +7,16 @@ import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 
-type SearchGroup = 'Income' | 'Expenses' | 'Time' | 'Clients' | 'Invoices' | 'Workspaces'
+type SearchGroup = 'income' | 'expenses' | 'time' | 'clients' | 'invoices' | 'workspaces'
 
 interface SearchResult {
   id: string
   group: SearchGroup
   title: string
+  titleKey?: string
   detail: string
+  detailKey?: string
+  detailParams?: Record<string, string>
   href: string
 }
 
@@ -61,7 +64,16 @@ interface InvoiceRow {
   company_id: string
 }
 
-const groups: SearchGroup[] = ['Income', 'Expenses', 'Time', 'Clients', 'Invoices', 'Workspaces']
+const groups: SearchGroup[] = ['income', 'expenses', 'time', 'clients', 'invoices', 'workspaces']
+
+const groupLabelKeys: Record<SearchGroup, string> = {
+  income: 'nav.income',
+  expenses: 'nav.expenses',
+  time: 'nav.time',
+  clients: 'nav.clients',
+  invoices: 'nav.invoices',
+  workspaces: 'nav.workspaces',
+}
 
 function matchesQuery(values: Array<string | number | null | undefined>, query: string) {
   const normalizedQuery = query.trim().toLowerCase()
@@ -92,7 +104,7 @@ export function AppSearch() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(false)
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
 
@@ -113,7 +125,7 @@ export function AppSearch() {
     if (!currentCompany || trimmedQuery.length < 2) {
       setResults([])
       setLoading(false)
-      setError('')
+      setError(false)
       return
     }
 
@@ -121,7 +133,7 @@ export function AppSearch() {
 
     const loadResults = async () => {
       setLoading(true)
-      setError('')
+      setError(false)
 
       try {
         const [incomeRes, expenseRes, timeRes, clientRes, invoiceRes] = await Promise.all([
@@ -169,9 +181,14 @@ export function AppSearch() {
           if (matchesQuery([company.name, company.type, company.currency], trimmedQuery)) {
             nextResults.push({
               id: `workspace-${company.id}`,
-              group: 'Workspaces',
+              group: 'workspaces',
               title: company.name,
-              detail: `${company.type} workspace${company.currency ? ` · ${company.currency}` : ''}`,
+              detail: '',
+              detailKey: 'search.workspaceDetail',
+              detailParams: {
+                type: company.type,
+                currency: company.currency ? ` · ${company.currency}` : '',
+              },
               href: '/app/dashboard',
             })
           }
@@ -181,8 +198,9 @@ export function AppSearch() {
           if (matchesQuery([income.description, income.category, income.amount, income.date], trimmedQuery)) {
             nextResults.push({
               id: `income-${income.id}`,
-              group: 'Income',
-              title: income.description || 'Income entry',
+              group: 'income',
+              title: income.description || '',
+              titleKey: income.description ? undefined : 'search.incomeEntry',
               detail: [income.category, income.amount, income.date].filter(Boolean).join(' · '),
               href: '/app/income',
             })
@@ -193,8 +211,9 @@ export function AppSearch() {
           if (matchesQuery([expense.description, expense.category, expense.amount, expense.date], trimmedQuery)) {
             nextResults.push({
               id: `expense-${expense.id}`,
-              group: 'Expenses',
-              title: expense.description || 'Expense entry',
+              group: 'expenses',
+              title: expense.description || '',
+              titleKey: expense.description ? undefined : 'search.expenseEntry',
               detail: [expense.category, expense.amount, expense.date].filter(Boolean).join(' · '),
               href: '/app/expenses',
             })
@@ -206,8 +225,9 @@ export function AppSearch() {
           if (matchesQuery([entry.description, entry.date, entry.hours, duration], trimmedQuery)) {
             nextResults.push({
               id: `time-${entry.id}`,
-              group: 'Time',
-              title: entry.description || 'Time entry',
+              group: 'time',
+              title: entry.description || '',
+              titleKey: entry.description ? undefined : 'search.timeEntry',
               detail: `${duration} · ${entry.date}`,
               href: '/app/time',
             })
@@ -218,7 +238,7 @@ export function AppSearch() {
           if (matchesQuery([client.name, client.phone, client.interested_in, client.status], trimmedQuery)) {
             nextResults.push({
               id: `client-${client.id}`,
-              group: 'Clients',
+              group: 'clients',
               title: client.name,
               detail: [client.phone, client.interested_in, client.status].filter(Boolean).join(' · '),
               href: '/app/clients',
@@ -230,7 +250,7 @@ export function AppSearch() {
           if (matchesQuery([invoice.invoice_number, invoice.status, invoice.total, invoice.currency], trimmedQuery)) {
             nextResults.push({
               id: `invoice-${invoice.id}`,
-              group: 'Invoices',
+              group: 'invoices',
               title: invoice.invoice_number,
               detail: [invoice.status, `${invoice.total} ${invoice.currency}`].filter(Boolean).join(' · '),
               href: '/app/invoices',
@@ -243,7 +263,8 @@ export function AppSearch() {
         }
       } catch (searchError) {
         if (active) {
-          setError(searchError instanceof Error ? searchError.message : 'Search failed')
+          console.error('Search failed:', searchError)
+          setError(true)
           setResults([])
         }
       } finally {
@@ -263,6 +284,14 @@ export function AppSearch() {
     }
   }, [companies, currentCompany, supabase, trimmedQuery])
 
+  const renderDetail = (result: SearchResult) => {
+    if (!result.detailKey) return result.detail
+    return Object.entries(result.detailParams ?? {}).reduce(
+      (value, [key, replacement]) => value.replace(`{${key}}`, replacement),
+      t(result.detailKey),
+    )
+  }
+
   const groupedResults = useMemo(
     () => groups.map((group) => ({
       group,
@@ -272,7 +301,7 @@ export function AppSearch() {
   )
 
   return (
-    <div ref={wrapperRef} className="relative w-full md:w-64">
+    <div ref={wrapperRef} className="relative w-full min-w-0">
       <label htmlFor="app-search" className="sr-only">{t('search.label')}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -286,18 +315,18 @@ export function AppSearch() {
           }}
           onFocus={() => setOpen(true)}
           placeholder={t('search.placeholder')}
-          className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm"
+          className="w-full min-w-0 rounded-md border bg-background py-2 pl-9 pr-3 text-sm"
         />
       </div>
 
       {open && trimmedQuery.length > 0 && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 min-w-0 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
           {trimmedQuery.length < 2 ? (
             <div className="px-4 py-3 text-sm text-slate-500">{t('search.minChars')}</div>
           ) : loading ? (
             <div className="px-4 py-3 text-sm text-slate-500">{t('search.loading')}</div>
           ) : error ? (
-            <div className="px-4 py-3 text-sm text-red-700">{error}</div>
+            <div className="px-4 py-3 text-sm text-red-700">{t('search.failed')}</div>
           ) : groupedResults.length === 0 ? (
             <div className="px-4 py-3 text-sm text-slate-500">{t('search.noResults')}</div>
           ) : (
@@ -305,7 +334,7 @@ export function AppSearch() {
               {groupedResults.map((section) => (
                 <div key={section.group} className="py-1">
                   <div className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {section.group}
+                    {t(groupLabelKeys[section.group])}
                   </div>
                   {section.items.map((result) => (
                     <Link
@@ -314,8 +343,8 @@ export function AppSearch() {
                       className="block px-4 py-2 text-sm hover:bg-slate-50"
                       onClick={() => setOpen(false)}
                     >
-                      <span className="block font-medium text-slate-900">{result.title}</span>
-                      <span className="block text-xs text-slate-500">{result.detail}</span>
+                      <span className="block font-medium text-slate-900">{result.titleKey ? t(result.titleKey) : result.title}</span>
+                      <span className="block text-xs text-slate-500">{renderDetail(result)}</span>
                     </Link>
                   ))}
                 </div>

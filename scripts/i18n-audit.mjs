@@ -102,6 +102,9 @@ function collectDictionaryKeys() {
     ['src/lib/i18n.ts', 'supplementalDictionaries'],
     ['src/lib/i18n.ts', 'productSortDictionaries'],
     ['src/lib/i18n.ts', 'inventoryUxDictionaries'],
+    ['src/lib/i18n.ts', 'productChannelDictionaries'],
+    ['src/lib/i18n.ts', 'landingDictionaries'],
+    ['src/lib/i18n.ts', 'mixedLanguageFixDictionaries'],
     ['src/lib/i18n.ts', 'auditDictionaries'],
   ]
 

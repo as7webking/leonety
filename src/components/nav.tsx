@@ -264,7 +264,7 @@ export function Nav() {
                 onChange={handleCompanyChange}
                 disabled={loading}
                 options={companyOptions}
-                ariaLabel="Current company"
+                ariaLabel={t('nav.currentCompany')}
               />
               <Link href="/app/dashboard" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.dashboard')}</Link>
               <div className="rounded-md border border-slate-200 p-3">
