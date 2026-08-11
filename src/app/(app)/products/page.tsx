@@ -63,19 +63,33 @@ interface ProductForm {
   woo_variants: string
 }
 
+type ProductChannel =
+  | 'woocommerce'
+  | 'shopify'
+  | 'opencart'
+  | 'google_merchant'
+  | 'facebook_instagram'
+  | 'tiktok_shop'
+  | 'iss_pos'
+
 interface ProductSync {
   product_id: string
-  channel: 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'iss_pos'
+  channel: ProductChannel
   external_product_id: string | null
   sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'
   last_synced_at: string | null
   error_message: string | null
 }
 
+interface StoreConnectionStatus {
+  provider: ProductChannel
+  status: 'not_connected' | 'connected' | 'error' | 'disabled'
+  lastSyncAt: string | null
+}
+
 interface BulkEditForm {
   category: string
   selling_price: string
-  current_stock: string
   status: '' | ProductStatus
 }
 
@@ -110,10 +124,23 @@ const productSortOptions: ProductSort[] = [
 
 type ProductEditorSection = 'general' | 'pricing' | 'inventory' | 'image' | 'integration' | 'advanced'
 type ProductStockFilter = 'all' | 'low'
-type ProductProviderFilter = 'all' | ProductSync['channel'] | 'none'
+type ProductProviderFilter = 'all' | ProductChannel | 'none'
 type ProductImageFilter = 'all' | 'has_image' | 'missing_image'
 
 const productEditorSections: ProductEditorSection[] = ['general', 'pricing', 'inventory', 'image', 'integration', 'advanced']
+
+const productChannels: Array<{
+  channel: ProductChannel
+  labelKey: string
+  publishKey: string
+  operational: boolean
+}> = [
+  { channel: 'woocommerce', labelKey: 'integrations.woocommerce', publishKey: 'products.publishChannel.woocommerce', operational: true },
+  { channel: 'google_merchant', labelKey: 'integrations.googleMerchant', publishKey: 'products.publishChannel.googleMerchant', operational: false },
+  { channel: 'facebook_instagram', labelKey: 'integrations.facebookInstagram', publishKey: 'products.publishChannel.facebookInstagram', operational: false },
+  { channel: 'tiktok_shop', labelKey: 'integrations.tiktokShop', publishKey: 'products.publishChannel.tiktokShop', operational: false },
+  { channel: 'iss_pos', labelKey: 'integrations.issPos', publishKey: 'products.publishChannel.issPos', operational: false },
+]
 
 const makeEmptyForm = (currency = 'EUR'): ProductForm => ({
   name: '',
@@ -330,10 +357,11 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<ProductCategory[]>([])
   const [syncs, setSyncs] = useState<Record<string, ProductSync[]>>({})
+  const [storeConnections, setStoreConnections] = useState<Record<ProductChannel, StoreConnectionStatus>>({} as Record<ProductChannel, StoreConnectionStatus>)
   const [syncingProductId, setSyncingProductId] = useState<string | null>(null)
   const [syncingAll, setSyncingAll] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
-  const [bulkForm, setBulkForm] = useState<BulkEditForm>({ category: '', selling_price: '', current_stock: '', status: '' })
+  const [bulkForm, setBulkForm] = useState<BulkEditForm>({ category: '', selling_price: '', status: '' })
   const [compressingImage, setCompressingImage] = useState(false)
   const [cropProductImage, setCropProductImage] = useState(false)
   const [imageCrop, setImageCrop] = useState({ zoom: 1, offsetX: 0, offsetY: 0 })
@@ -365,7 +393,7 @@ export default function ProductsPage() {
       return
     }
     setLoading(true)
-    const [productResult, syncResult, categoryResult] = await Promise.all([
+    const [productResult, syncResult, categoryResult, integrationResult] = await Promise.all([
       supabase.from('products').select('*').eq('company_id', currentCompany.id).order('name'),
       supabase
         .from('product_syncs')
@@ -376,6 +404,9 @@ export default function ProductsPage() {
         .select('id, company_id, name')
         .eq('company_id', currentCompany.id)
         .order('name'),
+      fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : { integrations: [] })
+        .catch(() => ({ integrations: [] })),
     ])
     const { data, error: loadError } = productResult
     if (loadError) {
@@ -402,6 +433,16 @@ export default function ProductsPage() {
     } else {
       setError(syncResult.error.message)
     }
+    const connectionMap = {} as Record<ProductChannel, StoreConnectionStatus>
+    for (const integration of (integrationResult.integrations ?? []) as Array<{ provider?: ProductChannel; status?: StoreConnectionStatus['status']; lastSyncAt?: string | null }>) {
+      if (!integration.provider) continue
+      connectionMap[integration.provider] = {
+        provider: integration.provider,
+        status: integration.status ?? 'not_connected',
+        lastSyncAt: integration.lastSyncAt ?? null,
+      }
+    }
+    setStoreConnections(connectionMap)
     if (!categoryResult.error) {
       setCategories((categoryResult.data ?? []) as ProductCategory[])
       setCategoriesAvailable(true)
@@ -937,7 +978,6 @@ export default function ProductsPage() {
       payload.category_id = categories.find((category) => category.name === bulkForm.category.trim())?.id ?? null
     }
     if (bulkForm.selling_price.trim()) payload.selling_price = Math.max(0, Number(bulkForm.selling_price) || 0)
-    if (bulkForm.current_stock.trim()) payload.current_stock = Math.max(0, Number(bulkForm.current_stock) || 0)
     if (bulkForm.status) payload.status = bulkForm.status
 
     if (Object.keys(payload).length === 1) {
@@ -956,7 +996,7 @@ export default function ProductsPage() {
       return
     }
 
-    setBulkForm({ category: '', selling_price: '', current_stock: '', status: '' })
+    setBulkForm({ category: '', selling_price: '', status: '' })
     setSelectedProductIds(new Set())
     setMessage(t('products.bulkUpdated'))
     await loadProducts()
@@ -1000,6 +1040,11 @@ export default function ProductsPage() {
     return sync?.external_product_id && sync.sync_status === 'synced'
       ? t('woocommerce.updateProduct')
       : t('woocommerce.publishProduct')
+  }
+
+  const hasUnsyncedLocalChanges = (product: Product, sync?: ProductSync) => {
+    if (!sync?.last_synced_at || !product.updated_at) return false
+    return new Date(product.updated_at).getTime() > new Date(sync.last_synced_at).getTime()
   }
 
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('products.title')} /><LoadingSkeleton /></PageContainer>
@@ -1066,6 +1111,8 @@ export default function ProductsPage() {
             { value: 'shopify', label: 'Shopify' },
             { value: 'opencart', label: 'OpenCart' },
             { value: 'google_merchant', label: 'Google Merchant' },
+            { value: 'facebook_instagram', label: 'Facebook / Instagram' },
+            { value: 'tiktok_shop', label: 'TikTok Shop' },
             { value: 'iss_pos', label: 'ISS POS' },
             { value: 'none', label: t('products.noProvider') },
           ]}
@@ -1103,17 +1150,17 @@ export default function ProductsPage() {
                   <Button variant="outline" onClick={() => void handleBulkWooSync()} disabled={syncingAll}><UploadCloud className="h-4 w-4" />{t('products.bulkSyncWoo')}</Button>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-5">
+                <div className="grid gap-3 md:grid-cols-4">
                   {categoriesAvailable && categories.length > 0 ? (
                     <AppSelect value={bulkForm.category} onChange={(value) => setBulkForm({ ...bulkForm, category: value })} options={[{ value: '', label: t('products.keepCategory') }, ...categories.map((category) => ({ value: category.name, label: category.name }))]} />
                   ) : (
                     <input value={bulkForm.category} onChange={(event) => setBulkForm({ ...bulkForm, category: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.category')} />
                   )}
                   <input type="number" min="0" step="0.01" value={bulkForm.selling_price} onChange={(event) => setBulkForm({ ...bulkForm, selling_price: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.sellingPrice')} />
-                  <input type="number" min="0" step="0.001" value={bulkForm.current_stock} onChange={(event) => setBulkForm({ ...bulkForm, current_stock: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.currentStock')} />
                   <AppSelect value={bulkForm.status} onChange={(value) => setBulkForm({ ...bulkForm, status: value as '' | ProductStatus })} options={[{ value: '', label: t('products.keepStatus') }, ...productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))]} />
                   <Button type="button" onClick={() => void handleBulkEdit()}>{t('products.applyBulkEdit')}</Button>
                 </div>
+                <p className="text-xs text-slate-500">{t('products.bulkStockMovementHint')}</p>
               </div>
             )}
           </CardContent>
@@ -1262,22 +1309,47 @@ export default function ProductsPage() {
 
                 {editorSection === 'integration' && (
                   <div className="space-y-4">
-                    <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:grid-cols-3">
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={form.publish_to_woocommerce}
-                    onChange={(event) => setForm({ ...form, publish_to_woocommerce: event.target.checked })}
-                    className="h-4 w-4"
-                  />
-                  {t('products.publishWoo')}
-                </label>
-                {['googleMerchant', 'whatsappCatalog', 'openCommerce'].map((provider) => (
-                  <label key={provider} className="flex items-center gap-2 text-sm text-slate-400">
-                    <input type="checkbox" disabled className="h-4 w-4" />
-                    {t(`products.futureProvider.${provider}`)} · {t('integrations.comingSoon')}
-                  </label>
-                ))}
+                    <div className="rounded-md border border-slate-200 bg-white p-3">
+                      <div className="mb-3">
+                        <p className="text-sm font-semibold text-slate-900">{t('products.channelsTitle')}</p>
+                        <p className="text-xs text-slate-500">{t('products.channelsDescription')}</p>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {productChannels.map((channel) => {
+                          const connection = storeConnections[channel.channel]
+                          const sync = editing ? (syncs[editing.id] ?? []).find((item) => item.channel === channel.channel) : undefined
+                          const connected = connection?.status === 'connected'
+                          const published = Boolean(sync?.external_product_id)
+                          const disabled = !connected || !channel.operational
+                          return (
+                            <div key={channel.channel} className="rounded-md border border-slate-200 p-3">
+                              <label className={`flex items-start gap-2 text-sm ${disabled ? 'text-slate-400' : 'text-slate-700'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={channel.channel === 'woocommerce' ? form.publish_to_woocommerce : published}
+                                  disabled={disabled}
+                                  onChange={(event) => {
+                                    if (channel.channel === 'woocommerce') {
+                                      setForm({ ...form, publish_to_woocommerce: event.target.checked })
+                                    }
+                                  }}
+                                  className="mt-0.5 h-4 w-4"
+                                />
+                                <span className="min-w-0">
+                                  <span className="block font-medium">{t(channel.publishKey)}</span>
+                                  <span className="block text-xs">
+                                    {connected ? t('integrations.connected') : t('integrations.notConnected')} · {published ? t('products.channelStatus.published') : t('products.channelStatus.notPublished')}
+                                  </span>
+                                  {sync?.sync_status === 'failed' && <span className="mt-1 block text-xs text-red-600">{sync.error_message ?? t('products.channelStatus.syncError')}</span>}
+                                  {sync?.last_synced_at && <span className="mt-1 block text-xs text-slate-500">{t('products.channelStatus.lastSync')}: {new Date(sync.last_synced_at).toLocaleString()}</span>}
+                                  {editing && hasUnsyncedLocalChanges(editing, sync) && <span className="mt-1 block text-xs text-amber-700">{t('products.localChangesPending')}</span>}
+                                  {disabled && <span className="mt-1 block text-xs text-slate-500">{connected ? t('products.channelSetupRequired') : t('products.connectIntegration')}</span>}
+                                </span>
+                              </label>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
               {form.publish_to_woocommerce && (
                 <label className="space-y-1">
@@ -1359,6 +1431,7 @@ export default function ProductsPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}>{t('products.view')}</Button>
                     <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
+                    <Link href="/app/stock-movements"><Button size="sm" variant="outline">{t('products.adjustStock')}</Button></Link>
                     <Button size="sm" variant="outline" onClick={() => void handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
                     <Button size="sm" variant="outline" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)}>
                       {syncingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
@@ -1409,6 +1482,7 @@ export default function ProductsPage() {
                 {viewingProduct.description && <p className="whitespace-pre-line text-sm text-slate-700">{decodeHtmlText(viewingProduct.description)}</p>}
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => { handleEdit(viewingProduct); setViewingProduct(null) }}>{t('common.edit')}</Button>
+                  <Link href="/app/stock-movements"><Button variant="outline">{t('products.adjustStock')}</Button></Link>
                   <Button variant="outline" disabled={syncingProductId === viewingProduct.id} onClick={() => void handleWooExport(viewingProduct)}>
                     {syncingProductId === viewingProduct.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
                     {getWooActionLabel(viewingProduct)}
