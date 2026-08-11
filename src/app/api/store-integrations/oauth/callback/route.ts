@@ -8,6 +8,7 @@ import {
   type StoreProvider,
 } from '@/lib/store-integrations'
 import { getSiteUrl } from '@/lib/site-url'
+import { encryptSecret } from '@/lib/credential-encryption'
 
 export const runtime = 'nodejs'
 
@@ -25,6 +26,17 @@ function redirectWithMessage(message: string, type: 'message' | 'error' = 'messa
   const url = new URL('/app/settings/integrations', getSiteUrl())
   url.searchParams.set(type, message)
   return NextResponse.redirect(url)
+}
+
+function formatSafeOAuthError(error: unknown) {
+  if (error && typeof error === 'object') {
+    const record = error as { code?: string; message?: string }
+    if (record.code === '42703' || record.code === 'PGRST204' || record.message?.includes('external_account_id')) {
+      return 'Store integrations are temporarily unavailable. Please run the Supabase migration and try again.'
+    }
+  }
+
+  return formatApiError(error)
 }
 
 async function exchangeShopifyCode(shop: string, code: string) {
@@ -124,8 +136,8 @@ export async function GET(request: Request) {
       store_url: parsed.provider === 'shopify' ? `https://${shop}` : '',
       external_account_id: parsed.provider === 'shopify' ? shop : '',
       merchant_id: parsed.merchantId,
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
+      access_token: tokens.accessToken ? encryptSecret(tokens.accessToken) : '',
+      refresh_token: tokens.refreshToken ? encryptSecret(tokens.refreshToken) : '',
       status: 'connected',
       error_message: null,
       updated_at: new Date().toISOString(),
@@ -139,6 +151,6 @@ export async function GET(request: Request) {
 
     return redirectWithMessage('Integration connected.')
   } catch (error) {
-    return redirectWithMessage(formatApiError(error), 'error')
+    return redirectWithMessage(formatSafeOAuthError(error), 'error')
   }
 }

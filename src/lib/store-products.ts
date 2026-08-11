@@ -1,11 +1,12 @@
 import 'server-only'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { decryptSecret } from '@/lib/credential-encryption'
 import { normalizeShopifyShop, type StoreProvider } from '@/lib/store-integrations'
 
 export interface StoreIntegrationConnection {
   provider: StoreProvider
   store_url: string | null
-  external_account_id: string | null
+  external_account_id?: string | null
   merchant_id: string | null
   access_token: string | null
   refresh_token: string | null
@@ -69,22 +70,56 @@ function toStock(value: ProductForSync['current_stock']) {
   return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0
 }
 
+function htmlToText(value: string | null | undefined) {
+  return String(value ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export async function getStoreIntegration(
   adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
   companyId: string,
   provider: StoreProvider
 ) {
-  const { data, error } = await adminSupabase
+  const query = adminSupabase
     .from('store_integrations')
     .select('provider, store_url, external_account_id, merchant_id, access_token, refresh_token, api_key, api_secret')
     .eq('company_id', companyId)
     .eq('provider', provider)
     .maybeSingle()
 
+  let { data, error } = await query as { data: StoreIntegrationConnection | null; error: { code?: string; message?: string } | null }
+
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('external_account_id'))) {
+    const fallback = await adminSupabase
+      .from('store_integrations')
+      .select('provider, store_url, merchant_id, access_token, refresh_token, api_key, api_secret')
+      .eq('company_id', companyId)
+      .eq('provider', provider)
+      .maybeSingle()
+
+    data = fallback.data as StoreIntegrationConnection | null
+    error = fallback.error
+  }
+
   if (error) throw error
   if (!data) throw new Error(`${provider} integration is not connected.`)
 
-  return data as StoreIntegrationConnection
+  const connection = data as StoreIntegrationConnection
+
+  return {
+    ...connection,
+    api_key: decryptSecret(connection.api_key),
+    api_secret: decryptSecret(connection.api_secret),
+    access_token: decryptSecret(connection.access_token),
+    refresh_token: decryptSecret(connection.refresh_token),
+  }
 }
 
 export async function fetchProductsForSync(
@@ -281,7 +316,7 @@ export function mapShopifyProductToLeonety(companyId: string, product: ShopifyPr
     sku: variant?.sku || null,
     barcode: variant?.barcode || null,
     category: product.product_type || null,
-    description: product.body_html || null,
+    description: htmlToText(product.body_html) || null,
     selling_price: Number(variant?.price ?? 0),
     current_stock: Math.max(0, Number(variant?.inventory_quantity ?? 0)),
     image_url: image?.src || null,

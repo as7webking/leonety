@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { Search } from 'lucide-react'
 import { useI18n } from '@/contexts/i18n-context'
 
@@ -27,7 +29,44 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeIndex, setActiveIndex] = useState(-1)
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const tRef = useRef(t)
+
+  useEffect(() => {
+    tRef.current = t
+  }, [t])
+
+  const updateMenuPosition = useCallback(() => {
+    const input = inputRef.current
+    if (!input) return
+    const rect = input.getBoundingClientRect()
+    const padding = 12
+    const offset = 6
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const availableBelow = viewportHeight - rect.bottom - padding
+    const availableAbove = rect.top - padding
+    const openAbove = availableBelow < 220 && availableAbove > availableBelow
+    const availableHeight = Math.max(120, openAbove ? availableAbove - offset : availableBelow - offset)
+    const width = Math.min(rect.width, viewportWidth - padding * 2)
+    const left = Math.min(Math.max(padding, rect.left), viewportWidth - width - padding)
+    const top = openAbove
+      ? Math.max(padding, rect.top - offset - Math.min(256, availableHeight))
+      : Math.min(viewportHeight - padding, rect.bottom + offset)
+
+    setMenuStyle({
+      position: 'fixed',
+      left,
+      top,
+      width,
+      maxHeight: Math.min(256, availableHeight),
+      zIndex: 150,
+    })
+  }, [])
 
   useEffect(() => {
     const normalizedQuery = query.trim()
@@ -59,14 +98,14 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
         const payload = await response.json().catch(() => ({}))
 
         if (!response.ok) {
-          throw new Error(payload.error ?? t('address.searchFailed'))
+          throw new Error(payload.error ?? tRef.current('address.searchFailed'))
         }
 
         setSuggestions((payload.suggestions ?? []) as AddressSuggestion[])
       } catch (searchError) {
         if (searchError instanceof Error && searchError.name === 'AbortError') return
         setSuggestions([])
-        setError(searchError instanceof Error ? searchError.message : t('address.searchFailed'))
+        setError(searchError instanceof Error ? searchError.message : tRef.current('address.searchFailed'))
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
@@ -76,7 +115,33 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [country, query, t])
+  }, [country, query])
+
+  useLayoutEffect(() => {
+    if (suggestions.length === 0) return
+    updateMenuPosition()
+  }, [suggestions.length, updateMenuPosition])
+
+  useEffect(() => {
+    if (suggestions.length === 0) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setSuggestions([])
+        setActiveIndex(-1)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('resize', updateMenuPosition)
+    window.addEventListener('scroll', updateMenuPosition, true)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('resize', updateMenuPosition)
+      window.removeEventListener('scroll', updateMenuPosition, true)
+    }
+  }, [suggestions.length, updateMenuPosition])
 
   const chooseSuggestion = (suggestion: AddressSuggestion) => {
     onSelect(suggestion)
@@ -85,12 +150,29 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
     setActiveIndex(-1)
   }
 
+  const suggestionsMenu = suggestions.length > 0 && menuStyle && typeof document !== 'undefined' ? createPortal(
+    <div ref={menuRef} style={menuStyle} className="overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+      {suggestions.map((suggestion, index) => (
+        <button
+          key={suggestion.id}
+          type="button"
+          onClick={() => chooseSuggestion(suggestion)}
+          className={`block w-full px-3 py-2 text-left text-sm ${index === activeIndex ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'}`}
+        >
+          {suggestion.label}
+        </button>
+      ))}
+    </div>,
+    document.body
+  ) : null
+
   return (
-    <div className="relative space-y-1">
+    <div ref={rootRef} className="relative space-y-1">
       <label className="block text-sm font-medium">{t('address.searchLabel')}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
+          ref={inputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -122,20 +204,7 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
       {!loading && !error && query.trim().length >= 3 && suggestions.length === 0 && (
         <p className="text-xs text-slate-500">{t('address.noResults')}</p>
       )}
-      {suggestions.length > 0 && (
-        <div className="absolute z-[60] mt-1 max-h-64 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
-          {suggestions.map((suggestion, index) => (
-            <button
-              key={suggestion.id}
-              type="button"
-              onClick={() => chooseSuggestion(suggestion)}
-              className={`block w-full px-3 py-2 text-left text-sm ${index === activeIndex ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'}`}
-            >
-              {suggestion.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {suggestionsMenu}
     </div>
   )
 }

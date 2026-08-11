@@ -26,7 +26,7 @@ const content = {
 }
 
 export default function ImpressumPage() {
-  const { locale } = useI18n()
+  const { locale, t } = useI18n()
   const contactEmail = getContactEmail()
   const page = content[locale as keyof typeof content] ?? content.en
 
@@ -36,7 +36,7 @@ export default function ImpressumPage() {
       intro={<p>{page.intro}</p>}
       sections={[
         { title: 'Leonety', content: <p>{page.provider}</p> },
-        { title: 'Contact', content: contactEmail ? <a className="font-medium text-slate-900 underline" href={`mailto:${contactEmail}`}>{contactEmail}</a> : <p>To be added</p> },
+        { title: 'Contact', content: contactEmail ? <a className="font-medium text-slate-900 underline" href={`mailto:${contactEmail}`}>{contactEmail}</a> : <p>{t('legal.toBeAdded')}</p> },
         { title: 'Responsibility', content: <p>{page.responsibility}</p> },
       ]}
     />

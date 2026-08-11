@@ -1,26 +1,7 @@
 import { NextResponse } from 'next/server'
+import { searchAddresses } from '@/lib/address-providers'
 
 export const runtime = 'nodejs'
-
-interface NominatimAddress {
-  city?: string
-  town?: string
-  village?: string
-  municipality?: string
-  road?: string
-  pedestrian?: string
-  footway?: string
-  house_number?: string
-  postcode?: string
-  country?: string
-  state?: string
-}
-
-interface NominatimResult {
-  place_id: number
-  display_name: string
-  address?: NominatimAddress
-}
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -35,44 +16,7 @@ export async function GET(request: Request) {
   const timeout = setTimeout(() => controller.abort(), 7000)
 
   try {
-    const params = new URLSearchParams({
-      q: [query, country].filter(Boolean).join(', '),
-      format: 'jsonv2',
-      addressdetails: '1',
-      limit: '6',
-    })
-
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'Leonety address autocomplete',
-      },
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-
-    if (!response.ok) {
-      return NextResponse.json({ error: 'Address provider is temporarily unavailable.' }, { status: 502 })
-    }
-
-    const data = await response.json() as NominatimResult[]
-    const suggestions = data.map((item) => {
-      const address = item.address ?? {}
-      const street = address.road ?? address.pedestrian ?? address.footway ?? ''
-      const city = address.city ?? address.town ?? address.village ?? address.municipality ?? ''
-
-      return {
-        id: String(item.place_id),
-        label: item.display_name,
-        street,
-        houseNumber: address.house_number ?? '',
-        postalCode: address.postcode ?? '',
-        city,
-        country: address.country ?? country,
-        state: address.state ?? '',
-      }
-    })
-
+    const suggestions = await searchAddresses({ query, country, signal: controller.signal })
     return NextResponse.json({ suggestions })
   } catch (error) {
     const message = error instanceof Error && error.name === 'AbortError'

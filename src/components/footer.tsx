@@ -16,7 +16,7 @@ export function Footer() {
       <footer className="border-t border-slate-200 bg-white py-5">
         <div className="mx-auto flex w-[90%] max-w-7xl flex-col items-center justify-between gap-2 text-sm text-slate-500 sm:flex-row">
           <div className="flex items-center gap-2">
-            <Logo src="/logo.png" size="sm" />
+            <Logo size="sm" />
             <span className="font-medium text-slate-700">Leonety</span>
           </div>
           <p>© 2026 Leonety. {t('footer.rights')}</p>
@@ -46,7 +46,7 @@ export function Footer() {
             <div className="grid gap-8 md:grid-cols-4">
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <Logo src="/logo.png" size="md" />
+                  <Logo size="md" />
                   <span className="text-lg font-semibold">Leonety</span>
                 </div>
                 <p className="text-sm text-slate-600">{t('footer.description')}</p>

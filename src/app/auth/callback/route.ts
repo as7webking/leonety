@@ -1,35 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { getSiteUrl } from '@/lib/site-url'
-
-const legacyAppRoutes: Record<string, string> = {
-  '/dashboard': '/app/dashboard',
-  '/income': '/app/income',
-  '/expenses': '/app/expenses',
-  '/transactions': '/app/transactions',
-  '/time': '/app/time',
-  '/onboarding': '/app/onboarding',
-  '/profile': '/app/profile',
-  '/workspaces': '/app/workspaces',
-  '/upgrade': '/app/upgrade',
-  '/clients': '/app/clients',
-  '/invoices': '/app/invoices',
-  '/products': '/app/products',
-  '/inventory': '/app/inventory',
-}
-
-function getSafeNextPath(next: string | null) {
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) {
-    return '/app/dashboard'
-  }
-
-  return legacyAppRoutes[next] ?? next
-}
+import { getSafeAppRedirectPath, getSiteUrl } from '@/lib/site-url'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const next = getSafeNextPath(requestUrl.searchParams.get('next'))
+  const next = getSafeAppRedirectPath(requestUrl.searchParams.get('next'))
 
   if (code) {
     const supabase = await createServerSupabaseClient()

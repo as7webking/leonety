@@ -10,8 +10,8 @@ interface I18nContextValue {
 }
 
 const I18nContext = createContext<I18nContextValue | undefined>(undefined)
-const STORAGE_KEY = LOCALE_COOKIE
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
+const warnedMissingKeys = new Set<string>()
 
 function humanizeMissingKey(key: string) {
   return key
@@ -33,7 +33,6 @@ export function I18nProvider({
 
   useEffect(() => {
     document.documentElement.lang = locale
-    window.localStorage.setItem(STORAGE_KEY, locale)
   }, [locale])
 
   const setLocale = (nextLocale: Locale) => {
@@ -45,7 +44,20 @@ export function I18nProvider({
   const value = useMemo<I18nContextValue>(() => ({
     locale,
     setLocale,
-    t: (key: string) => dictionaries[locale][key] ?? dictionaries.en[key] ?? humanizeMissingKey(key),
+    t: (key: string) => {
+      const translatedValue = dictionaries[locale][key]
+      const fallbackValue = dictionaries.en[key]
+
+      if (!translatedValue && process.env.NODE_ENV !== 'production') {
+        const warningKey = `${locale}:${key}`
+        if (!warnedMissingKeys.has(warningKey)) {
+          warnedMissingKeys.add(warningKey)
+          console.warn(`[i18n] Missing translation key "${key}" for locale "${locale}". Falling back to English.`)
+        }
+      }
+
+      return translatedValue ?? fallbackValue ?? humanizeMissingKey(key)
+    },
   }), [locale])
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>

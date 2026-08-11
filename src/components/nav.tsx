@@ -218,13 +218,13 @@ export function Nav() {
             <div className="flex min-w-0 items-center justify-end gap-1.5">
               <AppSearch />
               <div className="min-w-[160px] max-w-[210px]">
-                <label htmlFor="company-selector" className="sr-only">Current company</label>
+                <label htmlFor="company-selector" className="sr-only">{t('nav.currentCompany')}</label>
                 <AppSelect
                   value={currentCompanyId ?? ''}
                   onChange={handleCompanyChange}
                   disabled={loading}
                   options={companyOptions}
-                  ariaLabel="Current company"
+                  ariaLabel={t('nav.currentCompany')}
                 />
               </div>
               {isAuthenticated && (
@@ -248,7 +248,7 @@ export function Nav() {
           <button
             className="lg:hidden"
             onClick={() => setIsOpen(!isOpen)}
-            aria-label="Toggle menu"
+            aria-label={t('nav.toggleMenu')}
           >
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -264,7 +264,7 @@ export function Nav() {
                 onChange={handleCompanyChange}
                 disabled={loading}
                 options={companyOptions}
-                ariaLabel="Current company"
+                ariaLabel={t('nav.currentCompany')}
               />
               <Link href="/app/dashboard" className="hover:underline" onClick={() => setIsOpen(false)}>{t('nav.dashboard')}</Link>
               <div className="rounded-md border border-slate-200 p-3">

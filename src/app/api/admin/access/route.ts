@@ -31,6 +31,8 @@ interface AppAccessRow {
 interface AuthUserStatus {
   id: string
   email?: string | null
+  confirmed_at?: string | null
+  email_confirmed_at?: string | null
   banned_until?: string | null
   last_sign_in_at?: string | null
   created_at?: string | null
@@ -75,6 +77,28 @@ function isActiveAppAccess(access: AppAccessRow | undefined) {
   }
 
   return !access.expires_at || new Date(access.expires_at) > new Date()
+}
+
+async function recordAdminAuditEvent(
+  adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
+  adminUserId: string,
+  targetUserId: string,
+  action: string
+) {
+  const { error } = await adminSupabase
+    .from('admin_audit_events')
+    .insert({
+      admin_user_id: adminUserId,
+      target_user_id: targetUserId,
+      action,
+      created_at: new Date().toISOString(),
+    })
+
+  if (error && !['42P01', 'PGRST205'].includes(error.code ?? '')) {
+    throw error
+  }
+
+  return !error
 }
 
 async function isCurrentUserAdmin(userId: string, email: string | undefined) {
@@ -180,6 +204,7 @@ async function loadManagedProfiles() {
       subscriptionStatus: activeAccess
         ? isActiveAppAccess(activeAccess) ? 'active' : 'expired'
         : 'active',
+      emailConfirmed: Boolean(authUser?.email_confirmed_at ?? authUser?.confirmed_at),
       isDeactivated: Boolean(bannedUntil && bannedUntil > new Date()),
       lastSignInAt: authUser?.last_sign_in_at ?? null,
     }
@@ -268,6 +293,9 @@ export async function POST(request: Request) {
     const upgradeRequestStatus = body.upgradeRequestStatus === 'approved' || body.upgradeRequestStatus === 'rejected'
       ? body.upgradeRequestStatus as 'approved' | 'rejected'
       : null
+    const adminEmailAction = body.adminEmailAction === 'confirm_email' || body.adminEmailAction === 'resend_confirmation'
+      ? body.adminEmailAction as 'confirm_email' | 'resend_confirmation'
+      : null
     const noExpiry = Boolean(body.noExpiry)
     const monthsPaid = Math.max(1, Math.min(120, Number(body.monthsPaid) || 1))
 
@@ -276,6 +304,36 @@ export async function POST(request: Request) {
     }
 
     const adminSupabase = createSupabaseAdminClient()
+    let auditEventRecorded = true
+
+    if (adminEmailAction) {
+      const { data: targetUserData, error: targetUserError } = await adminSupabase.auth.admin.getUserById(targetUserId)
+      if (targetUserError) throw targetUserError
+
+      const targetEmail = targetUserData.user.email
+      if (!targetEmail) {
+        return NextResponse.json({ error: 'Target user email is missing' }, { status: 400 })
+      }
+
+      if (adminEmailAction === 'confirm_email') {
+        const { error: confirmError } = await adminSupabase.auth.admin.updateUserById(targetUserId, {
+          email_confirm: true,
+        })
+
+        if (confirmError) throw confirmError
+        auditEventRecorded = await recordAdminAuditEvent(adminSupabase, authData.user.id, targetUserId, 'confirm_email')
+      }
+
+      if (adminEmailAction === 'resend_confirmation') {
+        const { error: resendError } = await adminSupabase.auth.resend({
+          type: 'signup',
+          email: targetEmail,
+        })
+
+        if (resendError) throw resendError
+        auditEventRecorded = await recordAdminAuditEvent(adminSupabase, authData.user.id, targetUserId, 'resend_confirmation')
+      }
+    }
 
     if (upgradeRequestId && upgradeRequestStatus) {
       const { error: requestUpdateError } = await adminSupabase
@@ -390,7 +448,7 @@ export async function POST(request: Request) {
       loadManagedProfiles(),
       loadUpgradeRequests(),
     ])
-    return NextResponse.json({ profiles, upgradeRequests })
+    return NextResponse.json({ profiles, upgradeRequests, auditEventRecorded })
   } catch (error) {
     console.error('Admin access POST failed:', error)
     return NextResponse.json({ error: formatError(error) || 'Failed to update access' }, { status: 500 })

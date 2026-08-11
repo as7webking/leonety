@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, Edit, Search, Trash2, UserRoundPlus } from 'lucide-react'
+import { Building2, Edit, FileUp, Search, Trash2, UserRoundPlus, X } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -62,6 +62,23 @@ interface ClientFormState {
   status: ClientStatus
 }
 
+interface ClientImportRow {
+  name: string
+  email: string
+  phone: string
+  client_company: string
+  street: string
+  house_number: string
+  postal_code: string
+  city: string
+  country: string
+  interested_in: string
+  notes: string
+  status: ClientStatus
+  duplicate: boolean
+  duplicateReason: string
+}
+
 const emptyForm: ClientFormState = {
   name: '',
   email: '',
@@ -99,16 +116,114 @@ function validateClientForm(form: ClientFormState, t: (key: string) => string) {
   return ''
 }
 
+function normalizePhone(value: string | null | undefined) {
+  return String(value ?? '').replace(/[^\d+]/g, '')
+}
+
+function parseCsvLine(line: string) {
+  const values: string[] = []
+  let current = ''
+  let quoted = false
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]
+    const next = line[index + 1]
+
+    if (char === '"' && next === '"') {
+      current += '"'
+      index += 1
+    } else if (char === '"') {
+      quoted = !quoted
+    } else if (char === ',' && !quoted) {
+      values.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+
+  values.push(current.trim())
+  return values
+}
+
+function mapClientImportRow(row: Record<string, string>): ClientImportRow {
+  const get = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = row[key.toLowerCase()]
+      if (value) return value.trim()
+    }
+    return ''
+  }
+
+  return {
+    name: get('name', 'full name', 'client', 'fn'),
+    email: get('email', 'e-mail', 'mail'),
+    phone: get('phone', 'tel', 'telephone', 'mobile'),
+    client_company: get('company', 'organization', 'org', 'client_company'),
+    street: get('street', 'address', 'address line 1'),
+    house_number: get('house number', 'house_number', 'number'),
+    postal_code: get('postal code', 'postal_code', 'zip'),
+    city: get('city'),
+    country: get('country'),
+    interested_in: get('interested_in', 'interested in', 'interest'),
+    notes: get('notes', 'note'),
+    status: 'lead',
+    duplicate: false,
+    duplicateReason: '',
+  }
+}
+
+function parseCsvClients(text: string) {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim())
+  if (lines.length < 2) return []
+  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase())
+
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line)
+    const row = headers.reduce<Record<string, string>>((result, header, index) => ({
+      ...result,
+      [header]: values[index] ?? '',
+    }), {})
+    return mapClientImportRow(row)
+  }).filter((row) => row.name || row.phone || row.email)
+}
+
+function parseVcfClients(text: string) {
+  return text
+    .split(/END:VCARD/i)
+    .map((card) => {
+      const lines = card.split(/\r?\n/)
+      const row: Record<string, string> = {}
+      for (const line of lines) {
+        const separator = line.indexOf(':')
+        if (separator === -1) continue
+        const rawKey = line.slice(0, separator).split(';')[0].toLowerCase()
+        const value = line.slice(separator + 1).trim()
+        if (rawKey === 'fn') row.name = value
+        if (rawKey === 'tel' && !row.phone) row.phone = value
+        if (rawKey === 'email' && !row.email) row.email = value
+        if (rawKey === 'org') row.company = value
+        if (rawKey === 'note') row.notes = value
+      }
+      return mapClientImportRow(row)
+    })
+    .filter((row) => row.name || row.phone || row.email)
+}
+
 export default function ClientsPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { t } = useI18n()
+  const importFileInputRef = useRef<HTMLInputElement | null>(null)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
   const [clients, setClients] = useState<ClientRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [importRows, setImportRows] = useState<ClientImportRow[]>([])
+  const [importingClients, setImportingClients] = useState(false)
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null)
   const [formData, setFormData] = useState<ClientFormState>(emptyForm)
   const [monthlyUsage, setMonthlyUsage] = useState(0)
@@ -213,6 +328,98 @@ export default function ClientsPage() {
     setFormData(emptyForm)
     setEditingClient(null)
     setShowForm(false)
+  }
+
+  const markImportDuplicates = useCallback((rows: ClientImportRow[]) => {
+    const existingPhones = new Set(clients.map((client) => normalizePhone(client.phone)).filter(Boolean))
+    const existingEmails = new Set(clients.map((client) => String(client.email ?? '').trim().toLowerCase()).filter(Boolean))
+    const seenPhones = new Set<string>()
+    const seenEmails = new Set<string>()
+
+    return rows.map((row) => {
+      const phone = normalizePhone(row.phone)
+      const email = row.email.trim().toLowerCase()
+      const duplicateByPhone = Boolean(phone && (existingPhones.has(phone) || seenPhones.has(phone)))
+      const duplicateByEmail = Boolean(email && (existingEmails.has(email) || seenEmails.has(email)))
+
+      if (phone) seenPhones.add(phone)
+      if (email) seenEmails.add(email)
+
+      return {
+        ...row,
+        duplicate: duplicateByPhone || duplicateByEmail,
+        duplicateReason: duplicateByPhone ? t('clients.importDuplicatePhone') : duplicateByEmail ? t('clients.importDuplicateEmail') : '',
+      }
+    })
+  }, [clients, t])
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return
+    setMessage('')
+    setErrorMessage('')
+
+    try {
+      const text = await file.text()
+      const lowerName = file.name.toLowerCase()
+      const parsed = lowerName.endsWith('.vcf') || file.type === 'text/vcard'
+        ? parseVcfClients(text)
+        : parseCsvClients(text)
+      setImportRows(markImportDuplicates(parsed))
+      if (parsed.length === 0) {
+        setErrorMessage(t('clients.importNoRows'))
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t('clients.importFailed'))
+    }
+  }
+
+  const handleImportClients = async () => {
+    if (!currentCompany) return
+    const rowsToImport = importRows.filter((row) => !row.duplicate && row.name.trim())
+    if (rowsToImport.length === 0) {
+      setErrorMessage(t('clients.importNoRows'))
+      return
+    }
+
+    if (!isPro && monthlyUsage + rowsToImport.length > FREE_CLIENT_LIMIT) {
+      setErrorMessage(t('clients.freeLimitReached'))
+      return
+    }
+
+    setImportingClients(true)
+    setMessage('')
+    setErrorMessage('')
+
+    const payload = rowsToImport.map((row) => ({
+      company_id: currentCompany.id,
+      name: row.name.trim(),
+      email: row.email.trim() || null,
+      phone: row.phone.trim() || null,
+      client_company: row.client_company.trim() || null,
+      interested_in: row.interested_in.trim() || null,
+      notes: [row.notes.trim(), t('clients.importSourceNote')].filter(Boolean).join('\n') || null,
+      status: row.status,
+      ...(supportsClientDetails ? {
+        street: row.street.trim() || null,
+        house_number: row.house_number.trim() || null,
+        postal_code: row.postal_code.trim() || null,
+        city: row.city.trim() || null,
+        country: row.country.trim() || null,
+      } : {}),
+    }))
+
+    const { error } = await supabase.from('clients').insert(payload)
+    setImportingClients(false)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setMessage(t('clients.importCompleted').replace('{count}', String(rowsToImport.length)))
+    setImportRows([])
+    setShowImport(false)
+    await loadClients()
   }
 
   const handleEdit = (client: ClientRecord) => {
@@ -361,10 +568,16 @@ export default function ClientsPage() {
   return (
     <PageContainer>
       <PageHeader title={t('clients.title')} description={`${t('clients.description')} · ${currentCompany.name}`}>
-        <Button onClick={() => { setShowForm((value) => !value); setEditingClient(null); setFormData(emptyForm) }}>
-          <UserRoundPlus className="h-4 w-4" />
-          {showForm ? t('common.cancel') : t('clients.add')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setShowImport(true)}>
+            <FileUp className="h-4 w-4" />
+            {t('clients.importClients')}
+          </Button>
+          <Button onClick={() => { setShowForm((value) => !value); setEditingClient(null); setFormData(emptyForm) }}>
+            <UserRoundPlus className="h-4 w-4" />
+            {showForm ? t('common.cancel') : t('clients.add')}
+          </Button>
+        </div>
       </PageHeader>
 
       <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_auto]">
@@ -402,8 +615,79 @@ export default function ClientsPage() {
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
           {errorMessage}
           {errorMessage.includes('Free plan limit') && (
-            <Link href="/app/upgrade" className="ml-2 font-medium underline">Upgrade to Pro</Link>
+            <Link href="/app/upgrade" className="ml-2 font-medium underline">{t('workspaces.upgradePlan')}</Link>
           )}
+        </div>
+      )}
+
+      {showImport && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="client-import-title" className="flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-4xl sm:rounded-xl">
+            <div className="flex items-start justify-between gap-4 border-b p-4">
+              <div>
+                <h2 id="client-import-title" className="text-xl font-semibold text-slate-950">{t('clients.importClients')}</h2>
+                <p className="mt-1 text-sm text-slate-500">{t('clients.importDescription')}</p>
+              </div>
+              <button type="button" onClick={() => setShowImport(false)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={t('common.cancel')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+              <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+                {t('clients.importPrivacyNote')}
+              </div>
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept=".csv,.vcf,text/csv,text/vcard"
+                onChange={(event) => void handleImportFile(event.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+              <Button type="button" variant="outline" onClick={() => importFileInputRef.current?.click()}>
+                <FileUp className="h-4 w-4" />
+                {t('common.chooseFile')}
+              </Button>
+              {importRows.length > 0 && (
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2">{t('clients.name')}</th>
+                        <th className="px-3 py-2">{t('clients.phone')}</th>
+                        <th className="px-3 py-2">{t('clients.email')}</th>
+                        <th className="px-3 py-2">{t('clients.interestedIn')}</th>
+                        <th className="px-3 py-2">{t('clients.status')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {importRows.slice(0, 80).map((row, index) => (
+                        <tr key={`${row.name}-${row.phone}-${index}`} className={row.duplicate ? 'bg-amber-50' : 'bg-white'}>
+                          <td className="px-3 py-2">{row.name || '-'}</td>
+                          <td className="px-3 py-2">{row.phone || '-'}</td>
+                          <td className="px-3 py-2">{row.email || '-'}</td>
+                          <td className="px-3 py-2">{row.interested_in || '-'}</td>
+                          <td className="px-3 py-2">{row.duplicate ? row.duplicateReason : t('clients.importReady')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-between gap-3 border-t bg-white p-4">
+              <p className="text-sm text-slate-500">
+                {t('clients.importSummary')
+                  .replace('{total}', String(importRows.length))
+                  .replace('{ready}', String(importRows.filter((row) => !row.duplicate && row.name.trim()).length))}
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setShowImport(false)}>{t('common.cancel')}</Button>
+                <Button type="button" disabled={importingClients || importRows.filter((row) => !row.duplicate && row.name.trim()).length === 0} onClick={() => void handleImportClients()}>
+                  {importingClients ? t('common.loading') : t('clients.importSelected')}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -424,7 +708,7 @@ export default function ClientsPage() {
               </label>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('clients.email')}</span>
-                <input type="email" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="client@example.com" />
+                <input type="email" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('auth.emailPlaceholder')} />
               </label>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('clients.phone')}</span>

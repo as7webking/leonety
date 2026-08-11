@@ -1,8 +1,8 @@
-const CACHE_NAME = 'leonety-v3'
+const CACHE_NAME = 'leonety-v4'
 const ASSETS_TO_CACHE = [
   '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png',
+  '/brand/icon-192.png',
+  '/brand/icon-512.png',
 ]
 
 self.addEventListener('install', (event) => {

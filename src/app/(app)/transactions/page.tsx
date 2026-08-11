@@ -702,7 +702,7 @@ export default function TransactionsPage() {
                   value={bulkRename.from}
                   onChange={(event) => setBulkRename({ ...bulkRename, from: event.target.value })}
                   className="w-full rounded-md border px-3 py-2"
-                  placeholder="Verkauf"
+                  placeholder={t('transactions.bulkOldValuePlaceholder')}
                   required
                 />
               </label>
@@ -712,7 +712,7 @@ export default function TransactionsPage() {
                   value={bulkRename.to}
                   onChange={(event) => setBulkRename({ ...bulkRename, to: event.target.value })}
                   className="w-full rounded-md border px-3 py-2"
-                  placeholder="eingenommen"
+                  placeholder={t('transactions.bulkNewValuePlaceholder')}
                   required
                 />
               </label>

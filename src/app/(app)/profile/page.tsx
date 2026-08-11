@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
@@ -9,6 +9,7 @@ import { useAccountAccess } from '@/hooks/use-account-access'
 import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
 import { loadCompanyBranding, saveCompanyBranding } from '@/lib/company-branding'
 import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { getIntlLocale } from '@/lib/i18n'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AppSelect } from '@/components/app-select'
 import { AddressAutocomplete } from '@/components/address-autocomplete'
@@ -40,6 +41,7 @@ interface ManagedProfile {
   subscriptionEndsAt: string | null
   subscriptionSource: 'default' | 'manual' | 'payment'
   subscriptionStatus: 'active' | 'canceled' | 'expired'
+  emailConfirmed: boolean
   isDeactivated: boolean
   lastSignInAt: string | null
 }
@@ -98,13 +100,30 @@ export default function ProfilePage() {
   const [includeCategoryInPrint, setIncludeCategoryInPrint] = useState(true)
   const [invoiceNumberFormat, setInvoiceNumberFormat] = useState<'yy-seq' | 'yyyy-seq'>('yy-seq')
   const [invoiceNumberDigits, setInvoiceNumberDigits] = useState('3')
+  const [invoiceNumberPrefix, setInvoiceNumberPrefix] = useState('')
+  const [invoiceNumberSeparator, setInvoiceNumberSeparator] = useState('-')
+  const [invoiceNumberNext, setInvoiceNumberNext] = useState('1')
+  const [invoiceNumberResetAnnually, setInvoiceNumberResetAnnually] = useState(true)
   const [isPreparingPrint, setIsPreparingPrint] = useState(false)
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, refreshCompanies } = useCompany()
   const { accountAccess } = useAccountAccess(profile?.email)
   const { locale, t } = useI18n()
-  const planLabel = accountAccess.plan === 'pro' ? 'Pro' : 'Free'
+  const workspaceLogoInputRef = useRef<HTMLInputElement | null>(null)
+  const planLabel = t(`billing.plan.${accountAccess.plan}`)
+  const billingStatusLabel = accountAccess.status ? t(`billing.status.${accountAccess.status}`) : t('billing.status.free')
+  const billingSourceLabel = t(`billing.source.${accountAccess.overrideSource}`)
+  const formatBillingDate = (value: string | null | undefined) => value
+    ? new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(new Date(value))
+    : '-'
+  const invoicePreviewYear = invoiceNumberFormat === 'yyyy-seq'
+    ? String(new Date().getFullYear())
+    : String(new Date().getFullYear()).slice(-2)
+  const invoicePreviewNumber = String(Math.max(1, Number(invoiceNumberNext) || 1)).padStart(Math.max(2, Number(invoiceNumberDigits) || 3), '0')
+  const invoicePreview = [invoiceNumberPrefix, invoicePreviewYear, invoicePreviewNumber]
+    .filter(Boolean)
+    .join(invoiceNumberSeparator || '-')
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -112,6 +131,10 @@ export default function ProfilePage() {
       setIncludeCategoryInPrint(window.localStorage.getItem('leonety-include-category-in-print') !== 'false')
       setInvoiceNumberFormat(window.localStorage.getItem('leonety-invoice-number-format') === 'yyyy-seq' ? 'yyyy-seq' : 'yy-seq')
       setInvoiceNumberDigits(window.localStorage.getItem('leonety-invoice-number-digits') ?? '3')
+      setInvoiceNumberPrefix(window.localStorage.getItem('leonety-invoice-number-prefix') ?? '')
+      setInvoiceNumberSeparator(window.localStorage.getItem('leonety-invoice-number-separator') ?? '-')
+      setInvoiceNumberNext(window.localStorage.getItem('leonety-invoice-number-next') ?? '1')
+      setInvoiceNumberResetAnnually(window.localStorage.getItem('leonety-invoice-number-reset-annually') !== 'false')
     }, 0)
 
     return () => window.clearTimeout(timer)
@@ -135,6 +158,29 @@ export default function ProfilePage() {
   const handleInvoiceNumberDigitsChange = (value: string) => {
     setInvoiceNumberDigits(value)
     window.localStorage.setItem('leonety-invoice-number-digits', value)
+  }
+
+  const handleInvoiceNumberPrefixChange = (value: string) => {
+    const normalized = value.trim().slice(0, 12).replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    setInvoiceNumberPrefix(normalized)
+    window.localStorage.setItem('leonety-invoice-number-prefix', normalized)
+  }
+
+  const handleInvoiceNumberSeparatorChange = (value: string) => {
+    const normalized = ['-', '/', '.'].includes(value) ? value : '-'
+    setInvoiceNumberSeparator(normalized)
+    window.localStorage.setItem('leonety-invoice-number-separator', normalized)
+  }
+
+  const handleInvoiceNumberNextChange = (value: string) => {
+    const normalized = String(Math.max(1, Number(value) || 1))
+    setInvoiceNumberNext(normalized)
+    window.localStorage.setItem('leonety-invoice-number-next', normalized)
+  }
+
+  const handleInvoiceNumberResetAnnuallyChange = (checked: boolean) => {
+    setInvoiceNumberResetAnnually(checked)
+    window.localStorage.setItem('leonety-invoice-number-reset-annually', String(checked))
   }
 
   useEffect(() => {
@@ -442,6 +488,45 @@ export default function ProfilePage() {
     }
   }
 
+  const handleAdminEmailAction = async (managedProfile: ManagedProfile, action: 'confirm_email' | 'resend_confirmation') => {
+    if (action === 'confirm_email') {
+      const confirmed = window.confirm(t('profile.confirmEmailWarning'))
+      if (!confirmed) return
+    }
+
+    setAdminLoading(true)
+    setMessage('')
+    setAdminError('')
+
+    try {
+      const response = await fetch('/api/admin/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUserId: managedProfile.id,
+          adminEmailAction: action,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || t('profile.adminEmailActionFailed'))
+      }
+
+      setManagedProfiles(data.profiles ?? [])
+      setUpgradeRequests(data.upgradeRequests ?? [])
+      setMessage(action === 'confirm_email' ? t('profile.emailConfirmedManually') : t('profile.confirmationResent'))
+      if (data.auditEventRecorded === false) {
+        setAdminError(t('profile.adminAuditMissing'))
+      }
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : t('profile.adminEmailActionFailed'))
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
   const handleCopy = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value)
@@ -719,12 +804,12 @@ export default function ProfilePage() {
     return (
       <PageContainer>
         <PageHeader
-          title="Profile"
-          description="Your account information"
+          title={t('profile.title')}
+          description={t('profile.accountInformationShort')}
         />
         <Card className="bg-red-50 border-red-200">
           <CardContent className="pt-6">
-            <p className="text-red-700">Unable to load your profile. Please try again later.</p>
+            <p className="text-red-700">{t('profile.loadFailed')}</p>
           </CardContent>
         </Card>
       </PageContainer>
@@ -805,7 +890,7 @@ export default function ProfilePage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Your name"
+                  placeholder={t('auth.fullNamePlaceholder')}
                   required
                 />
               </div>
@@ -881,7 +966,7 @@ export default function ProfilePage() {
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Workspace name"
+                    placeholder={t('profile.workspaceName')}
                     required
                   />
                 </div>
@@ -922,11 +1007,15 @@ export default function ProfilePage() {
                     <div className="min-w-0 flex-1">
                       <label className="block text-sm font-medium">{t('profile.companyLogo')}</label>
                       <input
+                        ref={workspaceLogoInputRef}
                         type="file"
                         accept="image/*"
                         onChange={handleWorkspaceLogoChange}
-                        className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                        className="hidden"
                       />
+                      <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => workspaceLogoInputRef.current?.click()}>
+                        {t('common.chooseFile')}
+                      </Button>
                     </div>
                     {workspaceLogo && (
                       <Button
@@ -977,7 +1066,7 @@ export default function ProfilePage() {
                           persistWorkspaceBranding(workspaceLogo, workspaceAddress, event.target.value, workspaceIban, workspaceBic, workspaceTaxNumber)
                         }}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder="company@example.com"
+                        placeholder={t('auth.emailPlaceholder')}
                       />
                     </label>
                     <label className="block space-y-1">
@@ -1013,7 +1102,7 @@ export default function ProfilePage() {
                           persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, workspaceIban, workspaceBic, event.target.value)
                         }}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder="Tax number / VAT ID"
+                        placeholder={t('profile.companyTaxNumber')}
                       />
                     </label>
                   </div>
@@ -1062,7 +1151,7 @@ export default function ProfilePage() {
                 <span className="text-sm text-gray-600">{t('profile.invoiceNumberSettings')}</span>
                 <p className="text-xs text-gray-500">{t('profile.invoiceNumberSettingsDescription')}</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="space-y-1">
                   <span className="text-xs text-slate-500">{t('profile.invoiceNumberFormat')}</span>
                   <AppSelect
@@ -1071,6 +1160,27 @@ export default function ProfilePage() {
                     options={[
                       { value: 'yy-seq', label: '26-001' },
                       { value: 'yyyy-seq', label: '2026-001' },
+                    ]}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">{t('profile.invoiceNumberPrefix')}</span>
+                  <input
+                    value={invoiceNumberPrefix}
+                    onChange={(event) => handleInvoiceNumberPrefixChange(event.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    placeholder="INV / RE"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">{t('profile.invoiceNumberSeparator')}</span>
+                  <AppSelect
+                    value={invoiceNumberSeparator}
+                    onChange={handleInvoiceNumberSeparatorChange}
+                    options={[
+                      { value: '-', label: '-' },
+                      { value: '/', label: '/' },
+                      { value: '.', label: '.' },
                     ]}
                   />
                 </label>
@@ -1086,6 +1196,30 @@ export default function ProfilePage() {
                     ]}
                   />
                 </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">{t('profile.invoiceNumberNext')}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={invoiceNumberNext}
+                    onChange={(event) => handleInvoiceNumberNextChange(event.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={invoiceNumberResetAnnually}
+                    onChange={(event) => handleInvoiceNumberResetAnnuallyChange(event.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  {t('profile.invoiceNumberResetAnnually')}
+                </label>
+                <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900 lg:col-span-3">
+                  <span className="text-xs text-blue-700">{t('profile.invoiceNumberPreview')}</span>
+                  <p className="font-semibold">{invoicePreview}</p>
+                </div>
               </div>
             </div>
             <div className="space-y-3 border-b py-2">
@@ -1129,6 +1263,36 @@ export default function ProfilePage() {
               <span className="text-sm text-gray-600">{t('profile.currentPlan')}</span>
               <span className="text-sm font-medium">{planLabel}</span>
             </div>
+            <div className="space-y-2 border-b py-2">
+              <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                <div className="rounded-md border bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500">{t('billing.accessSource')}</p>
+                  <p className="font-medium text-slate-950">{billingSourceLabel}</p>
+                </div>
+                <div className="rounded-md border bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500">{t('billing.subscriptionStatus')}</p>
+                  <p className="font-medium text-slate-950">{billingStatusLabel}</p>
+                </div>
+                <div className="rounded-md border bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500">{t('billing.trialEnds')}</p>
+                  <p className="font-medium text-slate-950">{formatBillingDate(accountAccess.trialEndsAt)}</p>
+                </div>
+                <div className="rounded-md border bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500">{t('billing.currentPeriodEnd')}</p>
+                  <p className="font-medium text-slate-950">{formatBillingDate(accountAccess.currentPeriodEnd)}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => router.push('/app/upgrade')}>
+                  {accountAccess.plan === 'free' ? t('billing.upgrade') : t('billing.openBilling')}
+                </Button>
+                {accountAccess.cancelAtPeriodEnd && (
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                    {t('billing.cancelAtPeriodEnd')}
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="flex items-start justify-between gap-4 border-b py-2">
               <div className="w-full space-y-3">
                 <span className="text-sm text-gray-600">{t('profile.whatsappTitle')}</span>
@@ -1140,7 +1304,7 @@ export default function ProfilePage() {
                   </label>
                   <label className="space-y-1 text-xs text-slate-500">
                     <span>{t('profile.whatsappPhoneNumberId')}</span>
-                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder="Meta Phone Number ID" />
+                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder={t('profile.whatsappPhoneNumberId')} />
                   </label>
                   <label className="space-y-1 text-xs text-slate-500">
                     <span>{t('profile.whatsappWebhook')}</span>
@@ -1203,7 +1367,7 @@ export default function ProfilePage() {
                         <div className="space-y-1">
                           <p className="font-medium text-slate-900">{request.user_email || request.user_id}</p>
                           <p className="text-sm text-slate-500">
-                            {request.company_name || request.company_id} · Pro · {new Date(request.created_at).toLocaleDateString()}
+                            {request.company_name || request.company_id} · {t('billing.status.pro')} · {new Date(request.created_at).toLocaleDateString()}
                           </p>
                           {request.message && <p className="text-sm text-slate-600">{request.message}</p>}
                         </div>
@@ -1241,42 +1405,49 @@ export default function ProfilePage() {
                           </p>
                           <p className="text-sm text-slate-500">{managedProfile.email}</p>
                           <p className="text-sm text-slate-500">
-                            Subscription: {managedProfile.plan.toUpperCase()}
+                            {t('billing.subscription')}: {managedProfile.plan.toUpperCase()}
                             {managedProfile.isPro
                               ? managedProfile.subscriptionEndsAt
-                                ? ` · until ${new Date(managedProfile.subscriptionEndsAt).toLocaleDateString()}`
-                                : ' · no expiry'
+                                ? ` · ${t('common.until')} ${new Date(managedProfile.subscriptionEndsAt).toLocaleDateString()}`
+                                : ` · ${t('common.noExpiry')}`
                               : ''}
                           </p>
                           <p className="text-sm text-slate-500">
-                            Source: {managedProfile.subscriptionSource} · Status: {managedProfile.subscriptionStatus}
+                            {t('billing.source')}: {managedProfile.subscriptionSource} · {t('billing.status')}: {managedProfile.subscriptionStatus}
                           </p>
                           <p className="text-sm text-slate-500">
-                            Account: {managedProfile.isDeactivated ? 'Deactivated' : 'Active'}
+                            {t('billing.account')}: {managedProfile.isDeactivated ? t('common.deactivated') : t('common.active')}
                             {managedProfile.lastSignInAt
                               ? ` · last sign-in ${new Date(managedProfile.lastSignInAt).toLocaleDateString()}`
                               : ''}
                           </p>
                           <p className="text-sm text-slate-500">
-                            Workspaces: {managedProfile.workspaceCount}
+                            {t('billing.workspaces')}: {managedProfile.workspaceCount}
                             {managedProfile.workspaceNames.length > 0 ? ` · ${managedProfile.workspaceNames.join(', ')}` : ''}
                           </p>
                           <div className="flex flex-wrap gap-2 pt-1">
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                              {managedProfile.isAdmin ? 'Admin' : 'User'}
+                              {managedProfile.isAdmin ? t('profile.admin') : t('profile.user')}
                             </span>
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
                               {managedProfile.isPro ? 'Pro' : 'Free'}
                             </span>
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                              {managedProfile.subscriptionSource === 'payment' ? 'Paid automatically' : 'Manual access'}
+                              {managedProfile.subscriptionSource === 'payment' ? t('billing.paidAutomatically') : t('billing.manualAccess')}
                             </span>
                             <span className={`rounded-full px-2.5 py-1 text-xs ${
                               managedProfile.isDeactivated
                                 ? 'bg-red-100 text-red-700'
                                 : 'bg-green-100 text-green-700'
                             }`}>
-                              {managedProfile.isDeactivated ? 'Deactivated' : 'Active account'}
+                              {managedProfile.isDeactivated ? t('common.deactivated') : t('common.activeAccount')}
+                            </span>
+                            <span className={`rounded-full px-2.5 py-1 text-xs ${
+                              managedProfile.emailConfirmed
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {managedProfile.emailConfirmed ? t('profile.emailConfirmed') : t('profile.emailUnconfirmed')}
                             </span>
                           </div>
                         </div>
@@ -1288,7 +1459,7 @@ export default function ProfilePage() {
                             disabled={adminLoading}
                             onClick={() => handleCopy(managedProfile.email, 'Email')}
                           >
-                            Copy Email
+                            {t('profile.copyEmail')}
                           </Button>
                           <Button
                             type="button"
@@ -1296,7 +1467,7 @@ export default function ProfilePage() {
                             disabled={adminLoading}
                             onClick={() => handleCopy(managedProfile.id, 'User ID')}
                           >
-                            Copy ID
+                            {t('profile.copyId')}
                           </Button>
                           <div
                             className="inline-flex items-center overflow-hidden rounded-md border border-gray-300 bg-white text-sm"
@@ -1311,7 +1482,7 @@ export default function ProfilePage() {
                               -
                             </button>
                             <span className="min-w-20 border-x border-gray-300 px-3 py-2 text-center text-slate-700">
-                              {getMonthsForProfile(managedProfile.id)} month{getMonthsForProfile(managedProfile.id) === 1 ? '' : 's'}
+                              {getMonthsForProfile(managedProfile.id)} {getMonthsForProfile(managedProfile.id) === 1 ? t('common.month') : t('common.months')}
                             </span>
                             <button
                               type="button"
@@ -1329,14 +1500,30 @@ export default function ProfilePage() {
                               disabled={adminLoading}
                               onClick={() => handleAccessUpdate(managedProfile.id, managedProfile.isAdmin, !managedProfile.isPro)}
                             >
-                              {managedProfile.isPro ? 'Remove Pro' : 'Grant Pro'}
+                              {managedProfile.isPro ? t('profile.removePro') : t('profile.grantPro')}
                             </Button>
                           )}
                           {managedProfile.subscriptionSource === 'payment' && (
                             <span className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-                              Paid subscription
+                              {t('billing.paidSubscription')}
                             </span>
                           )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={adminLoading || managedProfile.emailConfirmed}
+                            onClick={() => void handleAdminEmailAction(managedProfile, 'resend_confirmation')}
+                          >
+                            {t('profile.resendConfirmation')}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={adminLoading || managedProfile.emailConfirmed}
+                            onClick={() => void handleAdminEmailAction(managedProfile, 'confirm_email')}
+                          >
+                            {t('profile.confirmEmailManually')}
+                          </Button>
                           {!managedProfile.isPro && (
                             <Button
                               type="button"
@@ -1344,7 +1531,7 @@ export default function ProfilePage() {
                               disabled={adminLoading}
                               onClick={() => handleAccessUpdate(managedProfile.id, managedProfile.isAdmin, true, undefined, true)}
                             >
-                              Grant Pro now
+                              {t('profile.grantProNow')}
                             </Button>
                           )}
                           <Button
@@ -1353,7 +1540,7 @@ export default function ProfilePage() {
                             disabled={adminLoading || isCurrentUser}
                             onClick={() => handleAccessUpdate(managedProfile.id, !managedProfile.isAdmin, managedProfile.isPro)}
                           >
-                            {managedProfile.isAdmin ? 'Remove Admin' : 'Make Admin'}
+                            {managedProfile.isAdmin ? t('profile.removeAdmin') : t('profile.makeAdmin')}
                           </Button>
                           <Button
                             type="button"
@@ -1368,7 +1555,7 @@ export default function ProfilePage() {
                               )
                             }
                           >
-                            {managedProfile.isDeactivated ? 'Reactivate' : 'Deactivate'}
+                            {managedProfile.isDeactivated ? t('common.reactivate') : t('common.deactivate')}
                           </Button>
                         </div>
                       </div>
@@ -1383,9 +1570,9 @@ export default function ProfilePage() {
         {/* Logout */}
         <Card className="border-red-200 bg-red-50 lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-red-700">Sign Out</CardTitle>
+            <CardTitle className="text-red-700">{t('profile.signOut')}</CardTitle>
             <CardDescription className="text-red-600">
-              End your current session
+              {t('profile.signOutDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1395,7 +1582,7 @@ export default function ProfilePage() {
               className="w-full text-red-700 border-red-200 hover:bg-red-100"
             >
               <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
+              {t('profile.signOut')}
             </Button>
           </CardContent>
         </Card>

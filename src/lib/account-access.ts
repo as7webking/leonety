@@ -1,4 +1,6 @@
-export type AppPlan = 'free' | 'pro'
+import { getPlanRank, planDefinitions, type AppPlan } from '@/lib/billing/plans'
+
+export type { AppPlan }
 
 export interface AccountAccess {
   isAdmin: boolean
@@ -6,6 +8,10 @@ export interface AccountAccess {
   workspaceLimit: number | null
   badgeLabel: string
   overrideSource: 'default' | 'manual' | 'payment'
+  status?: 'free' | 'trialing' | 'active' | 'past_due' | 'paused' | 'cancelled' | 'expired' | 'manual'
+  currentPeriodEnd?: string | null
+  trialEndsAt?: string | null
+  cancelAtPeriodEnd?: boolean
 }
 
 export function getAccountAccess(_email: string | null | undefined): AccountAccess {
@@ -14,9 +20,13 @@ export function getAccountAccess(_email: string | null | undefined): AccountAcce
   return {
     isAdmin: false,
     plan: 'free',
-    workspaceLimit: 1,
+    workspaceLimit: planDefinitions.free.workspaceLimit,
     badgeLabel: 'Free plan: 1 workspace',
     overrideSource: 'default',
+    status: 'free',
+    currentPeriodEnd: null,
+    trialEndsAt: null,
+    cancelAtPeriodEnd: false,
   }
 }
 
@@ -28,36 +38,65 @@ export function buildAccountAccess({
   isAdmin,
   isPro,
   overrideSource,
+  activePlan,
+  status,
+  currentPeriodEnd,
+  trialEndsAt,
+  cancelAtPeriodEnd,
 }: {
   isAdmin: boolean
   isPro: boolean
   overrideSource: 'default' | 'manual' | 'payment'
+  activePlan?: AppPlan
+  status?: AccountAccess['status']
+  currentPeriodEnd?: string | null
+  trialEndsAt?: string | null
+  cancelAtPeriodEnd?: boolean
 }): AccountAccess {
   if (isAdmin) {
     return {
       isAdmin: true,
-      plan: 'pro',
+      plan: 'business',
       workspaceLimit: null,
       badgeLabel: 'Admin override',
       overrideSource,
+      status: 'manual',
+      currentPeriodEnd: null,
+      trialEndsAt: null,
+      cancelAtPeriodEnd: false,
     }
   }
 
-  if (isPro) {
+  const paidPlan = activePlan && getPlanRank(activePlan) > 0
+    ? activePlan
+    : isPro
+      ? 'pro'
+      : null
+
+  if (paidPlan) {
+    const definition = planDefinitions[paidPlan]
     return {
       isAdmin: false,
-      plan: 'pro',
-      workspaceLimit: null,
-      badgeLabel: 'Pro access',
+      plan: paidPlan,
+      workspaceLimit: definition.workspaceLimit,
+      badgeLabel: `${paidPlan.charAt(0).toUpperCase()}${paidPlan.slice(1)} access`,
       overrideSource,
+      status: status ?? (overrideSource === 'manual' ? 'manual' : 'active'),
+      currentPeriodEnd: currentPeriodEnd ?? null,
+      trialEndsAt: trialEndsAt ?? null,
+      cancelAtPeriodEnd: cancelAtPeriodEnd ?? false,
     }
   }
 
   return {
     isAdmin: false,
     plan: 'free',
-    workspaceLimit: 1,
+    workspaceLimit: planDefinitions.free.workspaceLimit,
     badgeLabel: 'Free plan: 1 workspace',
     overrideSource: 'default',
+    status: 'free',
+    currentPeriodEnd: null,
+    trialEndsAt: null,
+    cancelAtPeriodEnd: false,
   }
 }

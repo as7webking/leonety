@@ -68,8 +68,9 @@ export function MobileDrawerClient() {
         />
         <aside
           className={`absolute left-0 top-0 h-dvh w-[min(20rem,88vw)] overflow-y-auto bg-white shadow-2xl transition-transform duration-200 ease-out ${open ? 'translate-x-0' : '-translate-x-full'}`}
-          aria-label="Mobile app navigation"
+          aria-labelledby="mobile-app-navigation-label"
         >
+          <span id="mobile-app-navigation-label" className="sr-only">{t('nav.mobileAppNavigation')}</span>
           <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
             <Link href="/app/dashboard" className="flex items-center gap-2" onClick={() => setOpen(false)}>
               <Logo size="md" className="h-9 w-9" />
@@ -82,7 +83,8 @@ export function MobileDrawerClient() {
 
           <div className="space-y-5 p-4">
             <WorkspaceSelectorClient />
-            <nav className="space-y-1" aria-label="Primary navigation">
+            <nav className="space-y-1" aria-labelledby="mobile-primary-navigation-label">
+              <span id="mobile-primary-navigation-label" className="sr-only">{t('nav.primaryNavigation')}</span>
               {primaryNavigation.map((item) => {
                 const Icon = item.icon
                 return (
