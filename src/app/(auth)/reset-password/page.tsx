@@ -39,9 +39,12 @@ export default function ResetPasswordPage() {
 
       if (resetError) throw resetError
 
-      setMessage('Password reset email sent. Please check your inbox.')
+      setMessage(t('auth.passwordResetSent'))
     } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : 'Failed to send password reset email.')
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Password reset request failed:', resetError)
+      }
+      setError(t('auth.passwordResetFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -53,12 +56,12 @@ export default function ResetPasswordPage() {
     setError('')
 
     if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters.')
+      setError(t('auth.passwordMinLength'))
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.')
+      setError(t('auth.passwordsDoNotMatch'))
       return
     }
 
@@ -68,10 +71,13 @@ export default function ResetPasswordPage() {
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
       if (updateError) throw updateError
 
-      setMessage('Password updated successfully. Redirecting to your profile...')
+      setMessage(t('auth.passwordUpdated'))
       window.setTimeout(() => router.push('/app/profile'), 800)
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : t('auth.passwordUpdateFailed'))
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Password update failed:', updateError)
+      }
+      setError(t('auth.passwordUpdateFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -97,22 +103,26 @@ export default function ResetPasswordPage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium">{t('auth.newPassword')}</label>
                   <input
+                    name="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder={t('auth.newPasswordPlaceholder')}
+                    autoComplete="new-password"
                     required
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">{t('auth.confirmPassword')}</label>
                   <input
+                    name="confirm-password"
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder={t('auth.confirmPasswordPlaceholder')}
+                    autoComplete="new-password"
                     required
                   />
                 </div>
@@ -121,11 +131,14 @@ export default function ResetPasswordPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('auth.email')}</label>
                 <input
+                  name="email"
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder={t('auth.emailPlaceholder')}
+                  autoComplete="email"
+                  inputMode="email"
                   required
                 />
               </div>

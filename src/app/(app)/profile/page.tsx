@@ -41,6 +41,7 @@ interface ManagedProfile {
   subscriptionEndsAt: string | null
   subscriptionSource: 'default' | 'manual' | 'payment'
   subscriptionStatus: 'active' | 'canceled' | 'expired'
+  emailConfirmed: boolean
   isDeactivated: boolean
   lastSignInAt: string | null
 }
@@ -482,6 +483,45 @@ export default function ProfilePage() {
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : 'Failed to update upgrade request')
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
+  const handleAdminEmailAction = async (managedProfile: ManagedProfile, action: 'confirm_email' | 'resend_confirmation') => {
+    if (action === 'confirm_email') {
+      const confirmed = window.confirm(t('profile.confirmEmailWarning'))
+      if (!confirmed) return
+    }
+
+    setAdminLoading(true)
+    setMessage('')
+    setAdminError('')
+
+    try {
+      const response = await fetch('/api/admin/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUserId: managedProfile.id,
+          adminEmailAction: action,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || t('profile.adminEmailActionFailed'))
+      }
+
+      setManagedProfiles(data.profiles ?? [])
+      setUpgradeRequests(data.upgradeRequests ?? [])
+      setMessage(action === 'confirm_email' ? t('profile.emailConfirmedManually') : t('profile.confirmationResent'))
+      if (data.auditEventRecorded === false) {
+        setAdminError(t('profile.adminAuditMissing'))
+      }
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : t('profile.adminEmailActionFailed'))
     } finally {
       setAdminLoading(false)
     }
@@ -1402,6 +1442,13 @@ export default function ProfilePage() {
                             }`}>
                               {managedProfile.isDeactivated ? t('common.deactivated') : t('common.activeAccount')}
                             </span>
+                            <span className={`rounded-full px-2.5 py-1 text-xs ${
+                              managedProfile.emailConfirmed
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {managedProfile.emailConfirmed ? t('profile.emailConfirmed') : t('profile.emailUnconfirmed')}
+                            </span>
                           </div>
                         </div>
 
@@ -1461,6 +1508,22 @@ export default function ProfilePage() {
                               {t('billing.paidSubscription')}
                             </span>
                           )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={adminLoading || managedProfile.emailConfirmed}
+                            onClick={() => void handleAdminEmailAction(managedProfile, 'resend_confirmation')}
+                          >
+                            {t('profile.resendConfirmation')}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={adminLoading || managedProfile.emailConfirmed}
+                            onClick={() => void handleAdminEmailAction(managedProfile, 'confirm_email')}
+                          >
+                            {t('profile.confirmEmailManually')}
+                          </Button>
                           {!managedProfile.isPro && (
                             <Button
                               type="button"

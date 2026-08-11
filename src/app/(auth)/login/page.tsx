@@ -116,11 +116,10 @@ export default function LoginPage() {
         }
       }
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        setError(error.message)
-      } else {
-        setError(t('auth.genericError'))
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Authentication failed:', error)
       }
+      setError(t(isSignUp ? 'auth.signUpFailed' : 'auth.signInFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -157,7 +156,10 @@ export default function LoginPage() {
       setResendCooldown(60)
       setSuccess(t('auth.confirmationSent'))
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : t('auth.confirmationFailed'))
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Confirmation resend failed:', error)
+      }
+      setError(t('auth.confirmationFailed'))
     } finally {
       setIsResending(false)
     }
