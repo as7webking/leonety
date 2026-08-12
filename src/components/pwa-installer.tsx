@@ -19,19 +19,22 @@ function isStandalone() {
 
 export function PwaInstaller() {
   const { t } = useI18n()
+  const [mounted, setMounted] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [dismissed, setDismissed] = useState(() => (
-    typeof window !== 'undefined' && window.localStorage.getItem(DISMISSED_KEY) === 'true'
-  ))
-  const [installed, setInstalled] = useState(() => isStandalone())
+  const [dismissed, setDismissed] = useState(false)
+  const [installed, setInstalled] = useState(false)
 
   const isIos = useMemo(() => {
-    if (typeof window === 'undefined') return false
+    if (!mounted || typeof window === 'undefined') return false
     return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
-  }, [])
+  }, [mounted])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+
+    setMounted(true)
+    setDismissed(window.localStorage.getItem(DISMISSED_KEY) === 'true')
+    setInstalled(isStandalone())
 
     const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -94,7 +97,7 @@ export function PwaInstaller() {
     window.localStorage.setItem(DISMISSED_KEY, 'true')
   }
 
-  if (installed || dismissed || (!installPrompt && !isIos)) {
+  if (!mounted || installed || dismissed || (!installPrompt && !isIos)) {
     return null
   }
 

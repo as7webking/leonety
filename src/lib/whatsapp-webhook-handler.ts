@@ -79,6 +79,10 @@ function getEventId(phoneNumberId: string, entry: WhatsAppEntry, message?: Whats
     .digest('hex')
 }
 
+function isMissingClientSourceColumn(error: { code?: string } | null) {
+  return error?.code === '42703' || error?.code === 'PGRST204' || error?.code === 'PGRST205'
+}
+
 async function tryInsertWebhookEvent(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   eventId: string,
@@ -133,28 +137,55 @@ async function upsertLeadFromMessage(
   const noteLine = interestedIn ? `WhatsApp: ${interestedIn}` : 'WhatsApp inbound message'
 
   if (existingClient?.id) {
+    const updatePayload = {
+      name: contactName,
+      interested_in: interestedIn || existingClient.interested_in,
+      notes: [existingClient.notes, noteLine].filter(Boolean).join('\n'),
+      source: 'whatsapp',
+      external_id: phone,
+      first_contact_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    const { error: updateError } = await supabase
+      .from('clients')
+      .update(updatePayload)
+      .eq('id', existingClient.id)
+
+    if (!updateError) return
+    if (!isMissingClientSourceColumn(updateError)) throw updateError
+
     await supabase
       .from('clients')
       .update({
         name: contactName,
         interested_in: interestedIn || existingClient.interested_in,
         notes: [existingClient.notes, noteLine].filter(Boolean).join('\n'),
-        source: 'whatsapp',
-        external_id: phone,
-        first_contact_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', existingClient.id)
     return
   }
 
-  await supabase.from('clients').insert({
+  const insertPayload = {
     company_id: companyId,
     name: contactName,
     phone,
     source: 'whatsapp',
     external_id: phone,
     first_contact_at: new Date().toISOString(),
+    interested_in: interestedIn || null,
+    notes: noteLine,
+    status: 'lead',
+  }
+  const { error: insertError } = await supabase.from('clients').insert(insertPayload)
+
+  if (!insertError) return
+  if (!isMissingClientSourceColumn(insertError)) throw insertError
+
+  await supabase.from('clients').insert({
+    company_id: companyId,
+    name: contactName,
+    phone,
     interested_in: interestedIn || null,
     notes: noteLine,
     status: 'lead',

@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
@@ -106,13 +108,46 @@ export function AppSearch() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [open, setOpen] = useState(false)
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
 
   const trimmedQuery = query.trim()
 
+  const updateMenuPosition = useCallback(() => {
+    const input = inputRef.current
+    if (!input) return
+
+    const rect = input.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const padding = 12
+    const offset = 8
+    const availableBelow = viewportHeight - rect.bottom - padding
+    const availableAbove = rect.top - padding
+    const openAbove = availableBelow < 260 && availableAbove > availableBelow
+    const availableHeight = Math.max(140, openAbove ? availableAbove - offset : availableBelow - offset)
+    const width = Math.min(Math.max(rect.width, 220), viewportWidth - padding * 2)
+    const left = Math.min(Math.max(padding, rect.left), viewportWidth - width - padding)
+    const maxHeight = Math.min(384, availableHeight)
+
+    setMenuStyle({
+      position: 'fixed',
+      left,
+      top: openAbove
+        ? Math.max(padding, rect.top - offset - maxHeight)
+        : Math.min(viewportHeight - padding, rect.bottom + offset),
+      width,
+      maxHeight,
+      zIndex: 150,
+    })
+  }, [])
+
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (!wrapperRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setOpen(false)
       }
     }
@@ -120,6 +155,22 @@ export function AppSearch() {
     document.addEventListener('pointerdown', handlePointerDown)
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [])
+
+  useEffect(() => {
+    if (!open) return
+
+    window.addEventListener('resize', updateMenuPosition)
+    window.addEventListener('scroll', updateMenuPosition, true)
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition)
+      window.removeEventListener('scroll', updateMenuPosition, true)
+    }
+  }, [open, updateMenuPosition])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    updateMenuPosition()
+  }, [open, updateMenuPosition, trimmedQuery, results.length, loading, error])
 
   useEffect(() => {
     if (!currentCompany || trimmedQuery.length < 2) {
@@ -300,12 +351,56 @@ export function AppSearch() {
     [results]
   )
 
+  const menu = open && trimmedQuery.length > 0 && menuStyle && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={menuRef}
+      style={menuStyle}
+      className="overflow-auto rounded-md border border-slate-200 bg-white shadow-lg"
+      role="listbox"
+    >
+      {trimmedQuery.length < 2 ? (
+        <div className="px-4 py-3 text-sm text-slate-500">{t('search.minChars')}</div>
+      ) : loading ? (
+        <div className="px-4 py-3 text-sm text-slate-500">{t('search.loading')}</div>
+      ) : error ? (
+        <div className="px-4 py-3 text-sm text-red-700">{t('search.failed')}</div>
+      ) : groupedResults.length === 0 ? (
+        <div className="px-4 py-3 text-sm text-slate-500">{t('search.noResults')}</div>
+      ) : (
+        <div className="py-2">
+          {groupedResults.map((section) => (
+            <div key={section.group} className="py-1">
+              <div className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t(groupLabelKeys[section.group])}
+              </div>
+              {section.items.map((result) => (
+                <Link
+                  key={result.id}
+                  href={result.href}
+                  className="block px-4 py-2 text-sm hover:bg-slate-50"
+                  onClick={() => setOpen(false)}
+                  role="option"
+                  aria-selected="false"
+                >
+                  <span className="block truncate font-medium text-slate-900">{result.titleKey ? t(result.titleKey) : result.title}</span>
+                  <span className="block truncate text-xs text-slate-500">{renderDetail(result)}</span>
+                </Link>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>,
+    document.body
+  ) : null
+
   return (
     <div ref={wrapperRef} className="relative w-full min-w-0">
       <label htmlFor="app-search" className="sr-only">{t('search.label')}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
+          ref={inputRef}
           id="app-search"
           type="search"
           value={query}
@@ -318,41 +413,7 @@ export function AppSearch() {
           className="w-full min-w-0 rounded-md border bg-background py-2 pl-9 pr-3 text-sm"
         />
       </div>
-
-      {open && trimmedQuery.length > 0 && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 min-w-0 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
-          {trimmedQuery.length < 2 ? (
-            <div className="px-4 py-3 text-sm text-slate-500">{t('search.minChars')}</div>
-          ) : loading ? (
-            <div className="px-4 py-3 text-sm text-slate-500">{t('search.loading')}</div>
-          ) : error ? (
-            <div className="px-4 py-3 text-sm text-red-700">{t('search.failed')}</div>
-          ) : groupedResults.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-slate-500">{t('search.noResults')}</div>
-          ) : (
-            <div className="py-2">
-              {groupedResults.map((section) => (
-                <div key={section.group} className="py-1">
-                  <div className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {t(groupLabelKeys[section.group])}
-                  </div>
-                  {section.items.map((result) => (
-                    <Link
-                      key={result.id}
-                      href={result.href}
-                      className="block px-4 py-2 text-sm hover:bg-slate-50"
-                      onClick={() => setOpen(false)}
-                    >
-                      <span className="block font-medium text-slate-900">{result.titleKey ? t(result.titleKey) : result.title}</span>
-                      <span className="block text-xs text-slate-500">{renderDetail(result)}</span>
-                    </Link>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {menu}
     </div>
   )
 }

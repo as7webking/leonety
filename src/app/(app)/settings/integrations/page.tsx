@@ -553,6 +553,7 @@ export default function StoreIntegrationsPage() {
   const { currentCompany, loading } = useCompany()
   const { locale, t } = useI18n()
   const labels = copy[locale] ?? copy.en
+  const labelsRef = useRef(labels)
   const [provider, setProvider] = useState<Provider>('woocommerce')
   const [form, setForm] = useState<IntegrationForm>(emptyForm)
   const [integrations, setIntegrations] = useState<StoreIntegration[]>([])
@@ -569,6 +570,10 @@ export default function StoreIntegrationsPage() {
   const whatsAppSignupDataRef = useRef<Record<string, unknown>>({})
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
+
+  useEffect(() => {
+    labelsRef.current = labels
+  }, [labels])
 
   const loadIntegrations = useCallback(async () => {
     if (!currentCompany) {
@@ -592,14 +597,14 @@ export default function StoreIntegrationsPage() {
 
       if (!response.ok) {
         setIntegrations([])
-        setError(localizedApiError(payload, copy.en))
+        setError(localizedApiError(payload, labelsRef.current))
       } else {
         setIntegrations((payload.integrations ?? []) as StoreIntegration[])
       }
     } catch (loadError) {
       if (loadError instanceof DOMException && loadError.name === 'AbortError') return
       setIntegrations([])
-      setError(loadError instanceof Error ? loadError.message : copy.en.schemaUnavailable)
+      setError(loadError instanceof Error ? loadError.message : labelsRef.current.schemaUnavailable)
     } finally {
       if (integrationRequestRef.current === controller) {
         integrationRequestRef.current = null

@@ -13,6 +13,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { createClient } from '@/lib/supabase-client'
+import { getIntlLocale, type Locale } from '@/lib/i18n'
 
 const FREE_CLIENT_LIMIT = 25
 
@@ -25,6 +26,7 @@ const statusOptions = [
 ] as const
 
 type ClientStatus = typeof statusOptions[number]
+type ClientSource = 'manual' | 'csv' | 'whatsapp' | 'google_contacts' | 'other'
 
 interface ClientRecord {
   id: string
@@ -41,6 +43,10 @@ interface ClientRecord {
   tax_number: string | null
   interested_in: string | null
   notes: string | null
+  source: ClientSource | null
+  external_id: string | null
+  first_contact_at: string | null
+  last_activity_at: string | null
   status: ClientStatus
   created_at: string
   updated_at: string | null
@@ -95,6 +101,8 @@ const emptyForm: ClientFormState = {
   status: 'lead',
 }
 
+const sourceOptions: ClientSource[] = ['manual', 'csv', 'whatsapp', 'google_contacts', 'other']
+
 function getMonthRange() {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -108,6 +116,15 @@ function getMonthRange() {
 
 function formatStatus(status: string, t: (key: string) => string) {
   return t(`clients.status.${status}`)
+}
+
+function formatSource(source: string | null | undefined, t: (key: string) => string) {
+  return t(`clients.source.${source || 'manual'}`)
+}
+
+function formatClientDate(value: string | null | undefined, locale: Locale) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(new Date(value))
 }
 
 function validateClientForm(form: ClientFormState, t: (key: string) => string) {
@@ -214,7 +231,7 @@ export default function ClientsPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const importFileInputRef = useRef<HTMLInputElement | null>(null)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
@@ -230,6 +247,7 @@ export default function ClientsPage() {
   const [supportsClientDetails, setSupportsClientDetails] = useState(true)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all')
+  const [sourceFilter, setSourceFilter] = useState<'all' | ClientSource>('all')
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const isPro = accountAccess.plan === 'pro' || accountAccess.isAdmin
@@ -247,7 +265,7 @@ export default function ClientsPage() {
       const monthRange = getMonthRange()
       const extendedClientQuery = supabase
         .from('clients')
-        .select('id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, interested_in, notes, status, created_at, updated_at')
+        .select('id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, interested_in, notes, source, external_id, first_contact_at, last_activity_at, status, created_at, updated_at')
         .eq('company_id', currentCompany.id)
         .order('created_at', { ascending: false })
 
@@ -288,6 +306,10 @@ export default function ClientsPage() {
         city: client.city ?? null,
         country: client.country ?? null,
         tax_number: client.tax_number ?? null,
+        source: client.source ?? null,
+        external_id: client.external_id ?? null,
+        first_contact_at: client.first_contact_at ?? null,
+        last_activity_at: client.last_activity_at ?? null,
       })))
       setMonthlyUsage(usageRes.count ?? 0)
     } catch (error) {
@@ -315,14 +337,15 @@ export default function ClientsPage() {
 
     return clients.filter((client) => {
       const matchesStatus = statusFilter === 'all' || client.status === statusFilter
+      const matchesSource = sourceFilter === 'all' || (client.source ?? 'manual') === sourceFilter
       const matchesSearch =
         !normalizedQuery ||
-        [client.name, client.email, client.phone, client.client_company, client.interested_in, client.notes]
+        [client.name, client.email, client.phone, client.client_company, client.interested_in, client.notes, client.source]
           .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery))
 
-      return matchesStatus && matchesSearch
+      return matchesStatus && matchesSource && matchesSearch
     })
-  }, [clients, query, statusFilter])
+  }, [clients, query, sourceFilter, statusFilter])
 
   const resetForm = () => {
     setFormData(emptyForm)
@@ -589,7 +612,7 @@ export default function ClientsPage() {
             <Link href="/app/upgrade" className="ml-2 font-medium text-blue-700 hover:underline">{t('workspaces.upgradePlan')}</Link>
           )}
         </div>
-        <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_180px]">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(10rem,12rem)]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -605,6 +628,14 @@ export default function ClientsPage() {
             options={[
               { value: 'all', label: t('clients.allStatuses') },
               ...statusOptions.map((status) => ({ value: status, label: formatStatus(status, t) })),
+            ]}
+          />
+          <AppSelect
+            value={sourceFilter}
+            onChange={(value) => setSourceFilter(value as 'all' | ClientSource)}
+            options={[
+              { value: 'all', label: t('clients.allSources') },
+              ...sourceOptions.map((source) => ({ value: source, label: formatSource(source, t) })),
             ]}
           />
         </div>
@@ -800,6 +831,13 @@ export default function ClientsPage() {
                 <div className="space-y-1 text-sm text-slate-600">
                   {client.email && <p>{client.email}</p>}
                   {client.phone && <p>{client.phone}</p>}
+                  <p><span className="font-medium">{t('clients.source')}:</span> {formatSource(client.source, t)}</p>
+                  {client.source === 'whatsapp' && (
+                    <>
+                      {client.first_contact_at && <p><span className="font-medium">{t('clients.firstContact')}:</span> {formatClientDate(client.first_contact_at, locale)}</p>}
+                      {client.last_activity_at && <p><span className="font-medium">{t('clients.lastActivity')}:</span> {formatClientDate(client.last_activity_at, locale)}</p>}
+                    </>
+                  )}
                   {(client.street || client.house_number || client.postal_code || client.city || client.country) && (
                     <p>
                       {[client.street, client.house_number, client.postal_code, client.city, client.country].filter(Boolean).join(' ')}
