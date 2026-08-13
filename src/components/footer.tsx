@@ -56,14 +56,14 @@ export function Footer() {
                 <ul className="space-y-2 text-sm text-slate-600">
                   <li><Link href="/#features" className="hover:text-slate-900 transition">{t('footer.features')}</Link></li>
                   <li><Link href="/pricing" className="hover:text-slate-900 transition">{t('footer.pricing')}</Link></li>
-                  <li><Link href="/onboarding" className="hover:text-slate-900 transition">{t('footer.getStarted')}</Link></li>
+                  <li><Link href="/signup" className="hover:text-slate-900 transition">{t('footer.getStarted')}</Link></li>
                 </ul>
               </div>
               <div>
                 <p className="font-semibold text-slate-900 mb-4">{t('footer.support')}</p>
                 <ul className="space-y-2 text-sm text-slate-600">
-                  <li><Link href="/#help-center" className="hover:text-slate-900 transition">{t('public.helpCenter')}</Link></li>
-                  <li><Link href="/#contact" className="hover:text-slate-900 transition">{t('footer.contact')}</Link></li>
+                  <li><Link href="/#faq" className="hover:text-slate-900 transition">{t('public.helpCenter')}</Link></li>
+                  <li><Link href="/#support" className="hover:text-slate-900 transition">{t('footer.contact')}</Link></li>
                   <li><a href="mailto:support@leonety.app" className="hover:text-slate-900 transition">{t('footer.emailUs')}</a></li>
                 </ul>
               </div>

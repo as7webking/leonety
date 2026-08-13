@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { getAuthCallbackUrl, getSafeAppRedirectPath } from '@/lib/site-url'
@@ -31,8 +31,16 @@ export default function LoginPage() {
   const [isResending, setIsResending] = useState(false)
   const [acceptedLegal, setAcceptedLegal] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { t } = useI18n()
+
+  useEffect(() => {
+    if (pathname === '/signup' || searchParams.get('mode') === 'signup') {
+      setIsSignUp(true)
+    }
+  }, [pathname, searchParams])
 
   useEffect(() => {
     if (resendCooldown <= 0) return
