@@ -1,13 +1,13 @@
 import { z } from 'zod'
 
 // Shared field validations
-const positiveAmount = z.number().positive('Amount must be greater than 0')
+const nonZeroAmount = z.number().refine((value) => value !== 0, 'Amount must not be zero')
 const nonEmptyString = z.string().min(1, 'This field is required').max(255, 'Text is too long').trim()
 const dateString = z.string().date('Invalid date')
 const currencyCode = z.string().length(3, 'Invalid currency code').toUpperCase()
 
 export const incomeSchema = z.object({
-  amount: positiveAmount,
+  amount: nonZeroAmount,
   description: nonEmptyString,
   category: nonEmptyString,
   date: dateString,
@@ -15,7 +15,7 @@ export const incomeSchema = z.object({
 })
 
 export const expenseSchema = z.object({
-  amount: positiveAmount,
+  amount: nonZeroAmount,
   description: nonEmptyString,
   category: nonEmptyString,
   date: dateString,

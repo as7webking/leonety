@@ -110,6 +110,23 @@ function publicIntegration(row: StoreIntegrationRow) {
   }
 }
 
+function publicWhatsAppNumber(row: Record<string, unknown>) {
+  return {
+    id: String(row.id ?? ''),
+    integrationId: String(row.store_integration_id ?? ''),
+    wabaId: String(row.waba_id ?? ''),
+    phoneNumberId: String(row.phone_number_id ?? ''),
+    displayPhoneNumber: String(row.display_phone_number ?? ''),
+    verifiedName: String(row.verified_name ?? ''),
+    status: String(row.status ?? ''),
+    isDefault: Boolean(row.is_default),
+    connectedAt: typeof row.connected_at === 'string' ? row.connected_at : null,
+    lastWebhookAt: typeof row.last_webhook_at === 'string' ? row.last_webhook_at : null,
+    lastError: String(row.last_error ?? ''),
+    clientCreationMode: String(row.client_creation_mode ?? 'ask'),
+  }
+}
+
 export async function GET(request: Request) {
   const log = { requestId: createRequestId(), route: '/api/store-integrations', operation: 'GET' }
 
@@ -176,7 +193,20 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ integrations })
+    let whatsappNumbers: ReturnType<typeof publicWhatsAppNumber>[] = []
+    const { data: numberRows, error: numberError } = await auth.adminSupabase
+      .from('whatsapp_business_numbers')
+      .select('id, store_integration_id, waba_id, phone_number_id, display_phone_number, verified_name, status, is_default, connected_at, last_webhook_at, last_error, client_creation_mode')
+      .eq('company_id', companyId)
+      .order('connected_at', { ascending: false })
+
+    if (!numberError) {
+      whatsappNumbers = (numberRows ?? []).map((row) => publicWhatsAppNumber(row as Record<string, unknown>))
+    } else if (numberError.code !== '42P01' && numberError.code !== 'PGRST205') {
+      throw numberError
+    }
+
+    return NextResponse.json({ integrations, whatsappNumbers })
   } catch (error) {
     safeLogError(log, error)
     return responseError(error)

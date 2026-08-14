@@ -108,6 +108,7 @@ function collectDictionaryKeys() {
     ['src/lib/i18n.ts', 'mixedLanguageFixDictionaries'],
     ['src/lib/i18n.ts', 'authStabilityDictionaries'],
     ['src/lib/i18n.ts', 'auditDictionaries'],
+    ['src/lib/i18n.ts', 'transactionStabilityDictionaries'],
   ]
 
   for (const [relativeFile, objectName] of dictionaryObjects) {

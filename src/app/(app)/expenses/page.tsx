@@ -19,11 +19,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
+import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 
 interface Expense extends ExpenseForm {
   id: string
   company_id: string
 }
+
+type ExpenseFormState = Omit<ExpenseForm, 'amount'> & { amount: string }
 
 export default function ExpensesPage() {
   const router = useRouter()
@@ -35,8 +38,8 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Expense | null>(null)
-  const [formData, setFormData] = useState<ExpenseForm>({
-    amount: 0,
+  const [formData, setFormData] = useState<ExpenseFormState>({
+    amount: '',
     description: '',
     category: '',
     date: new Date().toISOString().split('T')[0],
@@ -147,15 +150,21 @@ export default function ExpensesPage() {
 
     try {
       const isOtherExpense = formData.category === 'Other'
+      const parsedAmount = validateSignedAmountInput(formData.amount, {
+        required: t('transactions.amountRequired'),
+        invalid: t('transactions.amountInvalid'),
+        nonZero: t('transactions.amountNonZero'),
+      })
       const validatedData = expenseSchema.parse({
         ...formData,
+        amount: parsedAmount,
         description: isOtherExpense ? customCategory : formData.description,
       })
       const payload = {
         description: validatedData.description,
         date: validatedData.date,
         category: validatedData.category,
-        amount: Number(validatedData.amount.toFixed(2)),
+        amount: validatedData.amount,
         currency: validatedData.currency,
         company_id: currentCompany.id,
       }
@@ -175,7 +184,7 @@ export default function ExpensesPage() {
       }
 
       setFormData({
-        amount: 0,
+        amount: '',
         description: '',
         category: '',
         currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'),
@@ -197,7 +206,7 @@ export default function ExpensesPage() {
     setEditingEntry(entry)
     setCustomCategory(entry.category === 'Other' ? entry.description : '')
     setFormData({
-      amount: entry.amount,
+      amount: String(entry.amount),
       description: entry.description,
       category: entry.category,
       date: entry.date,
@@ -316,42 +325,47 @@ export default function ExpensesPage() {
         throw new Error('CSV must contain a header row and at least one data row')
       }
 
-      const header = rows[0].map((value) => value.trim().toLowerCase())
-      const dateIndex = header.indexOf('date')
-      const descriptionIndex = header.indexOf('description')
-      const categoryIndex = header.indexOf('category')
-      const amountIndex = header.indexOf('amount')
-      const currencyIndex = header.indexOf('currency')
+      const header = rows[0].map(normalizeCsvHeader)
+      const dateIndex = getCsvColumnIndex(header, ['date'])
+      const descriptionIndex = getCsvColumnIndex(header, ['description', 'name', 'title'])
+      const categoryIndex = getCsvColumnIndex(header, ['category'])
+      const amountIndex = getCsvColumnIndex(header, ['amount'])
+      const currencyIndex = getCsvColumnIndex(header, ['currency'])
 
       if ([dateIndex, descriptionIndex, categoryIndex, amountIndex, currencyIndex].some((index) => index === -1)) {
-        throw new Error('CSV must include Date, Description, Category, Amount, and Currency columns')
+        throw new Error(t('transactions.importMissingColumns'))
       }
 
       const payload = rows.slice(1).map((columns, index) => {
-        const date = columns[dateIndex]
+        const rowNumber = index + 2
+        const date = parseTransactionDate(columns[dateIndex] ?? '')
         const description = columns[descriptionIndex]?.trim()
         const category = columns[categoryIndex]?.trim()
-        const amount = Number(columns[amountIndex])
+        const amount = parseLocalizedAmount(columns[amountIndex] ?? '')
         const currency = normalizeCurrencyCode(columns[currencyIndex] || currentCompany.currency || 'USD')
 
-        if (!date || Number.isNaN(new Date(date).getTime())) {
-          throw new Error(`Row ${index + 2}: invalid date`)
+        if (!date) {
+          throw new Error(t('transactions.importRowInvalidDate').replace('{row}', String(rowNumber)))
         }
 
         if (!description) {
-          throw new Error(`Row ${index + 2}: description is required`)
+          throw new Error(t('transactions.importRowDescriptionRequired').replace('{row}', String(rowNumber)))
         }
 
         if (!category) {
-          throw new Error(`Row ${index + 2}: category is required`)
+          throw new Error(t('transactions.importRowCategoryRequired').replace('{row}', String(rowNumber)))
         }
 
-        if (!Number.isFinite(amount) || amount <= 0) {
-          throw new Error(`Row ${index + 2}: amount must be greater than 0`)
+        if (!Number.isFinite(amount)) {
+          throw new Error(t('transactions.importRowAmountInvalid').replace('{row}', String(rowNumber)))
+        }
+
+        if (amount === 0) {
+          throw new Error(t('transactions.importRowAmountNonZero').replace('{row}', String(rowNumber)))
         }
 
         if (!isSupportedCurrency(currency)) {
-          throw new Error(`Row ${index + 2}: unsupported currency`)
+          throw new Error(t('transactions.importRowUnsupportedCurrency').replace('{row}', String(rowNumber)))
         }
 
         return {
@@ -367,11 +381,11 @@ export default function ExpensesPage() {
       const { error } = await supabase.from('expenses').insert(payload)
       if (error) throw error
 
-      setSuccessMessage(`Imported ${payload.length} expense entr${payload.length === 1 ? 'y' : 'ies'}`)
+      setSuccessMessage(t('transactions.importedRows').replace('{count}', String(payload.length)))
       await loadExpenses()
     } catch (error) {
       console.error('Expense CSV import failed:', error)
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to import CSV')
+      setErrorMessage(error instanceof Error ? error.message : t('transactions.importFailed'))
     } finally {
       setImporting(false)
       event.target.value = ''
@@ -417,7 +431,7 @@ export default function ExpensesPage() {
             onChange={handleImportCSV}
           />
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
-            {importing ? 'Importing...' : t('common.importCsv')}
+            {importing ? t('transactions.importing') : t('common.importCsv')}
           </Button>
           {expenses.length > 0 && (
             <AppSelect
@@ -427,7 +441,7 @@ export default function ExpensesPage() {
                 { value: 'default', label: t('common.noMonthGrouping') },
                 { value: 'month', label: t('common.groupByMonth') },
               ]}
-              ariaLabel="Print grouping"
+                ariaLabel={t('common.groupByMonth')}
               className="w-48"
             />
           )}
@@ -543,7 +557,7 @@ export default function ExpensesPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('common.amount')}</label>
-                <input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })} className="w-full rounded-md border px-3 py-2" required />
+                <input type="text" inputMode="decimal" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} required />
               </div>
               {formData.category !== 'Other' && (
                 <div>
@@ -640,7 +654,7 @@ export default function ExpensesPage() {
               <Card className="border-primary/30 bg-slate-50">
                 <CardContent className="p-4">
                   <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
-                    <input type="number" step="0.01" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: Number(event.target.value) })} className="rounded-md border px-3 py-2" aria-label={t('common.amount')} required />
+                    <input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} aria-label={t('common.amount')} required />
                     <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} required />
                     <input value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.category')} required />
                     <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.date')} required />

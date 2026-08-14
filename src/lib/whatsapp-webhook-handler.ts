@@ -50,6 +50,14 @@ interface StoreIntegrationConnection {
   metadata: Record<string, unknown> | null
 }
 
+interface WhatsAppNumberConnection {
+  id: string
+  company_id: string
+  store_integration_id: string
+  metadata: Record<string, unknown> | null
+  client_creation_mode: WhatsAppClientCreationMode | null
+}
+
 function getVerifyToken() {
   return process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim() || process.env.WHATSAPP_VERIFY_TOKEN?.trim() || ''
 }
@@ -118,6 +126,20 @@ async function updateLastWebhookAt(
       updated_at: new Date().toISOString(),
     })
     .eq('id', connectionId)
+}
+
+async function updateNumberLastWebhookAt(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  numberId: string
+) {
+  await supabase
+    .from('whatsapp_business_numbers')
+    .update({
+      last_webhook_at: new Date().toISOString(),
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', numberId)
 }
 
 async function upsertLeadFromMessage(
@@ -237,18 +259,47 @@ export async function handleWhatsAppWebhook(request: Request) {
 
         if (!phoneNumberId) continue
 
-        const { data: connection, error: connectionError } = await supabase
-          .from('store_integrations')
-          .select('id, company_id, metadata')
-          .eq('provider', WHATSAPP_PROVIDER)
-          .eq('merchant_id', phoneNumberId)
+        let typedConnection: StoreIntegrationConnection | null = null
+        let typedNumber: WhatsAppNumberConnection | null = null
+
+        const { data: numberConnection, error: numberConnectionError } = await supabase
+          .from('whatsapp_business_numbers')
+          .select('id, company_id, store_integration_id, metadata, client_creation_mode')
+          .eq('phone_number_id', phoneNumberId)
           .eq('status', 'connected')
           .maybeSingle()
 
-        if (connectionError || !connection) continue
+        if (numberConnectionError && numberConnectionError.code !== '42P01' && numberConnectionError.code !== 'PGRST205') {
+          continue
+        }
 
-        const typedConnection = connection as StoreIntegrationConnection
+        if (numberConnection) {
+          typedNumber = numberConnection as WhatsAppNumberConnection
+          typedConnection = {
+            id: typedNumber.store_integration_id,
+            company_id: typedNumber.company_id,
+            metadata: {
+              ...(typedNumber.metadata ?? {}),
+              clientCreationMode: typedNumber.client_creation_mode ?? 'ask',
+            },
+          }
+        } else {
+          const { data: connection, error: connectionError } = await supabase
+            .from('store_integrations')
+            .select('id, company_id, metadata')
+            .eq('provider', WHATSAPP_PROVIDER)
+            .eq('merchant_id', phoneNumberId)
+            .eq('status', 'connected')
+            .maybeSingle()
+
+          if (connectionError || !connection) continue
+          typedConnection = connection as StoreIntegrationConnection
+        }
+
         await updateLastWebhookAt(supabase, typedConnection.id)
+        if (typedNumber) {
+          await updateNumberLastWebhookAt(supabase, typedNumber.id)
+        }
 
         for (const status of value?.statuses ?? []) {
           const eventId = getEventId(phoneNumberId, entry, undefined, status)

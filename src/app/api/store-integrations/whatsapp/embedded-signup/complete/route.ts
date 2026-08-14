@@ -43,6 +43,14 @@ function readSignupData(body: Record<string, unknown>) {
   return { wabaId, phoneNumberId, displayPhoneNumber }
 }
 
+function isMissingWhatsAppNumbersTable(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const record = error as { code?: string; message?: string }
+  return record.code === '42P01' ||
+    record.code === 'PGRST205' ||
+    Boolean(record.message?.includes('whatsapp_business_numbers'))
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
@@ -66,58 +74,93 @@ export async function POST(request: Request) {
     const now = new Date().toISOString()
     const displayName = phoneNumber.displayPhoneNumber || displayPhoneNumber || phoneNumberId
 
-    const payload = {
+    const integrationPayload = {
       company_id: companyId,
       provider: WHATSAPP_PROVIDER,
-      store_name: displayName,
+      store_name: 'WhatsApp Business',
       store_url: '',
       external_account_id: wabaId,
       merchant_id: phoneNumberId,
-      access_token: encryptSecret(JSON.stringify({
-        accessToken,
-        tokenType: 'embedded_signup_customer_token',
-        connectedAt: now,
-      })),
+      access_token: '',
       refresh_token: '',
       status: webhookSubscription.ok ? 'connected' : 'error',
       connected_at: now,
       error_message: webhookSubscription.ok ? null : webhookSubscription.error,
       metadata: {
         wabaId,
-        phoneNumberId,
-        displayPhoneNumber: displayName,
-        verifiedName: phoneNumber.verifiedName,
-        codeVerificationStatus: phoneNumber.codeVerificationStatus,
-        qualityRating: phoneNumber.qualityRating,
+        primaryPhoneNumberId: phoneNumberId,
+        primaryDisplayPhoneNumber: displayName,
         webhookSubscribed: webhookSubscription.ok,
         clientCreationMode,
+        supportsMultipleNumbers: true,
       },
       updated_at: now,
     }
 
-    const { data, error } = await auth.adminSupabase
+    const { data: integration, error: integrationError } = await auth.adminSupabase
       .from('store_integrations')
-      .upsert(payload, { onConflict: 'company_id,provider' })
+      .upsert(integrationPayload, { onConflict: 'company_id,provider' })
       .select('id, provider, store_name, external_account_id, merchant_id, status, last_sync_at, connected_at, last_webhook_at, error_message, metadata, updated_at')
       .single()
 
-    if (error) throw error
+    if (integrationError) throw integrationError
+
+    const encryptedCredential = encryptSecret(JSON.stringify({
+      accessToken,
+      tokenType: 'embedded_signup_customer_token',
+      connectedAt: now,
+    }))
+    const { data: numberRow, error: numberError } = await auth.adminSupabase
+      .from('whatsapp_business_numbers')
+      .upsert({
+        company_id: companyId,
+        store_integration_id: integration.id,
+        waba_id: wabaId,
+        phone_number_id: phoneNumberId,
+        display_phone_number: displayName,
+        verified_name: phoneNumber.verifiedName,
+        status: webhookSubscription.ok ? 'connected' : 'error',
+        is_default: true,
+        encrypted_credentials: encryptedCredential,
+        client_creation_mode: clientCreationMode,
+        connected_at: now,
+        last_error: webhookSubscription.ok ? null : webhookSubscription.error,
+        metadata: {
+          codeVerificationStatus: phoneNumber.codeVerificationStatus,
+          qualityRating: phoneNumber.qualityRating,
+          webhookSubscribed: webhookSubscription.ok,
+        },
+        updated_at: now,
+      }, { onConflict: 'company_id,phone_number_id' })
+      .select('id, phone_number_id, display_phone_number, verified_name, status, is_default, connected_at, last_webhook_at, last_error, client_creation_mode')
+      .single()
+
+    if (numberError) {
+      if (isMissingWhatsAppNumbersTable(numberError)) {
+        return NextResponse.json({
+          error: 'WhatsApp multi-number storage is not installed. Run the additive Supabase migration first.',
+          code: 'WHATSAPP_NUMBERS_MIGRATION_REQUIRED',
+        }, { status: 500 })
+      }
+      throw numberError
+    }
 
     return NextResponse.json({
       integration: {
-        id: data.id,
-        provider: data.provider,
-        storeName: data.store_name,
-        externalAccountId: data.external_account_id,
-        merchantId: data.merchant_id,
-        status: data.status,
-        lastSyncAt: data.last_sync_at,
-        connectedAt: data.connected_at,
-        lastWebhookAt: data.last_webhook_at,
-        errorMessage: data.error_message,
-        metadata: data.metadata,
-        updatedAt: data.updated_at,
+        id: integration.id,
+        provider: integration.provider,
+        storeName: integration.store_name,
+        externalAccountId: integration.external_account_id,
+        merchantId: integration.merchant_id,
+        status: integration.status,
+        lastSyncAt: integration.last_sync_at,
+        connectedAt: integration.connected_at,
+        lastWebhookAt: integration.last_webhook_at,
+        errorMessage: integration.error_message,
+        metadata: integration.metadata,
+        updatedAt: integration.updated_at,
       },
+      number: numberRow,
       webhookSubscribed: webhookSubscription.ok,
     })
   } catch (error) {

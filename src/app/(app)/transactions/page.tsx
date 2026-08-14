@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDownCircle, ArrowUpCircle, Building2, Copy, Printer, Plus } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
@@ -11,9 +11,11 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCategoryLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
-import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { parseCsv } from '@/lib/csv'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
+import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 
 interface TransactionRow {
   id: string
@@ -49,6 +51,7 @@ export default function TransactionsPage() {
   const [message, setMessage] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showBulkRename, setShowBulkRename] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
   const [selectedField, setSelectedField] = useState<BulkRenameField>('description')
   const [selectedValue, setSelectedValue] = useState('')
@@ -65,7 +68,7 @@ export default function TransactionsPage() {
   const [companyAddress, setCompanyAddress] = useState('')
   const [formData, setFormData] = useState({
     type: 'income' as 'income' | 'expense',
-    amount: 0,
+    amount: '',
     description: '',
     category: '',
     date: new Date().toISOString().split('T')[0],
@@ -78,6 +81,7 @@ export default function TransactionsPage() {
     to: '',
   })
   const [selectedBulkRenameIds, setSelectedBulkRenameIds] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const loadTransactions = useCallback(async () => {
     if (!currentCompany) {
@@ -154,24 +158,31 @@ export default function TransactionsPage() {
     setErrorMessage('')
 
     if (!currentCompany) {
-      setErrorMessage('Create or select a workspace first.')
+      setErrorMessage(t('common.noWorkspaceSelected'))
       return
     }
 
     if (!formData.description.trim()) {
-      setErrorMessage('Description is required.')
+      setErrorMessage(t('transactions.descriptionRequired'))
       return
     }
 
-    if (!Number.isFinite(formData.amount) || formData.amount <= 0) {
-      setErrorMessage('Amount must be greater than 0.')
+    let amount = 0
+    try {
+      amount = validateSignedAmountInput(formData.amount, {
+        required: t('transactions.amountRequired'),
+        invalid: t('transactions.amountInvalid'),
+        nonZero: t('transactions.amountNonZero'),
+      })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t('transactions.amountInvalid'))
       return
     }
 
     const table = formData.type === 'income' ? 'incomes' : 'expenses'
     const { error } = await supabase.from(table).insert({
       company_id: currentCompany.id,
-      amount: Number(formData.amount.toFixed(2)),
+      amount,
       description: formData.description.trim(),
       category: formData.category.trim() || 'Other',
       date: formData.date,
@@ -183,11 +194,11 @@ export default function TransactionsPage() {
       return
     }
 
-    setMessage('Transaction created.')
+    setMessage(t('transactions.created'))
     setShowForm(false)
     setFormData({
       type: 'income',
-      amount: 0,
+      amount: '',
       description: '',
       category: '',
       date: new Date().toISOString().split('T')[0],
@@ -196,28 +207,121 @@ export default function TransactionsPage() {
     await loadTransactions()
   }
 
-  const handleCopyTransaction = async (transaction: TransactionRow) => {
+  const handleCopyTransaction = (transaction: TransactionRow) => {
     if (!currentCompany) return
     setMessage('')
     setErrorMessage('')
-
-    const table = transaction.type === 'income' ? 'incomes' : 'expenses'
-    const { error } = await supabase.from(table).insert({
-      company_id: currentCompany.id,
-      amount: Number(transaction.amount.toFixed(2)),
-      description: transaction.description,
-      category: transaction.category,
-      date: new Date().toISOString().split('T')[0],
+    setFormData({
+      type: transaction.type,
+      amount: String(transaction.amount),
+      description: transaction.description ?? '',
+      category: transaction.category ?? '',
+      date: transaction.date,
       currency: normalizeCurrencyCode(transaction.currency),
     })
+    setShowForm(true)
+    setMessage(t('transactions.copyReady'))
+  }
 
-    if (error) {
-      setErrorMessage(error.message)
-      return
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !currentCompany) return
+
+    setImporting(true)
+    setMessage('')
+    setErrorMessage('')
+
+    try {
+      const rows = parseCsv(await file.text())
+      if (rows.length < 2) {
+        throw new Error(t('transactions.importEmpty'))
+      }
+
+      const header = rows[0].map(normalizeCsvHeader)
+      const typeIndex = getCsvColumnIndex(header, ['type'])
+      const dateIndex = getCsvColumnIndex(header, ['date'])
+      const descriptionIndex = getCsvColumnIndex(header, ['description', 'name', 'title'])
+      const categoryIndex = getCsvColumnIndex(header, ['category'])
+      const amountIndex = getCsvColumnIndex(header, ['amount'])
+      const currencyIndex = getCsvColumnIndex(header, ['currency'])
+
+      if ([typeIndex, dateIndex, descriptionIndex, categoryIndex, amountIndex, currencyIndex].some((index) => index === -1)) {
+        throw new Error(t('transactions.importMixedMissingColumns'))
+      }
+
+      const existingKeys = new Set(transactions.map((transaction) => [
+        transaction.type,
+        transaction.date,
+        Number(transaction.amount).toFixed(2),
+        (transaction.description ?? '').trim().toLowerCase(),
+        (transaction.category ?? '').trim().toLowerCase(),
+        normalizeCurrencyCode(transaction.currency),
+      ].join('|')))
+      const payloads = {
+        income: [] as Array<Record<string, unknown>>,
+        expense: [] as Array<Record<string, unknown>>,
+      }
+      let skippedDuplicates = 0
+
+      for (const [index, columns] of rows.slice(1).entries()) {
+        const rowNumber = index + 2
+        const rawType = (columns[typeIndex] ?? '').trim().toLowerCase()
+        const type = rawType === 'income' || rawType === t('income.title').toLowerCase()
+          ? 'income'
+          : rawType === 'expense' || rawType === t('expenses.title').toLowerCase()
+            ? 'expense'
+            : null
+        const date = parseTransactionDate(columns[dateIndex] ?? '')
+        const description = columns[descriptionIndex]?.trim() ?? ''
+        const category = columns[categoryIndex]?.trim() ?? ''
+        const amount = parseLocalizedAmount(columns[amountIndex] ?? '')
+        const currency = normalizeCurrencyCode(columns[currencyIndex] || currentCompany.currency || 'USD')
+
+        if (!type) throw new Error(t('transactions.importRowTypeInvalid').replace('{row}', String(rowNumber)))
+        if (!date) throw new Error(t('transactions.importRowInvalidDate').replace('{row}', String(rowNumber)))
+        if (!description) throw new Error(t('transactions.importRowDescriptionRequired').replace('{row}', String(rowNumber)))
+        if (!category) throw new Error(t('transactions.importRowCategoryRequired').replace('{row}', String(rowNumber)))
+        if (!Number.isFinite(amount)) throw new Error(t('transactions.importRowAmountInvalid').replace('{row}', String(rowNumber)))
+        if (amount === 0) throw new Error(t('transactions.importRowAmountNonZero').replace('{row}', String(rowNumber)))
+        if (!isSupportedCurrency(currency)) throw new Error(t('transactions.importRowUnsupportedCurrency').replace('{row}', String(rowNumber)))
+
+        const key = [type, date, Number(amount).toFixed(2), description.toLowerCase(), category.toLowerCase(), currency].join('|')
+        if (existingKeys.has(key)) {
+          skippedDuplicates += 1
+          continue
+        }
+
+        existingKeys.add(key)
+        payloads[type].push({
+          company_id: currentCompany.id,
+          date,
+          description,
+          category,
+          amount: Number(amount.toFixed(2)),
+          currency,
+        })
+      }
+
+      if (payloads.income.length > 0) {
+        const { error } = await supabase.from('incomes').insert(payloads.income)
+        if (error) throw error
+      }
+
+      if (payloads.expense.length > 0) {
+        const { error } = await supabase.from('expenses').insert(payloads.expense)
+        if (error) throw error
+      }
+
+      setMessage(t('transactions.importedRowsWithSkipped')
+        .replace('{count}', String(payloads.income.length + payloads.expense.length))
+        .replace('{skipped}', String(skippedDuplicates)))
+      await loadTransactions()
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t('transactions.importFailed'))
+    } finally {
+      setImporting(false)
+      event.target.value = ''
     }
-
-    setMessage(t('transactions.copied'))
-    await loadTransactions()
   }
 
   const handleBulkRename = async (event: React.FormEvent) => {
@@ -499,6 +603,16 @@ export default function TransactionsPage() {
     <PageContainer>
       <PageHeader title={t('transactions.title')} description={`${t('transactions.description')} · ${currentCompany.name}`}>
         <div className="flex flex-wrap gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleImportCSV}
+          />
+          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            {importing ? t('transactions.importing') : t('common.importCsv')}
+          </Button>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <span>{t('transactions.printFrom')}</span>
             <input
@@ -802,7 +916,7 @@ export default function TransactionsPage() {
               </label>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('common.amount')}</span>
-                <input type="number" min="0" step="0.01" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: Number(event.target.value) })} className="w-full rounded-md border px-3 py-2" required />
+                <input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} required />
               </label>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('common.currency')}</span>
@@ -877,7 +991,7 @@ export default function TransactionsPage() {
                 <span className="text-right font-semibold">
                   {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
                 </span>
-                <Button size="sm" variant="outline" onClick={() => void handleCopyTransaction(transaction)}>
+                <Button size="sm" variant="outline" onClick={() => handleCopyTransaction(transaction)}>
                   <Copy className="h-4 w-4" />
                   <span className="hidden sm:inline">{t('common.copy')}</span>
                 </Button>
