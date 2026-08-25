@@ -70,7 +70,13 @@ export default function StockMovementsPage() {
     setLoading(false)
   }, [currentCompany, supabase, t])
 
-  useEffect(() => { void loadData() }, [loadData])
+  useEffect(() => {
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (!cancelled) void loadData()
+    })
+    return () => { cancelled = true }
+  }, [loadData])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()

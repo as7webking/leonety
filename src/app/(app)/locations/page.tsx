@@ -53,7 +53,13 @@ export default function LocationsPage() {
     setLoading(false)
   }, [currentCompany, supabase, t])
 
-  useEffect(() => { void loadLocations() }, [loadLocations])
+  useEffect(() => {
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (!cancelled) void loadLocations()
+    })
+    return () => { cancelled = true }
+  }, [loadLocations])
 
   const resetForm = () => {
     setForm(emptyForm)

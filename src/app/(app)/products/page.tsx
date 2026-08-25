@@ -687,43 +687,35 @@ export default function ProductsPage() {
     setMessage(t('products.categoryCreated'))
   }
 
-  const handleCopyProduct = async (product: Product) => {
+  const handleCopyProduct = (product: Product) => {
     if (!currentCompany) return
     setMessage('')
     setError('')
-
-    const payload: Record<string, unknown> = {
-      company_id: currentCompany.id,
+    setEditing(null)
+    setForm({
       name: `${product.name} ${t('common.copy')}`,
-      sku: null,
-      barcode: null,
-      category: product.category,
-      description: product.description,
-      purchase_price: product.purchase_price,
-      selling_price: product.selling_price,
+      sku: '',
+      barcode: '',
+      category: product.category ?? '',
+      description: decodeHtmlText(product.description ?? ''),
+      purchase_price: product.purchase_price === null ? '' : String(product.purchase_price),
+      selling_price: product.selling_price === null ? '' : String(product.selling_price),
       currency: product.currency,
-      current_stock: 0,
-      low_stock_threshold: product.low_stock_threshold,
+      low_stock_threshold: String(product.low_stock_threshold),
       status: product.status,
-      image_url: product.image_url ?? null,
-      woo_product_type: product.woo_product_type ?? 'simple',
-      woo_attributes: product.woo_attributes ?? [],
-      woo_variants: product.woo_variants ?? [],
-    }
-
-    if (categoriesAvailable) {
-      payload.category_id = product.category_id ?? null
-    }
-
-    const { error: copyError } = await supabase.from('products').insert(payload)
-
-    if (copyError) {
-      setError(copyError.message)
-      return
-    }
-
-    setMessage(t('products.copied'))
-    await loadProducts()
+      image_url: product.image_url ?? '',
+      publish_to_woocommerce: Boolean(product.woo_product_type === 'variable' || product.woo_attributes || product.woo_variants),
+      woo_product_type: product.woo_product_type === 'variable' ? 'variable' : 'simple',
+      woo_attributes: stringifyJson(product.woo_attributes),
+      woo_variants: stringifyJson(product.woo_variants),
+    })
+    setShowForm(true)
+    setEditorSection('general')
+    setMessage(t('products.copyReady'))
+    requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      firstEditorInputRef.current?.focus()
+    })
   }
 
   const handleArchive = async (product: Product) => {
@@ -1432,7 +1424,7 @@ export default function ProductsPage() {
                     <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}>{t('products.view')}</Button>
                     <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
                     <Link href="/app/stock-movements"><Button size="sm" variant="outline">{t('products.adjustStock')}</Button></Link>
-                    <Button size="sm" variant="outline" onClick={() => void handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
+                    <Button size="sm" variant="outline" onClick={() => handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
                     <Button size="sm" variant="outline" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)}>
                       {syncingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
                       {getWooActionLabel(product)}

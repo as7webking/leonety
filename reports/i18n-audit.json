@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-14T09:19:15.953Z",
+  "generatedAt": "2026-08-15T00:16:24.278Z",
   "locales": [
     "en",
     "de",
@@ -15,38 +15,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1153,
-      "total": 1153,
+      "translated": 1161,
+      "total": 1161,
       "percent": 100
     },
     "de": {
-      "translated": 1153,
-      "total": 1153,
+      "translated": 1161,
+      "total": 1161,
       "percent": 100
     },
     "ru": {
-      "translated": 1153,
-      "total": 1153,
+      "translated": 1161,
+      "total": 1161,
       "percent": 100
     },
     "tr": {
-      "translated": 1153,
-      "total": 1153,
+      "translated": 1161,
+      "total": 1161,
       "percent": 100
     },
     "uk": {
-      "translated": 1153,
-      "total": 1153,
+      "translated": 1161,
+      "total": 1161,
       "percent": 100
     },
     "pl": {
-      "translated": 1153,
-      "total": 1153,
+      "translated": 1161,
+      "total": 1161,
       "percent": 100
     },
     "fr": {
-      "translated": 1153,
-      "total": 1153,
+      "translated": 1161,
+      "total": 1161,
       "percent": 100
     }
   },
@@ -2174,13 +2174,13 @@
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1364,
+      "line": 1356,
       "type": "attribute:placeholder",
       "text": "[{\"name\":\"Size\",\"options\":[\"S\",\"M\",\"L\"]}]"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1368,
+      "line": 1360,
       "type": "attribute:placeholder",
       "text": "[{\"sku\":\"TS-S-BLACK\",\"price\":19.99,\"stock_quantity\":5,\"attributes\":{\"Size\":\"S\",\"Color\":\"Black\"}}]"
     },
@@ -2283,7 +2283,7 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1153,
+    "englishKeyCount": 1161,
     "hardcodedStringCount": 18,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0

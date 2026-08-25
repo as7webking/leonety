@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import { getSiteUrl } from '@/lib/site-url'
 
 export const WHATSAPP_PROVIDER = 'whatsapp_business' as const
-export const GRAPH_API_VERSION = 'v23.0'
+export const DEFAULT_GRAPH_API_VERSION = 'v25.0'
 
 export type WhatsAppClientCreationMode = 'ask' | 'auto_create_lead' | 'never'
 
@@ -38,10 +38,12 @@ function getRequiredEnv(name: string) {
 }
 
 export function getWhatsAppPlatformConfig() {
+  const graphVersion = process.env.GRAPH_API_VERSION?.trim() || DEFAULT_GRAPH_API_VERSION
+
   return {
     appId: getRequiredEnv('META_APP_ID'),
     configId: getRequiredEnv('META_WHATSAPP_CONFIG_ID'),
-    graphVersion: GRAPH_API_VERSION,
+    graphVersion,
   }
 }
 
@@ -64,13 +66,14 @@ export function validateMetaSignature(rawBody: string, signature: string | null)
 export async function exchangeEmbeddedSignupCode(code: string) {
   const appId = getRequiredEnv('META_APP_ID')
   const appSecret = getRequiredEnv('META_APP_SECRET')
+  const { graphVersion } = getWhatsAppPlatformConfig()
   const params = new URLSearchParams({
     client_id: appId,
     client_secret: appSecret,
     code,
   })
 
-  const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token?${params.toString()}`, {
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/oauth/access_token?${params.toString()}`, {
     cache: 'no-store',
   })
   const payload = await response.json().catch(() => ({})) as GraphTokenResponse
@@ -83,8 +86,9 @@ export async function exchangeEmbeddedSignupCode(code: string) {
 }
 
 export async function fetchWhatsAppPhoneNumber(phoneNumberId: string, accessToken: string) {
+  const { graphVersion } = getWhatsAppPlatformConfig()
   const fields = ['display_phone_number', 'verified_name', 'code_verification_status', 'quality_rating'].join(',')
-  const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(phoneNumberId)}?fields=${fields}`, {
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(phoneNumberId)}?fields=${fields}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
@@ -107,7 +111,8 @@ export async function fetchWhatsAppPhoneNumber(phoneNumberId: string, accessToke
 }
 
 export async function subscribeWhatsAppApp(wabaId: string, accessToken: string) {
-  const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(wabaId)}/subscribed_apps`, {
+  const { graphVersion } = getWhatsAppPlatformConfig()
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(wabaId)}/subscribed_apps`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -81,6 +81,8 @@ interface ClientImportRow {
   interested_in: string
   notes: string
   status: ClientStatus
+  source: ClientSource
+  external_id: string
   duplicate: boolean
   duplicateReason: string
 }
@@ -185,8 +187,19 @@ function mapClientImportRow(row: Record<string, string>): ClientImportRow {
     interested_in: get('interested_in', 'interested in', 'interest'),
     notes: get('notes', 'note'),
     status: 'lead',
+    source: 'csv',
+    external_id: get('external_id', 'external id', 'google resource id'),
     duplicate: false,
     duplicateReason: '',
+  }
+}
+
+function mapGoogleContactImportRow(row: Record<string, string>): ClientImportRow {
+  return {
+    ...mapClientImportRow(row),
+    source: 'google_contacts',
+    external_id: row.external_id ?? '',
+    notes: row.notes || '',
   }
 }
 
@@ -241,6 +254,7 @@ export default function ClientsPage() {
   const [showImport, setShowImport] = useState(false)
   const [importRows, setImportRows] = useState<ClientImportRow[]>([])
   const [importingClients, setImportingClients] = useState(false)
+  const [loadingGoogleContacts, setLoadingGoogleContacts] = useState(false)
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null)
   const [formData, setFormData] = useState<ClientFormState>(emptyForm)
   const [monthlyUsage, setMonthlyUsage] = useState(0)
@@ -356,25 +370,85 @@ export default function ClientsPage() {
   const markImportDuplicates = useCallback((rows: ClientImportRow[]) => {
     const existingPhones = new Set(clients.map((client) => normalizePhone(client.phone)).filter(Boolean))
     const existingEmails = new Set(clients.map((client) => String(client.email ?? '').trim().toLowerCase()).filter(Boolean))
+    const existingExternalIds = new Set(clients.map((client) => String(client.external_id ?? '').trim()).filter(Boolean))
     const seenPhones = new Set<string>()
     const seenEmails = new Set<string>()
+    const seenExternalIds = new Set<string>()
 
     return rows.map((row) => {
       const phone = normalizePhone(row.phone)
       const email = row.email.trim().toLowerCase()
+      const externalId = row.external_id.trim()
       const duplicateByPhone = Boolean(phone && (existingPhones.has(phone) || seenPhones.has(phone)))
       const duplicateByEmail = Boolean(email && (existingEmails.has(email) || seenEmails.has(email)))
+      const duplicateByExternalId = Boolean(externalId && (existingExternalIds.has(externalId) || seenExternalIds.has(externalId)))
 
       if (phone) seenPhones.add(phone)
       if (email) seenEmails.add(email)
+      if (externalId) seenExternalIds.add(externalId)
 
       return {
         ...row,
-        duplicate: duplicateByPhone || duplicateByEmail,
-        duplicateReason: duplicateByPhone ? t('clients.importDuplicatePhone') : duplicateByEmail ? t('clients.importDuplicateEmail') : '',
+        duplicate: duplicateByPhone || duplicateByEmail || duplicateByExternalId,
+        duplicateReason: duplicateByExternalId
+          ? t('clients.importDuplicateExternal')
+          : duplicateByPhone
+            ? t('clients.importDuplicatePhone')
+            : duplicateByEmail
+              ? t('clients.importDuplicateEmail')
+              : '',
       }
     })
   }, [clients, t])
+
+  const loadGoogleContactsPreview = useCallback(async () => {
+    if (!currentCompany) return
+
+    setLoadingGoogleContacts(true)
+    setErrorMessage('')
+    setMessage('')
+
+    try {
+      const response = await fetch(`/api/clients/google-contacts/preview?companyId=${encodeURIComponent(currentCompany.id)}`)
+      const payload = await response.json().catch(() => ({})) as { contacts?: Array<Record<string, string>>; error?: string }
+
+      if (!response.ok) {
+        throw new Error(t('clients.googleContactsPreviewFailed'))
+      }
+
+      const rows = (payload.contacts ?? []).map(mapGoogleContactImportRow)
+      setImportRows(markImportDuplicates(rows))
+      setShowImport(true)
+      if (rows.length === 0) {
+        setErrorMessage(t('clients.importNoRows'))
+      } else {
+        setMessage(t('clients.googleContactsPreviewReady').replace('{count}', String(rows.length)))
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t('clients.googleContactsPreviewFailed'))
+    } finally {
+      setLoadingGoogleContacts(false)
+    }
+  }, [currentCompany, markImportDuplicates, t])
+
+  useEffect(() => {
+    if (!currentCompany) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('googleContacts') === 'preview') {
+      void loadGoogleContactsPreview()
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    const googleContactsError = params.get('googleContactsError')
+    if (googleContactsError) {
+      setErrorMessage(t('clients.googleContactsAuthFailed'))
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [currentCompany, loadGoogleContactsPreview, t])
+
+  const handleGoogleContactsStart = () => {
+    if (!currentCompany) return
+    window.location.href = `/api/clients/google-contacts/start?companyId=${encodeURIComponent(currentCompany.id)}`
+  }
 
   const handleImportFile = async (file: File | null) => {
     if (!file) return
@@ -423,6 +497,8 @@ export default function ClientsPage() {
       notes: [row.notes.trim(), t('clients.importSourceNote')].filter(Boolean).join('\n') || null,
       status: row.status,
       ...(supportsClientDetails ? {
+        source: row.source,
+        external_id: row.external_id.trim() || null,
         street: row.street.trim() || null,
         house_number: row.house_number.trim() || null,
         postal_code: row.postal_code.trim() || null,
@@ -666,6 +742,17 @@ export default function ClientsPage() {
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
                 {t('clients.importPrivacyNote')}
+              </div>
+              <div className="rounded-md border border-slate-200 bg-white p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-900">{t('clients.googleContactsTitle')}</p>
+                    <p className="mt-1 text-sm text-slate-500">{t('clients.googleContactsDescription')}</p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={handleGoogleContactsStart} disabled={loadingGoogleContacts}>
+                    {loadingGoogleContacts ? t('common.loading') : t('clients.googleContactsConnect')}
+                  </Button>
+                </div>
               </div>
               <input
                 ref={importFileInputRef}

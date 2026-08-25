@@ -91,7 +91,11 @@ export default function EmployeesPage() {
   }, [currentCompany, supabase, t])
 
   useEffect(() => {
-    void loadEmployees()
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (!cancelled) void loadEmployees()
+    })
+    return () => { cancelled = true }
   }, [loadEmployees])
 
   const filteredEmployees = useMemo(() => {

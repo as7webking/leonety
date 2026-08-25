@@ -32,9 +32,11 @@ export function PwaInstaller() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    setMounted(true)
-    setDismissed(window.localStorage.getItem(DISMISSED_KEY) === 'true')
-    setInstalled(isStandalone())
+    const frame = window.requestAnimationFrame(() => {
+      setMounted(true)
+      setDismissed(window.localStorage.getItem(DISMISSED_KEY) === 'true')
+      setInstalled(isStandalone())
+    })
 
     const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -75,6 +77,7 @@ export function PwaInstaller() {
     window.addEventListener('appinstalled', handleAppInstalled)
 
     return () => {
+      window.cancelAnimationFrame(frame)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
     }

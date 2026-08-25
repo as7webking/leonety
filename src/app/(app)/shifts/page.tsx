@@ -126,7 +126,13 @@ export default function ShiftsPage() {
     setLoading(false)
   }, [currentCompany, fromDate, supabase, t, toDate])
 
-  useEffect(() => { void loadData() }, [loadData])
+  useEffect(() => {
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (!cancelled) void loadData()
+    })
+    return () => { cancelled = true }
+  }, [loadData])
 
   const groupedShifts = useMemo(() => shifts.reduce<Record<string, Shift[]>>((groups, shift) => ({
     ...groups,

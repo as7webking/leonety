@@ -54,7 +54,13 @@ export default function InventoryPage() {
     setLoading(false)
   }, [currentCompany, supabase, t])
 
-  useEffect(() => { void loadInventory() }, [loadInventory])
+  useEffect(() => {
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (!cancelled) void loadInventory()
+    })
+    return () => { cancelled = true }
+  }, [loadInventory])
 
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('inventory.title')} /><LoadingSkeleton /></PageContainer>
   if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/app/onboarding') }} /></PageContainer>
