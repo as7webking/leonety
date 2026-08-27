@@ -5702,6 +5702,31 @@ export function normalizeLocale(locale: string | null | undefined): Locale {
   return locales.includes(locale as Locale) ? (locale as Locale) : defaultLocale
 }
 
+export function resolveLocaleFromAcceptLanguage(acceptLanguage: string | null | undefined): Locale {
+  if (!acceptLanguage) return defaultLocale
+
+  const requestedLocales = acceptLanguage
+    .split(',')
+    .map((part) => {
+      const [tag, quality = 'q=1'] = part.trim().split(';')
+      const q = Number(quality.replace(/^q=/, ''))
+      return {
+        tag: tag.toLowerCase(),
+        quality: Number.isFinite(q) ? q : 1,
+      }
+    })
+    .filter((entry) => entry.tag)
+    .sort((left, right) => right.quality - left.quality)
+
+  for (const { tag } of requestedLocales) {
+    const language = tag.split('-')[0]
+    if (language === 'ua') return 'uk'
+    if (locales.includes(language as Locale)) return language as Locale
+  }
+
+  return defaultLocale
+}
+
 export function getIntlLocale(locale: Locale) {
   return intlLocaleMap[locale] ?? intlLocaleMap[defaultLocale]
 }

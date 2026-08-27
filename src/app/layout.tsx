@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { CookieNotice } from "@/components/cookie-notice";
 import { Footer } from "@/components/footer";
 import { NumberInputWheelGuard } from "@/components/number-input-wheel-guard";
 import { PwaInstaller } from "@/components/pwa-installer";
 import { I18nProvider } from "@/contexts/i18n-context";
-import { LOCALE_COOKIE, normalizeLocale } from "@/lib/i18n";
+import { LOCALE_COOKIE, normalizeLocale, resolveLocaleFromAcceptLanguage } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -64,7 +65,11 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const initialLocale = normalizeLocale(cookieStore.get(LOCALE_COOKIE)?.value);
+  const headersList = await headers();
+  const explicitLocale = cookieStore.get(LOCALE_COOKIE)?.value;
+  const initialLocale = explicitLocale
+    ? normalizeLocale(explicitLocale)
+    : resolveLocaleFromAcceptLanguage(headersList.get("accept-language"));
 
   return (
     <html lang={initialLocale} className="h-full antialiased scroll-smooth" data-scroll-behavior="smooth">
