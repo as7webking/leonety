@@ -4,6 +4,7 @@ import {
   Building2,
   Clock3,
   FileText,
+  FileSignature,
   Landmark,
   Package,
   ReceiptText,
@@ -29,6 +30,7 @@ export const primaryNavigation: NavigationItem[] = [
   { href: '/app/time', labelKey: 'nav.time', icon: Clock3 },
   { href: '/app/clients', labelKey: 'nav.clients', icon: Users },
   { href: '/app/invoices', labelKey: 'nav.invoices', icon: FileText },
+  { href: '/app/contracts', labelKey: 'nav.contracts', icon: FileSignature },
 ]
 
 export const navigationGroups: NavigationGroup[] = [

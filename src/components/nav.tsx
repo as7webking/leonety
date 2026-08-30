@@ -181,6 +181,7 @@ export function Nav() {
                 <>
                   <Link href="/app/clients" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.clients')}</Link>
                   <Link href="/app/invoices" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.invoices')}</Link>
+                  <Link href="/app/contracts" className="rounded px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-slate-950">{t('nav.contracts')}</Link>
                   <div className="relative">
                     <button
                       type="button"

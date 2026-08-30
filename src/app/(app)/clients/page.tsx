@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, Edit, FileUp, Search, Trash2, UserRoundPlus, X } from 'lucide-react'
+import { Building2, Edit, FileSignature, FileUp, Search, Trash2, UserRoundPlus, X } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -935,6 +935,12 @@ export default function ClientsPage() {
                   {client.notes && <p className="line-clamp-3">{client.notes}</p>}
                 </div>
                 <div className="flex gap-2 pt-2">
+                  <Button asChild type="button" variant="outline" size="sm">
+                    <Link href={`/app/contracts?clientId=${client.id}`}>
+                      <FileSignature className="h-4 w-4" />
+                      {t('contracts.create')}
+                    </Link>
+                  </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => handleEdit(client)}>
                     <Edit className="h-4 w-4" />
                     {t('common.edit')}

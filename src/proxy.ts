@@ -48,6 +48,7 @@ export async function proxy(request: NextRequest) {
     '/upgrade',
     '/clients',
     '/invoices',
+    '/contracts',
     '/employees',
     '/locations',
     '/shifts',
