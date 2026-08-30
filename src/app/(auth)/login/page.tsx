@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
@@ -35,6 +35,22 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { t } = useI18n()
+
+  const callbackError = useMemo(() => {
+    const errorCode = searchParams.get('error')
+    if (!errorCode) return ''
+
+    const errorKeys: Record<string, string> = {
+      auth_provider_denied: 'auth.errorProviderDenied',
+      auth_provider_error: 'auth.errorProvider',
+      auth_callback_failed: 'auth.errorCallbackFailed',
+      auth_callback_missing_code: 'auth.errorMissingCode',
+      session_missing: 'auth.errorSessionMissing',
+    }
+
+    return t(errorKeys[errorCode] ?? 'auth.errorProvider')
+  }, [searchParams, t])
+  const visibleError = error || callbackError
 
   useEffect(() => {
     if (pathname === '/signup' || searchParams.get('mode') === 'signup') {
@@ -245,9 +261,9 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4" autoComplete="on">
-            {error && (
+            {visibleError && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
-                {error}
+                {visibleError}
               </div>
             )}
             {success && (
