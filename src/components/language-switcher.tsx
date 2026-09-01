@@ -26,7 +26,6 @@ export function LanguageSwitcher() {
         options={locales.map((item) => ({ value: item, label: labels[item] }))}
         ariaLabel={t('language.label')}
         className="w-28 sm:w-40"
-        placement="top"
       />
     </div>
   )

@@ -50,7 +50,8 @@ export function getPlanFromProviderPriceId(provider: BillingProvider, priceId: s
 }
 
 export function getSiteUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || 'http://localhost:3000'
+  return process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '')
+    || (process.env.NODE_ENV === 'production' ? 'https://leonety.vercel.app' : 'http://localhost:3000')
 }
 
 export function getPaddleApiBaseUrl() {

@@ -1,11 +1,12 @@
 "use client";
 
 import { getAccountAccess, type AccountAccess } from "@/lib/account-access";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface UseAccountAccessReturn {
   accountAccess: AccountAccess;
   isLoading: boolean;
+  refreshAccountAccess: () => Promise<void>;
 }
 
 export function useAccountAccess(
@@ -17,6 +18,29 @@ export function useAccountAccess(
   );
   const [accountAccess, setAccountAccess] = useState<AccountAccess>(fallbackAccess);
   const [isLoading, setIsLoading] = useState(false);
+
+  const refreshAccountAccess = useCallback(async () => {
+    if (email === undefined) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/account/access", { cache: "no-store" });
+      const data = await response.json();
+
+      if (response.ok && data.accountAccess) {
+        setAccountAccess(data.accountAccess);
+      } else {
+        setAccountAccess(fallbackAccess);
+      }
+    } catch {
+      setAccountAccess(fallbackAccess);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [email, fallbackAccess]);
 
   useEffect(() => {
     if (email === undefined) {
@@ -58,5 +82,6 @@ export function useAccountAccess(
   return {
     accountAccess,
     isLoading,
+    refreshAccountAccess,
   };
 }

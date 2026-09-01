@@ -18,10 +18,10 @@ interface AppSelectProps {
   disabled?: boolean
   ariaLabel?: string
   className?: string
-  placement?: 'bottom' | 'top'
+  placement?: 'bottom' | 'top' | 'auto'
 }
 
-export function AppSelect({ value, options, onChange, disabled, ariaLabel, className = '', placement = 'bottom' }: AppSelectProps) {
+export function AppSelect({ value, options, onChange, disabled, ariaLabel, className = '', placement = 'auto' }: AppSelectProps) {
   const [open, setOpen] = useState(false)
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -43,7 +43,9 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
     const preferredTop = placement === 'top'
     const openAbove = preferredTop
       ? availableAbove >= 160 || availableAbove > availableBelow
-      : availableBelow < 220 && availableAbove > availableBelow
+      : placement === 'bottom'
+        ? availableBelow < 220 && availableAbove > availableBelow
+        : availableBelow < 220 && availableAbove > availableBelow
     const availableHeight = Math.max(120, openAbove ? availableAbove - offset : availableBelow - offset)
     const width = Math.min(rect.width, viewportWidth - padding * 2)
     const left = Math.min(Math.max(padding, rect.left), viewportWidth - width - padding)

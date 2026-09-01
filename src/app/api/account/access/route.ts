@@ -20,6 +20,7 @@ interface BillingSubscriptionRow {
   company_id: string
   plan: AppPlan
   status: 'trialing' | 'active' | 'past_due' | 'paused' | 'cancelled' | 'expired'
+  current_period_start: string | null
   current_period_end: string | null
   cancel_at_period_end: boolean
 }
@@ -81,7 +82,7 @@ export async function GET() {
             .in('company_id', companyIds),
           adminSupabase
             .from('billing_subscriptions')
-            .select('company_id, plan, status, current_period_end, cancel_at_period_end')
+            .select('company_id, plan, status, current_period_start, current_period_end, cancel_at_period_end')
             .in('company_id', companyIds),
         ])
       : [{ data: [] }, { data: [] }]
@@ -114,9 +115,13 @@ export async function GET() {
         overrideSource,
         activePlan,
         status: manualAccess ? 'manual' : paidSubscription?.status ?? (storedAccess ? 'active' : undefined),
+        currentPeriodStart: paidSubscription?.current_period_start ?? null,
         currentPeriodEnd: paidSubscription?.current_period_end ?? activeAccess?.expires_at ?? null,
+        nextBillingDate: paidSubscription?.cancel_at_period_end ? null : paidSubscription?.current_period_end ?? null,
         trialEndsAt: paidSubscription?.status === 'trialing' ? paidSubscription.current_period_end : null,
         cancelAtPeriodEnd: paidSubscription?.cancel_at_period_end ?? false,
+        canCancelSubscription: Boolean(paidSubscription && !paidSubscription.cancel_at_period_end && ['trialing', 'active'].includes(paidSubscription.status)),
+        canManageSubscription: Boolean(paidSubscription && ['trialing', 'active', 'past_due'].includes(paidSubscription.status)),
       }),
     })
   } catch (error) {

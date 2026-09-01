@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-30T21:18:50.753Z",
+  "generatedAt": "2026-09-01T19:23:46.780Z",
   "locales": [
     "en",
     "de",
@@ -15,38 +15,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1272,
-      "total": 1272,
+      "translated": 1315,
+      "total": 1315,
       "percent": 100
     },
     "de": {
-      "translated": 1272,
-      "total": 1272,
+      "translated": 1315,
+      "total": 1315,
       "percent": 100
     },
     "ru": {
-      "translated": 1272,
-      "total": 1272,
+      "translated": 1315,
+      "total": 1315,
       "percent": 100
     },
     "tr": {
-      "translated": 1272,
-      "total": 1272,
+      "translated": 1315,
+      "total": 1315,
       "percent": 100
     },
     "uk": {
-      "translated": 1272,
-      "total": 1272,
+      "translated": 1315,
+      "total": 1315,
       "percent": 100
     },
     "pl": {
-      "translated": 1272,
-      "total": 1272,
+      "translated": 1315,
+      "total": 1315,
       "percent": 100
     },
     "fr": {
-      "translated": 1272,
-      "total": 1272,
+      "translated": 1315,
+      "total": 1315,
       "percent": 100
     }
   },
@@ -2197,6 +2197,12 @@
       "text": "Component-local translation map should move to src/lib/i18n.ts"
     },
     {
+      "file": "src/app/impressum/page.tsx",
+      "line": 27,
+      "type": "jsx-text",
+      "text": "Leonety"
+    },
+    {
       "file": "src/app/page.tsx",
       "line": 119,
       "type": "jsx-text",
@@ -2283,8 +2289,8 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1272,
-    "hardcodedStringCount": 18,
+    "englishKeyCount": 1315,
+    "hardcodedStringCount": 19,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0
   }

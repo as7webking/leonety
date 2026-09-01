@@ -44,6 +44,7 @@ export default function UpgradePage() {
   const [loading, setLoading] = useState(true)
   const [submittingPlan, setSubmittingPlan] = useState<PaidAppPlan | null>(null)
   const [submittingRequest, setSubmittingRequest] = useState(false)
+  const [billingAction, setBillingAction] = useState<'cancel' | 'portal' | null>(null)
   const [polling, setPolling] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -190,6 +191,72 @@ export default function UpgradePage() {
     }
   }
 
+  const scheduleCancellation = async () => {
+    if (!context?.company) {
+      setError(t('billing.workspaceRequired'))
+      return
+    }
+
+    const confirmed = window.confirm(t('billing.cancelConfirm'))
+    if (!confirmed) return
+
+    setBillingAction('cancel')
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch('/api/billing/subscription/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: context.company.id }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || t('billing.cancelFailed'))
+      }
+
+      const periodMessage = data.currentPeriodEnd
+        ? replaceVars(t('billing.cancelScheduledWithDate'), { date: formatDate(data.currentPeriodEnd) })
+        : t('billing.cancelScheduled')
+      setSuccess(periodMessage)
+      await loadUpgradeContext()
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : t('billing.cancelFailed'))
+    } finally {
+      setBillingAction(null)
+    }
+  }
+
+  const openCustomerPortal = async () => {
+    if (!context?.company) {
+      setError(t('billing.workspaceRequired'))
+      return
+    }
+
+    setBillingAction('portal')
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch('/api/billing/subscription/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: context.company.id }),
+      })
+      const data = await response.json()
+
+      if (!response.ok || !data.url) {
+        throw new Error(data.error || t('billing.portalFailed'))
+      }
+
+      window.location.assign(data.url)
+    } catch (portalError) {
+      setError(portalError instanceof Error ? portalError.message : t('billing.portalFailed'))
+      setBillingAction(null)
+    }
+  }
+
   const currentPlan = accountAccess?.plan ?? context?.currentPlan ?? 'free'
   const trialEnd = accountAccess?.trialEndsAt ?? null
   const periodEnd = accountAccess?.currentPeriodEnd ?? null
@@ -239,8 +306,22 @@ export default function UpgradePage() {
               <p className="text-slate-500">{accountAccess?.status === 'trialing' ? t('billing.trialEnds') : t('billing.currentPeriodEnd')}</p>
               <p className="font-medium text-slate-950">{formatDate(trialEnd || periodEnd) || '-'}</p>
             </div>
+            <div>
+              <p className="text-slate-500">{t('billing.nextBillingDate')}</p>
+              <p className="font-medium text-slate-950">{accountAccess?.cancelAtPeriodEnd ? t('billing.noRenewalScheduled') : formatDate(accountAccess?.nextBillingDate) || '-'}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">{t('billing.renewalStatus')}</p>
+              <p className="font-medium text-slate-950">{accountAccess?.cancelAtPeriodEnd ? t('billing.cancellationScheduled') : t('billing.renewsAutomatically')}</p>
+            </div>
           </CardContent>
         </Card>
+
+        {accountAccess?.cancelAtPeriodEnd && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {replaceVars(t('billing.accessUntil'), { date: formatDate(periodEnd) || '-' })}
+          </div>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-4">
           {appPlans.map((plan) => {
@@ -333,6 +414,16 @@ export default function UpgradePage() {
             <Button type="button" variant="outline" onClick={() => void loadUpgradeContext()} disabled={loading}>
               {t('billing.refreshStatus')}
             </Button>
+            {accountAccess?.canManageSubscription && (
+              <Button type="button" variant="outline" onClick={() => void openCustomerPortal()} disabled={billingAction !== null}>
+                {billingAction === 'portal' ? t('common.loading') : t('billing.manageSubscription')}
+              </Button>
+            )}
+            {accountAccess?.canCancelSubscription && (
+              <Button type="button" variant="outline" onClick={() => void scheduleCancellation()} disabled={billingAction !== null}>
+                {billingAction === 'cancel' ? t('common.loading') : t('billing.cancelSubscription')}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

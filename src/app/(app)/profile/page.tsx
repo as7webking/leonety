@@ -88,6 +88,7 @@ export default function ProfilePage() {
   const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([])
   const [adminLoading, setAdminLoading] = useState(false)
   const [adminError, setAdminError] = useState('')
+  const [billingAction, setBillingAction] = useState<'cancel' | 'portal' | null>(null)
   const [monthsByProfile, setMonthsByProfile] = useState<Record<string, number>>({})
   const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
   const [reportFromDate, setReportFromDate] = useState(() => {
@@ -108,7 +109,7 @@ export default function ProfilePage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, refreshCompanies } = useCompany()
-  const { accountAccess } = useAccountAccess(profile?.email)
+  const { accountAccess, refreshAccountAccess } = useAccountAccess(profile?.email)
   const { locale, t } = useI18n()
   const workspaceLogoInputRef = useRef<HTMLInputElement | null>(null)
   const planLabel = t(`billing.plan.${accountAccess.plan}`)
@@ -124,6 +125,71 @@ export default function ProfilePage() {
   const invoicePreview = [invoiceNumberPrefix, invoicePreviewYear, invoicePreviewNumber]
     .filter(Boolean)
     .join(invoiceNumberSeparator || '-')
+
+  const handleCancelSubscription = async () => {
+    if (!currentCompany) {
+      setMessage(t('billing.workspaceRequired'))
+      return
+    }
+
+    const confirmed = window.confirm(t('billing.cancelConfirm'))
+    if (!confirmed) return
+
+    setBillingAction('cancel')
+    setMessage('')
+
+    try {
+      const response = await fetch('/api/billing/subscription/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: currentCompany.id }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || t('billing.cancelFailed'))
+      }
+
+      setMessage(
+        data.currentPeriodEnd
+          ? t('billing.cancelScheduledWithDate').replace('{date}', formatBillingDate(data.currentPeriodEnd))
+          : t('billing.cancelScheduled')
+      )
+      await refreshAccountAccess()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t('billing.cancelFailed'))
+    } finally {
+      setBillingAction(null)
+    }
+  }
+
+  const handleManageSubscription = async () => {
+    if (!currentCompany) {
+      setMessage(t('billing.workspaceRequired'))
+      return
+    }
+
+    setBillingAction('portal')
+    setMessage('')
+
+    try {
+      const response = await fetch('/api/billing/subscription/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: currentCompany.id }),
+      })
+      const data = await response.json()
+
+      if (!response.ok || !data.url) {
+        throw new Error(data.error || t('billing.portalFailed'))
+      }
+
+      window.location.assign(data.url)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t('billing.portalFailed'))
+      setBillingAction(null)
+    }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1281,14 +1347,32 @@ export default function ProfilePage() {
                   <p className="text-xs text-slate-500">{t('billing.currentPeriodEnd')}</p>
                   <p className="font-medium text-slate-950">{formatBillingDate(accountAccess.currentPeriodEnd)}</p>
                 </div>
+                <div className="rounded-md border bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500">{t('billing.nextBillingDate')}</p>
+                  <p className="font-medium text-slate-950">{accountAccess.cancelAtPeriodEnd ? t('billing.noRenewalScheduled') : formatBillingDate(accountAccess.nextBillingDate)}</p>
+                </div>
+                <div className="rounded-md border bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500">{t('billing.renewalStatus')}</p>
+                  <p className="font-medium text-slate-950">{accountAccess.cancelAtPeriodEnd ? t('billing.cancellationScheduled') : t('billing.renewsAutomatically')}</p>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => router.push('/app/upgrade')}>
                   {accountAccess.plan === 'free' ? t('billing.upgrade') : t('billing.openBilling')}
                 </Button>
+                {accountAccess.canManageSubscription && (
+                  <Button type="button" variant="outline" size="sm" onClick={handleManageSubscription} disabled={billingAction !== null}>
+                    {billingAction === 'portal' ? t('common.loading') : t('billing.manageSubscription')}
+                  </Button>
+                )}
+                {accountAccess.canCancelSubscription && (
+                  <Button type="button" variant="outline" size="sm" onClick={handleCancelSubscription} disabled={billingAction !== null}>
+                    {billingAction === 'cancel' ? t('common.loading') : t('billing.cancelSubscription')}
+                  </Button>
+                )}
                 {accountAccess.cancelAtPeriodEnd && (
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-                    {t('billing.cancelAtPeriodEnd')}
+                    {t('billing.cancelAtPeriodEnd')}: {formatBillingDate(accountAccess.currentPeriodEnd)}
                   </span>
                 )}
               </div>

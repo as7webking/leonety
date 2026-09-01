@@ -4,10 +4,8 @@ import {
   BarChart3,
   Box,
   Check,
-  Clock3,
   FileText,
   Globe2,
-  Layers3,
   Package,
   ReceiptText,
   ShieldCheck,
@@ -226,7 +224,7 @@ export default async function Home() {
                 <span className="h-2 w-2 shrink-0 rounded-full bg-[#d7a642]" />
                 <span className="truncate"><T k="landing.hero.badge" /></span>
               </div>
-              <h1 className="max-w-4xl text-[clamp(2.25rem,8vw,4.9rem)] font-semibold leading-[1.02] tracking-tight text-slate-950">
+              <h1 className="max-w-4xl text-[clamp(2rem,7vw,4.9rem)] font-semibold leading-[1.04] tracking-tight text-slate-950">
                 <T k="landing.hero.title" />
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-700 sm:text-lg sm:leading-8">
@@ -254,7 +252,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="product" className="bg-white py-16 sm:py-20 lg:py-24">
+        <section id="product" className="scroll-mt-20 bg-white py-16 sm:py-20 lg:py-24">
           <div className="mx-auto w-[92%] max-w-7xl">
             <SectionIntro eyebrowKey="public.product" titleKey="landing.product.title" textKey="landing.product.text" />
             <div className="mt-10 grid gap-5 lg:grid-cols-3">
@@ -269,7 +267,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="features" className="bg-slate-50 py-16 sm:py-20 lg:py-24">
+        <section id="features" className="scroll-mt-20 bg-slate-50 py-16 sm:py-20 lg:py-24">
           <div className="mx-auto w-[92%] max-w-7xl">
             <SectionIntro eyebrowKey="public.features" titleKey="landing.finance.title" textKey="landing.finance.text" />
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -299,7 +297,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="integrations" className="bg-slate-950 py-16 text-white sm:py-20 lg:py-24">
+        <section id="integrations" className="scroll-mt-20 bg-slate-950 py-16 text-white sm:py-20 lg:py-24">
           <div className="mx-auto grid w-[92%] max-w-7xl gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d7a642] sm:tracking-[0.32em]"><T k="public.integrations" /></p>
@@ -353,7 +351,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="pricing" className="bg-white py-16 sm:py-20 lg:py-24">
+        <section id="pricing" className="scroll-mt-20 bg-white py-16 sm:py-20 lg:py-24">
           <div className="mx-auto w-[92%] max-w-7xl">
             <SectionIntro eyebrowKey="public.pricing" titleKey="landing.pricing.title" textKey="landing.pricing.text" />
             <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -390,7 +388,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="faq" className="bg-slate-50 py-16 sm:py-20 lg:py-24">
+        <section id="faq" className="scroll-mt-20 bg-slate-50 py-16 sm:py-20 lg:py-24">
           <div className="mx-auto w-[92%] max-w-5xl">
             <SectionIntro eyebrowKey="landing.faq.eyebrow" titleKey="landing.faq.title" textKey="landing.faq.text" />
             <div className="mt-10 grid gap-4 md:grid-cols-2">
@@ -409,7 +407,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="support" className="border-y border-slate-200 bg-slate-950 py-16 text-white sm:py-20">
+        <section id="support" className="scroll-mt-20 border-y border-slate-200 bg-slate-950 py-16 text-white sm:py-20">
           <div className="mx-auto flex w-[92%] max-w-7xl flex-col items-start justify-between gap-8 lg:flex-row lg:items-center">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d7a642] sm:tracking-[0.32em]"><T k="landing.cta.eyebrow" /></p>
