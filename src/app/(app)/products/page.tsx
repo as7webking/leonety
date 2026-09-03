@@ -70,6 +70,9 @@ type ProductChannel =
   | 'google_merchant'
   | 'facebook_instagram'
   | 'tiktok_shop'
+  | 'uber_eats'
+  | 'just_eat_takeaway'
+  | 'glovo'
   | 'iss_pos'
 
 interface ProductSync {
@@ -139,6 +142,9 @@ const productChannels: Array<{
   { channel: 'google_merchant', labelKey: 'integrations.googleMerchant', publishKey: 'products.publishChannel.googleMerchant', operational: false },
   { channel: 'facebook_instagram', labelKey: 'integrations.facebookInstagram', publishKey: 'products.publishChannel.facebookInstagram', operational: false },
   { channel: 'tiktok_shop', labelKey: 'integrations.tiktokShop', publishKey: 'products.publishChannel.tiktokShop', operational: false },
+  { channel: 'uber_eats', labelKey: 'integrations.uberEats', publishKey: 'products.publishChannel.uberEats', operational: false },
+  { channel: 'just_eat_takeaway', labelKey: 'integrations.justEatTakeaway', publishKey: 'products.publishChannel.justEatTakeaway', operational: false },
+  { channel: 'glovo', labelKey: 'integrations.glovo', publishKey: 'products.publishChannel.glovo', operational: false },
   { channel: 'iss_pos', labelKey: 'integrations.issPos', publishKey: 'products.publishChannel.issPos', operational: false },
 ]
 

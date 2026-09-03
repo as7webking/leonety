@@ -15,8 +15,7 @@ import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/cu
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
 
-const invoiceStatuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const
-type InvoiceStatus = typeof invoiceStatuses[number]
+type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 const visibleInvoiceStatuses = ['sent', 'cancelled', 'paid'] as const
 
 const taxCountries = [
@@ -336,6 +335,8 @@ export default function InvoicesPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null)
   const [printingInvoice, setPrintingInvoice] = useState<InvoiceRecord | null>(null)
+  const [combinedPrintInvoices, setCombinedPrintInvoices] = useState<InvoiceRecord[]>([])
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set())
   const [deleteInvoice, setDeleteInvoice] = useState<InvoiceRecord | null>(null)
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -362,6 +363,31 @@ export default function InvoicesPage() {
     amount_paid: '',
     items: [newItem()],
   })
+
+  const selectedInvoices = useMemo(
+    () => invoices.filter((invoice) => selectedInvoiceIds.has(invoice.id)),
+    [invoices, selectedInvoiceIds]
+  )
+
+  const allInvoicesSelected = invoices.length > 0 && invoices.every((invoice) => selectedInvoiceIds.has(invoice.id))
+  const combinedCurrency = useMemo(() => {
+    if (combinedPrintInvoices.length === 0) return null
+    const [first] = combinedPrintInvoices
+    return combinedPrintInvoices.every((invoice) => invoice.currency === first.currency) ? first.currency : null
+  }, [combinedPrintInvoices])
+  const combinedTotals = useMemo(() => ({
+    subtotal: combinedPrintInvoices.reduce((sum, invoice) => sum + Number(invoice.subtotal || 0), 0),
+    tax: combinedPrintInvoices.reduce((sum, invoice) => sum + Number(invoice.tax_amount || 0), 0),
+    total: combinedPrintInvoices.reduce((sum, invoice) => sum + Number(invoice.total || 0), 0),
+  }), [combinedPrintInvoices])
+  const combinedClient = useMemo(() => {
+    if (combinedPrintInvoices.length === 0) return null
+    const firstClientId = combinedPrintInvoices[0].client_id
+    return combinedPrintInvoices.every((invoice) => invoice.client_id === firstClientId)
+      ? combinedPrintInvoices[0].clients ?? null
+      : null
+  }, [combinedPrintInvoices])
+  const hasMixedCombinedClients = combinedPrintInvoices.length > 1 && !combinedClient
 
   const calculated = useMemo(() => calculateItems(formData.items), [formData.items])
   const vatOptions = useMemo(() => getVatOptions(formData.tax_country, t), [formData.tax_country, t])
@@ -786,6 +812,46 @@ export default function InvoicesPage() {
 
   const handlePrint = (invoice: InvoiceRecord) => {
     setPrintingInvoice(invoice)
+    setCombinedPrintInvoices([])
+    window.setTimeout(() => {
+      const previousTitle = document.title
+      document.title = ' '
+      window.print()
+      window.setTimeout(() => {
+        document.title = previousTitle
+      }, 500)
+    }, 50)
+  }
+
+  const toggleInvoiceSelection = (invoiceId: string) => {
+    setSelectedInvoiceIds((current) => {
+      const next = new Set(current)
+      if (next.has(invoiceId)) {
+        next.delete(invoiceId)
+      } else {
+        next.add(invoiceId)
+      }
+      return next
+    })
+  }
+
+  const toggleAllInvoices = () => {
+    setSelectedInvoiceIds((current) => {
+      if (invoices.length > 0 && invoices.every((invoice) => current.has(invoice.id))) {
+        return new Set()
+      }
+      return new Set(invoices.map((invoice) => invoice.id))
+    })
+  }
+
+  const handlePrintSelected = () => {
+    if (selectedInvoices.length === 0) {
+      setErrorMessage(t('invoices.selectAtLeastOne'))
+      return
+    }
+
+    setPrintingInvoice(null)
+    setCombinedPrintInvoices(selectedInvoices)
     window.setTimeout(() => {
       const previousTitle = document.title
       document.title = ' '
@@ -937,6 +1003,98 @@ export default function InvoicesPage() {
               </p>
               {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyIban && <p>IBAN: {companyIban}</p>}
               {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyBic && <p>BIC: {companyBic}</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {combinedPrintInvoices.length > 0 && (
+        <div className="print-area print-invoice hidden">
+          <div className="invoice-print-header">
+            <div className="invoice-print-brand">
+              {companyLogo ? (
+                <Logo src={companyLogo} alt={currentCompany.name} size="print" className="invoice-print-logo" correctArtworkOffset={false} />
+              ) : (
+                <div className="invoice-print-logo-fallback flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
+                  {currentCompany.name.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <div className="invoice-print-company">
+                <h1 className="text-xl font-semibold">{currentCompany.name}</h1>
+                <p className="text-sm text-slate-600">{t('invoices.combinedReport')}</p>
+                {includeCompanyAddress && companyAddress && (
+                  <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>
+                )}
+                {includeCompanyAddress && companyEmail && (
+                  <p className="text-xs text-slate-600">{companyEmail}</p>
+                )}
+              </div>
+            </div>
+            <div className="invoice-print-meta text-right text-sm">
+              <p>{t('invoices.sourceInvoices')}: {combinedPrintInvoices.map((invoice) => invoice.invoice_number).join(', ')}</p>
+              <p>{new Date().toLocaleDateString(intlLocale)}</p>
+            </div>
+          </div>
+          {hasMixedCombinedClients ? (
+            <div className="mb-3 rounded-md border p-3 text-sm">
+              <p className="font-semibold">{t('invoices.multipleClients')}</p>
+              <p>{t('invoices.mixedClientsReport')}</p>
+            </div>
+          ) : (
+            <div className="mb-3 rounded-md border p-3 text-sm">
+              <p className="font-semibold">{t('invoices.client')}</p>
+              <p>{combinedClient?.name ?? t('invoices.noClient')}</p>
+              {clientPrintFields.company && combinedClient?.client_company && <p>{combinedClient.client_company}</p>}
+              {clientPrintFields.email && combinedClient?.email && <p>{combinedClient.email}</p>}
+              {clientPrintFields.phone && combinedClient?.phone && <p>{combinedClient.phone}</p>}
+              {clientPrintFields.address && getClientAddressLines(combinedClient).map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          )}
+          {!combinedCurrency && (
+            <div className="mb-3 rounded-md border p-3 text-sm">
+              {t('invoices.mixedCurrenciesReport')}
+            </div>
+          )}
+          <table className="invoice-print-table w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="border p-2 text-left">{t('invoices.invoiceNumber')}</th>
+                <th className="border p-2 text-left">{t('common.description')}</th>
+                <th className="border p-2 text-right">{t('invoices.quantity')}</th>
+                <th className="border p-2 text-right">{t('invoices.price')}</th>
+                <th className="border p-2 text-right">{t('invoices.tax')}</th>
+                <th className="border p-2 text-right">{t('invoices.lineTotal')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {combinedPrintInvoices.flatMap((invoice) => (invoice.invoice_items ?? []).map((item) => (
+                <tr key={`${invoice.id}-${item.id ?? item.description}`}>
+                  <td className="border p-2">{invoice.invoice_number}</td>
+                  <td className="border p-2">{item.description}</td>
+                  <td className="border p-2 text-right">{item.quantity}</td>
+                  <td className="border p-2 text-right">{formatCurrency(item.unit_price, invoice.currency, intlLocale)}</td>
+                  <td className="border p-2 text-right">{item.tax_rate}%</td>
+                  <td className="border p-2 text-right">{formatCurrency(item.line_total, invoice.currency, intlLocale)}</td>
+                </tr>
+              )))}
+            </tbody>
+          </table>
+          {combinedCurrency ? (
+            <div className="invoice-print-totals ml-auto mt-4 w-full max-w-xs space-y-2 text-sm">
+              <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(combinedTotals.subtotal, combinedCurrency, intlLocale)}</span></div>
+              <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(combinedTotals.tax, combinedCurrency, intlLocale)}</span></div>
+              <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.grandTotal')}</span><span>{formatCurrency(combinedTotals.total, combinedCurrency, intlLocale)}</span></div>
+            </div>
+          ) : (
+            <div className="invoice-print-totals ml-auto mt-4 w-full max-w-md space-y-2 text-sm">
+              {combinedPrintInvoices.map((invoice) => (
+                <div key={invoice.id} className="flex justify-between">
+                  <span>{invoice.invoice_number}</span>
+                  <span>{formatCurrency(invoice.total, invoice.currency, intlLocale)}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1219,16 +1377,43 @@ export default function InvoicesPage() {
         <EmptyState title={t('invoices.noInvoices')} description={t('invoices.noInvoicesDescription')} />
       ) : (
         <div className="space-y-3">
+          <Card>
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <input type="checkbox" checked={allInvoicesSelected} onChange={toggleAllInvoices} />
+                {t('invoices.selectAll')}
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-slate-500">{selectedInvoices.length} {t('invoices.selected')}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => setSelectedInvoiceIds(new Set())} disabled={selectedInvoices.length === 0}>
+                  {t('common.clear')}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={handlePrintSelected} disabled={selectedInvoices.length === 0}>
+                  <Printer className="h-4 w-4" />
+                  {t('invoices.exportSelectedPdf')}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
           {invoices.map((invoice) => (
             <Card key={invoice.id}>
               <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="font-semibold text-slate-950">{invoice.invoice_number}</p>
-                  <p className="text-sm text-slate-500">
-                    {invoice.clients?.name ?? t('invoices.noClient')} · {invoice.issue_date}
-                    {invoice.due_date ? ` · ${t('invoices.dueDate')} ${invoice.due_date}` : ''}
-                  </p>
-                  <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{formatInvoiceStatus(invoice.status, t)}</span>
+                <div className="flex min-w-0 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedInvoiceIds.has(invoice.id)}
+                    onChange={() => toggleInvoiceSelection(invoice.id)}
+                    aria-label={t('invoices.selectInvoice')}
+                    className="mt-1 h-4 w-4"
+                  />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-950">{invoice.invoice_number}</p>
+                    <p className="text-sm text-slate-500">
+                      {invoice.clients?.name ?? t('invoices.noClient')} · {invoice.issue_date}
+                      {invoice.due_date ? ` · ${t('invoices.dueDate')} ${invoice.due_date}` : ''}
+                    </p>
+                    <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{formatInvoiceStatus(invoice.status, t)}</span>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="mr-2 font-semibold">{formatCurrency(invoice.total, invoice.currency)}</span>

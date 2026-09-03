@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-01T19:23:46.780Z",
+  "generatedAt": "2026-09-03T10:01:00.187Z",
   "locales": [
     "en",
     "de",
@@ -15,38 +15,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1315,
-      "total": 1315,
+      "translated": 1333,
+      "total": 1333,
       "percent": 100
     },
     "de": {
-      "translated": 1315,
-      "total": 1315,
+      "translated": 1333,
+      "total": 1333,
       "percent": 100
     },
     "ru": {
-      "translated": 1315,
-      "total": 1315,
+      "translated": 1333,
+      "total": 1333,
       "percent": 100
     },
     "tr": {
-      "translated": 1315,
-      "total": 1315,
+      "translated": 1333,
+      "total": 1333,
       "percent": 100
     },
     "uk": {
-      "translated": 1315,
-      "total": 1315,
+      "translated": 1333,
+      "total": 1333,
       "percent": 100
     },
     "pl": {
-      "translated": 1315,
-      "total": 1315,
+      "translated": 1333,
+      "total": 1333,
       "percent": 100
     },
     "fr": {
-      "translated": 1315,
-      "total": 1315,
+      "translated": 1333,
+      "total": 1333,
       "percent": 100
     }
   },
@@ -2174,13 +2174,13 @@
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1356,
+      "line": 1362,
       "type": "attribute:placeholder",
       "text": "[{\"name\":\"Size\",\"options\":[\"S\",\"M\",\"L\"]}]"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1360,
+      "line": 1366,
       "type": "attribute:placeholder",
       "text": "[{\"sku\":\"TS-S-BLACK\",\"price\":19.99,\"stock_quantity\":5,\"attributes\":{\"Size\":\"S\",\"Color\":\"Black\"}}]"
     },
@@ -2192,7 +2192,7 @@
     },
     {
       "file": "src/app/(app)/settings/integrations/page.tsx",
-      "line": 110,
+      "line": 134,
       "type": "local-translation-map",
       "text": "Component-local translation map should move to src/lib/i18n.ts"
     },
@@ -2204,13 +2204,13 @@
     },
     {
       "file": "src/app/page.tsx",
-      "line": 119,
+      "line": 117,
       "type": "jsx-text",
       "text": "leonety.app/workspace"
     },
     {
       "file": "src/app/page.tsx",
-      "line": 125,
+      "line": 123,
       "type": "jsx-text",
       "text": "Leonety"
     },
@@ -2289,7 +2289,7 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1315,
+    "englishKeyCount": 1333,
     "hardcodedStringCount": 19,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0

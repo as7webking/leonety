@@ -111,6 +111,7 @@ function collectDictionaryKeys() {
     ['src/lib/i18n.ts', 'transactionStabilityDictionaries'],
     ['src/lib/i18n.ts', 'contractBuilderDictionaries'],
     ['src/lib/i18n.ts', 'productionHardeningDictionaries'],
+    ['src/lib/i18n.ts', 'marketplaceInvoiceDictionaries'],
   ]
 
   for (const [relativeFile, objectName] of dictionaryObjects) {

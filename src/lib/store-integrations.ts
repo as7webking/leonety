@@ -1,7 +1,17 @@
 import 'server-only'
 import { getSiteUrl } from '@/lib/site-url'
 
-export const storeProviders = ['woocommerce', 'shopify', 'opencart', 'google_merchant', 'whatsapp_business', 'iss_pos'] as const
+export const storeProviders = [
+  'woocommerce',
+  'shopify',
+  'opencart',
+  'google_merchant',
+  'whatsapp_business',
+  'iss_pos',
+  'uber_eats',
+  'just_eat_takeaway',
+  'glovo',
+] as const
 
 export type StoreProvider = typeof storeProviders[number]
 

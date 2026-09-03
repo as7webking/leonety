@@ -12,7 +12,16 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import type { Locale } from '@/lib/i18n'
 
-type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'whatsapp_business' | 'iss_pos'
+type Provider =
+  | 'woocommerce'
+  | 'shopify'
+  | 'opencart'
+  | 'google_merchant'
+  | 'whatsapp_business'
+  | 'iss_pos'
+  | 'uber_eats'
+  | 'just_eat_takeaway'
+  | 'glovo'
 type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
 type WhatsAppClientCreationMode = 'ask' | 'auto_create_lead' | 'never'
 
@@ -92,6 +101,21 @@ const providerOptions: Array<{ value: Provider; label: string; fields: Array<key
     value: 'iss_pos',
     label: 'ISS POS',
     fields: ['storeName', 'storeUrl', 'externalAccountId'],
+  },
+  {
+    value: 'uber_eats',
+    label: 'Uber Eats',
+    fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
+  },
+  {
+    value: 'just_eat_takeaway',
+    label: 'Just Eat / Takeaway / Lieferando',
+    fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
+  },
+  {
+    value: 'glovo',
+    label: 'Glovo',
+    fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
   },
 ]
 
