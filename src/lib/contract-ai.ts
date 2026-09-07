@@ -8,6 +8,7 @@ import {
   type ContractTerms,
   type GeneratedContractDocument,
 } from '@/lib/contracts'
+import { generateAiText } from '@/lib/ai-provider'
 
 export interface ContractGenerationInput {
   templateId: ContractTemplateId
@@ -26,25 +27,6 @@ export interface ClauseRewriteInput {
     heading: string
     body: string
   }
-}
-
-type AiProvider = 'openai'
-
-function getAiProvider(): AiProvider {
-  const provider = process.env.AI_PROVIDER?.trim().toLowerCase()
-  return provider === 'openai' || !provider ? 'openai' : 'openai'
-}
-
-function getAiModel() {
-  return process.env.AI_MODEL?.trim() || 'gpt-5-mini'
-}
-
-function getAiApiKey() {
-  const key = process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim()
-  if (!key) {
-    throw new Error('AI_API_KEY is required server-side for contract generation.')
-  }
-  return key
 }
 
 function sanitizeText(value: unknown, maxLength = 4000) {
@@ -102,49 +84,11 @@ function parseJsonDocument(text: string): GeneratedContractDocument {
   }
 }
 
-function extractResponseText(payload: unknown) {
-  const record = payload as {
-    output_text?: string
-    output?: Array<{ content?: Array<{ text?: string; type?: string }> }>
-  }
-
-  if (typeof record.output_text === 'string') return record.output_text
-
-  return record.output
-    ?.flatMap((item) => item.content ?? [])
-    .map((content) => content.text)
-    .filter(Boolean)
-    .join('\n') ?? ''
-}
-
 async function callOpenAiJson(prompt: string, instructions: string, maxOutputTokens = 5000) {
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${getAiApiKey()}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: getAiModel(),
-      instructions,
-      input: prompt,
-      max_output_tokens: maxOutputTokens,
-      text: { format: { type: 'json_object' } },
-    }),
-  })
-  const payload = await response.json().catch(() => ({}))
-
-  if (!response.ok) {
-    throw new Error('AI provider request failed.')
-  }
-
-  const text = extractResponseText(payload)
-  if (!text) throw new Error('AI provider returned an empty response.')
-  return text
+  return generateAiText({ input: prompt, instructions, maxOutputTokens, responseFormat: 'json_object' })
 }
 
 export async function generateContractDraft(input: ContractGenerationInput): Promise<GeneratedContractDocument> {
-  getAiProvider()
   const text = await callOpenAiJson(
     buildContractPrompt(input),
     'You are a contract drafting assistant. Produce only valid JSON matching the requested shape. This is a draft, not legal advice.'
@@ -153,7 +97,6 @@ export async function generateContractDraft(input: ContractGenerationInput): Pro
 }
 
 export async function rewriteContractClause(input: ClauseRewriteInput) {
-  getAiProvider()
   const action = sanitizeText(input.action, 120)
   const prompt = JSON.stringify({
     task: 'Rewrite one contract clause.',
