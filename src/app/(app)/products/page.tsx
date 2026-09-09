@@ -520,30 +520,7 @@ export default function ProductsPage() {
   }, [resetForm, showForm])
 
   const handleEdit = (product: Product) => {
-    setEditing(product)
-    setForm({
-      name: product.name,
-      sku: product.sku ?? '',
-      barcode: product.barcode ?? '',
-      category: product.category ?? '',
-      description: decodeHtmlText(product.description ?? ''),
-      purchase_price: product.purchase_price === null ? '' : String(product.purchase_price),
-      selling_price: product.selling_price === null ? '' : String(product.selling_price),
-      currency: product.currency,
-      low_stock_threshold: String(product.low_stock_threshold),
-      status: product.status,
-      image_url: product.image_url ?? '',
-      publish_to_woocommerce: Boolean(product.woo_product_type === 'variable' || product.woo_attributes || product.woo_variants),
-      woo_product_type: product.woo_product_type === 'variable' ? 'variable' : 'simple',
-      woo_attributes: stringifyJson(product.woo_attributes),
-      woo_variants: stringifyJson(product.woo_variants),
-    })
-    setShowForm(true)
-    setEditorSection('general')
-    requestAnimationFrame(() => {
-      editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      firstEditorInputRef.current?.focus()
-    })
+    router.push(`/app/products/${product.id}/edit`)
   }
 
   const handleImageFileChange = async (file: File | null) => {
@@ -565,28 +542,26 @@ export default function ProductsPage() {
       throw new Error(t('products.imageTooLarge'))
     }
 
-    const { blob, dataUrl } = await compressImageToJpeg(file, true, cropProductImage ? imageCrop : { zoom: 1, offsetX: 0, offsetY: 0 })
+    const { blob } = await compressImageToJpeg(file, true, cropProductImage ? imageCrop : { zoom: 1, offsetX: 0, offsetY: 0 })
       const storagePath = currentCompany
         ? `${currentCompany.id}/products/${Date.now()}-${file.name.replace(/\.[^.]+$/, '')}.jpg`
         : ''
 
-      if (storagePath) {
-        const { error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(storagePath, blob, {
-            contentType: 'image/jpeg',
-            upsert: false,
-          })
-
-        if (!uploadError) {
-          const { data } = supabase.storage.from('product-images').getPublicUrl(storagePath)
-          setForm((current) => ({ ...current, image_url: data.publicUrl }))
-          setMessage(t('products.imageCompressed'))
-          return
-        }
+      if (!storagePath) {
+        throw new Error(t('products.imageCompressionFailed'))
       }
 
-      setForm((current) => ({ ...current, image_url: dataUrl }))
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(storagePath, blob, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data } = supabase.storage.from('product-images').getPublicUrl(storagePath)
+      setForm((current) => ({ ...current, image_url: data.publicUrl }))
       setMessage(t('products.imageCompressed'))
     } catch (compressionError) {
       const knownMessage = compressionError instanceof Error ? compressionError.message : ''
@@ -1479,7 +1454,7 @@ export default function ProductsPage() {
                 </div>
                 {viewingProduct.description && <p className="whitespace-pre-line text-sm text-slate-700">{decodeHtmlText(viewingProduct.description)}</p>}
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => { handleEdit(viewingProduct); setViewingProduct(null) }}>{t('common.edit')}</Button>
+                  <Button variant="outline" onClick={() => handleEdit(viewingProduct)}>{t('common.edit')}</Button>
                   <Link href="/app/stock-movements"><Button variant="outline">{t('products.adjustStock')}</Button></Link>
                   <Button variant="outline" disabled={syncingProductId === viewingProduct.id} onClick={() => void handleWooExport(viewingProduct)}>
                     {syncingProductId === viewingProduct.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}

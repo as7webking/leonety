@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T21:11:27.429Z",
+  "generatedAt": "2026-09-08T21:57:40.676Z",
   "locales": [
     "en",
     "de",
@@ -15,38 +15,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1372,
-      "total": 1372,
+      "translated": 1437,
+      "total": 1437,
       "percent": 100
     },
     "de": {
-      "translated": 1372,
-      "total": 1372,
+      "translated": 1437,
+      "total": 1437,
       "percent": 100
     },
     "ru": {
-      "translated": 1372,
-      "total": 1372,
+      "translated": 1437,
+      "total": 1437,
       "percent": 100
     },
     "tr": {
-      "translated": 1372,
-      "total": 1372,
+      "translated": 1437,
+      "total": 1437,
       "percent": 100
     },
     "uk": {
-      "translated": 1372,
-      "total": 1372,
+      "translated": 1437,
+      "total": 1437,
       "percent": 100
     },
     "pl": {
-      "translated": 1372,
-      "total": 1372,
+      "translated": 1437,
+      "total": 1437,
       "percent": 100
     },
     "fr": {
-      "translated": 1372,
-      "total": 1372,
+      "translated": 1437,
+      "total": 1437,
       "percent": 100
     }
   },
@@ -2173,14 +2173,26 @@
   "usedMissingInEnglish": [],
   "hardcodedStrings": [
     {
+      "file": "src/app/(app)/products/[productId]/edit/page.tsx",
+      "line": 595,
+      "type": "attribute:placeholder",
+      "text": "[{\"name\":\"Size\",\"options\":[\"S\",\"M\",\"L\"]}]"
+    },
+    {
+      "file": "src/app/(app)/products/[productId]/edit/page.tsx",
+      "line": 599,
+      "type": "attribute:placeholder",
+      "text": "[{\"sku\":\"TS-S\",\"price\":19.99,\"stock_quantity\":5,\"attributes\":{\"Size\":\"S\"}}]"
+    },
+    {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1362,
+      "line": 1337,
       "type": "attribute:placeholder",
       "text": "[{\"name\":\"Size\",\"options\":[\"S\",\"M\",\"L\"]}]"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1366,
+      "line": 1341,
       "type": "attribute:placeholder",
       "text": "[{\"sku\":\"TS-S-BLACK\",\"price\":19.99,\"stock_quantity\":5,\"attributes\":{\"Size\":\"S\",\"Color\":\"Black\"}}]"
     },
@@ -2269,6 +2281,12 @@
       "text": "Leonety"
     },
     {
+      "file": "src/components/products/product-image-workspace.tsx",
+      "line": 673,
+      "type": "jsx-text",
+      "text": "WebP"
+    },
+    {
       "file": "src/components/public-header.tsx",
       "line": 29,
       "type": "attribute:aria-label",
@@ -2289,8 +2307,8 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1372,
-    "hardcodedStringCount": 19,
+    "englishKeyCount": 1437,
+    "hardcodedStringCount": 22,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0
   }

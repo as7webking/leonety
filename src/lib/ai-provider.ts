@@ -2,11 +2,23 @@ import 'server-only'
 
 export type AiProviderName = 'openai'
 
-interface GenerateAiTextInput {
+export interface GenerateAiTextInput {
   instructions: string
   input: string
   maxOutputTokens?: number
   responseFormat?: 'text' | 'json_object'
+}
+
+export interface AiProviderCapabilities {
+  text: boolean
+  json: boolean
+  streaming: boolean
+}
+
+interface AiProviderAdapter {
+  name: AiProviderName
+  capabilities: AiProviderCapabilities
+  generate: (input: GenerateAiTextInput) => Promise<string>
 }
 
 export function getAiProviderName(): AiProviderName {
@@ -25,6 +37,63 @@ function getAiApiKey() {
     throw new Error('AI_API_KEY is required server-side.')
   }
   return key
+}
+
+const openAiProvider: AiProviderAdapter = {
+  name: 'openai',
+  capabilities: {
+    text: true,
+    json: true,
+    streaming: false,
+  },
+  async generate({
+    instructions,
+    input,
+    maxOutputTokens = 900,
+    responseFormat = 'text',
+  }) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 20_000)
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${getAiApiKey()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: getAiModelName(),
+          instructions,
+          input,
+          max_output_tokens: maxOutputTokens,
+          ...(responseFormat === 'json_object' ? { text: { format: { type: 'json_object' } } } : {}),
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error('AI provider request failed.')
+      }
+
+      const text = extractResponseText(payload)
+      if (!text) throw new Error('AI provider returned an empty response.')
+      return text
+    } finally {
+      clearTimeout(timeout)
+    }
+  },
+}
+
+function getAiProviderAdapter(): AiProviderAdapter {
+  const provider = getAiProviderName()
+  if (provider === 'openai') return openAiProvider
+  throw new Error('Unsupported AI_PROVIDER. Supported value: openai.')
+}
+
+export function getAiProviderCapabilities() {
+  return getAiProviderAdapter().capabilities
 }
 
 export function getAiConfigurationStatus() {
@@ -67,36 +136,5 @@ export async function generateAiText({
   maxOutputTokens = 900,
   responseFormat = 'text',
 }: GenerateAiTextInput) {
-  getAiProviderName()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 20_000)
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${getAiApiKey()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: getAiModelName(),
-        instructions,
-        input,
-        max_output_tokens: maxOutputTokens,
-        ...(responseFormat === 'json_object' ? { text: { format: { type: 'json_object' } } } : {}),
-      }),
-    })
-    const payload = await response.json().catch(() => ({}))
-
-    if (!response.ok) {
-      throw new Error('AI provider request failed.')
-    }
-
-    const text = extractResponseText(payload)
-    if (!text) throw new Error('AI provider returned an empty response.')
-    return text
-  } finally {
-    clearTimeout(timeout)
-  }
+  return getAiProviderAdapter().generate({ instructions, input, maxOutputTokens, responseFormat })
 }

@@ -17,6 +17,7 @@ const appRoutes = [
   '/locations',
   '/shifts',
   '/products',
+  '/products/:path*',
   '/inventory',
   '/stock-movements',
   '/settings/integrations',

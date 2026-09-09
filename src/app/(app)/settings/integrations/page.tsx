@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { BriefcaseBusiness, Building2, Clock3, KeyRound, Plug, Store, Unplug } from 'lucide-react'
+import { BookOpen, BriefcaseBusiness, Building2, Clock3, KeyRound, Plug, Store, Unplug, X } from 'lucide-react'
 import { EmptyState, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
@@ -588,12 +588,45 @@ export default function StoreIntegrationsPage() {
   const [importing, setImporting] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [whatsAppConnecting, setWhatsAppConnecting] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const integrationRequestRef = useRef<AbortController | null>(null)
   const whatsAppSignupDataRef = useRef<Record<string, unknown>>({})
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
+  const guideStepKeys = useMemo(() => {
+    if (provider === 'woocommerce') return [
+      'integrations.guide.woocommerce.1',
+      'integrations.guide.woocommerce.2',
+      'integrations.guide.woocommerce.3',
+      'integrations.guide.woocommerce.4',
+      'integrations.guide.woocommerce.5',
+      'integrations.guide.woocommerce.6',
+      'integrations.guide.woocommerce.7',
+    ]
+    if (provider === 'whatsapp_business') return [
+      'integrations.guide.whatsapp.1',
+      'integrations.guide.whatsapp.2',
+      'integrations.guide.whatsapp.3',
+      'integrations.guide.whatsapp.4',
+    ]
+    if (provider === 'iss_pos') return [
+      'integrations.guide.iss.1',
+      'integrations.guide.iss.2',
+      'integrations.guide.iss.3',
+    ]
+    if (provider === 'google_merchant') return [
+      'integrations.guide.googleMerchant.1',
+      'integrations.guide.googleMerchant.2',
+      'integrations.guide.googleMerchant.3',
+    ]
+    return [
+      'integrations.guide.partner.1',
+      'integrations.guide.partner.2',
+      'integrations.guide.partner.3',
+    ]
+  }, [provider])
 
   useEffect(() => {
     labelsRef.current = labels
@@ -1028,23 +1061,17 @@ export default function StoreIntegrationsPage() {
                 />
               </label>
 
-              <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
-                <p>{labels.serverOnly}</p>
-                <p className="mt-1">{labels.setupNote}</p>
+              <div className="flex flex-col gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p>{labels.serverOnly}</p>
+                  <p className="mt-1">{labels.setupNote}</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="shrink-0 bg-white">
+                  <BookOpen className="h-4 w-4" />
+                  {t('integrations.setupGuide')}
+                </Button>
                 {provider === 'whatsapp_business' && <p className="mt-2 font-medium">{labels.whatsappGuide}</p>}
                 {provider === 'iss_pos' && <p className="mt-2 font-medium">{labels.issSetup}</p>}
-              </div>
-
-              <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                <h3 className="font-semibold text-slate-950">{labels.integrationGuideTitle}</h3>
-                <p className="mt-2">{labels.credentialsNeverExposed}</p>
-                <div className="mt-3 grid gap-3">
-                  <p><span className="font-medium">{t('integrations.googleLogin')}:</span> {labels.googleLoginGuide}</p>
-                  <p><span className="font-medium">{t('integrations.facebookLogin')}:</span> {labels.facebookLoginGuide}</p>
-                  <p><span className="font-medium">{t('integrations.googleMaps')}:</span> {labels.googleMapsGuide}</p>
-                  <p><span className="font-medium">{t('integrations.whatsappBusiness')}:</span> {labels.whatsappGuide}</p>
-                  <p><span className="font-medium">ISS POS:</span> {labels.issGuide}</p>
-                </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -1218,6 +1245,36 @@ export default function StoreIntegrationsPage() {
           })}
         </div>
       </div>
+
+      {guideOpen && (
+        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" role="presentation">
+          <section className="max-h-[92dvh] w-full overflow-y-auto bg-white shadow-2xl sm:max-w-xl sm:rounded-xl" role="dialog" aria-modal="true" aria-labelledby="integration-guide-title">
+            <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-4">
+              <div>
+                <h2 id="integration-guide-title" className="text-lg font-semibold text-slate-950">{t('integrations.setupGuide')}</h2>
+                <p className="mt-1 text-sm text-slate-500">{selectedProvider.label}</p>
+              </div>
+              <button type="button" onClick={() => setGuideOpen(false)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={t('integrations.closeGuide')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 p-4">
+              <p className="text-sm leading-6 text-slate-700">{t('integrations.guideIntro')}</p>
+              <ol className="space-y-3 text-sm leading-6 text-slate-700">
+                {guideStepKeys.map((key) => (
+                  <li key={key} className="rounded-lg border border-slate-200 bg-slate-50 p-3">{t(key)}</li>
+                ))}
+              </ol>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                {labels.credentialsNeverExposed}
+              </div>
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => setGuideOpen(false)}>{t('integrations.closeGuide')}</Button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </PageContainer>
   )
 }

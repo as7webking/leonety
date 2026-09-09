@@ -207,9 +207,15 @@ export function AiAssistantWidget() {
         </section>
       )}
 
-      <Button type="button" onClick={() => setOpen((current) => !current)} className="shadow-lg">
+      <Button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="h-12 w-12 rounded-full p-0 shadow-lg"
+        aria-label={t('assistant.button')}
+        title={t('assistant.button')}
+      >
         <LifeBuoy className="h-4 w-4" />
-        {t('assistant.button')}
+        <span className="sr-only">{t('assistant.button')}</span>
       </Button>
     </div>
   )
