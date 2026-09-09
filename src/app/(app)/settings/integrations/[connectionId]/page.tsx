@@ -11,7 +11,20 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import type { Locale } from '@/lib/i18n'
 
-type Provider = 'woocommerce' | 'shopify' | 'opencart' | 'google_merchant' | 'whatsapp_business' | 'iss_pos'
+type Provider =
+  | 'woocommerce'
+  | 'shopify'
+  | 'opencart'
+  | 'google_merchant'
+  | 'whatsapp_business'
+  | 'iss_pos'
+  | 'ebay'
+  | 'amazon_marketplace'
+  | 'kleinanzeigen'
+  | 'olx'
+  | 'uber_eats'
+  | 'just_eat_takeaway'
+  | 'glovo'
 type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
 
 interface StoreIntegration {
@@ -41,6 +54,13 @@ const providerLabels: Record<Provider, string> = {
   google_merchant: 'Google Merchant',
   whatsapp_business: 'WhatsApp Business',
   iss_pos: 'ISS POS',
+  ebay: 'eBay',
+  amazon_marketplace: 'Amazon Marketplace',
+  kleinanzeigen: 'Kleinanzeigen',
+  olx: 'OLX',
+  uber_eats: 'Uber Eats',
+  just_eat_takeaway: 'Just Eat / Takeaway / Lieferando',
+  glovo: 'Glovo',
 }
 
 const copy: Record<Locale, Record<string, string>> = {

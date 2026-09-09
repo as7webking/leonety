@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Edit, FileText, PackagePlus, Printer, Trash2 } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { AppSelect } from '@/components/app-select'
 import { Logo } from '@/components/logo'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { createClient } from '@/lib/supabase-client'
@@ -137,6 +138,15 @@ interface InvoiceFormState {
   payment_method: 'cash' | 'card'
   amount_paid: string
   items: InvoiceItem[]
+}
+
+interface ContractPrefillRow {
+  id: string
+  company_id: string
+  client_id: string | null
+  reference: string | null
+  title: string | null
+  terms_snapshot: Record<string, unknown> | null
 }
 
 type InvoiceNumberFormat = 'yy-seq' | 'yyyy-seq'
@@ -321,8 +331,19 @@ function getClientAddressLines(client: ClientOption | null | undefined) {
   return [streetLine, cityLine, client.country].filter(Boolean)
 }
 
+function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
+  return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
+}
+
+function stripOptionalTitle<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload }
+  delete next.title
+  return next
+}
+
 export default function InvoicesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
@@ -338,6 +359,8 @@ export default function InvoicesPage() {
   const [combinedPrintInvoices, setCombinedPrintInvoices] = useState<InvoiceRecord[]>([])
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set())
   const [deleteInvoice, setDeleteInvoice] = useState<InvoiceRecord | null>(null)
+  const [sourceContractId, setSourceContractId] = useState('')
+  const [prefilledContractId, setPrefilledContractId] = useState('')
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [companyLogo, setCompanyLogo] = useState('')
@@ -392,6 +415,8 @@ export default function InvoicesPage() {
   const calculated = useMemo(() => calculateItems(formData.items), [formData.items])
   const vatOptions = useMemo(() => getVatOptions(formData.tax_country, t), [formData.tax_country, t])
 
+  useBodyScrollLock(Boolean(deleteInvoice))
+
   useEffect(() => {
     if (!currentCompany) return
     const branding = loadCompanyBranding(currentCompany.id)
@@ -441,6 +466,7 @@ export default function InvoicesPage() {
     })
     setShowForm(false)
     setQuickClient({ name: '', phone: '', interested_in: '' })
+    setSourceContractId('')
   }, [currentCompany, invoices])
 
   const openCreateForm = () => {
@@ -461,6 +487,7 @@ export default function InvoicesPage() {
       items: [newItem(defaultTaxRate)],
     })
     setQuickClient({ name: '', phone: '', interested_in: '' })
+    setSourceContractId('')
     setShowForm(true)
   }
 
@@ -574,6 +601,71 @@ export default function InvoicesPage() {
     void loadInvoices()
   }, [loadInvoices])
 
+  useEffect(() => {
+    const contractId = searchParams.get('contractId') ?? ''
+    if (!contractId || !currentCompany || prefilledContractId === contractId) return
+
+    const loadContractPrefill = async () => {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('id, company_id, client_id, reference, title, terms_snapshot')
+        .eq('company_id', currentCompany.id)
+        .eq('id', contractId)
+        .maybeSingle()
+
+      if (error) {
+        setErrorMessage(error.code === '42P01' || error.code === 'PGRST205'
+          ? t('contracts.databaseRequired')
+          : t('invoices.contractPrefillFailed'))
+        setPrefilledContractId(contractId)
+        return
+      }
+
+      if (!data) {
+        setErrorMessage(t('invoices.contractPrefillFailed'))
+        setPrefilledContractId(contractId)
+        return
+      }
+
+      const contract = data as ContractPrefillRow
+      const terms = contract.terms_snapshot ?? {}
+      const amount = Number(terms.price ?? 0)
+      const currency = normalizeCurrencyCode(String(terms.currency ?? currentCompany.currency ?? 'USD'))
+      const description = [
+        contract.reference,
+        contract.title,
+        typeof terms.projectDescription === 'string' ? terms.projectDescription : '',
+      ].filter(Boolean).join(' - ')
+
+      setSourceContractId(contract.id)
+      setEditingInvoice(null)
+      setFormData({
+        client_id: contract.client_id ?? '',
+        invoice_number: makeInvoiceNumber(invoices),
+        issue_date: today(),
+        due_date: '',
+        currency,
+        status: 'sent',
+        notes: contract.reference ? `${t('contracts.reference')}: ${contract.reference}` : '',
+        tax_country: 'DE',
+        tax_type: 'standard',
+        payment_method: 'card',
+        amount_paid: '',
+        items: [{
+          ...newItem(getTaxRate('DE', 'standard')),
+          description: description || t('invoices.contractLineItem'),
+          unit_price: Number.isFinite(amount) && amount > 0 ? amount : 0,
+        }],
+      })
+      setQuickClient({ name: '', phone: '', interested_in: '' })
+      setShowForm(true)
+      setPrefilledContractId(contractId)
+      setMessage(t('invoices.contractPrefilled'))
+    }
+
+    void loadContractPrefill()
+  }, [currentCompany, invoices, prefilledContractId, searchParams, supabase, t])
+
   const updateItem = (index: number, updates: Partial<InvoiceItem>) => {
     setFormData((prev) => ({
       ...prev,
@@ -683,7 +775,7 @@ export default function InvoicesPage() {
     }
 
     const totals = calculateItems(formData.items)
-    const invoicePayload = {
+    const invoicePayload: Record<string, unknown> = {
       company_id: currentCompany.id,
       client_id: clientId,
       invoice_number: formData.invoice_number.trim(),
@@ -697,31 +789,50 @@ export default function InvoicesPage() {
       notes: formData.notes.trim() || null,
       updated_at: new Date().toISOString(),
     }
+    if (sourceContractId) {
+      invoicePayload.contract_id = sourceContractId
+    }
 
     try {
-      let invoiceId = editingInvoice?.id
+      let contractLinkFallback = false
+      const saveInvoiceRecord = async (payloadToSave: Record<string, unknown>) => {
+        if (editingInvoice) {
+          const { error } = await supabase
+            .from('invoices')
+            .update(payloadToSave)
+            .eq('id', editingInvoice.id)
+            .eq('company_id', currentCompany.id)
+
+          return { invoiceId: editingInvoice.id, error }
+        }
+
+        const { data, error } = await supabase
+          .from('invoices')
+          .insert(payloadToSave)
+          .select('id')
+          .single()
+
+        return { invoiceId: data?.id as string | undefined, error }
+      }
+
+      let saveResult = await saveInvoiceRecord(invoicePayload)
+      if (saveResult.error && sourceContractId && isMissingOptionalColumn(saveResult.error)) {
+        const fallbackPayload = { ...invoicePayload }
+        delete fallbackPayload.contract_id
+        saveResult = await saveInvoiceRecord(fallbackPayload)
+        if (!saveResult.error) contractLinkFallback = true
+      }
+      if (saveResult.error) throw saveResult.error
+
+      const invoiceId = saveResult.invoiceId
+      if (!invoiceId) throw new Error(t('invoices.saveFailed'))
 
       if (editingInvoice) {
-        const { error } = await supabase
-          .from('invoices')
-          .update(invoicePayload)
-          .eq('id', editingInvoice.id)
-          .eq('company_id', currentCompany.id)
-        if (error) throw error
-
         const { error: deleteItemsError } = await supabase
           .from('invoice_items')
           .delete()
           .eq('invoice_id', editingInvoice.id)
         if (deleteItemsError) throw deleteItemsError
-      } else {
-        const { data, error } = await supabase
-          .from('invoices')
-          .insert(invoicePayload)
-          .select('id')
-          .single()
-        if (error) throw error
-        invoiceId = data.id
       }
 
       const itemPayload = totals.items.map((item) => ({
@@ -743,6 +854,10 @@ export default function InvoicesPage() {
         })
       }
 
+      let nextSuccessMessage = contractLinkFallback
+        ? `${editingInvoice ? t('invoices.updated') : t('invoices.created')} ${t('invoices.contractLinkMigrationRequired')}`
+        : editingInvoice ? t('invoices.updated') : t('invoices.created')
+
       if (formData.status === 'paid') {
         const existingIncome = await supabase
           .from('incomes')
@@ -754,26 +869,32 @@ export default function InvoicesPage() {
         if (!existingIncome.error && !existingIncome.data) {
           const clientName = clients.find((client) => client.id === formData.client_id)?.name
           const itemNames = totals.items.map((item) => item.description.trim()).filter(Boolean).join(', ')
-          const { error: incomeError } = await supabase.from('incomes').insert({
+          const incomePayload = {
             company_id: currentCompany.id,
+            title: itemNames || clientName || formData.invoice_number.trim(),
             description: `Invoice ${formData.invoice_number.trim()} paid`,
             category: 'Invoice Payment',
             amount: totals.total,
             currency: normalizeCurrencyCode(formData.currency),
             date: formData.issue_date,
-          })
+          }
 
+          let { error: incomeError } = await supabase.from('incomes').insert(incomePayload)
+          let incomeTitleFallback = false
+          if (isMissingOptionalColumn(incomeError)) {
+            const fallback = await supabase.from('incomes').insert(stripOptionalTitle(incomePayload))
+            incomeError = fallback.error
+            incomeTitleFallback = !incomeError
+          }
           if (incomeError) throw incomeError
 
-          if (clientName || itemNames) {
-            setMessage(`Invoice saved and income recorded for ${clientName || 'client'}${itemNames ? `: ${itemNames}` : ''}.`)
-          }
+          nextSuccessMessage = incomeTitleFallback
+            ? `${t('invoices.paidIncomeRecorded')} ${t('transactions.titleMigrationRequired')}`
+            : t('invoices.paidIncomeRecorded')
         }
       }
 
-      if (formData.status !== 'paid') {
-        setMessage(editingInvoice ? 'Invoice updated.' : 'Invoice created.')
-      }
+      setMessage(nextSuccessMessage)
       resetForm()
       await loadInvoices()
     } catch (error) {
@@ -802,7 +923,7 @@ export default function InvoicesPage() {
         .eq('company_id', currentCompany.id)
 
       if (error) throw error
-      setMessage(keepIncome ? 'Invoice deleted. Related income was kept.' : 'Invoice and related income deleted.')
+      setMessage(keepIncome ? t('invoices.deletedIncomeKept') : t('invoices.deletedWithIncomeMessage'))
       setDeleteInvoice(null)
       await loadInvoices()
     } catch (error) {
@@ -1436,7 +1557,7 @@ export default function InvoicesPage() {
         </div>
       )}
       {deleteInvoice && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 px-4">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/40 px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-20">
           <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-950">{t('common.confirmDelete')}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">

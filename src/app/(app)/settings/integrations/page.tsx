@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import type { Locale } from '@/lib/i18n'
 
 type Provider =
@@ -19,6 +20,10 @@ type Provider =
   | 'google_merchant'
   | 'whatsapp_business'
   | 'iss_pos'
+  | 'ebay'
+  | 'amazon_marketplace'
+  | 'kleinanzeigen'
+  | 'olx'
   | 'uber_eats'
   | 'just_eat_takeaway'
   | 'glovo'
@@ -70,7 +75,7 @@ interface IntegrationForm {
   clientCreationMode: WhatsAppClientCreationMode
 }
 
-const providerOptions: Array<{ value: Provider; label: string; fields: Array<keyof IntegrationForm>; directSettings?: string }> = [
+const providerOptions: Array<{ value: Provider; label: string; fields: Array<keyof IntegrationForm>; directSettings?: string; requiresApproval?: boolean }> = [
   {
     value: 'woocommerce',
     label: 'WooCommerce',
@@ -101,21 +106,49 @@ const providerOptions: Array<{ value: Provider; label: string; fields: Array<key
     value: 'iss_pos',
     label: 'ISS POS',
     fields: ['storeName', 'storeUrl', 'externalAccountId'],
+    requiresApproval: true,
+  },
+  {
+    value: 'ebay',
+    label: 'eBay',
+    fields: ['storeName', 'externalAccountId', 'accessToken', 'refreshToken'],
+    requiresApproval: true,
+  },
+  {
+    value: 'amazon_marketplace',
+    label: 'Amazon Marketplace',
+    fields: ['storeName', 'externalAccountId', 'merchantId', 'accessToken', 'refreshToken'],
+    requiresApproval: true,
+  },
+  {
+    value: 'kleinanzeigen',
+    label: 'Kleinanzeigen',
+    fields: ['storeName', 'storeUrl', 'externalAccountId', 'apiKey'],
+    requiresApproval: true,
+  },
+  {
+    value: 'olx',
+    label: 'OLX',
+    fields: ['storeName', 'storeUrl', 'externalAccountId', 'apiKey', 'accessToken', 'refreshToken'],
+    requiresApproval: true,
   },
   {
     value: 'uber_eats',
     label: 'Uber Eats',
     fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
+    requiresApproval: true,
   },
   {
     value: 'just_eat_takeaway',
     label: 'Just Eat / Takeaway / Lieferando',
     fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
+    requiresApproval: true,
   },
   {
     value: 'glovo',
     label: 'Glovo',
     fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
+    requiresApproval: true,
   },
 ]
 
@@ -595,6 +628,7 @@ export default function StoreIntegrationsPage() {
   const whatsAppSignupDataRef = useRef<Record<string, unknown>>({})
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
+  useBodyScrollLock(guideOpen)
   const guideStepKeys = useMemo(() => {
     if (provider === 'woocommerce') return [
       'integrations.guide.woocommerce.1',
@@ -1065,6 +1099,7 @@ export default function StoreIntegrationsPage() {
                 <div className="min-w-0">
                   <p>{labels.serverOnly}</p>
                   <p className="mt-1">{labels.setupNote}</p>
+                  {selectedProvider.requiresApproval && <p className="mt-2 font-medium">{labels.setupRequired}</p>}
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="shrink-0 bg-white">
                   <BookOpen className="h-4 w-4" />
@@ -1236,7 +1271,7 @@ export default function StoreIntegrationsPage() {
                           : 'bg-slate-100 text-slate-600'
                     }`}>
                       {status === 'connected' ? <Plug className="h-3.5 w-3.5" /> : <Unplug className="h-3.5 w-3.5" />}
-                      {statusLabel(status, labels)}
+                      {status === 'not_connected' && item.requiresApproval ? labels.setupRequired : statusLabel(status, labels)}
                     </span>
                   </div>
                 </CardContent>
@@ -1247,7 +1282,7 @@ export default function StoreIntegrationsPage() {
       </div>
 
       {guideOpen && (
-        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" role="presentation">
+        <div className="fixed inset-0 z-[160] flex items-start justify-center overflow-y-auto bg-slate-950/50 p-0 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-4 sm:pt-12" role="presentation">
           <section className="max-h-[92dvh] w-full overflow-y-auto bg-white shadow-2xl sm:max-w-xl sm:rounded-xl" role="dialog" aria-modal="true" aria-labelledby="integration-guide-title">
             <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-4">
               <div>

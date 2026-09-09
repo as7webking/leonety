@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Archive,
@@ -153,10 +154,11 @@ function parseContractRow(row: Record<string, unknown>): ContractRow {
   }
 }
 
-export default function ContractsPage() {
+function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' | 'create' }) {
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
   const searchParams = useSearchParams()
+  const pageMode = searchParams.get('mode') === 'create' ? 'create' : initialMode
   const [supabase] = useState(() => createClient())
   const [contracts, setContracts] = useState<ContractRow[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
@@ -172,6 +174,7 @@ export default function ContractsPage() {
   const [templateFilter, setTemplateFilter] = useState('all')
   const [clientFilter, setClientFilter] = useState('all')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editorVisible, setEditorVisible] = useState(pageMode === 'create')
   const [clientId, setClientId] = useState('')
   const [templateId, setTemplateId] = useState<ContractTemplateId>('general_service')
   const [contractLanguage, setContractLanguage] = useState<ContractLanguage>(isContractLanguage(locale) ? locale : 'en')
@@ -233,6 +236,12 @@ export default function ContractsPage() {
   }, [loadData])
 
   useEffect(() => {
+    if (pageMode === 'create') {
+      setEditorVisible(true)
+    }
+  }, [pageMode])
+
+  useEffect(() => {
     if (!currentCompany) return
     setPartyA((current) => ({
       ...current,
@@ -289,6 +298,7 @@ export default function ContractsPage() {
 
   function startCreate() {
     resetEditor()
+    setEditorVisible(true)
     setMessage('')
     setError('')
     window.requestAnimationFrame(() => editorRef.current?.focus())
@@ -315,6 +325,7 @@ export default function ContractsPage() {
 
   function editContract(contract: ContractRow) {
     setEditingId(contract.id)
+    setEditorVisible(true)
     setClientId(contract.client_id ?? '')
     setTemplateId(contract.template_type)
     setContractLanguage(contract.language)
@@ -331,6 +342,7 @@ export default function ContractsPage() {
 
   function duplicateContract(contract: ContractRow) {
     setEditingId(null)
+    setEditorVisible(true)
     setClientId(contract.client_id ?? '')
     setTemplateId(contract.template_type)
     setContractLanguage(contract.language)
@@ -538,22 +550,38 @@ export default function ContractsPage() {
     <PageContainer className="max-w-7xl print:max-w-none print:px-0 print:py-0">
       <div className="print:hidden">
         <PageHeader
-          title={t('contracts.title')}
+          title={pageMode === 'create' ? t('contracts.create') : t('contracts.title')}
           description={t('contracts.description')}
-        />
+        >
+          {pageMode === 'create' ? (
+            <Link href="/app/contracts">
+              <Button type="button" variant="outline">{t('contracts.savedContracts')}</Button>
+            </Link>
+          ) : (
+            <Link href="/app/contracts/new">
+              <Button type="button">
+                <Plus className="h-4 w-4" />
+                {t('contracts.create')}
+              </Button>
+            </Link>
+          )}
+        </PageHeader>
 
         {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</div>}
         {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
-        <div className="mb-6 grid gap-4 xl:grid-cols-[minmax(280px,360px)_1fr]">
+        <div className={`mb-6 grid gap-4 ${pageMode === 'create' || !editorVisible ? 'xl:grid-cols-1' : 'xl:grid-cols-[minmax(280px,360px)_1fr]'}`}>
+          {pageMode !== 'create' && (
           <Card>
             <CardHeader className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-xl">{t('contracts.savedContracts')}</CardTitle>
-                <Button size="sm" onClick={startCreate}>
-                  <Plus className="h-4 w-4" />
-                  {t('contracts.create')}
-                </Button>
+                <Link href="/app/contracts/new">
+                  <Button size="sm">
+                    <Plus className="h-4 w-4" />
+                    {t('contracts.create')}
+                  </Button>
+                </Link>
               </div>
               <CardDescription>{t('contracts.legalNotice')}</CardDescription>
             </CardHeader>
@@ -622,6 +650,12 @@ export default function ContractsPage() {
                         <Copy className="h-4 w-4" />
                         {t('contracts.duplicate')}
                       </Button>
+                      <Link href={`/app/invoices?contractId=${encodeURIComponent(contract.id)}`}>
+                        <Button size="sm" variant="outline">
+                          <FileText className="h-4 w-4" />
+                          {t('contracts.createInvoice')}
+                        </Button>
+                      </Link>
                       <Button size="sm" variant="outline" onClick={printContract}>
                         <Printer className="h-4 w-4" />
                         {t('common.print')}
@@ -636,7 +670,9 @@ export default function ContractsPage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
+          {(pageMode === 'create' || editorVisible) && (
           <Card ref={editorRef} tabIndex={-1} className="outline-none">
             <CardHeader>
               <CardTitle className="text-xl">{editingId ? t('contracts.edit') : t('contracts.create')}</CardTitle>
@@ -793,6 +829,7 @@ export default function ContractsPage() {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
 
@@ -807,6 +844,10 @@ export default function ContractsPage() {
       />
     </PageContainer>
   )
+}
+
+export default function ContractsPage() {
+  return <ContractsWorkspace initialMode="saved" />
 }
 
 function PartyEditor({

@@ -23,9 +23,20 @@ import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTrans
 interface Income extends IncomeForm {
   id: string
   company_id: string
+  title?: string | null
 }
 
-type IncomeFormState = Omit<IncomeForm, 'amount'> & { amount: string }
+type IncomeFormState = Omit<IncomeForm, 'amount'> & { amount: string; title: string }
+
+function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
+  return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
+}
+
+function stripTitle<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload }
+  delete next.title
+  return next
+}
 
 export default function IncomePage() {
   const router = useRouter()
@@ -39,6 +50,7 @@ export default function IncomePage() {
   const [editingEntry, setEditingEntry] = useState<Income | null>(null)
   const [formData, setFormData] = useState<IncomeFormState>({
     amount: '',
+    title: '',
     description: '',
     category: '',
     date: new Date().toISOString().split('T')[0],
@@ -103,11 +115,11 @@ export default function IncomePage() {
       setIncomes((data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
     } catch (error) {
       console.error('Failed to load incomes:', error)
-      setErrorMessage('Failed to load income data')
+      setErrorMessage(t('income.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [currentCompany, supabase])
+  }, [currentCompany, supabase, t])
 
   useEffect(() => {
     loadIncomes()
@@ -146,11 +158,12 @@ export default function IncomePage() {
     setErrorMessage('')
 
     if (!currentCompany) {
-      setErrorMessage('Create a workspace first')
+      setErrorMessage(t('common.noWorkspaceSelected'))
       return
     }
 
     try {
+      const desiredTitle = formData.title.trim()
       const effectiveCategory = isBusinessWorkspace ? (formData.category || 'Sales') : formData.category
       const fallbackDescription = effectiveCategory && effectiveCategory !== 'Other'
         ? formatCategoryLabel(effectiveCategory, t)
@@ -169,6 +182,7 @@ export default function IncomePage() {
       })
       const category = validatedData.category === 'Other' ? customCategory || 'Other' : validatedData.category
       const payload = {
+        title: desiredTitle || null,
         description: validatedData.description,
         date: validatedData.date,
         category,
@@ -176,23 +190,39 @@ export default function IncomePage() {
         currency: validatedData.currency,
         company_id: currentCompany.id,
       }
+      let titleFallback = false
 
       if (editingEntry) {
-        const { error } = await supabase
+        let { error } = await supabase
           .from('incomes')
           .update(payload)
           .eq('id', editingEntry.id)
           .eq('company_id', currentCompany.id)
+        if (isMissingOptionalColumn(error)) {
+          const fallback = await supabase
+            .from('incomes')
+            .update(stripTitle(payload))
+            .eq('id', editingEntry.id)
+            .eq('company_id', currentCompany.id)
+          error = fallback.error
+          titleFallback = !error && Boolean(desiredTitle)
+        }
         if (error) throw error
-        setSuccessMessage(t('income.updated'))
+        setSuccessMessage(titleFallback ? `${t('income.updated')} ${t('transactions.titleMigrationRequired')}` : t('income.updated'))
       } else {
-        const { error } = await supabase.from('incomes').insert(payload)
+        let { error } = await supabase.from('incomes').insert(payload)
+        if (isMissingOptionalColumn(error)) {
+          const fallback = await supabase.from('incomes').insert(stripTitle(payload))
+          error = fallback.error
+          titleFallback = !error && Boolean(desiredTitle)
+        }
         if (error) throw error
-        setSuccessMessage(t('income.created'))
+        setSuccessMessage(titleFallback ? `${t('income.created')} ${t('transactions.titleMigrationRequired')}` : t('income.created'))
       }
 
       setFormData({
         amount: '',
+        title: '',
         description: '',
         category: '',
         currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'),
@@ -214,6 +244,7 @@ export default function IncomePage() {
     setEditingEntry(entry)
     setFormData({
       amount: String(entry.amount),
+      title: entry.title ?? '',
       description: entry.description,
       category: entry.category,
       date: entry.date,
@@ -244,8 +275,8 @@ export default function IncomePage() {
       return
     }
 
-    const headers = [t('common.date'), t('common.description'), t('common.category'), t('common.amount'), t('common.currency')]
-    const rows = sortedIncomes.map((income) => [income.date, income.description, formatCategoryLabel(income.category, t), income.amount, income.currency])
+    const headers = [t('common.date'), t('transactions.titleLabel'), t('common.description'), t('common.category'), t('common.amount'), t('common.currency')]
+    const rows = sortedIncomes.map((income) => [income.date, income.title ?? '', income.description, formatCategoryLabel(income.category, t), income.amount, income.currency])
     const csv = buildCsv([headers, ...rows])
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -329,12 +360,13 @@ export default function IncomePage() {
     try {
       const rows = parseCsv(await file.text())
       if (rows.length < 2) {
-        throw new Error('CSV must contain a header row and at least one data row')
+        throw new Error(t('transactions.importEmpty'))
       }
 
       const header = rows[0].map(normalizeCsvHeader)
       const dateIndex = getCsvColumnIndex(header, ['date'])
       const descriptionIndex = getCsvColumnIndex(header, ['description', 'name', 'title'])
+      const titleIndex = getCsvColumnIndex(header, ['title'])
       const categoryIndex = getCsvColumnIndex(header, ['category'])
       const amountIndex = getCsvColumnIndex(header, ['amount'])
       const currencyIndex = getCsvColumnIndex(header, ['currency'])
@@ -347,6 +379,7 @@ export default function IncomePage() {
         const rowNumber = index + 2
         const date = parseTransactionDate(columns[dateIndex] ?? '')
         const description = columns[descriptionIndex]?.trim()
+        const title = titleIndex >= 0 ? columns[titleIndex]?.trim() ?? '' : ''
         const category = columns[categoryIndex]?.trim()
         const amount = parseLocalizedAmount(columns[amountIndex] ?? '')
         const currency = normalizeCurrencyCode(columns[currencyIndex] || currentCompany.currency || 'USD')
@@ -378,6 +411,7 @@ export default function IncomePage() {
         return {
           company_id: currentCompany.id,
           date,
+          title: title || description,
           description,
           category,
           amount: Number(amount.toFixed(2)),
@@ -385,7 +419,11 @@ export default function IncomePage() {
         }
       })
 
-      const { error } = await supabase.from('incomes').insert(payload)
+      let { error } = await supabase.from('incomes').insert(payload)
+      if (isMissingOptionalColumn(error)) {
+        const fallback = await supabase.from('incomes').insert(payload.map(stripTitle))
+        error = fallback.error
+      }
       if (error) throw error
 
       setSuccessMessage(t('transactions.importedRows').replace('{count}', String(payload.length)))
@@ -528,6 +566,7 @@ export default function IncomePage() {
               <thead>
                 <tr>
                   <th className="border p-2 text-left">{t('common.date')}</th>
+                  <th className="border p-2 text-left">{t('transactions.titleLabel')}</th>
                   <th className="border p-2 text-left">{t('common.description')}</th>
                   <th className="border p-2 text-left">{t('common.category')}</th>
                   <th className="border p-2 text-right">{t('common.amount')}</th>
@@ -537,6 +576,7 @@ export default function IncomePage() {
                 {groupItems.map((income) => (
                   <tr key={`print-${income.id}`}>
                     <td className="border p-2">{new Date(`${income.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
+                    <td className="border p-2">{income.title || '-'}</td>
                     <td className="border p-2">{income.description}</td>
                     <td className="border p-2">{formatCategoryLabel(income.category, t)}</td>
                     <td className="border p-2 text-right">{renderPrintAmount(income)}</td>
@@ -565,6 +605,10 @@ export default function IncomePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('common.amount')}</label>
                 <input type="text" inputMode="decimal" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} required />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">{t('transactions.titleLabel')}</label>
+                <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
               </div>
               {isBusinessWorkspace ? (
                 <div>
@@ -640,9 +684,9 @@ export default function IncomePage() {
             <Card>
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
-                  <p className="font-medium">{income.description}</p>
+                  <p className="font-medium">{income.title || income.description}</p>
                   <p className="text-sm text-muted-foreground">
-                    {formatCategoryLabel(income.category, t)} · {income.date}
+                    {income.title && income.description ? `${income.description} · ` : ''}{formatCategoryLabel(income.category, t)} · {income.date}
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -671,8 +715,9 @@ export default function IncomePage() {
             {editingEntry?.id === income.id && (
               <Card className="border-primary/30 bg-slate-50">
                 <CardContent className="p-4">
-                  <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-4">
+                  <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
                     <input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} aria-label={t('common.amount')} required />
+                    <input value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} aria-label={t('transactions.titleLabel')} />
                     <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} />
                     <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.date')} required />
                     <div className="flex gap-2">

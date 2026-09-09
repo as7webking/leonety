@@ -21,6 +21,7 @@ interface TransactionRow {
   id: string
   type: 'income' | 'expense'
   date: string
+  title: string | null
   description: string | null
   category: string | null
   amount: number
@@ -30,6 +31,7 @@ interface TransactionRow {
 interface SupabaseTransactionRow {
   id: string
   date: string
+  title?: string | null
   description: string | null
   category: string | null
   amount: number | string
@@ -37,7 +39,22 @@ interface SupabaseTransactionRow {
 }
 
 type BulkRenameTarget = 'all' | 'income' | 'expense'
-type BulkRenameField = 'description' | 'category'
+type BulkRenameField = 'title' | 'description' | 'category'
+type TransactionTable = 'incomes' | 'expenses'
+type TransactionQueryResult = {
+  data: SupabaseTransactionRow[] | null
+  error: { code?: string; message?: string } | null
+}
+
+function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
+  return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
+}
+
+function stripTitle<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload }
+  delete next.title
+  return next
+}
 
 export default function TransactionsPage() {
   const router = useRouter()
@@ -69,6 +86,7 @@ export default function TransactionsPage() {
   const [formData, setFormData] = useState({
     type: 'income' as 'income' | 'expense',
     amount: '',
+    title: '',
     description: '',
     category: '',
     date: new Date().toISOString().split('T')[0],
@@ -94,18 +112,28 @@ export default function TransactionsPage() {
       setErrorMessage('')
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
-      const [incomeRes, expenseRes] = await Promise.all([
-        supabase
-          .from('incomes')
-          .select('id, date, description, category, amount, currency')
+      const queryTransactions = async (table: TransactionTable, includeTitle: boolean): Promise<TransactionQueryResult> => {
+        const columns = includeTitle
+          ? 'id, date, title, description, category, amount, currency'
+          : 'id, date, description, category, amount, currency'
+        return await supabase
+          .from(table)
+          .select(columns)
           .eq('company_id', currentCompany.id)
-          .order('date', { ascending: false }),
-        supabase
-          .from('expenses')
-          .select('id, date, description, category, amount, currency')
-          .eq('company_id', currentCompany.id)
-          .order('date', { ascending: false }),
+          .order('date', { ascending: false }) as TransactionQueryResult
+      }
+
+      let [incomeRes, expenseRes] = await Promise.all([
+        queryTransactions('incomes', true),
+        queryTransactions('expenses', true),
       ])
+
+      if (isMissingOptionalColumn(incomeRes.error) || isMissingOptionalColumn(expenseRes.error)) {
+        ;[incomeRes, expenseRes] = await Promise.all([
+          queryTransactions('incomes', false),
+          queryTransactions('expenses', false),
+        ])
+      }
 
       if (incomeRes.error) throw incomeRes.error
       if (expenseRes.error) throw expenseRes.error
@@ -114,11 +142,13 @@ export default function TransactionsPage() {
         ...((incomeRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
           ...item,
           type: 'income' as const,
+          title: item.title ?? null,
           amount: Number(item.amount),
         })),
         ...((expenseRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
           ...item,
           type: 'expense' as const,
+          title: item.title ?? null,
           amount: Number(item.amount),
         })),
       ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
@@ -180,14 +210,21 @@ export default function TransactionsPage() {
     }
 
     const table = formData.type === 'income' ? 'incomes' : 'expenses'
-    const { error } = await supabase.from(table).insert({
+    const payload = {
       company_id: currentCompany.id,
       amount,
+      title: formData.title.trim() || null,
       description: formData.description.trim(),
       category: formData.category.trim() || 'Other',
       date: formData.date,
       currency: normalizeCurrencyCode(formData.currency),
-    })
+    }
+
+    let { error } = await supabase.from(table).insert(payload)
+    if (isMissingOptionalColumn(error)) {
+      const fallback = await supabase.from(table).insert(stripTitle(payload))
+      error = fallback.error
+    }
 
     if (error) {
       setErrorMessage(error.message)
@@ -199,6 +236,7 @@ export default function TransactionsPage() {
     setFormData({
       type: 'income',
       amount: '',
+      title: '',
       description: '',
       category: '',
       date: new Date().toISOString().split('T')[0],
@@ -214,6 +252,7 @@ export default function TransactionsPage() {
     setFormData({
       type: transaction.type,
       amount: String(transaction.amount),
+      title: transaction.title ?? '',
       description: transaction.description ?? '',
       category: transaction.category ?? '',
       date: transaction.date,
@@ -241,6 +280,7 @@ export default function TransactionsPage() {
       const typeIndex = getCsvColumnIndex(header, ['type'])
       const dateIndex = getCsvColumnIndex(header, ['date'])
       const descriptionIndex = getCsvColumnIndex(header, ['description', 'name', 'title'])
+      const titleIndex = getCsvColumnIndex(header, ['title'])
       const categoryIndex = getCsvColumnIndex(header, ['category'])
       const amountIndex = getCsvColumnIndex(header, ['amount'])
       const currencyIndex = getCsvColumnIndex(header, ['currency'])
@@ -273,6 +313,7 @@ export default function TransactionsPage() {
             : null
         const date = parseTransactionDate(columns[dateIndex] ?? '')
         const description = columns[descriptionIndex]?.trim() ?? ''
+        const title = titleIndex >= 0 ? columns[titleIndex]?.trim() ?? '' : ''
         const category = columns[categoryIndex]?.trim() ?? ''
         const amount = parseLocalizedAmount(columns[amountIndex] ?? '')
         const currency = normalizeCurrencyCode(columns[currencyIndex] || currentCompany.currency || 'USD')
@@ -295,6 +336,7 @@ export default function TransactionsPage() {
         payloads[type].push({
           company_id: currentCompany.id,
           date,
+          title: title || description,
           description,
           category,
           amount: Number(amount.toFixed(2)),
@@ -303,12 +345,20 @@ export default function TransactionsPage() {
       }
 
       if (payloads.income.length > 0) {
-        const { error } = await supabase.from('incomes').insert(payloads.income)
+        let { error } = await supabase.from('incomes').insert(payloads.income)
+        if (isMissingOptionalColumn(error)) {
+          const fallback = await supabase.from('incomes').insert(payloads.income.map(stripTitle))
+          error = fallback.error
+        }
         if (error) throw error
       }
 
       if (payloads.expense.length > 0) {
-        const { error } = await supabase.from('expenses').insert(payloads.expense)
+        let { error } = await supabase.from('expenses').insert(payloads.expense)
+        if (isMissingOptionalColumn(error)) {
+          const fallback = await supabase.from('expenses').insert(payloads.expense.map(stripTitle))
+          error = fallback.error
+        }
         if (error) throw error
       }
 
@@ -373,6 +423,10 @@ export default function TransactionsPage() {
         .in('id', ids)
 
       if (error) {
+        if (bulkRename.field === 'title' && isMissingOptionalColumn(error)) {
+          setErrorMessage(t('transactions.titleMigrationRequired'))
+          return
+        }
         setErrorMessage(error.message)
         return
       }
@@ -412,6 +466,10 @@ export default function TransactionsPage() {
         .in('id', ids)
 
       if (error) {
+        if (selectedField === 'title' && isMissingOptionalColumn(error)) {
+          setErrorMessage(t('transactions.titleMigrationRequired'))
+          return
+        }
         setErrorMessage(error.message)
         return
       }
@@ -547,9 +605,11 @@ export default function TransactionsPage() {
   const renderPrintCell = (transaction: TransactionRow | undefined) => {
     if (!transaction) return null
     const categoryLabel = formatCategoryLabel(transaction.category, t)
+    const displayTitle = transaction.title || transaction.description || transaction.date
     const isDefaultBusinessIncome =
       currentCompany?.type === 'business' &&
       transaction.type === 'income' &&
+      !transaction.title &&
       (!transaction.description ||
         transaction.description === transaction.category ||
         transaction.description === categoryLabel)
@@ -560,7 +620,7 @@ export default function TransactionsPage() {
           <span className="font-medium">
             {isDefaultBusinessIncome
               ? new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)
-              : transaction.description || transaction.date}
+              : displayTitle}
           </span>
           <span className="whitespace-nowrap font-semibold">
             {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
@@ -569,6 +629,7 @@ export default function TransactionsPage() {
         {!isDefaultBusinessIncome && (
           <div className="text-xs text-slate-600">
             {new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)}
+            {transaction.title && transaction.description ? ` · ${transaction.description}` : ''}
             {transaction.type === 'expense' && transaction.category ? ` · ${categoryLabel}` : ''}
           </div>
         )}
@@ -760,6 +821,7 @@ export default function TransactionsPage() {
                 value={selectedField}
                 onChange={(value) => setSelectedField(value as BulkRenameField)}
                 options={[
+                  { value: 'title', label: t('transactions.titleLabel') },
                   { value: 'description', label: t('common.description') },
                   { value: 'category', label: t('common.category') },
                 ]}
@@ -805,6 +867,7 @@ export default function TransactionsPage() {
                   value={bulkRename.field}
                   onChange={(value) => setBulkRename({ ...bulkRename, field: value as BulkRenameField })}
                   options={[
+                    { value: 'title', label: t('transactions.titleLabel') },
                     { value: 'description', label: t('common.description') },
                     { value: 'category', label: t('common.category') },
                   ]}
@@ -879,10 +942,10 @@ export default function TransactionsPage() {
                           />
                           <span className="min-w-0">
                             <span className="block font-medium text-slate-900">
-                              {transaction.type === 'income' ? t('income.title') : t('expenses.title')} · {transaction.date}
+                              {transaction.type === 'income' ? t('income.title') : t('expenses.title')} · {transaction.title || transaction.description || transaction.date}
                             </span>
                             <span className="block truncate text-slate-600">
-                              {transaction.description || '-'} · {formatCategoryLabel(transaction.category, t)} · {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
+                              {transaction.title && transaction.description ? `${transaction.description} · ` : ''}{formatCategoryLabel(transaction.category, t)} · {transaction.date} · {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
                             </span>
                           </span>
                         </label>
@@ -935,6 +998,10 @@ export default function TransactionsPage() {
                 <input value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="w-full rounded-md border px-3 py-2" />
               </label>
               <label className="space-y-1 md:col-span-3">
+                <span className="text-sm font-medium">{t('transactions.titleLabel')}</span>
+                <input value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
+              </label>
+              <label className="space-y-1 md:col-span-3">
                 <span className="text-sm font-medium">{t('common.description')}</span>
                 <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
               </label>
@@ -953,7 +1020,7 @@ export default function TransactionsPage() {
           <div className="grid grid-cols-[auto_auto_1fr_auto_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid-cols-[auto_auto_1fr_160px_160px_auto]">
             <span>{t('transactions.select')}</span>
             <span>{t('transactions.type')}</span>
-            <span>{t('common.description')}</span>
+            <span>{t('transactions.titleLabel')}</span>
             <span className="hidden md:block">{t('common.category')}</span>
             <span className="text-right">{t('common.amount')}</span>
             <span className="sr-only">{t('common.copy')}</span>
@@ -976,7 +1043,7 @@ export default function TransactionsPage() {
                       ? [...current, key]
                       : current.filter((value) => value !== key))
                   }}
-                  aria-label={`${t('transactions.select')} ${transaction.description ?? transaction.date}`}
+                  aria-label={`${t('transactions.select')} ${transaction.title || transaction.description || transaction.date}`}
                   className="mt-0.5 h-4 w-4"
                 />
                 <span className={`inline-flex items-center gap-1 font-medium ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}>
@@ -984,8 +1051,10 @@ export default function TransactionsPage() {
                   {isIncome ? t('income.title') : t('expenses.title')}
                 </span>
                 <span>
-                  <span className="block font-medium text-slate-900">{transaction.description || '-'}</span>
-                  <span className="text-xs text-slate-500">{transaction.date}</span>
+                  <span className="block font-medium text-slate-900">{transaction.title || transaction.description || '-'}</span>
+                  <span className="text-xs text-slate-500">
+                    {transaction.title && transaction.description ? `${transaction.description} · ` : ''}{transaction.date}
+                  </span>
                 </span>
                 <span className="hidden text-slate-600 md:block">{formatCategoryLabel(transaction.category, t)}</span>
                 <span className="text-right font-semibold">

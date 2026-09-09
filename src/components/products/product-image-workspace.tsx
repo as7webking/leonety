@@ -1,7 +1,7 @@
 'use client'
 
 import { PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { RotateCcw, RotateCw, Trash2, UploadCloud } from 'lucide-react'
+import { Download, RotateCcw, RotateCw, Trash2, UploadCloud } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase-client'
 
@@ -27,6 +27,7 @@ interface ImageDetails {
 
 interface ProductImageWorkspaceProps {
   companyId: string
+  productName?: string
   value: string
   onChange: (url: string) => void
   t: (key: string) => string
@@ -203,7 +204,22 @@ function resizeCropFromHandle(
   return constrainCrop(next, details, aspect)
 }
 
-export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage, onError }: ProductImageWorkspaceProps) {
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName?: string
+    types?: Array<{
+      description: string
+      accept: Record<string, string[]>
+    }>
+  }) => Promise<{
+    createWritable: () => Promise<{
+      write: (data: Blob) => Promise<void>
+      close: () => Promise<void>
+    }>
+  }>
+}
+
+export function ProductImageWorkspace({ companyId, productName, value, onChange, t, onMessage, onError }: ProductImageWorkspaceProps) {
   const [supabase] = useState(() => createClient())
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
@@ -230,6 +246,7 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
   const [customSize, setCustomSize] = useState('1200')
   const [processing, setProcessing] = useState(false)
   const [lastOutput, setLastOutput] = useState<{ width: number; height: number; size: number } | null>(null)
+  const [lastDownloadName, setLastDownloadName] = useState('')
 
   useEffect(() => {
     const objectUrls = objectUrlsRef.current
@@ -312,6 +329,7 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
       setSourceDetails(imageDetails)
       setRotation(0)
       setLastOutput(null)
+      setLastDownloadName('')
       await initializeWorkingImage(objectUrl, imageDetails, 0)
       onMessage?.(t('products.imageReady'))
     } catch {
@@ -424,6 +442,53 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
     }, details, aspect))
   }
 
+  const createProcessedImageBlob = async () => {
+    if (!workingUrl || !details || !crop || !outputDimensions) {
+      throw new Error('image_source_missing')
+    }
+
+    const image = await loadImage(workingUrl)
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('image_canvas_failed')
+
+    canvas.width = outputDimensions.width
+    canvas.height = outputDimensions.height
+    if (outputFormat === 'image/jpeg') {
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+    }
+    context.drawImage(
+      image,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    )
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((nextBlob) => {
+        if (nextBlob) resolve(nextBlob)
+        else reject(new Error('image_canvas_failed'))
+      }, outputFormat, qualityMap[qualityMode])
+    })
+
+    const baseName = sanitizeFilename(productName || details.name)
+    const extension = extensionForFormat(outputFormat)
+    const filename = `${baseName}-${canvas.width}x${canvas.height}.${extension}`
+
+    return {
+      blob,
+      filename,
+      width: canvas.width,
+      height: canvas.height,
+    }
+  }
+
   const saveProcessedImage = async () => {
     if (!workingUrl || !details || !crop || !outputDimensions) {
       if (value) onMessage?.(t('products.imageReady'))
@@ -435,42 +500,11 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
     onError?.('')
 
     try {
-      const image = await loadImage(workingUrl)
-      const canvas = document.createElement('canvas')
-      const context = canvas.getContext('2d')
-      if (!context) throw new Error('image_canvas_failed')
-
-      canvas.width = outputDimensions.width
-      canvas.height = outputDimensions.height
-      if (outputFormat === 'image/jpeg') {
-        context.fillStyle = '#ffffff'
-        context.fillRect(0, 0, canvas.width, canvas.height)
-      }
-      context.drawImage(
-        image,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      )
-
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((nextBlob) => {
-          if (nextBlob) resolve(nextBlob)
-          else reject(new Error('image_canvas_failed'))
-        }, outputFormat, qualityMap[qualityMode])
-      })
-
-      const baseName = sanitizeFilename(details.name)
-      const extension = extensionForFormat(outputFormat)
-      const storagePath = `${companyId}/products/${Date.now()}-${baseName}.${extension}`
+      const processed = await createProcessedImageBlob()
+      const storagePath = `${companyId}/products/${Date.now()}-${processed.filename}`
       const { error: uploadError } = await supabase.storage
         .from('product-images')
-        .upload(storagePath, blob, {
+        .upload(storagePath, processed.blob, {
           contentType: outputFormat,
           upsert: false,
         })
@@ -479,7 +513,7 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
 
       const { data } = supabase.storage.from('product-images').getPublicUrl(storagePath)
       onChange(data.publicUrl)
-      setLastOutput({ width: canvas.width, height: canvas.height, size: blob.size })
+      setLastOutput({ width: processed.width, height: processed.height, size: processed.blob.size })
       onMessage?.(t('products.imageProcessed'))
     } catch {
       onError?.(t('products.imageCompressionFailed'))
@@ -487,6 +521,79 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
       setProcessing(false)
     }
   }
+
+  const downloadProcessedImage = async () => {
+    if (!workingUrl || !details || !crop || !outputDimensions) return
+
+    setProcessing(true)
+    onMessage?.('')
+    onError?.('')
+
+    try {
+      const processed = await createProcessedImageBlob()
+      const picker = (window as SaveFilePickerWindow).showSaveFilePicker
+
+      if (picker) {
+        try {
+          const handle = await picker({
+            suggestedName: processed.filename,
+            types: [{
+              description: outputFormat === 'image/webp' ? 'WebP image' : 'JPEG image',
+              accept: { [outputFormat]: [`.${extensionForFormat(outputFormat)}`] },
+            }],
+          })
+          const writable = await handle.createWritable()
+          await writable.write(processed.blob)
+          await writable.close()
+          setLastDownloadName(processed.filename)
+          onMessage?.(t('products.imageDownloaded'))
+          return
+        } catch (pickerError) {
+          if (pickerError instanceof DOMException && pickerError.name === 'AbortError') {
+            onMessage?.(t('products.imageDownloadCanceled'))
+            return
+          }
+        }
+      }
+
+      const href = URL.createObjectURL(processed.blob)
+      const link = document.createElement('a')
+      link.href = href
+      link.download = processed.filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(href), 1000)
+      setLastDownloadName(processed.filename)
+      onMessage?.(t('products.imageDownloadStarted'))
+    } catch {
+      onError?.(t('products.imageCompressionFailed'))
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const removeImage = () => {
+    if (!value && !workingUrl) return
+    if (!window.confirm(t('products.removeImageConfirm'))) return
+    onChange('')
+    setSourceUrl('')
+    setSourceDetails(null)
+    setWorkingUrl('')
+    setDetails(null)
+    setCrop(null)
+    setLastOutput(null)
+    setLastDownloadName('')
+    onMessage?.(t('products.imageRemoved'))
+  }
+
+  const imageStatus = lastDownloadName
+    ? t('products.imageStatus.downloaded')
+    : value
+      ? t('products.imageStatus.saved')
+      : workingUrl
+        ? t('products.imageStatus.edited')
+        : t('products.imageStatus.notDownloaded')
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -691,6 +798,8 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
           <p>{t('products.original')}: {details ? `${details.width} x ${details.height} · ${bytesLabel(details.size)}` : '-'}</p>
           <p>{t('products.output')}: {outputDimensions ? `${outputDimensions.width} x ${outputDimensions.height}` : '-'}</p>
           {lastOutput && <p>{t('products.savedOutput')}: {lastOutput.width} x {lastOutput.height} · {bytesLabel(lastOutput.size)}</p>}
+          <p>{t('products.imageStatus')}: {imageStatus}</p>
+          {lastDownloadName && <p>{t('products.downloadedFilename')}: {lastDownloadName}</p>}
           {outputDimensions?.enlarging && <p className="text-amber-700">{t('products.enlargementNotice')}</p>}
         </div>
 
@@ -698,7 +807,12 @@ export function ProductImageWorkspace({ companyId, value, onChange, t, onMessage
           <Button type="button" onClick={() => void saveProcessedImage()} disabled={processing || !workingUrl}>
             {processing ? t('products.processingImage') : t('products.saveProcessedImage')}
           </Button>
-          <Button type="button" variant="outline" onClick={() => onChange('')} disabled={!value}>
+          <Button type="button" variant="outline" onClick={() => void downloadProcessedImage()} disabled={processing || !workingUrl}>
+            <Download className="h-4 w-4" />
+            {t('products.downloadImage')}
+          </Button>
+          <p className="text-xs text-slate-500">{t('products.browserDownloadHint')}</p>
+          <Button type="button" variant="outline" onClick={removeImage} disabled={!value && !workingUrl}>
             <Trash2 className="h-4 w-4" />
             {t('products.removeImage')}
           </Button>

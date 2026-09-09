@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Barcode, BriefcaseBusiness, Building2, Plus, Save } from 'lucide-react'
+import { ArrowLeft, Barcode, BriefcaseBusiness, Building2, Plus, Save, UploadCloud } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { ProductImageWorkspace } from '@/components/products/product-image-workspace'
@@ -24,6 +24,10 @@ type ProductChannel =
   | 'google_merchant'
   | 'facebook_instagram'
   | 'tiktok_shop'
+  | 'ebay'
+  | 'amazon_marketplace'
+  | 'kleinanzeigen'
+  | 'olx'
   | 'uber_eats'
   | 'just_eat_takeaway'
   | 'glovo'
@@ -72,6 +76,25 @@ interface StoreConnectionStatus {
   lastSyncAt: string | null
 }
 
+interface ChannelOverride {
+  title: string
+  description: string
+  category: string
+  price: string
+}
+
+interface ProductChannelPreference {
+  provider: ProductChannel
+  publish_requested: boolean
+  overrides: Partial<ChannelOverride> | null
+}
+
+interface PublishResult {
+  channel: ProductChannel
+  status: 'published' | 'needs_action' | 'failed' | 'not_connected'
+  message: string
+}
+
 interface ProductForm {
   name: string
   sku: string
@@ -102,11 +125,30 @@ const productChannels: Array<{
   { channel: 'google_merchant', labelKey: 'integrations.googleMerchant', publishKey: 'products.publishChannel.googleMerchant', operational: false },
   { channel: 'facebook_instagram', labelKey: 'integrations.facebookInstagram', publishKey: 'products.publishChannel.facebookInstagram', operational: false },
   { channel: 'tiktok_shop', labelKey: 'integrations.tiktokShop', publishKey: 'products.publishChannel.tiktokShop', operational: false },
+  { channel: 'ebay', labelKey: 'integrations.ebay', publishKey: 'products.publishChannel.ebay', operational: false },
+  { channel: 'amazon_marketplace', labelKey: 'integrations.amazonMarketplace', publishKey: 'products.publishChannel.amazonMarketplace', operational: false },
+  { channel: 'kleinanzeigen', labelKey: 'integrations.kleinanzeigen', publishKey: 'products.publishChannel.kleinanzeigen', operational: false },
+  { channel: 'olx', labelKey: 'integrations.olx', publishKey: 'products.publishChannel.olx', operational: false },
   { channel: 'uber_eats', labelKey: 'integrations.uberEats', publishKey: 'products.publishChannel.uberEats', operational: false },
   { channel: 'just_eat_takeaway', labelKey: 'integrations.justEatTakeaway', publishKey: 'products.publishChannel.justEatTakeaway', operational: false },
   { channel: 'glovo', labelKey: 'integrations.glovo', publishKey: 'products.publishChannel.glovo', operational: false },
   { channel: 'iss_pos', labelKey: 'integrations.issPos', publishKey: 'products.publishChannel.issPos', operational: false },
 ]
+
+const migrationMissingCodes = ['42P01', '42703', 'PGRST200', 'PGRST204', 'PGRST205']
+
+function emptyChannelOverride(): ChannelOverride {
+  return {
+    title: '',
+    description: '',
+    category: '',
+    price: '',
+  }
+}
+
+function hasSchemaMissingCode(error: { code?: string; message?: string } | null | undefined) {
+  return Boolean(error && migrationMissingCodes.includes(error.code ?? ''))
+}
 
 function stringifyJson(value: unknown) {
   if (!value || (Array.isArray(value) && value.length === 0)) return ''
@@ -177,6 +219,11 @@ export default function ProductEditPage() {
   const [categories, setCategories] = useState<ProductCategory[]>([])
   const [syncs, setSyncs] = useState<ProductSync[]>([])
   const [storeConnections, setStoreConnections] = useState<Record<ProductChannel, StoreConnectionStatus>>({} as Record<ProductChannel, StoreConnectionStatus>)
+  const [selectedPublishChannels, setSelectedPublishChannels] = useState<ProductChannel[]>([])
+  const [channelOverrides, setChannelOverrides] = useState<Partial<Record<ProductChannel, ChannelOverride>>>({})
+  const [publishResults, setPublishResults] = useState<PublishResult[]>([])
+  const [publishingChannels, setPublishingChannels] = useState(false)
+  const [channelPreferencesAvailable, setChannelPreferencesAvailable] = useState(true)
   const [categoriesAvailable, setCategoriesAvailable] = useState(true)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [editorSection, setEditorSection] = useState<ProductEditorSection>('general')
@@ -194,7 +241,7 @@ export default function ProductEditPage() {
     setLoading(true)
     setError('')
 
-    const [productResult, categoryResult, syncResult, integrationResult] = await Promise.all([
+    const [productResult, categoryResult, syncResult, integrationResult, preferenceResult] = await Promise.all([
       supabase
         .from('products')
         .select('*')
@@ -214,6 +261,11 @@ export default function ProductEditPage() {
       fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
         .then((response) => response.ok ? response.json() : { integrations: [] })
         .catch(() => ({ integrations: [] })),
+      supabase
+        .from('product_channel_preferences')
+        .select('provider, publish_requested, overrides')
+        .eq('company_id', currentCompany.id)
+        .eq('product_id', productId),
     ])
 
     if (productResult.error) {
@@ -245,8 +297,31 @@ export default function ProductEditPage() {
       setError(categoryResult.error.message)
     }
 
+    const loadedSyncs = !syncResult.error ? (syncResult.data ?? []) as ProductSync[] : []
+
     if (!syncResult.error) {
-      setSyncs((syncResult.data ?? []) as ProductSync[])
+      setSyncs(loadedSyncs)
+    }
+
+    if (!preferenceResult.error) {
+      const preferences = (preferenceResult.data ?? []) as ProductChannelPreference[]
+      setChannelPreferencesAvailable(true)
+      setSelectedPublishChannels(preferences.filter((preference) => preference.publish_requested).map((preference) => preference.provider))
+      setChannelOverrides(preferences.reduce<Partial<Record<ProductChannel, ChannelOverride>>>((acc, preference) => {
+        if (preference.overrides) {
+          acc[preference.provider] = {
+            ...emptyChannelOverride(),
+            ...preference.overrides,
+          }
+        }
+        return acc
+      }, {}))
+    } else if (hasSchemaMissingCode(preferenceResult.error)) {
+      setChannelPreferencesAvailable(false)
+      setSelectedPublishChannels(loadedSyncs.filter((sync) => Boolean(sync.external_product_id)).map((sync) => sync.channel))
+      setChannelOverrides({})
+    } else {
+      setError(preferenceResult.error.message)
     }
 
     const connectionMap = {} as Record<ProductChannel, StoreConnectionStatus>
@@ -272,6 +347,146 @@ export default function ProductEditPage() {
     () => categories.find((category) => category.name === form?.category.trim()),
     [categories, form?.category]
   )
+
+  const availablePublishChannels = useMemo(
+    () => productChannels
+      .filter((channel) => channel.operational && storeConnections[channel.channel]?.status === 'connected')
+      .map((channel) => channel.channel),
+    [storeConnections]
+  )
+
+  function togglePublishChannel(channel: ProductChannel, checked: boolean) {
+    setSelectedPublishChannels((current) => {
+      if (checked) return Array.from(new Set([...current, channel]))
+      return current.filter((item) => item !== channel)
+    })
+
+    if (channel === 'woocommerce' && form) {
+      setForm({ ...form, publish_to_woocommerce: checked })
+    }
+  }
+
+  function updateChannelOverride(channel: ProductChannel, patch: Partial<ChannelOverride>) {
+    setChannelOverrides((current) => ({
+      ...current,
+      [channel]: {
+        ...emptyChannelOverride(),
+        ...(current[channel] ?? {}),
+        ...patch,
+      },
+    }))
+  }
+
+  function validateChannel(channel: ProductChannel) {
+    if (!form) return [t('products.channelMissingName')]
+    const override = channelOverrides[channel]
+    const title = override?.title.trim() || form.name.trim()
+    const description = override?.description.trim() || form.description.trim()
+    const category = override?.category.trim() || form.category.trim()
+    const price = override?.price.trim() || form.selling_price.trim()
+    const issues: string[] = []
+
+    if (!title) issues.push(t('products.channelMissingName'))
+    if (!price || Number(price) <= 0) issues.push(t('products.channelMissingPrice'))
+    if (['ebay', 'amazon_marketplace', 'kleinanzeigen', 'olx', 'uber_eats', 'just_eat_takeaway', 'glovo'].includes(channel) && !category) {
+      issues.push(t('products.channelMissingCategory'))
+    }
+    if (['amazon_marketplace'].includes(channel) && !form.barcode.trim()) {
+      issues.push(t('products.channelMissingEan'))
+    }
+    if (['ebay', 'amazon_marketplace', 'kleinanzeigen', 'olx'].includes(channel) && !description) {
+      issues.push(t('products.channelMissingDescription'))
+    }
+
+    return issues
+  }
+
+  async function saveChannelPreferences(productIdToSave: string) {
+    if (!currentCompany) return true
+
+    const rows = productChannels.map((channel) => ({
+      company_id: currentCompany.id,
+      product_id: productIdToSave,
+      provider: channel.channel,
+      publish_requested: selectedPublishChannels.includes(channel.channel),
+      overrides: channelOverrides[channel.channel] ?? {},
+      updated_at: new Date().toISOString(),
+    }))
+
+    const { error: preferenceError } = await supabase
+      .from('product_channel_preferences')
+      .upsert(rows, { onConflict: 'company_id,product_id,provider' })
+
+    if (hasSchemaMissingCode(preferenceError)) {
+      setChannelPreferencesAvailable(false)
+      return false
+    }
+
+    if (preferenceError) throw preferenceError
+    setChannelPreferencesAvailable(true)
+    return true
+  }
+
+  async function publishChannels(channels: ProductChannel[]) {
+    if (!currentCompany || !product || !form || publishingChannels) return
+
+    const uniqueChannels = Array.from(new Set(channels))
+    if (uniqueChannels.length === 0) {
+      setError(t('products.noAvailablePublishChannels'))
+      return
+    }
+
+    setPublishingChannels(true)
+    setMessage('')
+    setError('')
+
+    const results: PublishResult[] = []
+
+    for (const channel of uniqueChannels) {
+      const config = productChannels.find((item) => item.channel === channel)
+      const connection = storeConnections[channel]
+      const label = config ? t(config.labelKey) : channel
+
+      if (connection?.status !== 'connected') {
+        results.push({ channel, status: 'not_connected', message: t('products.connectIntegration') })
+        continue
+      }
+
+      if (!config?.operational) {
+        results.push({ channel, status: 'needs_action', message: t('products.channelApprovalRequired') })
+        continue
+      }
+
+      const issues = validateChannel(channel)
+      if (issues.length > 0) {
+        results.push({ channel, status: 'needs_action', message: issues.join(', ') })
+        continue
+      }
+
+      if (channel === 'woocommerce') {
+        const response = await fetch('/api/woocommerce/products/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyId: currentCompany.id, productId: product.id }),
+        })
+        const payload = await response.json().catch(() => ({}))
+
+        if (response.ok) {
+          results.push({ channel, status: 'published', message: t('products.channelPublished') })
+        } else {
+          results.push({ channel, status: 'failed', message: payload.error ?? t('products.channelFailed') })
+        }
+        continue
+      }
+
+      results.push({ channel, status: 'needs_action', message: `${label}: ${t('products.channelApprovalRequired')}` })
+    }
+
+    setPublishResults(results)
+    setMessage(t('products.publishResultsReady'))
+    setPublishingChannels(false)
+    await loadProduct()
+  }
 
   const handleCreateCategory = async () => {
     if (!currentCompany || !form || !newCategoryName.trim()) return
@@ -345,7 +560,9 @@ export default function ProductEditPage() {
       payload.category_id = matchedCategory?.id ?? null
     }
 
-    if (!form.publish_to_woocommerce) {
+    const publishWooCommerce = form.publish_to_woocommerce || selectedPublishChannels.includes('woocommerce')
+
+    if (!publishWooCommerce) {
       payload.woo_product_type = 'simple'
       payload.woo_attributes = []
       payload.woo_variants = []
@@ -367,9 +584,17 @@ export default function ProductEditPage() {
       return
     }
 
-    setMessage(t('products.updated'))
+    let shouldReload = true
+    try {
+      const preferencesSaved = await saveChannelPreferences(product.id)
+      setMessage(preferencesSaved ? t('products.updated') : `${t('products.updated')} ${t('products.channelPreferencesMigrationRequired')}`)
+    } catch {
+      setError(t('products.channelPreferencesSaveFailed'))
+      shouldReload = false
+    }
+
     setSaving(false)
-    await loadProduct()
+    if (shouldReload) await loadProduct()
   }
 
   const goBack = () => {
@@ -531,6 +756,7 @@ export default function ProductEditPage() {
             <CardContent>
               <ProductImageWorkspace
                 companyId={currentCompany.id}
+                productName={form.name}
                 value={form.image_url}
                 onChange={(imageUrl) => setForm({ ...form, image_url: imageUrl })}
                 t={t}
@@ -548,6 +774,11 @@ export default function ProductEditPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-slate-600">{t('products.channelsDescription')}</p>
+              {!channelPreferencesAvailable && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  {t('products.channelPreferencesMigrationRequired')}
+                </div>
+              )}
               <div className="grid gap-3 md:grid-cols-2">
                 {productChannels.map((channel) => {
                   const connection = storeConnections[channel.channel]
@@ -555,15 +786,16 @@ export default function ProductEditPage() {
                   const connected = connection?.status === 'connected'
                   const published = Boolean(sync?.external_product_id)
                   const disabled = !connected || !channel.operational
+                  const requested = selectedPublishChannels.includes(channel.channel)
                   return (
                     <div key={channel.channel} className="rounded-lg border border-slate-200 p-3">
                       <label className={`flex items-start gap-2 text-sm ${disabled ? 'text-slate-400' : 'text-slate-700'}`}>
                         <input
                           type="checkbox"
-                          checked={channel.channel === 'woocommerce' ? form.publish_to_woocommerce : published}
+                          checked={requested}
                           disabled={disabled}
                           onChange={(event) => {
-                            if (channel.channel === 'woocommerce') setForm({ ...form, publish_to_woocommerce: event.target.checked })
+                            togglePublishChannel(channel.channel, event.target.checked)
                           }}
                           className="mt-0.5 h-4 w-4"
                         />
@@ -582,21 +814,81 @@ export default function ProductEditPage() {
                 })}
               </div>
 
-              {form.publish_to_woocommerce && (
+              {selectedPublishChannels.length > 0 && (
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">{t('products.channelReviewTitle')}</h3>
+                    <p className="text-xs text-slate-500">{t('products.channelReviewDescription')}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedPublishChannels.map((channel) => {
+                      const config = productChannels.find((item) => item.channel === channel)
+                      const issues = validateChannel(channel)
+                      const override = channelOverrides[channel] ?? emptyChannelOverride()
+                      return (
+                        <details key={channel} className="rounded-md border border-slate-200 bg-white p-3" open={issues.length > 0}>
+                          <summary className="cursor-pointer text-sm font-medium text-slate-800">
+                            {config ? t(config.labelKey) : channel} · {issues.length === 0 ? t('products.channelReady') : t('products.channelNeedsAction')}
+                          </summary>
+                          {issues.length > 0 && (
+                            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-700">
+                              {issues.map((issue) => <li key={issue}>{issue}</li>)}
+                            </ul>
+                          )}
+                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            <input value={override.title} onChange={(event) => updateChannelOverride(channel, { title: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.overrideTitle')} />
+                            <input value={override.category} onChange={(event) => updateChannelOverride(channel, { category: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.overrideCategory')} />
+                            <input value={override.price} onChange={(event) => updateChannelOverride(channel, { price: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.overridePrice')} inputMode="decimal" />
+                            <textarea value={override.description} onChange={(event) => updateChannelOverride(channel, { description: event.target.value })} className="min-h-20 rounded-md border px-3 py-2 text-sm md:col-span-2" placeholder={t('products.overrideDescription')} />
+                          </div>
+                        </details>
+                      )
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" onClick={() => void publishChannels(selectedPublishChannels)} disabled={publishingChannels}>
+                      <UploadCloud className="h-4 w-4" />
+                      {publishingChannels ? t('common.loading') : t('products.publishSelected')}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => void publishChannels(availablePublishChannels)} disabled={publishingChannels}>
+                      {t('products.publishAllAvailable')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {publishResults.length > 0 && (
+                <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+                  <h3 className="text-sm font-semibold text-slate-950">{t('products.publishResults')}</h3>
+                  {publishResults.map((result) => {
+                    const config = productChannels.find((item) => item.channel === result.channel)
+                    return (
+                      <div key={result.channel} className="flex flex-col gap-1 rounded-md bg-slate-50 p-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <span className="font-medium">{config ? t(config.labelKey) : result.channel}</span>
+                        <span className={result.status === 'published' ? 'text-green-700' : result.status === 'failed' ? 'text-red-700' : 'text-amber-700'}>
+                          {result.status === 'published' ? t('products.channelPublished') : result.message}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {selectedPublishChannels.includes('woocommerce') && (
                 <label className="block space-y-1">
                   <span className="text-sm font-medium">{t('woocommerce.productType')}</span>
                   <AppSelect value={form.woo_product_type} onChange={(value) => setForm({ ...form, woo_product_type: value as 'simple' | 'variable' })} options={[{ value: 'simple', label: t('woocommerce.simpleProduct') }, { value: 'variable', label: t('woocommerce.variableProduct') }]} />
                 </label>
               )}
-              {form.publish_to_woocommerce && form.woo_product_type === 'variable' && (
+              {selectedPublishChannels.includes('woocommerce') && form.woo_product_type === 'variable' && (
                 <div className="grid gap-4">
                   <label className="space-y-1">
                     <span className="text-sm font-medium">{t('woocommerce.attributesJson')}</span>
-                    <textarea value={form.woo_attributes} onChange={(event) => setForm({ ...form, woo_attributes: event.target.value })} className="min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder='[{"name":"Size","options":["S","M","L"]}]' />
+                    <textarea value={form.woo_attributes} onChange={(event) => setForm({ ...form, woo_attributes: event.target.value })} className="min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder={t('woocommerce.attributesPlaceholder')} />
                   </label>
                   <label className="space-y-1">
                     <span className="text-sm font-medium">{t('woocommerce.variantsJson')}</span>
-                    <textarea value={form.woo_variants} onChange={(event) => setForm({ ...form, woo_variants: event.target.value })} className="min-h-28 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder='[{"sku":"TS-S","price":19.99,"stock_quantity":5,"attributes":{"Size":"S"}}]' />
+                    <textarea value={form.woo_variants} onChange={(event) => setForm({ ...form, woo_variants: event.target.value })} className="min-h-28 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder={t('woocommerce.variantsPlaceholder')} />
                     <span className="text-xs text-slate-500">{t('woocommerce.jsonHelp')}</span>
                   </label>
                 </div>

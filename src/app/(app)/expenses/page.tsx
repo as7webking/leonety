@@ -24,9 +24,20 @@ import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTrans
 interface Expense extends ExpenseForm {
   id: string
   company_id: string
+  title?: string | null
 }
 
-type ExpenseFormState = Omit<ExpenseForm, 'amount'> & { amount: string }
+type ExpenseFormState = Omit<ExpenseForm, 'amount'> & { amount: string; title: string }
+
+function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
+  return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
+}
+
+function stripTitle<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload }
+  delete next.title
+  return next
+}
 
 export default function ExpensesPage() {
   const router = useRouter()
@@ -40,6 +51,7 @@ export default function ExpensesPage() {
   const [editingEntry, setEditingEntry] = useState<Expense | null>(null)
   const [formData, setFormData] = useState<ExpenseFormState>({
     amount: '',
+    title: '',
     description: '',
     category: '',
     date: new Date().toISOString().split('T')[0],
@@ -101,11 +113,11 @@ export default function ExpensesPage() {
       setExpenses((data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
     } catch (error) {
       console.error('Failed to load expenses:', error)
-      setErrorMessage('Failed to load expense data')
+      setErrorMessage(t('expenses.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [currentCompany, supabase])
+  }, [currentCompany, supabase, t])
 
   useEffect(() => {
     loadExpenses()
@@ -144,11 +156,12 @@ export default function ExpensesPage() {
     setErrorMessage('')
 
     if (!currentCompany) {
-      setErrorMessage('Create a workspace first')
+      setErrorMessage(t('common.noWorkspaceSelected'))
       return
     }
 
     try {
+      const desiredTitle = formData.title.trim()
       const isOtherExpense = formData.category === 'Other'
       const parsedAmount = validateSignedAmountInput(formData.amount, {
         required: t('transactions.amountRequired'),
@@ -161,6 +174,7 @@ export default function ExpensesPage() {
         description: isOtherExpense ? customCategory : formData.description,
       })
       const payload = {
+        title: desiredTitle || null,
         description: validatedData.description,
         date: validatedData.date,
         category: validatedData.category,
@@ -168,23 +182,39 @@ export default function ExpensesPage() {
         currency: validatedData.currency,
         company_id: currentCompany.id,
       }
+      let titleFallback = false
 
       if (editingEntry) {
-        const { error } = await supabase
+        let { error } = await supabase
           .from('expenses')
           .update(payload)
           .eq('id', editingEntry.id)
           .eq('company_id', currentCompany.id)
+        if (isMissingOptionalColumn(error)) {
+          const fallback = await supabase
+            .from('expenses')
+            .update(stripTitle(payload))
+            .eq('id', editingEntry.id)
+            .eq('company_id', currentCompany.id)
+          error = fallback.error
+          titleFallback = !error && Boolean(desiredTitle)
+        }
         if (error) throw error
-        setSuccessMessage(t('expenses.updated'))
+        setSuccessMessage(titleFallback ? `${t('expenses.updated')} ${t('transactions.titleMigrationRequired')}` : t('expenses.updated'))
       } else {
-        const { error } = await supabase.from('expenses').insert(payload)
+        let { error } = await supabase.from('expenses').insert(payload)
+        if (isMissingOptionalColumn(error)) {
+          const fallback = await supabase.from('expenses').insert(stripTitle(payload))
+          error = fallback.error
+          titleFallback = !error && Boolean(desiredTitle)
+        }
         if (error) throw error
-        setSuccessMessage(t('expenses.created'))
+        setSuccessMessage(titleFallback ? `${t('expenses.created')} ${t('transactions.titleMigrationRequired')}` : t('expenses.created'))
       }
 
       setFormData({
         amount: '',
+        title: '',
         description: '',
         category: '',
         currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'),
@@ -207,6 +237,7 @@ export default function ExpensesPage() {
     setCustomCategory(entry.category === 'Other' ? entry.description : '')
     setFormData({
       amount: String(entry.amount),
+      title: entry.title ?? '',
       description: entry.description,
       category: entry.category,
       date: entry.date,
@@ -237,8 +268,8 @@ export default function ExpensesPage() {
       return
     }
 
-    const headers = [t('common.date'), t('common.description'), t('common.category'), t('common.amount'), t('common.currency')]
-    const rows = sortedExpenses.map((expense) => [expense.date, expense.description, formatCategoryLabel(expense.category, t), expense.amount, expense.currency])
+    const headers = [t('common.date'), t('transactions.titleLabel'), t('common.description'), t('common.category'), t('common.amount'), t('common.currency')]
+    const rows = sortedExpenses.map((expense) => [expense.date, expense.title ?? '', expense.description, formatCategoryLabel(expense.category, t), expense.amount, expense.currency])
     const csv = buildCsv([headers, ...rows])
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -322,12 +353,13 @@ export default function ExpensesPage() {
     try {
       const rows = parseCsv(await file.text())
       if (rows.length < 2) {
-        throw new Error('CSV must contain a header row and at least one data row')
+        throw new Error(t('transactions.importEmpty'))
       }
 
       const header = rows[0].map(normalizeCsvHeader)
       const dateIndex = getCsvColumnIndex(header, ['date'])
       const descriptionIndex = getCsvColumnIndex(header, ['description', 'name', 'title'])
+      const titleIndex = getCsvColumnIndex(header, ['title'])
       const categoryIndex = getCsvColumnIndex(header, ['category'])
       const amountIndex = getCsvColumnIndex(header, ['amount'])
       const currencyIndex = getCsvColumnIndex(header, ['currency'])
@@ -340,6 +372,7 @@ export default function ExpensesPage() {
         const rowNumber = index + 2
         const date = parseTransactionDate(columns[dateIndex] ?? '')
         const description = columns[descriptionIndex]?.trim()
+        const title = titleIndex >= 0 ? columns[titleIndex]?.trim() ?? '' : ''
         const category = columns[categoryIndex]?.trim()
         const amount = parseLocalizedAmount(columns[amountIndex] ?? '')
         const currency = normalizeCurrencyCode(columns[currencyIndex] || currentCompany.currency || 'USD')
@@ -371,6 +404,7 @@ export default function ExpensesPage() {
         return {
           company_id: currentCompany.id,
           date,
+          title: title || description,
           description,
           category,
           amount: Number(amount.toFixed(2)),
@@ -378,7 +412,11 @@ export default function ExpensesPage() {
         }
       })
 
-      const { error } = await supabase.from('expenses').insert(payload)
+      let { error } = await supabase.from('expenses').insert(payload)
+      if (isMissingOptionalColumn(error)) {
+        const fallback = await supabase.from('expenses').insert(payload.map(stripTitle))
+        error = fallback.error
+      }
       if (error) throw error
 
       setSuccessMessage(t('transactions.importedRows').replace('{count}', String(payload.length)))
@@ -521,6 +559,7 @@ export default function ExpensesPage() {
               <thead>
                 <tr>
                   <th className="border p-2 text-left">{t('common.date')}</th>
+                  <th className="border p-2 text-left">{t('transactions.titleLabel')}</th>
                   <th className="border p-2 text-left">{t('common.description')}</th>
                   <th className="border p-2 text-left">{t('common.category')}</th>
                   <th className="border p-2 text-right">{t('common.amount')}</th>
@@ -530,6 +569,7 @@ export default function ExpensesPage() {
                 {groupItems.map((expense) => (
                   <tr key={`print-${expense.id}`}>
                     <td className="border p-2">{new Date(`${expense.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
+                    <td className="border p-2">{expense.title || '-'}</td>
                     <td className="border p-2">{expense.description}</td>
                     <td className="border p-2">{formatCategoryLabel(expense.category, t)}</td>
                     <td className="border p-2 text-right">{renderPrintAmount(expense)}</td>
@@ -558,6 +598,10 @@ export default function ExpensesPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('common.amount')}</label>
                 <input type="text" inputMode="decimal" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} required />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">{t('transactions.titleLabel')}</label>
+                <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
               </div>
               {formData.category !== 'Other' && (
                 <div>
@@ -619,9 +663,9 @@ export default function ExpensesPage() {
             <Card>
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
-                  <p className="font-medium">{expense.description}</p>
+                  <p className="font-medium">{expense.title || expense.description}</p>
                   <p className="text-sm text-muted-foreground">
-                    {formatCategoryLabel(expense.category, t)} · {expense.date}
+                    {expense.title && expense.description ? `${expense.description} · ` : ''}{formatCategoryLabel(expense.category, t)} · {expense.date}
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -655,6 +699,7 @@ export default function ExpensesPage() {
                 <CardContent className="p-4">
                   <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
                     <input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} aria-label={t('common.amount')} required />
+                    <input value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} aria-label={t('transactions.titleLabel')} />
                     <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} required />
                     <input value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.category')} required />
                     <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.date')} required />

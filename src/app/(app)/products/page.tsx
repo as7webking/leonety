@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { createClient } from '@/lib/supabase-client'
 
@@ -70,6 +71,10 @@ type ProductChannel =
   | 'google_merchant'
   | 'facebook_instagram'
   | 'tiktok_shop'
+  | 'ebay'
+  | 'amazon_marketplace'
+  | 'kleinanzeigen'
+  | 'olx'
   | 'uber_eats'
   | 'just_eat_takeaway'
   | 'glovo'
@@ -142,6 +147,10 @@ const productChannels: Array<{
   { channel: 'google_merchant', labelKey: 'integrations.googleMerchant', publishKey: 'products.publishChannel.googleMerchant', operational: false },
   { channel: 'facebook_instagram', labelKey: 'integrations.facebookInstagram', publishKey: 'products.publishChannel.facebookInstagram', operational: false },
   { channel: 'tiktok_shop', labelKey: 'integrations.tiktokShop', publishKey: 'products.publishChannel.tiktokShop', operational: false },
+  { channel: 'ebay', labelKey: 'integrations.ebay', publishKey: 'products.publishChannel.ebay', operational: false },
+  { channel: 'amazon_marketplace', labelKey: 'integrations.amazonMarketplace', publishKey: 'products.publishChannel.amazonMarketplace', operational: false },
+  { channel: 'kleinanzeigen', labelKey: 'integrations.kleinanzeigen', publishKey: 'products.publishChannel.kleinanzeigen', operational: false },
+  { channel: 'olx', labelKey: 'integrations.olx', publishKey: 'products.publishChannel.olx', operational: false },
   { channel: 'uber_eats', labelKey: 'integrations.uberEats', publishKey: 'products.publishChannel.uberEats', operational: false },
   { channel: 'just_eat_takeaway', labelKey: 'integrations.justEatTakeaway', publishKey: 'products.publishChannel.justEatTakeaway', operational: false },
   { channel: 'glovo', labelKey: 'integrations.glovo', publishKey: 'products.publishChannel.glovo', operational: false },
@@ -392,6 +401,8 @@ export default function ProductsPage() {
   const editorRef = useRef<HTMLDivElement | null>(null)
   const firstEditorInputRef = useRef<HTMLInputElement | null>(null)
   const productImageInputRef = useRef<HTMLInputElement | null>(null)
+
+  useBodyScrollLock(showForm || Boolean(viewingProduct))
 
   const loadProducts = useCallback(async () => {
     if (!currentCompany) {
@@ -1086,6 +1097,13 @@ export default function ProductsPage() {
             { value: 'google_merchant', label: 'Google Merchant' },
             { value: 'facebook_instagram', label: 'Facebook / Instagram' },
             { value: 'tiktok_shop', label: 'TikTok Shop' },
+            { value: 'ebay', label: 'eBay' },
+            { value: 'amazon_marketplace', label: 'Amazon Marketplace' },
+            { value: 'kleinanzeigen', label: 'Kleinanzeigen' },
+            { value: 'olx', label: 'OLX' },
+            { value: 'uber_eats', label: 'Uber Eats' },
+            { value: 'just_eat_takeaway', label: 'Just Eat / Takeaway / Lieferando' },
+            { value: 'glovo', label: 'Glovo' },
             { value: 'iss_pos', label: 'ISS POS' },
             { value: 'none', label: t('products.noProvider') },
           ]}
@@ -1144,8 +1162,8 @@ export default function ProductsPage() {
       {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
       {showForm && (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" role="presentation">
-          <div ref={editorRef} role="dialog" aria-modal="true" aria-labelledby="product-editor-title" className="flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh] sm:max-w-5xl sm:rounded-xl">
+        <div className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-slate-950/50 p-0 pt-[max(0.5rem,env(safe-area-inset-top))] sm:p-4 sm:pt-10" role="presentation">
+          <div ref={editorRef} role="dialog" aria-modal="true" aria-labelledby="product-editor-title" className="flex max-h-[96dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-w-5xl sm:rounded-xl">
             <div className="flex items-start justify-between gap-4 border-b p-4 sm:p-5">
               <div className="min-w-0">
                 <h2 id="product-editor-title" className="truncate text-xl font-semibold text-slate-950">{editing ? `${t('products.edit')}: ${editing.name}` : t('products.add')}</h2>
@@ -1334,11 +1352,11 @@ export default function ProductsPage() {
                 <>
                   <label className="space-y-1 md:col-span-2 xl:col-span-3">
                     <span className="text-sm font-medium">{t('woocommerce.attributesJson')}</span>
-                    <textarea value={form.woo_attributes} onChange={(e) => setForm({ ...form, woo_attributes: e.target.value })} className="min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder='[{"name":"Size","options":["S","M","L"]}]' />
+                    <textarea value={form.woo_attributes} onChange={(e) => setForm({ ...form, woo_attributes: e.target.value })} className="min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder={t('woocommerce.attributesPlaceholder')} />
                   </label>
                   <label className="space-y-1 md:col-span-2 xl:col-span-3">
                     <span className="text-sm font-medium">{t('woocommerce.variantsJson')}</span>
-                    <textarea value={form.woo_variants} onChange={(e) => setForm({ ...form, woo_variants: e.target.value })} className="min-h-28 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder='[{"sku":"TS-S-BLACK","price":19.99,"stock_quantity":5,"attributes":{"Size":"S","Color":"Black"}}]' />
+                    <textarea value={form.woo_variants} onChange={(e) => setForm({ ...form, woo_variants: e.target.value })} className="min-h-28 w-full rounded-md border px-3 py-2 font-mono text-xs" placeholder={t('woocommerce.variantsPlaceholder')} />
                     <span className="text-xs text-slate-500">{t('woocommerce.jsonHelp')}</span>
                   </label>
                 </>
@@ -1420,7 +1438,7 @@ export default function ProductsPage() {
       )}
 
       {viewingProduct && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 px-4 py-6">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/50 px-4 py-[max(1rem,env(safe-area-inset-top))] sm:py-10">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white shadow-2xl">
             <div className="grid gap-0 md:grid-cols-[260px_1fr]">
               <div className="bg-slate-50 p-5">
