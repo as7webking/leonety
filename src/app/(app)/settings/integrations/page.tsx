@@ -1082,7 +1082,7 @@ export default function StoreIntegrationsPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>{labels.title}</CardTitle>
+            <CardTitle>{t('integrations.addIntegration')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSave} className="space-y-5">
@@ -1095,18 +1095,14 @@ export default function StoreIntegrationsPage() {
                 />
               </label>
 
-              <div className="flex flex-col gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p>{labels.serverOnly}</p>
-                  <p className="mt-1">{labels.setupNote}</p>
-                  {selectedProvider.requiresApproval && <p className="mt-2 font-medium">{labels.setupRequired}</p>}
+                  <p>{selectedProvider.requiresApproval ? labels.setupRequired : labels.credentialsNeverExposed}</p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="shrink-0 bg-white">
                   <BookOpen className="h-4 w-4" />
                   {t('integrations.setupGuide')}
                 </Button>
-                {provider === 'whatsapp_business' && <p className="mt-2 font-medium">{labels.whatsappGuide}</p>}
-                {provider === 'iss_pos' && <p className="mt-2 font-medium">{labels.issSetup}</p>}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -1240,8 +1236,54 @@ export default function StoreIntegrationsPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          {providerOptions.map((item) => {
+        <div className="space-y-6">
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">{t('integrations.connectedIntegrations')}</h2>
+              <p className="text-sm text-slate-500">{t('integrations.connectedIntegrationsDescription')}</p>
+            </div>
+            {integrations.filter((integration) => integration.status === 'connected').length === 0 ? (
+              <Card>
+                <CardContent className="p-5 text-sm text-slate-500">{t('integrations.noConnectedIntegrations')}</CardContent>
+              </Card>
+            ) : integrations.filter((integration) => integration.status === 'connected').map((integration) => {
+              const option = providerOptions.find((item) => item.value === integration.provider)
+              return (
+                <Card key={integration.id}>
+                  <CardContent className="p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <Store className="mb-3 h-5 w-5 text-slate-500" />
+                        <h3 className="font-semibold text-slate-950">{option?.label ?? integration.provider}</h3>
+                        <p className="mt-1 break-all text-sm text-slate-500">{integration.storeName || integration.storeUrl || integration.merchantId || '-'}</p>
+                        <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          {labels.lastSync}: {formatDate(integration.lastSyncAt, locale) || labels.neverSynced}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs text-green-700">
+                          <Plug className="h-3.5 w-3.5" />
+                          {labels.connected}
+                        </span>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setProvider(integration.provider)}>{t('integrations.configure')}</Button>
+                        <Link href={`/app/settings/integrations/${encodeURIComponent(integration.id)}`}>
+                          <Button type="button" variant="outline" size="sm">{labels.openConnection}</Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </section>
+
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">{t('integrations.availableIntegrations')}</h2>
+              <p className="text-sm text-slate-500">{t('integrations.availableIntegrationsDescription')}</p>
+            </div>
+          {providerOptions.filter((item) => !integrations.some((row) => row.provider === item.value && row.status === 'connected')).map((item) => {
             const integration = integrations.find((row) => row.provider === item.value)
             const status = integration?.status ?? 'not_connected'
 
@@ -1262,6 +1304,9 @@ export default function StoreIntegrationsPage() {
                           {labels.openConnection}
                         </Link>
                       )}
+                      <button type="button" onClick={() => setProvider(item.value)} className="mt-3 block text-sm font-medium text-blue-600 hover:text-blue-700">
+                        {t('integrations.configure')}
+                      </button>
                     </div>
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
                       status === 'connected'
@@ -1278,6 +1323,7 @@ export default function StoreIntegrationsPage() {
               </Card>
             )
           })}
+          </section>
         </div>
       </div>
 

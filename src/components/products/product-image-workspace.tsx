@@ -247,6 +247,7 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
   const [processing, setProcessing] = useState(false)
   const [lastOutput, setLastOutput] = useState<{ width: number; height: number; size: number } | null>(null)
   const [lastDownloadName, setLastDownloadName] = useState('')
+  const [importingExistingImage, setImportingExistingImage] = useState(false)
 
   useEffect(() => {
     const objectUrls = objectUrlsRef.current
@@ -334,6 +335,51 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
       onMessage?.(t('products.imageReady'))
     } catch {
       onError?.(t('products.imageCompressionFailed'))
+    }
+  }
+
+  const handleImportExistingImage = async () => {
+    if (!value || importingExistingImage || processing) return
+
+    setImportingExistingImage(true)
+    onMessage?.('')
+    onError?.('')
+
+    try {
+      const response = await fetch('/api/product-images/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          imageUrl: value,
+          productName,
+        }),
+      })
+      const payload = await response.json().catch(() => ({})) as { imageUrl?: string; size?: number; error?: string }
+
+      if (!response.ok || !payload.imageUrl) {
+        throw new Error(payload.error || 'image_import_failed')
+      }
+
+      onChange(payload.imageUrl)
+      const image = await loadImage(payload.imageUrl)
+      const imageDetails = {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        size: typeof payload.size === 'number' ? payload.size : null,
+        name: productName || 'product-image',
+      }
+      setSourceUrl(payload.imageUrl)
+      setSourceDetails(imageDetails)
+      setRotation(0)
+      setLastOutput(null)
+      setLastDownloadName('')
+      await initializeWorkingImage(payload.imageUrl, imageDetails, 0)
+      onMessage?.(t('products.imageImportedToLeonety'))
+    } catch {
+      onError?.(t('products.imageImportFailed'))
+    } finally {
+      setImportingExistingImage(false)
     }
   }
 
@@ -700,6 +746,10 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={value} alt="" className="mx-auto max-h-[24rem] max-w-full rounded-lg object-contain" />
               <p className="text-sm text-white/75">{t('products.uploadToEditImage')}</p>
+              <Button type="button" variant="outline" className="bg-white" onClick={() => void handleImportExistingImage()} disabled={importingExistingImage || processing}>
+                <UploadCloud className="h-4 w-4" />
+                {importingExistingImage ? t('common.loading') : t('products.importToLeonety')}
+              </Button>
             </div>
           ) : (
             <p className="max-w-sm text-center text-sm text-white/75">{t('products.dragToSelectArea')}</p>
@@ -804,6 +854,12 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
         </div>
 
         <div className="flex flex-col gap-2">
+          {value && !workingUrl && (
+            <Button type="button" variant="outline" onClick={() => void handleImportExistingImage()} disabled={importingExistingImage || processing}>
+              <UploadCloud className="h-4 w-4" />
+              {importingExistingImage ? t('common.loading') : t('products.importToLeonety')}
+            </Button>
+          )}
           <Button type="button" onClick={() => void saveProcessedImage()} disabled={processing || !workingUrl}>
             {processing ? t('products.processingImage') : t('products.saveProcessedImage')}
           </Button>

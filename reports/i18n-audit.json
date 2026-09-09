@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-09T21:17:57.645Z",
+  "generatedAt": "2026-09-09T21:43:57.160Z",
   "locales": [
     "en",
     "de",
@@ -15,38 +15,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1535,
-      "total": 1535,
+      "translated": 1563,
+      "total": 1563,
       "percent": 100
     },
     "de": {
-      "translated": 1535,
-      "total": 1535,
+      "translated": 1563,
+      "total": 1563,
       "percent": 100
     },
     "ru": {
-      "translated": 1535,
-      "total": 1535,
+      "translated": 1563,
+      "total": 1563,
       "percent": 100
     },
     "tr": {
-      "translated": 1535,
-      "total": 1535,
+      "translated": 1563,
+      "total": 1563,
       "percent": 100
     },
     "uk": {
-      "translated": 1535,
-      "total": 1535,
+      "translated": 1563,
+      "total": 1563,
       "percent": 100
     },
     "pl": {
-      "translated": 1535,
-      "total": 1535,
+      "translated": 1563,
+      "total": 1563,
       "percent": 100
     },
     "fr": {
-      "translated": 1535,
-      "total": 1535,
+      "translated": 1563,
+      "total": 1563,
       "percent": 100
     }
   },
@@ -2275,7 +2275,7 @@
     },
     {
       "file": "src/components/products/product-image-workspace.tsx",
-      "line": 780,
+      "line": 830,
       "type": "jsx-text",
       "text": "WebP"
     },
@@ -2300,7 +2300,7 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1535,
+    "englishKeyCount": 1563,
     "hardcodedStringCount": 17,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0

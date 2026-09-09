@@ -38,6 +38,19 @@ function stripTitle<T extends Record<string, unknown>>(payload: T) {
   return next
 }
 
+function uniqueRecentValues(items: Income[], selector: (item: Income) => string | null | undefined) {
+  const seen = new Set<string>()
+  const values: string[] = []
+  for (const item of items) {
+    const value = selector(item)?.trim()
+    if (!value || seen.has(value.toLowerCase())) continue
+    seen.add(value.toLowerCase())
+    values.push(value)
+    if (values.length >= 12) break
+  }
+  return values
+}
+
 export default function IncomePage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -79,6 +92,9 @@ export default function IncomePage() {
   const categoryOptions = currentCompany?.type === 'business'
     ? ['Sales', 'Service', 'Invoice Payment', 'Salary', 'Other']
     : ['Salary', 'Freelance', 'Investment', 'Other']
+  const titleSuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.title || income.description), [incomes])
+  const descriptionSuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.description), [incomes])
+  const categorySuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.category), [incomes])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -608,18 +624,21 @@ export default function IncomePage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('transactions.titleLabel')}</label>
-                <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
+                <input type="text" list="income-title-suggestions" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
+                <datalist id="income-title-suggestions">{titleSuggestions.map((value) => <option key={value} value={value} />)}</datalist>
               </div>
               {isBusinessWorkspace ? (
                 <div>
                   <label className="mb-1 block text-sm font-medium">{t('common.description')}</label>
                   <input
                     type="text"
+                    list="income-description-suggestions"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value, category: formData.category || 'Sales' })}
                     className="w-full rounded-md border px-3 py-2"
                     placeholder={t('common.description')}
                   />
+                  <datalist id="income-description-suggestions">{descriptionSuggestions.map((value) => <option key={value} value={value} />)}</datalist>
                 </div>
               ) : (
                 <div>
@@ -634,8 +653,9 @@ export default function IncomePage() {
                   />
                   {formData.category === 'Other' && (
                     <div className="mt-2 space-y-2">
-                      <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="w-full rounded-md border px-3 py-2" placeholder={t('income.customCategory')} required />
-                      <input type="text" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('common.description')} required />
+                      <input type="text" list="income-category-suggestions" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="w-full rounded-md border px-3 py-2" placeholder={t('income.customCategory')} required />
+                      <datalist id="income-category-suggestions">{categorySuggestions.map((value) => <option key={value} value={value} />)}</datalist>
+                      <input type="text" list="income-description-suggestions" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('common.description')} required />
                     </div>
                   )}
                 </div>
@@ -717,8 +737,8 @@ export default function IncomePage() {
                 <CardContent className="p-4">
                   <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
                     <input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} aria-label={t('common.amount')} required />
-                    <input value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} aria-label={t('transactions.titleLabel')} />
-                    <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} />
+                    <input list="income-title-suggestions" value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} aria-label={t('transactions.titleLabel')} />
+                    <input list="income-description-suggestions" value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} />
                     <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.date')} required />
                     <div className="flex gap-2">
                       <Button type="submit">{t('common.saveChanges')}</Button>

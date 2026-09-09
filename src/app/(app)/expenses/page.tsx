@@ -39,6 +39,19 @@ function stripTitle<T extends Record<string, unknown>>(payload: T) {
   return next
 }
 
+function uniqueRecentValues(items: Expense[], selector: (item: Expense) => string | null | undefined) {
+  const seen = new Set<string>()
+  const values: string[] = []
+  for (const item of items) {
+    const value = selector(item)?.trim()
+    if (!value || seen.has(value.toLowerCase())) continue
+    seen.add(value.toLowerCase())
+    values.push(value)
+    if (values.length >= 12) break
+  }
+  return values
+}
+
 export default function ExpensesPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -77,6 +90,9 @@ export default function ExpensesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const categoryOptions = ['Food', 'Utilities', 'Rent', 'Other']
+  const titleSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.title || expense.description), [expenses])
+  const descriptionSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.description), [expenses])
+  const categorySuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.category), [expenses])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -601,12 +617,14 @@ export default function ExpensesPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('transactions.titleLabel')}</label>
-                <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
+                <input type="text" list="expense-title-suggestions" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
+                <datalist id="expense-title-suggestions">{titleSuggestions.map((value) => <option key={value} value={value} />)}</datalist>
               </div>
               {formData.category !== 'Other' && (
                 <div>
                   <label className="mb-1 block text-sm font-medium">{t('common.description')}</label>
-                  <input type="text" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" required />
+                  <input type="text" list="expense-description-suggestions" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border px-3 py-2" required />
+                  <datalist id="expense-description-suggestions">{descriptionSuggestions.map((value) => <option key={value} value={value} />)}</datalist>
                 </div>
               )}
               <div>
@@ -620,8 +638,9 @@ export default function ExpensesPage() {
                   ]}
                 />
                 {formData.category === 'Other' && (
-                  <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" placeholder={t('expenses.otherExpenseDetails')} aria-label={t('expenses.otherExpenseDetails')} required />
+                  <input type="text" list="expense-category-suggestions" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" placeholder={t('expenses.otherExpenseDetails')} aria-label={t('expenses.otherExpenseDetails')} required />
                 )}
+                <datalist id="expense-category-suggestions">{categorySuggestions.map((value) => <option key={value} value={value} />)}</datalist>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
@@ -699,9 +718,9 @@ export default function ExpensesPage() {
                 <CardContent className="p-4">
                   <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
                     <input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} aria-label={t('common.amount')} required />
-                    <input value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} aria-label={t('transactions.titleLabel')} />
-                    <input value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} required />
-                    <input value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.category')} required />
+                    <input list="expense-title-suggestions" value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} aria-label={t('transactions.titleLabel')} />
+                    <input list="expense-description-suggestions" value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} required />
+                    <input list="expense-category-suggestions" value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.category')} required />
                     <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.date')} required />
                     <div className="flex gap-2">
                       <Button type="submit">{t('common.saveChanges')}</Button>

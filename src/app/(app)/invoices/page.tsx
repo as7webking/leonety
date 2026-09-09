@@ -74,6 +74,7 @@ const taxCountries = [
 
 type TaxCountryCode = typeof taxCountries[number]['code']
 type TaxType = 'standard' | 'reduced' | 'none'
+type PaymentMethod = 'cash' | 'bank_transfer' | 'card'
 
 interface ClientOption {
   id: string
@@ -123,6 +124,16 @@ interface InvoiceRecord {
   created_at: string
   clients?: ClientOption | null
   invoice_items?: InvoiceItem[]
+  invoice_payments?: InvoicePaymentAllocation[]
+}
+
+interface InvoicePaymentAllocation {
+  id?: string
+  method: PaymentMethod
+  amount: number
+  paid_at?: string | null
+  reference?: string | null
+  notes?: string | null
 }
 
 interface InvoiceFormState {
@@ -135,8 +146,10 @@ interface InvoiceFormState {
   notes: string
   tax_country: TaxCountryCode
   tax_type: TaxType
-  payment_method: 'cash' | 'card'
+  payment_method: PaymentMethod
   amount_paid: string
+  split_payment: boolean
+  payments: InvoicePaymentAllocation[]
   items: InvoiceItem[]
 }
 
@@ -152,8 +165,10 @@ interface ContractPrefillRow {
 type InvoiceNumberFormat = 'yy-seq' | 'yyyy-seq'
 
 interface InvoicePaymentMeta {
-  method: 'cash' | 'card'
+  method: PaymentMethod
   amountPaid: string
+  splitPayment: boolean
+  payments: InvoicePaymentAllocation[]
 }
 
 interface InvoiceClientPrintFields {
@@ -178,17 +193,29 @@ function getInvoicePaymentKey(invoiceId: string) {
 
 function loadInvoicePaymentMeta(invoiceId: string | null | undefined): InvoicePaymentMeta {
   if (!invoiceId || typeof window === 'undefined') {
-    return { method: 'card', amountPaid: '' }
+    return { method: 'bank_transfer', amountPaid: '', splitPayment: false, payments: [] }
   }
 
   try {
     const parsed = JSON.parse(window.localStorage.getItem(getInvoicePaymentKey(invoiceId)) ?? '{}') as Partial<InvoicePaymentMeta>
     return {
-      method: parsed.method === 'cash' ? 'cash' : 'card',
+      method: parsed.method === 'cash' || parsed.method === 'bank_transfer' || parsed.method === 'card' ? parsed.method : 'bank_transfer',
       amountPaid: typeof parsed.amountPaid === 'string' ? parsed.amountPaid : '',
+      splitPayment: parsed.splitPayment === true,
+      payments: Array.isArray(parsed.payments)
+        ? parsed.payments
+          .map((payment) => ({
+            method: payment?.method === 'cash' || payment?.method === 'bank_transfer' || payment?.method === 'card' ? payment.method : 'bank_transfer',
+            amount: Number(payment?.amount || 0),
+            paid_at: typeof payment?.paid_at === 'string' ? payment.paid_at : null,
+            reference: typeof payment?.reference === 'string' ? payment.reference : null,
+            notes: typeof payment?.notes === 'string' ? payment.notes : null,
+          }))
+          .filter((payment) => payment.amount > 0)
+        : [],
     }
   } catch {
-    return { method: 'card', amountPaid: '' }
+    return { method: 'bank_transfer', amountPaid: '', splitPayment: false, payments: [] }
   }
 }
 
@@ -230,6 +257,26 @@ const newItem = (taxRate = 19): InvoiceItem => ({
   tax_rate: taxRate,
   line_total: 0,
 })
+
+const newPaymentAllocation = (method: PaymentMethod = 'cash'): InvoicePaymentAllocation => ({
+  method,
+  amount: 0,
+  paid_at: today(),
+  reference: '',
+  notes: '',
+})
+
+function toCents(value: number | string) {
+  const normalized = typeof value === 'string' ? value.replace(',', '.') : String(value)
+  const number = Number(normalized)
+  return Number.isFinite(number) ? Math.round(number * 100) : 0
+}
+
+function paymentMethodLabel(method: PaymentMethod, t: (key: string) => string) {
+  if (method === 'cash') return t('invoices.paymentCash')
+  if (method === 'card') return t('invoices.paymentCard')
+  return t('invoices.paymentBankTransfer')
+}
 
 function formatInvoiceStatus(status: InvoiceStatus, t: (key: string) => string) {
   return t(`invoices.status.${status}`)
@@ -382,8 +429,10 @@ export default function InvoicesPage() {
     notes: '',
     tax_country: 'DE',
     tax_type: 'standard',
-    payment_method: 'card',
+    payment_method: 'bank_transfer',
     amount_paid: '',
+    split_payment: false,
+    payments: [],
     items: [newItem()],
   })
 
@@ -460,8 +509,10 @@ export default function InvoicesPage() {
       notes: '',
       tax_country: 'DE',
       tax_type: 'standard',
-      payment_method: 'card',
+      payment_method: 'bank_transfer',
       amount_paid: '',
+      split_payment: false,
+      payments: [],
       items: [newItem(defaultTaxRate)],
     })
     setShowForm(false)
@@ -482,8 +533,10 @@ export default function InvoicesPage() {
       notes: '',
       tax_country: 'DE',
       tax_type: 'standard',
-      payment_method: 'card',
+      payment_method: 'bank_transfer',
       amount_paid: '',
+      split_payment: false,
+      payments: [],
       items: [newItem(defaultTaxRate)],
     })
     setQuickClient({ name: '', phone: '', interested_in: '' })
@@ -649,8 +702,10 @@ export default function InvoicesPage() {
         notes: contract.reference ? `${t('contracts.reference')}: ${contract.reference}` : '',
         tax_country: 'DE',
         tax_type: 'standard',
-        payment_method: 'card',
+        payment_method: 'bank_transfer',
         amount_paid: '',
+        split_payment: false,
+        payments: [],
         items: [{
           ...newItem(getTaxRate('DE', 'standard')),
           description: description || t('invoices.contractLineItem'),
@@ -695,6 +750,7 @@ export default function InvoicesPage() {
       ? invoice.invoice_items
       : [newItem(getTaxRate('DE', 'standard'))]
     setEditingInvoice(invoice)
+    const paymentMeta = loadInvoicePaymentMeta(invoice.id)
     setFormData({
       client_id: invoice.client_id ?? '',
       invoice_number: invoice.invoice_number,
@@ -705,18 +761,91 @@ export default function InvoicesPage() {
       notes: invoice.notes ?? '',
       tax_country: 'DE',
       tax_type: 'standard',
-      payment_method: loadInvoicePaymentMeta(invoice.id).method,
-      amount_paid: loadInvoicePaymentMeta(invoice.id).amountPaid,
+      payment_method: paymentMeta.method,
+      amount_paid: paymentMeta.amountPaid,
+      split_payment: paymentMeta.splitPayment,
+      payments: paymentMeta.payments.length > 0 ? paymentMeta.payments : [newPaymentAllocation('cash'), newPaymentAllocation('card'), newPaymentAllocation('bank_transfer')],
       items: invoiceItems,
     })
     setShowForm(true)
   }
 
   const validateInvoice = () => {
-    if (!formData.invoice_number.trim()) return 'Invoice number is required.'
-    if (!formData.issue_date) return 'Issue date is required.'
-    if (formData.items.some((item) => !item.description.trim())) return 'Each invoice item needs a description.'
+    if (!formData.invoice_number.trim()) return t('invoices.validation.invoiceNumberRequired')
+    if (!formData.issue_date) return t('invoices.validation.issueDateRequired')
+    if (formData.items.some((item) => !item.description.trim())) return t('invoices.validation.itemDescriptionRequired')
+    if (formData.status === 'paid') {
+      const paidCents = toCents(formData.amount_paid || calculated.total)
+      if (paidCents <= 0) return t('invoices.validation.amountPaidRequired')
+      if (formData.split_payment) {
+        const paymentCents = formData.payments.reduce((sum, payment) => sum + toCents(payment.amount), 0)
+        if (formData.payments.some((payment) => toCents(payment.amount) < 0)) return t('invoices.validation.paymentNegative')
+        if (paymentCents !== paidCents) return t('invoices.validation.splitMismatch')
+      }
+    }
     return ''
+  }
+
+  const saveInvoicePayments = async (invoiceId: string, total: number) => {
+    const amountPaid = formData.amount_paid.trim() || String(total)
+    const paymentsToSave = formData.status === 'paid'
+      ? formData.split_payment
+        ? formData.payments
+          .filter((payment) => toCents(payment.amount) > 0)
+          .map((payment) => ({
+            method: payment.method,
+            amount: Number((toCents(payment.amount) / 100).toFixed(2)),
+            paid_at: payment.paid_at || formData.issue_date,
+            reference: payment.reference?.trim() || null,
+            notes: payment.notes?.trim() || null,
+          }))
+        : [{
+          method: formData.payment_method,
+          amount: Number((toCents(amountPaid) / 100).toFixed(2)),
+          paid_at: formData.issue_date,
+          reference: null,
+          notes: null,
+        }]
+      : []
+
+    saveInvoicePaymentMeta(invoiceId, {
+      method: formData.payment_method,
+      amountPaid,
+      splitPayment: formData.split_payment,
+      payments: paymentsToSave,
+    })
+
+    const { error: deleteError } = await supabase
+      .from('invoice_payments')
+      .delete()
+      .eq('invoice_id', invoiceId)
+
+    if (isMissingOptionalColumn(deleteError) || deleteError?.code === '42P01') {
+      return false
+    }
+
+    if (deleteError) throw deleteError
+    if (paymentsToSave.length === 0) return true
+
+    const { error: insertError } = await supabase
+      .from('invoice_payments')
+      .insert(paymentsToSave.map((payment) => ({
+        invoice_id: invoiceId,
+        company_id: currentCompany?.id,
+        method: payment.method,
+        amount: payment.amount,
+        currency: normalizeCurrencyCode(formData.currency),
+        paid_at: payment.paid_at,
+        reference: payment.reference,
+        notes: payment.notes,
+      })))
+
+    if (isMissingOptionalColumn(insertError) || insertError?.code === '42P01') {
+      return false
+    }
+
+    if (insertError) throw insertError
+    return true
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -847,14 +976,11 @@ export default function InvoicesPage() {
       const { error: itemError } = await supabase.from('invoice_items').insert(itemPayload)
       if (itemError) throw itemError
 
-      if (invoiceId) {
-        saveInvoicePaymentMeta(invoiceId, {
-          method: formData.payment_method,
-          amountPaid: formData.amount_paid.trim(),
-        })
-      }
+      const paymentsSaved = await saveInvoicePayments(invoiceId, totals.total)
 
-      let nextSuccessMessage = contractLinkFallback
+      let nextSuccessMessage = !paymentsSaved
+        ? `${editingInvoice ? t('invoices.updated') : t('invoices.created')} ${t('invoices.paymentMigrationRequired')}`
+        : contractLinkFallback
         ? `${editingInvoice ? t('invoices.updated') : t('invoices.created')} ${t('invoices.contractLinkMigrationRequired')}`
         : editingInvoice ? t('invoices.updated') : t('invoices.created')
 
@@ -1112,18 +1238,29 @@ export default function InvoicesPage() {
           {printingInvoice.status === 'paid' && (
             <div className="invoice-print-payment mt-4 rounded-md border p-3 text-sm">
               <p className="font-semibold">{t('invoices.payment')}</p>
-              <p>
-                {t('invoices.paymentMethod')}: {loadInvoicePaymentMeta(printingInvoice.id).method === 'cash' ? t('invoices.paymentCash') : t('invoices.paymentCard')}
-              </p>
-              <p>
-                {t('invoices.amountPaid')}: {formatCurrency(
-                  Number(loadInvoicePaymentMeta(printingInvoice.id).amountPaid || printingInvoice.total),
-                  printingInvoice.currency,
-                  intlLocale
-                )}
-              </p>
-              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyIban && <p>IBAN: {companyIban}</p>}
-              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'card' && companyBic && <p>BIC: {companyBic}</p>}
+              {loadInvoicePaymentMeta(printingInvoice.id).splitPayment && loadInvoicePaymentMeta(printingInvoice.id).payments.length > 0 ? (
+                <div className="mt-1 space-y-1">
+                  {loadInvoicePaymentMeta(printingInvoice.id).payments.map((payment, index) => (
+                    <p key={`${payment.method}-${index}`}>
+                      {paymentMethodLabel(payment.method, t)}: {formatCurrency(payment.amount, printingInvoice.currency, intlLocale)}
+                      {payment.reference ? ` · ${payment.reference}` : ''}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <p>{t('invoices.paymentMethod')}: {paymentMethodLabel(loadInvoicePaymentMeta(printingInvoice.id).method, t)}</p>
+                  <p>
+                    {t('invoices.amountPaid')}: {formatCurrency(
+                      Number(loadInvoicePaymentMeta(printingInvoice.id).amountPaid || printingInvoice.total),
+                      printingInvoice.currency,
+                      intlLocale
+                    )}
+                  </p>
+                </>
+              )}
+              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'bank_transfer' && companyIban && <p>IBAN: {companyIban}</p>}
+              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'bank_transfer' && companyBic && <p>BIC: {companyBic}</p>}
             </div>
           )}
         </div>
@@ -1236,42 +1373,44 @@ export default function InvoicesPage() {
                   <span className="text-sm font-medium">{t('invoices.client')}</span>
                   <AppSelect
                     value={formData.client_id}
-                    onChange={(value) => setFormData({ ...formData, client_id: value })}
+                    onChange={(value) => {
+                      setFormData({ ...formData, client_id: value })
+                      if (value) setQuickClient({ name: '', phone: '', interested_in: '' })
+                    }}
                     options={[
                       { value: '', label: t('invoices.noClient') },
                       ...clients.map((client) => ({ value: client.id, label: client.name })),
                     ]}
                   />
                 </label>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-2">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <PackagePlus className="h-4 w-4" />
-                    {t('invoices.quickClient')}
+                {!formData.client_id && (
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <PackagePlus className="h-4 w-4" />
+                      {t('invoices.quickClient')}
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <input
+                        value={quickClient.name}
+                        onChange={(event) => setQuickClient({ ...quickClient, name: event.target.value })}
+                        className="rounded-md border bg-white px-3 py-2 text-sm"
+                        placeholder={t('clients.name')}
+                      />
+                      <input
+                        value={quickClient.phone}
+                        onChange={(event) => setQuickClient({ ...quickClient, phone: event.target.value })}
+                        className="rounded-md border bg-white px-3 py-2 text-sm"
+                        placeholder={t('clients.phone')}
+                      />
+                      <input
+                        value={quickClient.interested_in}
+                        onChange={(event) => setQuickClient({ ...quickClient, interested_in: event.target.value })}
+                        className="rounded-md border bg-white px-3 py-2 text-sm"
+                        placeholder={t('clients.interestedIn')}
+                      />
+                    </div>
                   </div>
-                  <div className="grid gap-2 md:grid-cols-3">
-                    <input
-                      value={quickClient.name}
-                      onChange={(event) => setQuickClient({ ...quickClient, name: event.target.value })}
-                      className="rounded-md border bg-white px-3 py-2 text-sm"
-                      placeholder={t('clients.name')}
-                      disabled={Boolean(formData.client_id)}
-                    />
-                    <input
-                      value={quickClient.phone}
-                      onChange={(event) => setQuickClient({ ...quickClient, phone: event.target.value })}
-                      className="rounded-md border bg-white px-3 py-2 text-sm"
-                      placeholder={t('clients.phone')}
-                      disabled={Boolean(formData.client_id)}
-                    />
-                    <input
-                      value={quickClient.interested_in}
-                      onChange={(event) => setQuickClient({ ...quickClient, interested_in: event.target.value })}
-                      className="rounded-md border bg-white px-3 py-2 text-sm"
-                      placeholder={t('clients.interestedIn')}
-                      disabled={Boolean(formData.client_id)}
-                    />
-                  </div>
-                </div>
+                )}
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.invoiceNumber')}</span>
                   <input value={formData.invoice_number} onChange={(event) => setFormData({ ...formData, invoice_number: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
@@ -1322,33 +1461,107 @@ export default function InvoicesPage() {
               </div>
 
               {formData.status === 'paid' && (
-                <div className="grid gap-4 rounded-md border border-slate-200 bg-slate-50 p-3 md:grid-cols-2">
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('invoices.paymentMethod')}</span>
-                    <AppSelect
-                      value={formData.payment_method}
-                      onChange={(value) => setFormData({ ...formData, payment_method: value === 'cash' ? 'cash' : 'card' })}
-                      options={[
-                        { value: 'card', label: t('invoices.paymentCard') },
-                        { value: 'cash', label: t('invoices.paymentCash') },
-                      ]}
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('invoices.amountPaid')}</span>
+                <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-1">
+                      <span className="text-sm font-medium">{t('invoices.paymentMethod')}</span>
+                      <AppSelect
+                        value={formData.payment_method}
+                        onChange={(value) => setFormData({ ...formData, payment_method: value as PaymentMethod })}
+                        options={[
+                          { value: 'bank_transfer', label: t('invoices.paymentBankTransfer') },
+                          { value: 'card', label: t('invoices.paymentCard') },
+                          { value: 'cash', label: t('invoices.paymentCash') },
+                        ]}
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-sm font-medium">{t('invoices.amountPaid')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.amount_paid}
+                        onChange={(event) => setFormData({ ...formData, amount_paid: event.target.value })}
+                        className="w-full rounded-md border bg-white px-3 py-2"
+                        placeholder={String(calculated.total)}
+                      />
+                      {formData.payment_method === 'bank_transfer' && companyIban && (
+                        <p className="text-xs text-slate-500">IBAN: {companyIban}</p>
+                      )}
+                    </label>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
                     <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.amount_paid}
-                      onChange={(event) => setFormData({ ...formData, amount_paid: event.target.value })}
-                      className="w-full rounded-md border bg-white px-3 py-2"
-                      placeholder={String(calculated.total)}
+                      type="checkbox"
+                      checked={formData.split_payment}
+                      onChange={(event) => setFormData({
+                        ...formData,
+                        split_payment: event.target.checked,
+                        payments: formData.payments.length > 0 ? formData.payments : [newPaymentAllocation('cash'), newPaymentAllocation('card'), newPaymentAllocation('bank_transfer')],
+                      })}
+                      className="h-4 w-4"
                     />
-                    {formData.payment_method === 'card' && companyIban && (
-                      <p className="text-xs text-slate-500">IBAN: {companyIban}</p>
-                    )}
+                    {t('invoices.splitPayment')}
                   </label>
+                  {formData.split_payment && (
+                    <div className="space-y-2">
+                      {formData.payments.map((payment, index) => (
+                        <div key={index} className="grid gap-2 rounded-md border border-slate-200 bg-white p-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)_auto]">
+                          <AppSelect
+                            value={payment.method}
+                            onChange={(value) => setFormData({
+                              ...formData,
+                              payments: formData.payments.map((item, itemIndex) => itemIndex === index ? { ...item, method: value as PaymentMethod } : item),
+                            })}
+                            options={[
+                              { value: 'cash', label: t('invoices.paymentCash') },
+                              { value: 'card', label: t('invoices.paymentCard') },
+                              { value: 'bank_transfer', label: t('invoices.paymentBankTransfer') },
+                            ]}
+                            ariaLabel={t('invoices.paymentMethod')}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={payment.amount}
+                            onChange={(event) => setFormData({
+                              ...formData,
+                              payments: formData.payments.map((item, itemIndex) => itemIndex === index ? { ...item, amount: Number(event.target.value) } : item),
+                            })}
+                            className="w-full rounded-md border px-3 py-2 text-sm"
+                            aria-label={t('invoices.paymentAmount')}
+                          />
+                          <input
+                            value={payment.reference ?? ''}
+                            onChange={(event) => setFormData({
+                              ...formData,
+                              payments: formData.payments.map((item, itemIndex) => itemIndex === index ? { ...item, reference: event.target.value } : item),
+                            })}
+                            className="w-full rounded-md border px-3 py-2 text-sm"
+                            placeholder={t('invoices.paymentReference')}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFormData({ ...formData, payments: formData.payments.filter((_, itemIndex) => itemIndex !== index) })}
+                          >
+                            {t('common.delete')}
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setFormData({ ...formData, payments: [...formData.payments, newPaymentAllocation('cash')] })}>
+                          {t('invoices.addPaymentPart')}
+                        </Button>
+                        <p className="text-sm text-slate-600">
+                          {t('invoices.splitTotal')}: {formatCurrency(formData.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0), formData.currency, intlLocale)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
