@@ -2,7 +2,7 @@ import Link from 'next/link'
 import {
   ArrowRight,
   BarChart3,
-  Box,
+  Bot,
   Check,
   FileText,
   Globe2,
@@ -14,6 +14,7 @@ import {
   Timer,
   Users,
   WalletCards,
+  Warehouse,
 } from 'lucide-react'
 import { PublicHeader } from '@/components/public-header'
 import { T } from '@/components/t'
@@ -33,14 +34,59 @@ const businessItems = [
   ['nav.clients', 'landing.business.clientsText', Users],
   ['nav.invoices', 'landing.business.invoicesText', FileText],
   ['nav.products', 'landing.business.productsText', Package],
-  ['nav.inventory', 'landing.business.inventoryText', Box],
+  ['nav.inventory', 'landing.business.inventoryText', Warehouse],
   ['nav.stockMovements', 'landing.business.stockText', Store],
 ] as const
 
-const productPillars = [
-  ['landing.product.cardFinance', 'landing.product.cardFinanceText', BarChart3],
-  ['landing.product.cardBusiness', 'landing.product.cardBusinessText', Users],
-  ['landing.product.cardCommerce', 'landing.product.cardCommerceText', Store],
+const visualSections = [
+  {
+    id: 'dashboard',
+    eyebrow: 'landing.visual.dashboard.eyebrow',
+    title: 'landing.visual.dashboard.title',
+    text: 'landing.visual.dashboard.text',
+    icon: BarChart3,
+    tone: 'emerald',
+  },
+  {
+    id: 'products',
+    eyebrow: 'landing.visual.products.eyebrow',
+    title: 'landing.visual.products.title',
+    text: 'landing.visual.products.text',
+    icon: Package,
+    tone: 'amber',
+  },
+  {
+    id: 'inventory',
+    eyebrow: 'landing.visual.inventory.eyebrow',
+    title: 'landing.visual.inventory.title',
+    text: 'landing.visual.inventory.text',
+    icon: Warehouse,
+    tone: 'blue',
+  },
+  {
+    id: 'invoices',
+    eyebrow: 'landing.visual.invoices.eyebrow',
+    title: 'landing.visual.invoices.title',
+    text: 'landing.visual.invoices.text',
+    icon: FileText,
+    tone: 'slate',
+  },
+  {
+    id: 'integrations',
+    eyebrow: 'landing.visual.integrations.eyebrow',
+    title: 'landing.visual.integrations.title',
+    text: 'landing.visual.integrations.text',
+    icon: Store,
+    tone: 'gold',
+  },
+  {
+    id: 'assistant',
+    eyebrow: 'landing.visual.assistant.eyebrow',
+    title: 'landing.visual.assistant.title',
+    text: 'landing.visual.assistant.text',
+    icon: Bot,
+    tone: 'violet',
+  },
 ] as const
 
 const utilityCards = [
@@ -97,29 +143,41 @@ function formatPlanPrice(plan: AppPlan) {
 function SectionIntro({ eyebrowKey, titleKey, textKey }: { eyebrowKey: string; titleKey: string; textKey: string }) {
   return (
     <div className="mx-auto max-w-3xl text-center">
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b88a2a] sm:tracking-[0.32em]"><T k={eyebrowKey} /></p>
-      <h2 className="mt-4 text-[clamp(1.9rem,4.8vw,3.5rem)] font-semibold leading-tight tracking-tight text-slate-950"><T k={titleKey} /></h2>
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a77918] sm:tracking-[0.3em]"><T k={eyebrowKey} /></p>
+      <h2 className="mt-4 text-[clamp(1.85rem,4.4vw,3.35rem)] font-semibold leading-tight tracking-tight text-slate-950"><T k={titleKey} /></h2>
       <p className="mt-5 text-base leading-8 text-slate-600 sm:text-lg"><T k={textKey} /></p>
     </div>
   )
 }
 
-function DesktopPreview() {
+function BrowserChrome({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) {
   return (
-    <div className="relative hidden min-w-0 rounded-[1.5rem] border border-white/70 bg-white/75 p-2 shadow-2xl shadow-[#b88a2a]/10 backdrop-blur lg:block">
-      <div className="overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="flex gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-          </div>
-          <div className="max-w-[14rem] truncate rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">leonety.app/workspace</div>
+    <div className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-xl shadow-slate-900/8">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
         </div>
-        <div className="grid min-h-[430px] bg-white md:grid-cols-[190px_1fr]">
-          <aside className="border-r border-slate-200 bg-slate-950 p-5 text-white">
-            <div className="mb-8 flex items-center gap-2">
-              <div className="h-9 w-9 rounded-xl bg-[#d7a642]" />
+        <div className="max-w-[12rem] truncate rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+          {compact ? 'Leonety' : 'leonety.app/workspace'}
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function HeroProductPreview() {
+  return (
+    <div className="relative min-w-0">
+      <div className="absolute -left-8 top-10 hidden h-40 w-40 rounded-full bg-[#d7a642]/10 blur-3xl lg:block" />
+      <div className="absolute -right-6 bottom-10 hidden h-48 w-48 rounded-full bg-emerald-300/10 blur-3xl lg:block" />
+      <BrowserChrome>
+        <div className="grid min-h-[420px] bg-white sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+          <aside className="hidden border-r border-slate-200 bg-slate-950 p-4 text-white sm:block">
+            <div className="mb-7 flex items-center gap-2">
+              <div className="h-8 w-8 rounded-xl bg-[#d7a642]" />
               <span className="font-semibold">Leonety</span>
             </div>
             {['nav.dashboard', 'nav.transactions', 'nav.clients', 'nav.invoices', 'nav.products'].map((key, index) => (
@@ -128,13 +186,13 @@ function DesktopPreview() {
               </div>
             ))}
           </aside>
-          <div className="min-w-0 p-5">
-            <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="min-w-0 p-4 sm:p-5">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="text-sm text-slate-500"><T k="landing.preview.workspace" /></p>
                 <h3 className="truncate text-2xl font-semibold text-slate-950"><T k="landing.preview.title" /></h3>
               </div>
-              <div className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">
+              <div className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">
                 <T k="landing.preview.synced" />
               </div>
             </div>
@@ -145,14 +203,14 @@ function DesktopPreview() {
                 ['landing.reports', '4,130 €', 'text-slate-950'],
               ].map(([label, value, color]) => (
                 <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="truncate text-xs font-medium uppercase tracking-[0.18em] text-slate-500"><T k={label} /></p>
+                  <p className="truncate text-xs font-medium uppercase tracking-[0.16em] text-slate-500"><T k={label} /></p>
                   <p className={`mt-3 text-2xl font-semibold ${color}`}>{value}</p>
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_260px]">
+            <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_250px]">
               <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="mb-4 flex items-center justify-between gap-4">
+                <div className="mb-3 flex items-center justify-between gap-4">
                   <p className="font-semibold text-slate-950"><T k="landing.preview.transactions" /></p>
                   <span className="text-sm text-slate-500"><T k="landing.preview.thisMonth" /></span>
                 </div>
@@ -161,9 +219,9 @@ function DesktopPreview() {
                   ['landing.preview.sampleSupplier', '-84.20 €', 'text-red-600'],
                   ['landing.preview.sampleTimeInvoice', '+640.00 €', 'text-emerald-700'],
                 ].map(([nameKey, amount, color]) => (
-                  <div key={nameKey} className="flex items-center justify-between border-t border-slate-100 py-3 text-sm">
-                    <span className="truncate pr-3 text-slate-700"><T k={nameKey} /></span>
-                    <span className={`font-semibold ${color}`}>{amount}</span>
+                  <div key={nameKey} className="flex min-w-0 items-center justify-between border-t border-slate-100 py-3 text-sm">
+                    <span className="min-w-0 truncate pr-3 text-slate-700"><T k={nameKey} /></span>
+                    <span className={`shrink-0 font-semibold ${color}`}>{amount}</span>
                   </div>
                 ))}
               </div>
@@ -171,8 +229,8 @@ function DesktopPreview() {
                 <p className="font-semibold text-slate-950"><T k="landing.preview.channels" /></p>
                 <div className="mt-4 space-y-2">
                   {['WooCommerce', 'Google Merchant', 'TikTok Shop'].map((name, index) => (
-                    <div key={name} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                      <span className="truncate">{name}</span>
+                    <div key={name} className="flex min-w-0 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate">{name}</span>
                       <span className={index === 0 ? 'shrink-0 text-emerald-700' : 'shrink-0 text-amber-700'}>
                         <T k={index === 0 ? 'landing.integration.available' : 'landing.integration.requiresSetup'} />
                       </span>
@@ -183,27 +241,144 @@ function DesktopPreview() {
             </div>
           </div>
         </div>
-      </div>
+      </BrowserChrome>
     </div>
   )
 }
 
-function MobilePreview() {
+function ProductVisualCard({ visual, index }: { visual: typeof visualSections[number]; index: number }) {
+  const Icon = visual.icon
+  const reverse = index % 2 === 1
+  const toneClasses: Record<typeof visual.tone, string> = {
+    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+    blue: 'bg-blue-50 text-blue-700 ring-blue-200',
+    slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+    gold: 'bg-[#fff4d8] text-[#8a6518] ring-[#e8ca73]',
+    violet: 'bg-violet-50 text-violet-700 ring-violet-200',
+  }
+
   return (
-    <div className="grid gap-3 sm:grid-cols-3 lg:hidden">
-      {[
-        ['landing.preview.mobileFinance', '12,450 €', 'nav.income', 'bg-emerald-50 text-emerald-700'],
-        ['landing.preview.mobileInventory', '18', 'nav.products', 'bg-amber-50 text-amber-700'],
-        ['landing.preview.mobileInvoice', 'INV-2026', 'nav.invoices', 'bg-blue-50 text-blue-700'],
-      ].map(([title, value, label, className]) => (
-        <div key={title} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className={`mb-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${className}`}>
-            <T k={label} />
-          </div>
-          <p className="text-sm text-slate-500"><T k={title} /></p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
+    <article className={`grid gap-6 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-2 lg:items-center lg:p-6 ${reverse ? 'lg:[&>div:first-child]:order-2' : ''}`}>
+      <div className="min-w-0 p-2 sm:p-3">
+        <div className={`mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ring-1 ${toneClasses[visual.tone]}`}>
+          <Icon className="h-4 w-4" />
+          <T k={visual.eyebrow} />
         </div>
-      ))}
+        <h3 className="text-[clamp(1.5rem,3vw,2.25rem)] font-semibold leading-tight text-slate-950"><T k={visual.title} /></h3>
+        <p className="mt-4 text-base leading-7 text-slate-600"><T k={visual.text} /></p>
+      </div>
+      <BrowserChrome compact>
+        <MiniScreen id={visual.id} />
+      </BrowserChrome>
+    </article>
+  )
+}
+
+function MiniScreen({ id }: { id: typeof visualSections[number]['id'] }) {
+  if (id === 'products') {
+    return (
+      <div className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="font-semibold text-slate-950"><T k="nav.products" /></h4>
+          <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-medium text-white"><T k="products.add" /></span>
+        </div>
+        {[['Ayran', '301', '2,00 €'], ['Ice Tea 0.33l', '308', '1,75 €'], ['Salad Bowl', '125', '11,90 €']].map(([name, sku, price]) => (
+          <div key={name} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="h-12 w-12 shrink-0 rounded-xl bg-white ring-1 ring-slate-200" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-slate-950">{name}</p>
+                <p className="text-sm text-slate-500">SKU {sku}</p>
+              </div>
+              <p className="shrink-0 font-semibold">{price}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (id === 'inventory') {
+    return (
+      <div className="space-y-3 p-4">
+        <h4 className="font-semibold text-slate-950"><T k="nav.inventory" /></h4>
+        {[
+          ['landing.visual.inventory.stockIn', '+24', 'text-emerald-700'],
+          ['landing.visual.inventory.stockOut', '-8', 'text-red-600'],
+          ['landing.visual.inventory.adjustment', '+2', 'text-blue-700'],
+        ].map(([label, qty, color]) => (
+          <div key={label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-3">
+            <span className="text-sm text-slate-700"><T k={label} /></span>
+            <span className={`font-semibold ${color}`}>{qty}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (id === 'invoices') {
+    return (
+      <div className="p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500"><T k="nav.invoices" /></p>
+              <h4 className="mt-1 text-xl font-semibold">INV-2026-0042</h4>
+            </div>
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"><T k="invoices.status.paid" /></span>
+          </div>
+          <div className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between"><span><T k="invoices.subtotal" /></span><span>640,00 €</span></div>
+            <div className="flex justify-between"><span><T k="invoices.tax" /></span><span>121,60 €</span></div>
+            <div className="flex justify-between border-t pt-2 font-semibold"><span><T k="invoices.total" /></span><span>761,60 €</span></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (id === 'integrations') {
+    return (
+      <div className="space-y-3 p-4">
+        <h4 className="font-semibold text-slate-950"><T k="public.integrations" /></h4>
+        {integrations.slice(0, 4).map(([name, statusKey, className]) => (
+          <div key={name} className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+            <span className="min-w-0 truncate font-medium">{name}</span>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${className}`}><T k={statusKey} /></span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (id === 'assistant') {
+    return (
+      <div className="space-y-3 bg-slate-950 p-4 text-white">
+        <h4 className="font-semibold"><T k="assistant.title" /></h4>
+        <div className="rounded-2xl bg-white/10 p-3 text-sm text-slate-200"><T k="landing.visual.assistant.question" /></div>
+        <div className="ml-6 rounded-2xl bg-blue-600 p-3 text-sm"><T k="landing.visual.assistant.answer" /></div>
+        <div className="flex gap-2">
+          <span className="h-2 w-2 rounded-full bg-blue-300" />
+          <span className="h-2 w-2 rounded-full bg-blue-300" />
+          <span className="h-2 w-2 rounded-full bg-blue-300" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3 p-4">
+      <h4 className="font-semibold text-slate-950"><T k="nav.dashboard" /></h4>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {['nav.income', 'nav.expenses', 'landing.reports'].map((key) => (
+          <div key={key} className="rounded-2xl bg-slate-50 p-3">
+            <p className="truncate text-xs text-slate-500"><T k={key} /></p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">4,130 €</p>
+          </div>
+        ))}
+      </div>
+      <div className="h-28 rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,#ecfdf5,#eff6ff)]" />
     </div>
   )
 }
@@ -217,14 +392,14 @@ export default async function Home() {
     <div className="min-h-screen overflow-x-hidden bg-[#f8f6f1] text-slate-950">
       <PublicHeader user={user} />
       <main>
-        <section className="relative overflow-hidden border-b border-[#eadfca] bg-[radial-gradient(circle_at_top_left,#fff4d8,transparent_34%),linear-gradient(180deg,#fffaf0_0%,#f8f6f1_70%,#ffffff_100%)]">
-          <div className="mx-auto grid w-[92%] max-w-7xl gap-10 py-12 sm:py-16 md:py-20 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center lg:py-24">
+        <section className="relative overflow-hidden border-b border-[#eadfca] bg-[radial-gradient(circle_at_top_left,#fff4d8,transparent_34%),linear-gradient(180deg,#fffaf0_0%,#f8f6f1_72%,#ffffff_100%)]">
+          <div className="mx-auto grid w-[92%] max-w-7xl gap-9 py-10 sm:py-14 md:py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:py-20">
             <div className="min-w-0">
-              <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-[#e2c886] bg-white/80 px-3 py-1 text-sm font-medium text-slate-700 shadow-sm">
+              <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-[#e2c886] bg-white/85 px-3 py-1 text-sm font-medium text-slate-700 shadow-sm">
                 <span className="h-2 w-2 shrink-0 rounded-full bg-[#d7a642]" />
                 <span className="truncate"><T k="landing.hero.badge" /></span>
               </div>
-              <h1 className="max-w-4xl text-[clamp(2rem,7vw,4.9rem)] font-semibold leading-[1.04] tracking-tight text-slate-950">
+              <h1 className="max-w-4xl text-[clamp(2rem,6.3vw,4.7rem)] font-semibold leading-[1.04] tracking-tight text-slate-950">
                 <T k="landing.hero.title" />
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-700 sm:text-lg sm:leading-8">
@@ -232,7 +407,7 @@ export default async function Home() {
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" asChild className="bg-slate-950 text-white hover:bg-slate-800">
-                  <Link href={primarySignupHref}><T k={user ? 'home.openApp' : 'home.startFree'} /><ArrowRight className="h-4 w-4" /></Link>
+                  <Link href={primarySignupHref}><T k={user ? 'home.openApp' : 'landing.cta.startTrial'} /><ArrowRight className="h-4 w-4" /></Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild className="border-slate-300 bg-white">
                   <Link href="/#product"><T k="landing.hero.secondaryCta" /></Link>
@@ -247,27 +422,41 @@ export default async function Home() {
                 ))}
               </div>
             </div>
-            <DesktopPreview />
-            <MobilePreview />
+            <HeroProductPreview />
           </div>
         </section>
 
-        <section id="product" className="scroll-mt-20 bg-white py-16 sm:py-20 lg:py-24">
+        <section id="product" className="scroll-mt-20 bg-white py-14 sm:py-16 lg:py-20">
           <div className="mx-auto w-[92%] max-w-7xl">
             <SectionIntro eyebrowKey="public.product" titleKey="landing.product.title" textKey="landing.product.text" />
             <div className="mt-10 grid gap-5 lg:grid-cols-3">
-              {productPillars.map(([title, text, Icon]) => (
-                <div key={title} className="rounded-[1.25rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+              {[
+                ['landing.product.cardFinance', 'landing.product.cardFinanceText', BarChart3],
+                ['landing.product.cardBusiness', 'landing.product.cardBusinessText', Users],
+                ['landing.product.cardCommerce', 'landing.product.cardCommerceText', Store],
+              ].map(([title, text, Icon]) => (
+                <div key={title as string} className="rounded-[1.25rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
                   <Icon className="h-10 w-10 rounded-2xl bg-[#fff4d8] p-2 text-[#9b711d]" />
-                  <h3 className="mt-5 text-xl font-semibold"><T k={title} /></h3>
-                  <p className="mt-3 leading-7 text-slate-600"><T k={text} /></p>
+                  <h3 className="mt-5 text-xl font-semibold"><T k={title as string} /></h3>
+                  <p className="mt-3 leading-7 text-slate-600"><T k={text as string} /></p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="features" className="scroll-mt-20 bg-slate-50 py-16 sm:py-20 lg:py-24">
+        <section className="bg-[#fbfaf7] py-14 sm:py-16 lg:py-20">
+          <div className="mx-auto w-[92%] max-w-7xl">
+            <SectionIntro eyebrowKey="landing.visual.eyebrow" titleKey="landing.visual.title" textKey="landing.visual.text" />
+            <div className="mt-10 grid gap-6">
+              {visualSections.map((visual, index) => (
+                <ProductVisualCard key={visual.id} visual={visual} index={index} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="scroll-mt-20 bg-slate-50 py-14 sm:py-16 lg:py-20">
           <div className="mx-auto w-[92%] max-w-7xl">
             <SectionIntro eyebrowKey="public.features" titleKey="landing.finance.title" textKey="landing.finance.text" />
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -282,7 +471,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="bg-white py-16 sm:py-20 lg:py-24">
+        <section className="bg-white py-14 sm:py-16 lg:py-20">
           <div className="mx-auto w-[92%] max-w-7xl">
             <SectionIntro eyebrowKey="landing.business.eyebrow" titleKey="landing.business.title" textKey="landing.business.text" />
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -297,11 +486,11 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="integrations" className="scroll-mt-20 bg-slate-950 py-16 text-white sm:py-20 lg:py-24">
+        <section id="integrations" className="scroll-mt-20 bg-slate-950 py-14 text-white sm:py-16 lg:py-20">
           <div className="mx-auto grid w-[92%] max-w-7xl gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d7a642] sm:tracking-[0.32em]"><T k="public.integrations" /></p>
-              <h2 className="mt-4 text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-tight tracking-tight"><T k="landing.integrations.title" /></h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#d7a642] sm:tracking-[0.3em]"><T k="public.integrations" /></p>
+              <h2 className="mt-4 text-[clamp(1.85rem,4.4vw,3.35rem)] font-semibold leading-tight tracking-tight"><T k="landing.integrations.title" /></h2>
               <p className="mt-5 text-base leading-8 text-slate-300 sm:text-lg"><T k="landing.integrations.text" /></p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -318,11 +507,11 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="bg-white py-16 sm:py-20 lg:py-24">
+        <section className="bg-white py-14 sm:py-16 lg:py-20">
           <div className="mx-auto grid w-[92%] max-w-7xl gap-10 lg:grid-cols-2 lg:items-center">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b88a2a] sm:tracking-[0.32em]"><T k="landing.multichannel.eyebrow" /></p>
-              <h2 className="mt-4 text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-tight tracking-tight text-slate-950"><T k="landing.multichannel.title" /></h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#b88a2a] sm:tracking-[0.3em]"><T k="landing.multichannel.eyebrow" /></p>
+              <h2 className="mt-4 text-[clamp(1.85rem,4.4vw,3.35rem)] font-semibold leading-tight tracking-tight text-slate-950"><T k="landing.multichannel.title" /></h2>
               <p className="mt-5 text-base leading-8 text-slate-600 sm:text-lg"><T k="landing.multichannel.text" /></p>
             </div>
             <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 sm:p-5">
@@ -339,7 +528,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="bg-[#fbfaf7] py-16 sm:py-20 lg:py-24">
+        <section className="bg-[#fbfaf7] py-14 sm:py-16 lg:py-20">
           <div className="mx-auto grid w-[92%] max-w-7xl gap-6 lg:grid-cols-3">
             {utilityCards.map(([title, text, Icon]) => (
               <div key={title} className="rounded-[1.25rem] border border-[#eadfca] bg-white p-7 shadow-sm">
@@ -351,7 +540,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="pricing" className="scroll-mt-20 bg-white py-16 sm:py-20 lg:py-24">
+        <section id="pricing" className="scroll-mt-20 bg-white py-14 sm:py-16 lg:py-20">
           <div className="mx-auto w-[92%] max-w-7xl">
             <SectionIntro eyebrowKey="public.pricing" titleKey="landing.pricing.title" textKey="landing.pricing.text" />
             <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -370,7 +559,7 @@ export default async function Home() {
                     <p className="mt-2 text-sm text-[#9b711d]"><T k={definition.trialDays > 0 ? 'billing.sevenDayTrial' : 'billing.freeForever'} /></p>
                     <Button asChild className="mt-6" variant={highlighted ? 'default' : 'outline'}>
                       <Link href={user ? '/app/upgrade' : planSignupHref(plan.plan)}>
-                        <T k={definition.trialDays > 0 ? 'billing.startTrial' : 'home.startFree'} />
+                        <T k={definition.trialDays > 0 ? 'landing.cta.startTrial' : 'home.startFree'} />
                       </Link>
                     </Button>
                     <ul className="mt-6 space-y-3 text-sm text-slate-600">
@@ -388,7 +577,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="faq" className="scroll-mt-20 bg-slate-50 py-16 sm:py-20 lg:py-24">
+        <section id="faq" className="scroll-mt-20 bg-slate-50 py-14 sm:py-16 lg:py-20">
           <div className="mx-auto w-[92%] max-w-5xl">
             <SectionIntro eyebrowKey="landing.faq.eyebrow" titleKey="landing.faq.title" textKey="landing.faq.text" />
             <div className="mt-10 grid gap-4 md:grid-cols-2">
@@ -407,16 +596,16 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="support" className="scroll-mt-20 border-y border-slate-200 bg-slate-950 py-16 text-white sm:py-20">
+        <section id="support" className="scroll-mt-20 border-y border-slate-200 bg-slate-950 py-14 text-white sm:py-16">
           <div className="mx-auto flex w-[92%] max-w-7xl flex-col items-start justify-between gap-8 lg:flex-row lg:items-center">
             <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d7a642] sm:tracking-[0.32em]"><T k="landing.cta.eyebrow" /></p>
-              <h2 className="mt-4 text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-tight"><T k="landing.cta.title" /></h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#d7a642] sm:tracking-[0.3em]"><T k="landing.cta.eyebrow" /></p>
+              <h2 className="mt-4 text-[clamp(1.85rem,4.4vw,3.35rem)] font-semibold leading-tight"><T k="landing.cta.title" /></h2>
               <p className="mt-5 text-base leading-8 text-slate-300 sm:text-lg"><T k="landing.cta.text" /></p>
             </div>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <Button size="lg" asChild className="bg-white text-slate-950 hover:bg-slate-100">
-                <Link href={primarySignupHref}><T k={user ? 'home.openApp' : 'home.startFree'} /></Link>
+                <Link href={primarySignupHref}><T k={user ? 'home.openApp' : 'landing.cta.startTrial'} /></Link>
               </Button>
               <Button size="lg" variant="outline" asChild className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white">
                 <Link href="/login"><T k="home.login" /></Link>

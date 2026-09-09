@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-09T18:29:06.547Z",
+  "generatedAt": "2026-09-09T21:17:57.645Z",
   "locales": [
     "en",
     "de",
@@ -15,38 +15,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1508,
-      "total": 1508,
+      "translated": 1535,
+      "total": 1535,
       "percent": 100
     },
     "de": {
-      "translated": 1508,
-      "total": 1508,
+      "translated": 1535,
+      "total": 1535,
       "percent": 100
     },
     "ru": {
-      "translated": 1508,
-      "total": 1508,
+      "translated": 1535,
+      "total": 1535,
       "percent": 100
     },
     "tr": {
-      "translated": 1508,
-      "total": 1508,
+      "translated": 1535,
+      "total": 1535,
       "percent": 100
     },
     "uk": {
-      "translated": 1508,
-      "total": 1508,
+      "translated": 1535,
+      "total": 1535,
       "percent": 100
     },
     "pl": {
-      "translated": 1508,
-      "total": 1508,
+      "translated": 1535,
+      "total": 1535,
       "percent": 100
     },
     "fr": {
-      "translated": 1508,
-      "total": 1508,
+      "translated": 1535,
+      "total": 1535,
       "percent": 100
     }
   },
@@ -2215,13 +2215,7 @@
     },
     {
       "file": "src/app/page.tsx",
-      "line": 117,
-      "type": "jsx-text",
-      "text": "leonety.app/workspace"
-    },
-    {
-      "file": "src/app/page.tsx",
-      "line": 123,
+      "line": 181,
       "type": "jsx-text",
       "text": "Leonety"
     },
@@ -2306,8 +2300,8 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1508,
-    "hardcodedStringCount": 18,
+    "englishKeyCount": 1535,
+    "hardcodedStringCount": 17,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0
   }
