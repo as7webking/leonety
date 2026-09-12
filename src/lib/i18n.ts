@@ -1,4 +1,5 @@
 import { businessModuleDictionaries } from '@/lib/business-modules-i18n'
+import { publicWebsiteDictionaries } from '@/lib/public-website-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8634,6 +8635,7 @@ const uxFeatureDictionaries: Record<Locale, Record<string, string>> = {
 
 for (const locale of locales) {
   Object.assign(dictionaries[locale], uxFeatureDictionaries[locale])
+  Object.assign(dictionaries[locale], publicWebsiteDictionaries[locale])
 }
 
 for (const locale of locales) {

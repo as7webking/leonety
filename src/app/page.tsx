@@ -2,7 +2,6 @@ import Link from 'next/link'
 import {
   ArrowRight,
   BarChart3,
-  Bot,
   Check,
   FileText,
   Globe2,
@@ -16,6 +15,9 @@ import {
   WalletCards,
   Warehouse,
 } from 'lucide-react'
+import { IntegrationGrid } from '@/components/landing/integration-grid'
+import { ProductScreenshot } from '@/components/landing/product-screenshot'
+import { PublicAssistantDemo } from '@/components/landing/public-assistant-demo'
 import { PublicHeader } from '@/components/public-header'
 import { T } from '@/components/t'
 import { Button } from '@/components/ui/button'
@@ -39,14 +41,6 @@ const businessItems = [
 ] as const
 
 const visualSections = [
-  {
-    id: 'dashboard',
-    eyebrow: 'landing.visual.dashboard.eyebrow',
-    title: 'landing.visual.dashboard.title',
-    text: 'landing.visual.dashboard.text',
-    icon: BarChart3,
-    tone: 'emerald',
-  },
   {
     id: 'products',
     eyebrow: 'landing.visual.products.eyebrow',
@@ -79,14 +73,6 @@ const visualSections = [
     icon: Store,
     tone: 'gold',
   },
-  {
-    id: 'assistant',
-    eyebrow: 'landing.visual.assistant.eyebrow',
-    title: 'landing.visual.assistant.title',
-    text: 'landing.visual.assistant.text',
-    icon: Bot,
-    tone: 'violet',
-  },
 ] as const
 
 const utilityCards = [
@@ -102,6 +88,13 @@ const integrations = [
   ['TikTok Shop', 'landing.integration.beta', 'bg-blue-50 text-blue-700 ring-blue-200'],
   ['WhatsApp Business', 'landing.integration.requiresSetup', 'bg-amber-50 text-amber-700 ring-amber-200'],
   ['ISS POS', 'landing.integration.comingSoon', 'bg-slate-100 text-slate-600 ring-slate-200'],
+] as const
+
+const additionalIntegrations = [
+  ['Shopify', 'landing.integration.comingSoon', 'bg-slate-100 text-slate-600 ring-slate-200'],
+  ['OpenCart', 'landing.integration.comingSoon', 'bg-slate-100 text-slate-600 ring-slate-200'],
+  ['eBay', 'landing.integration.requiresSetup', 'bg-amber-50 text-amber-700 ring-amber-200'],
+  ['Amazon Marketplace', 'landing.integration.requiresSetup', 'bg-amber-50 text-amber-700 ring-amber-200'],
 ] as const
 
 const pricingPlans: Array<{
@@ -170,79 +163,7 @@ function BrowserChrome({ children, compact = false }: { children: React.ReactNod
 
 function HeroProductPreview() {
   return (
-    <div className="relative min-w-0">
-      <div className="absolute -left-8 top-10 hidden h-40 w-40 rounded-full bg-[#d7a642]/10 blur-3xl lg:block" />
-      <div className="absolute -right-6 bottom-10 hidden h-48 w-48 rounded-full bg-emerald-300/10 blur-3xl lg:block" />
-      <BrowserChrome>
-        <div className="grid min-h-[420px] bg-white sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
-          <aside className="hidden border-r border-slate-200 bg-slate-950 p-4 text-white sm:block">
-            <div className="mb-7 flex items-center gap-2">
-              <div className="h-8 w-8 rounded-xl bg-[#d7a642]" />
-              <span className="font-semibold">Leonety</span>
-            </div>
-            {['nav.dashboard', 'nav.transactions', 'nav.clients', 'nav.invoices', 'nav.products'].map((key, index) => (
-              <div key={key} className={`mb-2 rounded-xl px-3 py-2 text-sm ${index === 0 ? 'bg-white text-slate-950' : 'text-slate-300'}`}>
-                <T k={key} />
-              </div>
-            ))}
-          </aside>
-          <div className="min-w-0 p-4 sm:p-5">
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-sm text-slate-500"><T k="landing.preview.workspace" /></p>
-                <h3 className="truncate text-2xl font-semibold text-slate-950"><T k="landing.preview.title" /></h3>
-              </div>
-              <div className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">
-                <T k="landing.preview.synced" />
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                ['nav.income', '12,450 €', 'text-emerald-700'],
-                ['nav.expenses', '8,320 €', 'text-red-600'],
-                ['landing.reports', '4,130 €', 'text-slate-950'],
-              ].map(([label, value, color]) => (
-                <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="truncate text-xs font-medium uppercase tracking-[0.16em] text-slate-500"><T k={label} /></p>
-                  <p className={`mt-3 text-2xl font-semibold ${color}`}>{value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_250px]">
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="mb-3 flex items-center justify-between gap-4">
-                  <p className="font-semibold text-slate-950"><T k="landing.preview.transactions" /></p>
-                  <span className="text-sm text-slate-500"><T k="landing.preview.thisMonth" /></span>
-                </div>
-                {[
-                  ['landing.preview.sampleCustomer', '+200.00 €', 'text-emerald-700'],
-                  ['landing.preview.sampleSupplier', '-84.20 €', 'text-red-600'],
-                  ['landing.preview.sampleTimeInvoice', '+640.00 €', 'text-emerald-700'],
-                ].map(([nameKey, amount, color]) => (
-                  <div key={nameKey} className="flex min-w-0 items-center justify-between border-t border-slate-100 py-3 text-sm">
-                    <span className="min-w-0 truncate pr-3 text-slate-700"><T k={nameKey} /></span>
-                    <span className={`shrink-0 font-semibold ${color}`}>{amount}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <p className="font-semibold text-slate-950"><T k="landing.preview.channels" /></p>
-                <div className="mt-4 space-y-2">
-                  {['WooCommerce', 'Google Merchant', 'TikTok Shop'].map((name, index) => (
-                    <div key={name} className="flex min-w-0 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                      <span className="min-w-0 truncate">{name}</span>
-                      <span className={index === 0 ? 'shrink-0 text-emerald-700' : 'shrink-0 text-amber-700'}>
-                        <T k={index === 0 ? 'landing.integration.available' : 'landing.integration.requiresSetup'} />
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </BrowserChrome>
-    </div>
+    <ProductScreenshot src="/landing/dashboard.webp" altKey="landing.media.dashboardAlt" width={1600} height={747} priority />
   )
 }
 
@@ -250,12 +171,10 @@ function ProductVisualCard({ visual, index }: { visual: typeof visualSections[nu
   const Icon = visual.icon
   const reverse = index % 2 === 1
   const toneClasses: Record<typeof visual.tone, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     amber: 'bg-amber-50 text-amber-700 ring-amber-200',
     blue: 'bg-blue-50 text-blue-700 ring-blue-200',
     slate: 'bg-slate-100 text-slate-700 ring-slate-200',
     gold: 'bg-[#fff4d8] text-[#8a6518] ring-[#e8ca73]',
-    violet: 'bg-violet-50 text-violet-700 ring-violet-200',
   }
 
   return (
@@ -268,9 +187,13 @@ function ProductVisualCard({ visual, index }: { visual: typeof visualSections[nu
         <h3 className="text-[clamp(1.5rem,3vw,2.25rem)] font-semibold leading-tight text-slate-950"><T k={visual.title} /></h3>
         <p className="mt-4 text-base leading-7 text-slate-600"><T k={visual.text} /></p>
       </div>
-      <BrowserChrome compact>
-        <MiniScreen id={visual.id} />
-      </BrowserChrome>
+      {visual.id === 'products' ? (
+        <ProductScreenshot src="/landing/products.webp" altKey="landing.media.productsAlt" width={1600} height={747} />
+      ) : visual.id === 'integrations' ? (
+        <ProductScreenshot src="/landing/integrations.webp" altKey="landing.media.integrationsAlt" width={1600} height={730} />
+      ) : (
+        <BrowserChrome compact><MiniScreen id={visual.id} /></BrowserChrome>
+      )}
     </article>
   )
 }
@@ -348,21 +271,6 @@ function MiniScreen({ id }: { id: typeof visualSections[number]['id'] }) {
             <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${className}`}><T k={statusKey} /></span>
           </div>
         ))}
-      </div>
-    )
-  }
-
-  if (id === 'assistant') {
-    return (
-      <div className="space-y-3 bg-slate-950 p-4 text-white">
-        <h4 className="font-semibold"><T k="assistant.title" /></h4>
-        <div className="rounded-2xl bg-white/10 p-3 text-sm text-slate-200"><T k="landing.visual.assistant.question" /></div>
-        <div className="ml-6 rounded-2xl bg-blue-600 p-3 text-sm"><T k="landing.visual.assistant.answer" /></div>
-        <div className="flex gap-2">
-          <span className="h-2 w-2 rounded-full bg-blue-300" />
-          <span className="h-2 w-2 rounded-full bg-blue-300" />
-          <span className="h-2 w-2 rounded-full bg-blue-300" />
-        </div>
       </div>
     )
   }
@@ -493,17 +401,7 @@ export default async function Home() {
               <h2 className="mt-4 text-[clamp(1.85rem,4.4vw,3.35rem)] font-semibold leading-tight tracking-tight"><T k="landing.integrations.title" /></h2>
               <p className="mt-5 text-base leading-8 text-slate-300 sm:text-lg"><T k="landing.integrations.text" /></p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {integrations.map(([name, statusKey, className]) => (
-                <div key={name} className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="min-w-0 font-semibold">{name}</h3>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${className}`}><T k={statusKey} /></span>
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-slate-300"><T k="landing.integrations.cardText" /></p>
-                </div>
-              ))}
-            </div>
+            <IntegrationGrid initial={integrations} more={additionalIntegrations} />
           </div>
         </section>
 
@@ -524,6 +422,16 @@ export default async function Home() {
                   <span className="shrink-0 text-sm text-slate-500"><T k={index === 0 ? 'landing.integration.available' : 'landing.integration.requiresSetup'} /></span>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="assistant" className="scroll-mt-24 bg-[#fbfaf7] py-14 sm:py-16 lg:py-20">
+          <div className="mx-auto w-[92%] max-w-7xl">
+            <SectionIntro eyebrowKey="landing.visual.assistant.eyebrow" titleKey="landing.assistant.sectionTitle" textKey="landing.assistant.sectionText" />
+            <div className="mt-10 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
+              <ProductScreenshot src="/landing/assistant.webp" altKey="landing.media.assistantAlt" width={820} height={1170} portrait />
+              <PublicAssistantDemo />
             </div>
           </div>
         </section>
