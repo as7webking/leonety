@@ -11,6 +11,7 @@ const appRoutes = [
   '/workspaces',
   '/upgrade',
   '/clients',
+  '/clients/:path*',
   '/invoices',
   '/contracts',
   '/contracts/:path*',

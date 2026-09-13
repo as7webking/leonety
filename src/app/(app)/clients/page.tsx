@@ -1,138 +1,46 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Building2, Edit, FileSignature, FileUp, Search, Trash2, UserRoundPlus, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Archive, Building2, ChevronLeft, ChevronRight, FileSignature, FileText, FileUp, Search, UserRoundPlus, X } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
-import { AddressAutocomplete } from '@/components/address-autocomplete'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
+import { formatCurrencyGroups, type ClientRecord } from '@/lib/client-crm'
+import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
-import { getIntlLocale, type Locale } from '@/lib/i18n'
 
+const PAGE_SIZE = 20
 const FREE_CLIENT_LIMIT = 25
 
-const statusOptions = [
-  'lead',
-  'interested',
-  'proposal_sent',
-  'client',
-  'inactive',
-] as const
+type ClientView = 'current' | 'archived'
+type ClientSort = 'name' | 'newest' | 'activity'
 
-type ClientStatus = typeof statusOptions[number]
-type ClientSource = 'manual' | 'csv' | 'whatsapp' | 'google_contacts' | 'other'
-
-interface ClientRecord {
-  id: string
-  company_id: string
-  name: string
-  email: string | null
-  phone: string | null
-  client_company: string | null
-  street: string | null
-  house_number: string | null
-  postal_code: string | null
-  city: string | null
-  country: string | null
-  tax_number: string | null
-  interested_in: string | null
-  notes: string | null
-  source: ClientSource | null
-  external_id: string | null
-  first_contact_at: string | null
-  last_activity_at: string | null
-  status: ClientStatus
-  created_at: string
-  updated_at: string | null
+interface ClientMetrics {
+  invoiceCount: number
+  contractCount: number
+  paid: Record<string, number>
+  unpaid: Record<string, number>
+  lastActivity: string | null
 }
 
-interface ClientFormState {
+interface ImportRow {
   name: string
   email: string
   phone: string
   client_company: string
-  street: string
-  house_number: string
-  postal_code: string
-  city: string
-  country: string
-  tax_number: string
-  interested_in: string
-  notes: string
-  status: ClientStatus
-}
-
-interface ClientImportRow {
-  name: string
-  email: string
-  phone: string
-  client_company: string
-  street: string
-  house_number: string
-  postal_code: string
-  city: string
-  country: string
-  interested_in: string
-  notes: string
-  status: ClientStatus
-  source: ClientSource
+  source: 'csv' | 'google_contacts'
   external_id: string
   duplicate: boolean
-  duplicateReason: string
 }
 
-const emptyForm: ClientFormState = {
-  name: '',
-  email: '',
-  phone: '',
-  client_company: '',
-  street: '',
-  house_number: '',
-  postal_code: '',
-  city: '',
-  country: '',
-  tax_number: '',
-  interested_in: '',
-  notes: '',
-  status: 'lead',
-}
-
-const sourceOptions: ClientSource[] = ['manual', 'csv', 'whatsapp', 'google_contacts', 'other']
-
-function getMonthRange() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), 1)
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-
-  return {
-    start: start.toISOString(),
-    end: end.toISOString(),
-  }
-}
-
-function formatStatus(status: string, t: (key: string) => string) {
-  return t(`clients.status.${status}`)
-}
-
-function formatSource(source: string | null | undefined, t: (key: string) => string) {
-  return t(`clients.source.${source || 'manual'}`)
-}
-
-function formatClientDate(value: string | null | undefined, locale: Locale) {
-  if (!value) return ''
-  return new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(new Date(value))
-}
-
-function validateClientForm(form: ClientFormState, t: (key: string) => string) {
-  if (!form.name.trim()) return t('clients.validation.nameRequired')
-  if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return t('clients.validation.emailInvalid')
-  return ''
+function sanitizeSearch(value: string) {
+  return value.replace(/[,()%]/g, ' ').trim().slice(0, 100)
 }
 
 function normalizePhone(value: string | null | undefined) {
@@ -143,818 +51,395 @@ function parseCsvLine(line: string) {
   const values: string[] = []
   let current = ''
   let quoted = false
-
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index]
-    const next = line[index + 1]
-
-    if (char === '"' && next === '"') {
+    if (char === '"' && line[index + 1] === '"') {
       current += '"'
       index += 1
-    } else if (char === '"') {
-      quoted = !quoted
-    } else if (char === ',' && !quoted) {
+    } else if (char === '"') quoted = !quoted
+    else if (char === ',' && !quoted) {
       values.push(current.trim())
       current = ''
-    } else {
-      current += char
-    }
+    } else current += char
   }
-
   values.push(current.trim())
   return values
 }
 
-function mapClientImportRow(row: Record<string, string>): ClientImportRow {
-  const get = (...keys: string[]) => {
-    for (const key of keys) {
-      const value = row[key.toLowerCase()]
-      if (value) return value.trim()
-    }
-    return ''
+function parseImportFile(text: string, isVcard: boolean): ImportRow[] {
+  if (isVcard) {
+    return text.split(/END:VCARD/i).map((card) => {
+      const row: ImportRow = { name: '', email: '', phone: '', client_company: '', source: 'csv', external_id: '', duplicate: false }
+      for (const line of card.split(/\r?\n/)) {
+        const separator = line.indexOf(':')
+        if (separator < 0) continue
+        const key = line.slice(0, separator).split(';')[0].toLowerCase()
+        const value = line.slice(separator + 1).trim()
+        if (key === 'fn') row.name = value
+        if (key === 'email' && !row.email) row.email = value
+        if (key === 'tel' && !row.phone) row.phone = value
+        if (key === 'org') row.client_company = value
+      }
+      return row
+    }).filter((row) => row.name || row.email || row.phone)
   }
 
-  return {
-    name: get('name', 'full name', 'client', 'fn'),
-    email: get('email', 'e-mail', 'mail'),
-    phone: get('phone', 'tel', 'telephone', 'mobile'),
-    client_company: get('company', 'organization', 'org', 'client_company'),
-    street: get('street', 'address', 'address line 1'),
-    house_number: get('house number', 'house_number', 'number'),
-    postal_code: get('postal code', 'postal_code', 'zip'),
-    city: get('city'),
-    country: get('country'),
-    interested_in: get('interested_in', 'interested in', 'interest'),
-    notes: get('notes', 'note'),
-    status: 'lead',
-    source: 'csv',
-    external_id: get('external_id', 'external id', 'google resource id'),
-    duplicate: false,
-    duplicateReason: '',
-  }
-}
-
-function mapGoogleContactImportRow(row: Record<string, string>): ClientImportRow {
-  return {
-    ...mapClientImportRow(row),
-    source: 'google_contacts',
-    external_id: row.external_id ?? '',
-    notes: row.notes || '',
-  }
-}
-
-function parseCsvClients(text: string) {
   const lines = text.split(/\r?\n/).filter((line) => line.trim())
   if (lines.length < 2) return []
   const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase())
-
   return lines.slice(1).map((line) => {
     const values = parseCsvLine(line)
-    const row = headers.reduce<Record<string, string>>((result, header, index) => ({
-      ...result,
-      [header]: values[index] ?? '',
-    }), {})
-    return mapClientImportRow(row)
-  }).filter((row) => row.name || row.phone || row.email)
-}
-
-function parseVcfClients(text: string) {
-  return text
-    .split(/END:VCARD/i)
-    .map((card) => {
-      const lines = card.split(/\r?\n/)
-      const row: Record<string, string> = {}
-      for (const line of lines) {
-        const separator = line.indexOf(':')
-        if (separator === -1) continue
-        const rawKey = line.slice(0, separator).split(';')[0].toLowerCase()
-        const value = line.slice(separator + 1).trim()
-        if (rawKey === 'fn') row.name = value
-        if (rawKey === 'tel' && !row.phone) row.phone = value
-        if (rawKey === 'email' && !row.email) row.email = value
-        if (rawKey === 'org') row.company = value
-        if (rawKey === 'note') row.notes = value
-      }
-      return mapClientImportRow(row)
-    })
-    .filter((row) => row.name || row.phone || row.email)
+    const get = (...names: string[]) => {
+      const index = headers.findIndex((header) => names.includes(header))
+      return index >= 0 ? values[index] ?? '' : ''
+    }
+    return {
+      name: get('name', 'full name', 'client', 'fn'),
+      email: get('email', 'e-mail', 'mail'),
+      phone: get('phone', 'telephone', 'tel', 'mobile'),
+      client_company: get('company', 'organization', 'org', 'client_company'),
+      source: 'csv' as const,
+      external_id: get('external_id', 'external id', 'google resource id'),
+      duplicate: false,
+    }
+  }).filter((row) => row.name || row.email || row.phone)
 }
 
 export default function ClientsPage() {
-  const router = useRouter()
-  const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
-  const importFileInputRef = useRef<HTMLInputElement | null>(null)
+  const [supabase] = useState(() => createClient())
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [clients, setClients] = useState<ClientRecord[]>([])
+  const [metrics, setMetrics] = useState<Record<string, ClientMetrics>>({})
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [showImport, setShowImport] = useState(false)
-  const [importRows, setImportRows] = useState<ClientImportRow[]>([])
-  const [importingClients, setImportingClients] = useState(false)
-  const [loadingGoogleContacts, setLoadingGoogleContacts] = useState(false)
-  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null)
-  const [formData, setFormData] = useState<ClientFormState>(emptyForm)
-  const [monthlyUsage, setMonthlyUsage] = useState(0)
-  const [supportsClientDetails, setSupportsClientDetails] = useState(true)
   const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all')
-  const [sourceFilter, setSourceFilter] = useState<'all' | ClientSource>('all')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [view, setView] = useState<ClientView>('current')
+  const [sort, setSort] = useState<ClientSort>('name')
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const isPro = accountAccess.plan === 'pro' || accountAccess.isAdmin
+  const [showImport, setShowImport] = useState(false)
+  const [importRows, setImportRows] = useState<ImportRow[]>([])
+  const [importing, setImporting] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  useBodyScrollLock(showImport)
+
+  useEffect(() => {
+    let cancelled = false
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setAccountEmail(data.user?.email ?? null)
+    })
+    return () => { cancelled = true }
+  }, [supabase])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 300)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  const loadMetrics = useCallback(async (clientRows: ClientRecord[]) => {
+    if (!currentCompany || clientRows.length === 0) {
+      setMetrics({})
+      return
+    }
+    const ids = clientRows.map((client) => client.id)
+    const [invoiceResult, contractResult] = await Promise.all([
+      supabase.from('invoices').select('id, client_id, total, currency, status, created_at, issue_date').eq('company_id', currentCompany.id).in('client_id', ids),
+      supabase.from('contracts').select('id, client_id, created_at, updated_at').eq('company_id', currentCompany.id).in('client_id', ids),
+    ])
+    const next = Object.fromEntries(clientRows.map((client) => [client.id, {
+      invoiceCount: 0,
+      contractCount: 0,
+      paid: {},
+      unpaid: {},
+      lastActivity: client.last_activity_at || client.updated_at || client.created_at,
+    }])) as Record<string, ClientMetrics>
+
+    if (!invoiceResult.error) {
+      const invoiceIds = (invoiceResult.data ?? []).map((invoice) => invoice.id)
+      const paymentResult = invoiceIds.length > 0
+        ? await supabase.from('invoice_payments').select('invoice_id, amount, currency').eq('company_id', currentCompany.id).in('invoice_id', invoiceIds)
+        : { data: [], error: null }
+      const paymentsByInvoice = new Map<string, number>()
+      if (!paymentResult.error) {
+        for (const payment of paymentResult.data ?? []) {
+          paymentsByInvoice.set(payment.invoice_id, (paymentsByInvoice.get(payment.invoice_id) ?? 0) + Number(payment.amount || 0))
+        }
+      }
+      for (const invoice of invoiceResult.data ?? []) {
+        if (!invoice.client_id || !next[invoice.client_id]) continue
+        const item = next[invoice.client_id]
+        item.invoiceCount += 1
+        const amount = Number(invoice.total || 0)
+        const allocated = paymentsByInvoice.get(invoice.id)
+        const paidAmount = allocated ?? (invoice.status === 'paid' ? amount : 0)
+        const unpaidAmount = invoice.status === 'sent' || invoice.status === 'overdue' ? Math.max(0, amount - paidAmount) : 0
+        if (paidAmount > 0) item.paid[invoice.currency] = (item.paid[invoice.currency] ?? 0) + paidAmount
+        if (unpaidAmount > 0) item.unpaid[invoice.currency] = (item.unpaid[invoice.currency] ?? 0) + unpaidAmount
+        const activityDate = invoice.issue_date || invoice.created_at
+        if (!item.lastActivity || new Date(activityDate) > new Date(item.lastActivity)) item.lastActivity = activityDate
+      }
+    }
+    if (!contractResult.error) {
+      for (const contract of contractResult.data ?? []) {
+        if (!contract.client_id || !next[contract.client_id]) continue
+        const item = next[contract.client_id]
+        item.contractCount += 1
+        const activityDate = contract.updated_at || contract.created_at
+        if (!item.lastActivity || new Date(activityDate) > new Date(item.lastActivity)) item.lastActivity = activityDate
+      }
+    }
+    setMetrics(next)
+  }, [currentCompany, supabase])
 
   const loadClients = useCallback(async () => {
     if (!currentCompany) {
       setLoading(false)
       return
     }
+    setLoading(true)
+    setError('')
+    const search = sanitizeSearch(debouncedQuery)
+    const extendedColumns = 'id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, interested_in, notes, source, external_id, first_contact_at, last_activity_at, status, created_at, updated_at'
+    const basicColumns = 'id, company_id, name, email, phone, client_company, interested_in, notes, status, created_at, updated_at'
 
-    try {
-      setLoading(true)
-      setErrorMessage('')
-
-      const monthRange = getMonthRange()
-      const extendedClientQuery = supabase
-        .from('clients')
-        .select('id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, interested_in, notes, source, external_id, first_contact_at, last_activity_at, status, created_at, updated_at')
-        .eq('company_id', currentCompany.id)
-        .order('created_at', { ascending: false })
-
-      let clientRes: {
-        data: unknown[] | null
-        error: { code?: string; message?: string } | null
-      } = await extendedClientQuery
-
-      if (clientRes.error && ['42703', 'PGRST204', 'PGRST205'].includes(clientRes.error.code ?? '')) {
-        setSupportsClientDetails(false)
-        clientRes = await supabase
-          .from('clients')
-          .select('id, company_id, name, email, phone, client_company, interested_in, notes, status, created_at, updated_at')
-          .eq('company_id', currentCompany.id)
-          .order('created_at', { ascending: false })
-      } else {
-        setSupportsClientDetails(true)
+    const execute = async (extended: boolean) => {
+      let request = supabase.from('clients').select(extended ? extendedColumns : basicColumns, { count: 'exact' }).eq('company_id', currentCompany.id)
+      request = view === 'archived' ? request.eq('status', 'inactive') : request.neq('status', 'inactive')
+      if (search) {
+        const fields = extended ? ['name', 'client_company', 'email', 'phone', 'tax_number'] : ['name', 'client_company', 'email', 'phone']
+        request = request.or(fields.map((field) => `${field}.ilike.%${search}%`).join(','))
       }
+      if (sort === 'name') request = request.order('name', { ascending: true })
+      else if (sort === 'activity' && extended) request = request.order('last_activity_at', { ascending: false, nullsFirst: false })
+      else request = request.order('created_at', { ascending: false })
+      return request.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+    }
 
-      const [, usageRes] = await Promise.all([
-        Promise.resolve(clientRes),
-        supabase
-          .from('clients')
-          .select('id', { count: 'exact', head: true })
-          .eq('company_id', currentCompany.id)
-          .gte('created_at', monthRange.start)
-          .lt('created_at', monthRange.end),
-      ])
-
-      if (clientRes.error) throw clientRes.error
-      if (usageRes.error) throw usageRes.error
-
-      setClients(((clientRes.data ?? []) as ClientRecord[]).map((client) => ({
-        ...client,
-        street: client.street ?? null,
-        house_number: client.house_number ?? null,
-        postal_code: client.postal_code ?? null,
-        city: client.city ?? null,
-        country: client.country ?? null,
-        tax_number: client.tax_number ?? null,
-        source: client.source ?? null,
-        external_id: client.external_id ?? null,
-        first_contact_at: client.first_contact_at ?? null,
-        last_activity_at: client.last_activity_at ?? null,
-      })))
-      setMonthlyUsage(usageRes.count ?? 0)
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load clients')
-    } finally {
+    let result = await execute(true)
+    if (result.error && ['42703', 'PGRST204', 'PGRST205'].includes(result.error.code ?? '')) result = await execute(false)
+    if (result.error) {
+      setError(t('clients.crm.loadFailed'))
+      setClients([])
       setLoading(false)
-    }
-  }, [currentCompany, supabase])
-
-  useEffect(() => {
-    const loadUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      setAccountEmail(data.user?.email ?? null)
+      return
     }
 
-    void loadUser()
-  }, [supabase])
+    const rows = (result.data ?? []).map((row) => ({
+      street: null,
+      house_number: null,
+      postal_code: null,
+      city: null,
+      country: null,
+      tax_number: null,
+      source: null,
+      external_id: null,
+      first_contact_at: null,
+      last_activity_at: null,
+      ...(row as unknown as Record<string, unknown>),
+    })) as ClientRecord[]
+    setClients(rows)
+    setTotal(result.count ?? 0)
+    await loadMetrics(rows)
+    setLoading(false)
+  }, [currentCompany, debouncedQuery, loadMetrics, page, sort, supabase, t, view])
 
   useEffect(() => {
-    void loadClients()
+    let cancelled = false
+    void Promise.resolve().then(() => {
+      if (!cancelled) void loadClients()
+    })
+    return () => { cancelled = true }
   }, [loadClients])
 
-  const filteredClients = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-
-    return clients.filter((client) => {
-      const matchesStatus = statusFilter === 'all' || client.status === statusFilter
-      const matchesSource = sourceFilter === 'all' || (client.source ?? 'manual') === sourceFilter
-      const matchesSearch =
-        !normalizedQuery ||
-        [client.name, client.email, client.phone, client.client_company, client.interested_in, client.notes, client.source]
-          .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery))
-
-      return matchesStatus && matchesSource && matchesSearch
-    })
-  }, [clients, query, sourceFilter, statusFilter])
-
-  const resetForm = () => {
-    setFormData(emptyForm)
-    setEditingClient(null)
-    setShowForm(false)
-  }
-
-  const markImportDuplicates = useCallback((rows: ClientImportRow[]) => {
-    const existingPhones = new Set(clients.map((client) => normalizePhone(client.phone)).filter(Boolean))
-    const existingEmails = new Set(clients.map((client) => String(client.email ?? '').trim().toLowerCase()).filter(Boolean))
-    const existingExternalIds = new Set(clients.map((client) => String(client.external_id ?? '').trim()).filter(Boolean))
-    const seenPhones = new Set<string>()
-    const seenEmails = new Set<string>()
-    const seenExternalIds = new Set<string>()
-
-    return rows.map((row) => {
-      const phone = normalizePhone(row.phone)
-      const email = row.email.trim().toLowerCase()
-      const externalId = row.external_id.trim()
-      const duplicateByPhone = Boolean(phone && (existingPhones.has(phone) || seenPhones.has(phone)))
-      const duplicateByEmail = Boolean(email && (existingEmails.has(email) || seenEmails.has(email)))
-      const duplicateByExternalId = Boolean(externalId && (existingExternalIds.has(externalId) || seenExternalIds.has(externalId)))
-
-      if (phone) seenPhones.add(phone)
-      if (email) seenEmails.add(email)
-      if (externalId) seenExternalIds.add(externalId)
-
-      return {
-        ...row,
-        duplicate: duplicateByPhone || duplicateByEmail || duplicateByExternalId,
-        duplicateReason: duplicateByExternalId
-          ? t('clients.importDuplicateExternal')
-          : duplicateByPhone
-            ? t('clients.importDuplicatePhone')
-            : duplicateByEmail
-              ? t('clients.importDuplicateEmail')
-              : '',
-      }
-    })
-  }, [clients, t])
-
-  const loadGoogleContactsPreview = useCallback(async () => {
-    if (!currentCompany) return
-
-    setLoadingGoogleContacts(true)
-    setErrorMessage('')
-    setMessage('')
-
-    try {
-      const response = await fetch(`/api/clients/google-contacts/preview?companyId=${encodeURIComponent(currentCompany.id)}`)
-      const payload = await response.json().catch(() => ({})) as { contacts?: Array<Record<string, string>>; error?: string }
-
-      if (!response.ok) {
-        throw new Error(t('clients.googleContactsPreviewFailed'))
-      }
-
-      const rows = (payload.contacts ?? []).map(mapGoogleContactImportRow)
-      setImportRows(markImportDuplicates(rows))
-      setShowImport(true)
-      if (rows.length === 0) {
-        setErrorMessage(t('clients.importNoRows'))
-      } else {
-        setMessage(t('clients.googleContactsPreviewReady').replace('{count}', String(rows.length)))
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('clients.googleContactsPreviewFailed'))
-    } finally {
-      setLoadingGoogleContacts(false)
+  const markDuplicates = useCallback(async (rows: ImportRow[]) => {
+    if (!currentCompany) return rows
+    let result = await supabase.from('clients').select('email, phone, external_id').eq('company_id', currentCompany.id)
+    if (result.error && ['42703', 'PGRST204', 'PGRST205'].includes(result.error.code ?? '')) {
+      result = await supabase.from('clients').select('email, phone').eq('company_id', currentCompany.id) as typeof result
     }
-  }, [currentCompany, markImportDuplicates, t])
+    const emails = new Set((result.data ?? []).map((item) => String(item.email ?? '').trim().toLowerCase()).filter(Boolean))
+    const phones = new Set((result.data ?? []).map((item) => normalizePhone(item.phone)).filter(Boolean))
+    const externalIds = new Set((result.data ?? []).map((item) => String(item.external_id ?? '')).filter(Boolean))
+    return rows.map((row) => ({ ...row, duplicate: Boolean((row.email && emails.has(row.email.trim().toLowerCase())) || (row.phone && phones.has(normalizePhone(row.phone))) || (row.external_id && externalIds.has(row.external_id))) }))
+  }, [currentCompany, supabase])
 
-  useEffect(() => {
-    if (!currentCompany) return
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('googleContacts') === 'preview') {
-      void loadGoogleContactsPreview()
-      window.history.replaceState(null, '', window.location.pathname)
-    }
-    const googleContactsError = params.get('googleContactsError')
-    if (googleContactsError) {
-      setErrorMessage(t('clients.googleContactsAuthFailed'))
-      window.history.replaceState(null, '', window.location.pathname)
-    }
-  }, [currentCompany, loadGoogleContactsPreview, t])
-
-  const handleGoogleContactsStart = () => {
-    if (!currentCompany) return
-    window.location.href = `/api/clients/google-contacts/start?companyId=${encodeURIComponent(currentCompany.id)}`
-  }
-
-  const handleImportFile = async (file: File | null) => {
+  const readImportFile = async (file: File | null) => {
     if (!file) return
-    setMessage('')
-    setErrorMessage('')
-
-    try {
-      const text = await file.text()
-      const lowerName = file.name.toLowerCase()
-      const parsed = lowerName.endsWith('.vcf') || file.type === 'text/vcard'
-        ? parseVcfClients(text)
-        : parseCsvClients(text)
-      setImportRows(markImportDuplicates(parsed))
-      if (parsed.length === 0) {
-        setErrorMessage(t('clients.importNoRows'))
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('clients.importFailed'))
-    }
+    const rows = parseImportFile(await file.text(), file.name.toLowerCase().endsWith('.vcf') || file.type === 'text/vcard')
+    setImportRows(await markDuplicates(rows))
   }
 
-  const handleImportClients = async () => {
-    if (!currentCompany) return
-    const rowsToImport = importRows.filter((row) => !row.duplicate && row.name.trim())
-    if (rowsToImport.length === 0) {
-      setErrorMessage(t('clients.importNoRows'))
-      return
+  const importClients = async () => {
+    if (!currentCompany || importing) return
+    const rows = importRows.filter((row) => !row.duplicate && row.name.trim())
+    if (rows.length === 0) return
+    if (accountAccess.plan !== 'pro' && !accountAccess.isAdmin) {
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()
+      const { count } = await supabase.from('clients').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).gte('created_at', monthStart).lt('created_at', nextMonth)
+      if ((count ?? 0) + rows.length > FREE_CLIENT_LIMIT) {
+        setError(t('clients.freeLimitReached'))
+        return
+      }
     }
-
-    if (!isPro && monthlyUsage + rowsToImport.length > FREE_CLIENT_LIMIT) {
-      setErrorMessage(t('clients.freeLimitReached'))
-      return
-    }
-
-    setImportingClients(true)
-    setMessage('')
-    setErrorMessage('')
-
-    const payload = rowsToImport.map((row) => ({
+    setImporting(true)
+    const payload = rows.map((row) => ({
       company_id: currentCompany.id,
       name: row.name.trim(),
       email: row.email.trim() || null,
       phone: row.phone.trim() || null,
       client_company: row.client_company.trim() || null,
-      interested_in: row.interested_in.trim() || null,
-      notes: [row.notes.trim(), t('clients.importSourceNote')].filter(Boolean).join('\n') || null,
-      status: row.status,
-      ...(supportsClientDetails ? {
-        source: row.source,
-        external_id: row.external_id.trim() || null,
-        street: row.street.trim() || null,
-        house_number: row.house_number.trim() || null,
-        postal_code: row.postal_code.trim() || null,
-        city: row.city.trim() || null,
-        country: row.country.trim() || null,
-      } : {}),
+      status: 'lead',
+      source: row.source,
+      external_id: row.external_id || null,
     }))
-
-    const { error } = await supabase.from('clients').insert(payload)
-    setImportingClients(false)
-
-    if (error) {
-      setErrorMessage(error.message)
-      return
+    let { error: importError } = await supabase.from('clients').insert(payload)
+    if (importError && ['42703', 'PGRST204', 'PGRST205'].includes(importError.code ?? '')) {
+      const fallback = await supabase.from('clients').insert(payload.map(({ source, external_id, ...row }) => {
+        void source
+        void external_id
+        return row
+      }))
+      importError = fallback.error
     }
-
-    setMessage(t('clients.importCompleted').replace('{count}', String(rowsToImport.length)))
-    setImportRows([])
-    setShowImport(false)
-    await loadClients()
+    setImporting(false)
+    if (importError) setError(t('clients.importFailed'))
+    else {
+      setMessage(t('clients.importCompleted').replace('{count}', String(rows.length)))
+      setImportRows([])
+      setShowImport(false)
+      await loadClients()
+    }
   }
 
-  const handleEdit = (client: ClientRecord) => {
-    setEditingClient(client)
-    setFormData({
-      name: client.name,
-      email: client.email ?? '',
-      phone: client.phone ?? '',
-      client_company: client.client_company ?? '',
-      street: client.street ?? '',
-      house_number: client.house_number ?? '',
-      postal_code: client.postal_code ?? '',
-      city: client.city ?? '',
-      country: client.country ?? '',
-      tax_number: client.tax_number ?? '',
-      interested_in: client.interested_in ?? '',
-      notes: client.notes ?? '',
-      status: client.status,
+  const startGoogleContacts = () => {
+    if (!currentCompany || googleLoading) return
+    setGoogleLoading(true)
+    window.location.href = `/api/clients/google-contacts/start?companyId=${encodeURIComponent(currentCompany.id)}`
+  }
+
+  const loadGooglePreview = useCallback(async () => {
+    if (!currentCompany) return
+    setGoogleLoading(true)
+    const response = await fetch(`/api/clients/google-contacts/preview?companyId=${encodeURIComponent(currentCompany.id)}`)
+    const payload = await response.json().catch(() => ({})) as { contacts?: Array<Record<string, string>> }
+    setGoogleLoading(false)
+    if (!response.ok) {
+      setError(t('clients.googleContactsPreviewFailed'))
+      return
+    }
+    const rows = (payload.contacts ?? []).map((item) => ({
+      name: item.name ?? '',
+      email: item.email ?? '',
+      phone: item.phone ?? '',
+      client_company: item.client_company ?? '',
+      source: 'google_contacts' as const,
+      external_id: item.external_id ?? '',
+      duplicate: false,
+    }))
+    setImportRows(await markDuplicates(rows))
+    setShowImport(true)
+  }, [currentCompany, markDuplicates, t])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const preview = params.get('googleContacts') === 'preview'
+    const authFailed = Boolean(params.get('googleContactsError'))
+    void Promise.resolve().then(() => {
+      if (preview) void loadGooglePreview()
+      if (authFailed) setError(t('clients.googleContactsAuthFailed'))
     })
-    setShowForm(true)
+    if (params.has('googleContacts') || params.has('googleContactsError')) window.history.replaceState(null, '', window.location.pathname)
+  }, [loadGooglePreview, t])
+
+  const archive = async (client: ClientRecord) => {
+    if (!currentCompany || !window.confirm(t('clients.crm.archiveConfirm'))) return
+    const { error: archiveError } = await supabase.from('clients').update({ status: 'inactive', updated_at: new Date().toISOString() }).eq('id', client.id).eq('company_id', currentCompany.id)
+    if (archiveError) setError(t('clients.crm.archiveFailed'))
+    else await loadClients()
   }
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setMessage('')
-    setErrorMessage('')
-
-    if (!currentCompany) {
-      setErrorMessage(t('common.noWorkspaceSelected'))
-      return
-    }
-
-    const validationError = validateClientForm(formData, t)
-    if (validationError) {
-      setErrorMessage(validationError)
-      return
-    }
-
-    if (!editingClient && !isPro && monthlyUsage >= FREE_CLIENT_LIMIT) {
-      setErrorMessage(t('clients.freeLimitReached'))
-      return
-    }
-
-    const basePayload = {
-      company_id: currentCompany.id,
-      name: formData.name.trim(),
-      email: formData.email.trim() || null,
-      phone: formData.phone.trim() || null,
-      client_company: formData.client_company.trim() || null,
-      interested_in: formData.interested_in.trim() || null,
-      notes: formData.notes.trim() || null,
-      status: formData.status,
-      updated_at: new Date().toISOString(),
-    }
-    const detailPayload = supportsClientDetails
-      ? {
-        street: formData.street.trim() || null,
-        house_number: formData.house_number.trim() || null,
-        postal_code: formData.postal_code.trim() || null,
-        city: formData.city.trim() || null,
-        country: formData.country.trim() || null,
-        tax_number: formData.tax_number.trim() || null,
-      }
-      : {}
-    const payload = { ...basePayload, ...detailPayload }
-
-    try {
-      if (editingClient) {
-        const { error } = await supabase
-          .from('clients')
-          .update(payload)
-          .eq('id', editingClient.id)
-          .eq('company_id', currentCompany.id)
-        if (error) throw error
-        setMessage(t('clients.updated'))
-      } else {
-        const { error } = await supabase.from('clients').insert({
-          ...payload,
-        })
-        if (error) throw error
-        setMessage(t('clients.created'))
-      }
-
-      resetForm()
-      await loadClients()
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('clients.saveFailed'))
-    }
+  const restore = async (client: ClientRecord) => {
+    if (!currentCompany) return
+    const { error: restoreError } = await supabase.from('clients').update({ status: 'client', updated_at: new Date().toISOString() }).eq('id', client.id).eq('company_id', currentCompany.id)
+    if (restoreError) setError(t('clients.crm.restoreFailed'))
+    else await loadClients()
   }
 
-  const handleDelete = async (client: ClientRecord) => {
-    if (!currentCompany || !window.confirm(t('clients.deleteConfirm').replace('{name}', client.name))) return
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const intlLocale = getIntlLocale(locale)
 
-    try {
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', client.id)
-        .eq('company_id', currentCompany.id)
-
-      if (error) throw error
-      setMessage(t('clients.deleted'))
-      await loadClients()
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('clients.deleteFailed'))
-    }
-  }
-
-  if (companyLoading || loading) {
-    return (
-      <PageContainer>
-        <PageHeader title={t('clients.title')} description={t('clients.description')} />
-        <LoadingSkeleton />
-      </PageContainer>
-    )
-  }
-
-  if (!currentCompany) {
-    return (
-      <PageContainer>
-        <PageHeader title={t('clients.title')} description={t('clients.description')} />
-        <EmptyState
-          icon={Building2}
-          title={t('common.noWorkspaceSelected')}
-          description={t('dashboard.noWorkspace')}
-          action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/onboarding') }}
-        />
-      </PageContainer>
-    )
-  }
-
-  if (currentCompany.type !== 'business') {
-    return (
-      <PageContainer>
-        <PageHeader title={t('clients.title')} description={t('clients.description')} />
-        <EmptyState
-          icon={Building2}
-          title={t('common.businessOnlyTitle')}
-          description={t('common.businessOnlyDescription')}
-          action={{ label: t('nav.workspaces'), onClick: () => router.push('/app/workspaces') }}
-        />
-      </PageContainer>
-    )
-  }
+  if (companyLoading) return <PageContainer><LoadingSkeleton /></PageContainer>
+  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} description={t('dashboard.noWorkspace')} /></PageContainer>
+  if (currentCompany.type !== 'business') return <PageContainer><EmptyState icon={Building2} title={t('common.businessOnlyTitle')} description={t('common.businessOnlyDescription')} /></PageContainer>
 
   return (
     <PageContainer>
-      <PageHeader title={t('clients.title')} description={`${t('clients.description')} · ${currentCompany.name}`}>
+      <PageHeader title={t('clients.title')} description={`${t('clients.crm.databaseDescription')} · ${currentCompany.name}`}>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setShowImport(true)}>
-            <FileUp className="h-4 w-4" />
-            {t('clients.importClients')}
-          </Button>
-          <Button onClick={() => { setShowForm((value) => !value); setEditingClient(null); setFormData(emptyForm) }}>
-            <UserRoundPlus className="h-4 w-4" />
-            {showForm ? t('common.cancel') : t('clients.add')}
-          </Button>
+          <Button variant="outline" onClick={() => setShowImport(true)}><FileUp className="h-4 w-4" />{t('clients.importClients')}</Button>
+          <Button asChild><Link href="/app/clients/new"><UserRoundPlus className="h-4 w-4" />{t('clients.crm.createClient')}</Link></Button>
         </div>
       </PageHeader>
 
-      <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_auto]">
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          {isPro
-            ? t('clients.proUsage')
-            : t('clients.freeUsage').replace('{used}', String(monthlyUsage)).replace('{limit}', String(FREE_CLIENT_LIMIT))}
-          {!isPro && monthlyUsage >= FREE_CLIENT_LIMIT && (
-            <Link href="/app/upgrade" className="ml-2 font-medium text-blue-700 hover:underline">{t('workspaces.upgradePlan')}</Link>
-          )}
-        </div>
-        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_minmax(10rem,12rem)]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
-              placeholder={t('clients.searchPlaceholder')}
-            />
-          </div>
-          <AppSelect
-            value={statusFilter}
-            onChange={(value) => setStatusFilter(value as 'all' | ClientStatus)}
-            options={[
-              { value: 'all', label: t('clients.allStatuses') },
-              ...statusOptions.map((status) => ({ value: status, label: formatStatus(status, t) })),
-            ]}
-          />
-          <AppSelect
-            value={sourceFilter}
-            onChange={(value) => setSourceFilter(value as 'all' | ClientSource)}
-            options={[
-              { value: 'all', label: t('clients.allSources') },
-              ...sourceOptions.map((source) => ({ value: source, label: formatSource(source, t) })),
-            ]}
-          />
-        </div>
+      <div className="mb-5 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+        <label className="relative min-w-0">
+          <span className="sr-only">{t('clients.searchPlaceholder')}</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0) }} className="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base" placeholder={t('clients.searchPlaceholder')} />
+        </label>
+        <AppSelect value={view} onChange={(value) => { setView(value as ClientView); setPage(0) }} options={[{ value: 'current', label: t('clients.crm.current') }, { value: 'archived', label: t('clients.crm.archived') }]} />
+        <AppSelect value={sort} onChange={(value) => { setSort(value as ClientSort); setPage(0) }} options={[{ value: 'name', label: t('clients.crm.sortName') }, { value: 'newest', label: t('clients.crm.sortNewest') }, { value: 'activity', label: t('clients.crm.sortActivity') }]} />
       </div>
 
-      {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>}
-      {errorMessage && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
-          {errorMessage}
-          {errorMessage.includes('Free plan limit') && (
-            <Link href="/app/upgrade" className="ml-2 font-medium underline">{t('workspaces.upgradePlan')}</Link>
-          )}
-        </div>
-      )}
+      {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}
+      {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
-      {showImport && (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="client-import-title" className="flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-4xl sm:rounded-xl">
-            <div className="flex items-start justify-between gap-4 border-b p-4">
-              <div>
-                <h2 id="client-import-title" className="text-xl font-semibold text-slate-950">{t('clients.importClients')}</h2>
-                <p className="mt-1 text-sm text-slate-500">{t('clients.importDescription')}</p>
-              </div>
-              <button type="button" onClick={() => setShowImport(false)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={t('common.cancel')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-              <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
-                {t('clients.importPrivacyNote')}
-              </div>
-              <div className="rounded-md border border-slate-200 bg-white p-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-slate-900">{t('clients.googleContactsTitle')}</p>
-                    <p className="mt-1 text-sm text-slate-500">{t('clients.googleContactsDescription')}</p>
-                  </div>
-                  <Button type="button" variant="outline" onClick={handleGoogleContactsStart} disabled={loadingGoogleContacts}>
-                    {loadingGoogleContacts ? t('common.loading') : t('clients.googleContactsConnect')}
-                  </Button>
-                </div>
-              </div>
-              <input
-                ref={importFileInputRef}
-                type="file"
-                accept=".csv,.vcf,text/csv,text/vcard"
-                onChange={(event) => void handleImportFile(event.target.files?.[0] ?? null)}
-                className="hidden"
-              />
-              <Button type="button" variant="outline" onClick={() => importFileInputRef.current?.click()}>
-                <FileUp className="h-4 w-4" />
-                {t('common.chooseFile')}
-              </Button>
-              {importRows.length > 0 && (
-                <div className="overflow-x-auto rounded-md border">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2">{t('clients.name')}</th>
-                        <th className="px-3 py-2">{t('clients.phone')}</th>
-                        <th className="px-3 py-2">{t('clients.email')}</th>
-                        <th className="px-3 py-2">{t('clients.interestedIn')}</th>
-                        <th className="px-3 py-2">{t('clients.status')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {importRows.slice(0, 80).map((row, index) => (
-                        <tr key={`${row.name}-${row.phone}-${index}`} className={row.duplicate ? 'bg-amber-50' : 'bg-white'}>
-                          <td className="px-3 py-2">{row.name || '-'}</td>
-                          <td className="px-3 py-2">{row.phone || '-'}</td>
-                          <td className="px-3 py-2">{row.email || '-'}</td>
-                          <td className="px-3 py-2">{row.interested_in || '-'}</td>
-                          <td className="px-3 py-2">{row.duplicate ? row.duplicateReason : t('clients.importReady')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            <div className="flex flex-wrap justify-between gap-3 border-t bg-white p-4">
-              <p className="text-sm text-slate-500">
-                {t('clients.importSummary')
-                  .replace('{total}', String(importRows.length))
-                  .replace('{ready}', String(importRows.filter((row) => !row.duplicate && row.name.trim()).length))}
-              </p>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowImport(false)}>{t('common.cancel')}</Button>
-                <Button type="button" disabled={importingClients || importRows.filter((row) => !row.duplicate && row.name.trim()).length === 0} onClick={() => void handleImportClients()}>
-                  {importingClients ? t('common.loading') : t('clients.importSelected')}
-                </Button>
-              </div>
-            </div>
+      {loading ? <LoadingSkeleton /> : clients.length === 0 ? <EmptyState title={t('clients.noClients')} description={t('clients.crm.emptyDescription')} /> : (
+        <>
+          <div className="hidden overflow-x-auto rounded-md border border-slate-200 bg-white xl:block">
+            <table className="w-full min-w-[1120px] text-left text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-slate-500"><tr>
+                <th className="px-4 py-3 font-medium">{t('clients.crm.client')}</th><th className="px-4 py-3 font-medium">{t('clients.crm.contact')}</th><th className="px-4 py-3 font-medium">{t('clients.crm.invoices')}</th><th className="px-4 py-3 font-medium">{t('clients.crm.unpaid')}</th><th className="px-4 py-3 font-medium">{t('clients.crm.paid')}</th><th className="px-4 py-3 font-medium">{t('clients.crm.contracts')}</th><th className="px-4 py-3 font-medium">{t('clients.crm.lastActivity')}</th><th className="px-4 py-3"><span className="sr-only">{t('clients.crm.actions')}</span></th>
+              </tr></thead>
+              <tbody className="divide-y divide-slate-100">{clients.map((client) => <ClientRow key={client.id} client={client} metric={metrics[client.id]} locale={intlLocale} fallbackCurrency={currentCompany.currency ?? 'EUR'} t={t} view={view} archive={archive} restore={restore} />)}</tbody>
+            </table>
           </div>
-        </div>
+          <div className="grid gap-3 xl:hidden">{clients.map((client) => <ClientCard key={client.id} client={client} metric={metrics[client.id]} locale={intlLocale} fallbackCurrency={currentCompany.currency ?? 'EUR'} t={t} view={view} archive={archive} restore={restore} />)}</div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-500">{t('clients.crm.pagination').replace('{page}', String(page + 1)).replace('{pages}', String(pageCount)).replace('{total}', String(total))}</p>
+            <div className="flex gap-2"><Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft className="h-4 w-4" />{t('clients.crm.previous')}</Button><Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => value + 1)}>{t('clients.crm.next')}<ChevronRight className="h-4 w-4" /></Button></div>
+          </div>
+        </>
       )}
 
-      {showForm && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>{editingClient ? t('clients.edit') : t('clients.create')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <label className="space-y-1">
-                <span className="text-sm font-medium">{t('clients.name')}</span>
-                <input value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
-              </label>
-              <label className="space-y-1">
-                <span className="text-sm font-medium">{t('clients.clientCompany')}</span>
-                <input value={formData.client_company} onChange={(event) => setFormData({ ...formData, client_company: event.target.value })} className="w-full rounded-md border px-3 py-2" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-sm font-medium">{t('clients.email')}</span>
-                <input type="email" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('auth.emailPlaceholder')} />
-              </label>
-              <label className="space-y-1">
-                <span className="text-sm font-medium">{t('clients.phone')}</span>
-                <input value={formData.phone} onChange={(event) => setFormData({ ...formData, phone: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="+49 ..." />
-              </label>
-              <label className="space-y-1">
-                <span className="text-sm font-medium">{t('clients.interestedIn')}</span>
-                <input value={formData.interested_in} onChange={(event) => setFormData({ ...formData, interested_in: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('clients.interestedPlaceholder')} />
-              </label>
-              <label className="space-y-1">
-                <span className="text-sm font-medium">{t('clients.status')}</span>
-                <AppSelect
-                  value={formData.status}
-                  onChange={(value) => setFormData({ ...formData, status: value as ClientStatus })}
-                  options={statusOptions.map((status) => ({ value: status, label: formatStatus(status, t) }))}
-                />
-              </label>
-              {supportsClientDetails && (
-                <>
-                  <div className="md:col-span-2 xl:col-span-3">
-                    <AddressAutocomplete
-                      country={formData.country}
-                      onSelect={(suggestion) => setFormData({
-                        ...formData,
-                        street: suggestion.street || formData.street,
-                        house_number: suggestion.houseNumber || formData.house_number,
-                        postal_code: suggestion.postalCode || formData.postal_code,
-                        city: suggestion.city || formData.city,
-                        country: suggestion.country || formData.country,
-                      })}
-                    />
-                  </div>
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('clients.street')}</span>
-                    <input value={formData.street} onChange={(event) => setFormData({ ...formData, street: event.target.value })} className="w-full rounded-md border px-3 py-2" />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('clients.houseNumber')}</span>
-                    <input value={formData.house_number} onChange={(event) => setFormData({ ...formData, house_number: event.target.value })} className="w-full rounded-md border px-3 py-2" />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('clients.postalCode')}</span>
-                    <input value={formData.postal_code} onChange={(event) => setFormData({ ...formData, postal_code: event.target.value })} className="w-full rounded-md border px-3 py-2" />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('clients.city')}</span>
-                    <input value={formData.city} onChange={(event) => setFormData({ ...formData, city: event.target.value })} className="w-full rounded-md border px-3 py-2" />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('clients.country')}</span>
-                    <input value={formData.country} onChange={(event) => setFormData({ ...formData, country: event.target.value })} className="w-full rounded-md border px-3 py-2" />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-sm font-medium">{t('clients.taxNumber')}</span>
-                    <input value={formData.tax_number} onChange={(event) => setFormData({ ...formData, tax_number: event.target.value })} className="w-full rounded-md border px-3 py-2" />
-                  </label>
-                </>
-              )}
-              <label className="space-y-1 md:col-span-2 xl:col-span-3">
-                <span className="text-sm font-medium">{t('clients.notes')}</span>
-                <textarea value={formData.notes} onChange={(event) => setFormData({ ...formData, notes: event.target.value })} className="min-h-24 w-full rounded-md border px-3 py-2" />
-              </label>
-              {!supportsClientDetails && (
-                <p className="text-sm text-amber-700 md:col-span-2 xl:col-span-3">{t('clients.detailsMigrationRequired')}</p>
-              )}
-              <div className="flex gap-2 md:col-span-2 xl:col-span-3">
-                <Button type="submit">{editingClient ? t('common.saveChanges') : t('clients.create')}</Button>
-                <Button type="button" variant="outline" onClick={resetForm}>{t('common.cancel')}</Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {filteredClients.length === 0 ? (
-        <EmptyState title={t('clients.noClients')} description={t('clients.noClientsDescription')} />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredClients.map((client) => (
-            <Card key={client.id}>
-              <CardContent className="space-y-3 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-slate-950">{client.name}</h3>
-                    <p className="text-sm text-slate-500">{client.client_company || t('clients.noCompany')}</p>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{formatStatus(client.status, t)}</span>
-                </div>
-                <div className="space-y-1 text-sm text-slate-600">
-                  {client.email && <p>{client.email}</p>}
-                  {client.phone && <p>{client.phone}</p>}
-                  <p><span className="font-medium">{t('clients.source')}:</span> {formatSource(client.source, t)}</p>
-                  {client.source === 'whatsapp' && (
-                    <>
-                      {client.first_contact_at && <p><span className="font-medium">{t('clients.firstContact')}:</span> {formatClientDate(client.first_contact_at, locale)}</p>}
-                      {client.last_activity_at && <p><span className="font-medium">{t('clients.lastActivity')}:</span> {formatClientDate(client.last_activity_at, locale)}</p>}
-                    </>
-                  )}
-                  {(client.street || client.house_number || client.postal_code || client.city || client.country) && (
-                    <p>
-                      {[client.street, client.house_number, client.postal_code, client.city, client.country].filter(Boolean).join(' ')}
-                    </p>
-                  )}
-                  {client.tax_number && <p>{t('clients.taxNumber')}: {client.tax_number}</p>}
-                  {client.interested_in && <p><span className="font-medium">{t('clients.interestedIn')}:</span> {client.interested_in}</p>}
-                  {client.notes && <p className="line-clamp-3">{client.notes}</p>}
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button asChild type="button" variant="outline" size="sm">
-                    <Link href={`/app/contracts?clientId=${client.id}`}>
-                      <FileSignature className="h-4 w-4" />
-                      {t('contracts.create')}
-                    </Link>
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => handleEdit(client)}>
-                    <Edit className="h-4 w-4" />
-                    {t('common.edit')}
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => handleDelete(client)}>
-                    <Trash2 className="h-4 w-4" />
-                    {t('common.delete')}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      {showImport && <div className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-slate-950/50 p-3 pt-[max(1rem,env(safe-area-inset-top))]" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="client-import-title" className="my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-md bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b p-4"><div><h2 id="client-import-title" className="text-lg font-semibold">{t('clients.importClients')}</h2><p className="mt-1 text-sm text-slate-500">{t('clients.importDescription')}</p></div><button type="button" className="rounded-md p-2 hover:bg-slate-100" onClick={() => setShowImport(false)} aria-label={t('clients.crm.close')}><X className="h-5 w-5" /></button></div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4"><div className="flex flex-wrap gap-2"><input ref={fileInputRef} type="file" accept=".csv,.vcf,text/csv,text/vcard" className="hidden" onChange={(event) => void readImportFile(event.target.files?.[0] ?? null)} /><Button variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="h-4 w-4" />{t('common.chooseFile')}</Button><Button variant="outline" onClick={startGoogleContacts} disabled={googleLoading}>{googleLoading ? t('common.loading') : t('clients.googleContactsConnect')}</Button></div>
+          {importRows.length > 0 && <div className="overflow-x-auto rounded-md border"><table className="min-w-[600px] w-full text-sm"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">{t('clients.name')}</th><th className="px-3 py-2">{t('clients.email')}</th><th className="px-3 py-2">{t('clients.phone')}</th><th className="px-3 py-2">{t('clients.status')}</th></tr></thead><tbody className="divide-y">{importRows.slice(0,100).map((row,index)=><tr key={`${row.email}-${row.phone}-${index}`} className={row.duplicate?'bg-amber-50':''}><td className="px-3 py-2">{row.name||'—'}</td><td className="px-3 py-2">{row.email||'—'}</td><td className="px-3 py-2">{row.phone||'—'}</td><td className="px-3 py-2">{row.duplicate?t('clients.crm.possibleDuplicate'):t('clients.importReady')}</td></tr>)}</tbody></table></div>}
+        </div><div className="flex flex-wrap items-center justify-end gap-2 border-t p-4"><Button variant="outline" onClick={() => setShowImport(false)}>{t('common.cancel')}</Button><Button disabled={importing || !importRows.some((row) => !row.duplicate && row.name.trim())} onClick={() => void importClients()}>{importing ? t('common.loading') : t('clients.importSelected')}</Button></div>
+      </div></div>}
     </PageContainer>
   )
+}
+
+function ClientRow({ client, metric, locale, fallbackCurrency, t, view, archive, restore }: { client: ClientRecord; metric?: ClientMetrics; locale: string; fallbackCurrency: string; t: (key: string) => string; view: ClientView; archive: (client: ClientRecord) => Promise<void>; restore: (client: ClientRecord) => Promise<void> }) {
+  return <tr><td className="px-4 py-4"><Link href={`/app/clients/${client.id}`} className="font-medium text-slate-950 hover:text-blue-700">{client.client_company || client.name}</Link>{client.client_company && <p className="mt-1 text-xs text-slate-500">{client.name}</p>}</td><td className="max-w-52 px-4 py-4 text-slate-600"><p className="truncate">{client.email || '—'}</p><p>{client.phone || '—'}</p></td><td className="px-4 py-4">{metric?.invoiceCount ?? 0}</td><td className="px-4 py-4 font-medium text-amber-700">{formatCurrencyGroups(metric?.unpaid ?? {}, locale, fallbackCurrency)}</td><td className="px-4 py-4 font-medium text-emerald-700">{formatCurrencyGroups(metric?.paid ?? {}, locale, fallbackCurrency)}</td><td className="px-4 py-4">{metric?.contractCount ?? 0}</td><td className="px-4 py-4 text-slate-600">{metric?.lastActivity ? new Intl.DateTimeFormat(locale).format(new Date(metric.lastActivity)) : '—'}</td><td className="px-4 py-4"><RowActions client={client} t={t} view={view} archive={archive} restore={restore} /></td></tr>
+}
+
+function ClientCard({ client, metric, locale, fallbackCurrency, t, view, archive, restore }: { client: ClientRecord; metric?: ClientMetrics; locale: string; fallbackCurrency: string; t: (key: string) => string; view: ClientView; archive: (client: ClientRecord) => Promise<void>; restore: (client: ClientRecord) => Promise<void> }) {
+  return <Card><CardContent className="space-y-4 p-4"><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><Link href={`/app/clients/${client.id}`} className="block truncate font-semibold text-slate-950">{client.client_company || client.name}</Link>{client.client_company && <p className="truncate text-sm text-slate-500">{client.name}</p>}</div><span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{t(`clients.status.${client.status}`)}</span></div><div className="grid grid-cols-2 gap-3 text-sm"><SmallMetric label={t('clients.crm.invoices')} value={String(metric?.invoiceCount ?? 0)} /><SmallMetric label={t('clients.crm.contracts')} value={String(metric?.contractCount ?? 0)} /><SmallMetric label={t('clients.crm.unpaid')} value={formatCurrencyGroups(metric?.unpaid ?? {}, locale, fallbackCurrency)} /><SmallMetric label={t('clients.crm.paid')} value={formatCurrencyGroups(metric?.paid ?? {}, locale, fallbackCurrency)} /></div><div className="min-w-0 text-sm text-slate-600"><p className="truncate">{client.email || '—'}</p><p>{client.phone || '—'}</p><p className="mt-1">{t('clients.crm.lastActivity')}: {metric?.lastActivity ? new Intl.DateTimeFormat(locale).format(new Date(metric.lastActivity)) : '—'}</p></div><RowActions client={client} t={t} view={view} archive={archive} restore={restore} /></CardContent></Card>
+}
+
+function SmallMetric({ label, value }: { label: string; value: string }) { return <div className="min-w-0 rounded-md bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 break-words font-medium text-slate-900">{value}</p></div> }
+
+function RowActions({ client, t, view, archive, restore }: { client: ClientRecord; t: (key: string) => string; view: ClientView; archive: (client: ClientRecord) => Promise<void>; restore: (client: ClientRecord) => Promise<void> }) {
+  return <div className="flex flex-wrap gap-2"><Button asChild size="sm" variant="outline"><Link href={`/app/clients/${client.id}`}>{t('clients.crm.open')}</Link></Button><Button asChild size="sm" variant="outline"><Link href={`/app/invoices?clientId=${client.id}`}><FileText className="h-4 w-4" /><span className="sr-only">{t('clients.crm.createInvoice')}</span></Link></Button><Button asChild size="sm" variant="outline"><Link href={`/app/contracts/new?clientId=${client.id}`}><FileSignature className="h-4 w-4" /><span className="sr-only">{t('clients.crm.createContract')}</span></Link></Button>{view === 'archived' ? <Button size="sm" variant="outline" onClick={() => void restore(client)}>{t('clients.crm.restore')}</Button> : <Button size="sm" variant="outline" onClick={() => void archive(client)}><Archive className="h-4 w-4" /><span className="sr-only">{t('clients.crm.archive')}</span></Button>}</div>
 }

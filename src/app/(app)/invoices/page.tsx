@@ -408,6 +408,7 @@ export default function InvoicesPage() {
   const [deleteInvoice, setDeleteInvoice] = useState<InvoiceRecord | null>(null)
   const [sourceContractId, setSourceContractId] = useState('')
   const [prefilledContractId, setPrefilledContractId] = useState('')
+  const [prefilledClientId, setPrefilledClientId] = useState('')
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [companyLogo, setCompanyLogo] = useState('')
@@ -653,6 +654,27 @@ export default function InvoicesPage() {
   useEffect(() => {
     void loadInvoices()
   }, [loadInvoices])
+
+  useEffect(() => {
+    const clientId = searchParams.get('clientId') ?? ''
+    if (!clientId || prefilledClientId === clientId || clients.length === 0) return
+    if (!clients.some((client) => client.id === clientId)) {
+      setPrefilledClientId(clientId)
+      return
+    }
+
+    setEditingInvoice(null)
+    setSourceContractId('')
+    setFormData((current) => ({
+      ...current,
+      client_id: clientId,
+      invoice_number: makeInvoiceNumber(invoices),
+      currency: normalizeCurrencyCode(currentCompany?.currency ?? current.currency),
+    }))
+    setQuickClient({ name: '', phone: '', interested_in: '' })
+    setShowForm(true)
+    setPrefilledClientId(clientId)
+  }, [clients, currentCompany?.currency, invoices, prefilledClientId, searchParams])
 
   useEffect(() => {
     const contractId = searchParams.get('contractId') ?? ''

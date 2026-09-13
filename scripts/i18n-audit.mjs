@@ -6,6 +6,7 @@ const root = process.cwd()
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr']
 const translationFiles = [
   path.join(root, 'src/lib/business-modules-i18n.ts'),
+  path.join(root, 'src/lib/client-crm-i18n.ts'),
   path.join(root, 'src/lib/i18n.ts'),
   path.join(root, 'src/lib/public-website-i18n.ts'),
 ]
@@ -119,6 +120,7 @@ function collectDictionaryKeys() {
     ['src/lib/i18n.ts', 'productManagementUxDictionaries'],
     ['src/lib/i18n.ts', 'featureExpansionDictionaries'],
     ['src/lib/i18n.ts', 'uxFeatureDictionaries'],
+    ['src/lib/client-crm-i18n.ts', 'clientCrmDictionaries'],
     ['src/lib/public-website-i18n.ts', 'publicWebsiteDictionaries'],
   ]
 
