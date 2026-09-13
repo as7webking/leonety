@@ -62,9 +62,10 @@ export const emptyClientForm: ClientFormValues = {
 }
 
 export function clientToForm(client: ClientRecord): ClientFormValues {
+  const isCompany = Boolean(client.client_company)
   return {
-    clientType: client.client_company ? 'company' : 'person',
-    name: client.name,
+    clientType: isCompany ? 'company' : 'person',
+    name: isCompany && client.name === client.client_company ? '' : client.name,
     client_company: client.client_company ?? '',
     email: client.email ?? '',
     phone: client.phone ?? '',

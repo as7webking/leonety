@@ -26,6 +26,8 @@ interface TransactionRow {
   category: string | null
   amount: number
   currency: string
+  note: string | null
+  payment_method: string | null
 }
 
 interface SupabaseTransactionRow {
@@ -36,6 +38,8 @@ interface SupabaseTransactionRow {
   category: string | null
   amount: number | string
   currency: string
+  note?: string | null
+  payment_method?: string | null
 }
 
 type BulkRenameTarget = 'all' | 'income' | 'expense'
@@ -70,8 +74,12 @@ export default function TransactionsPage() {
   const [showBulkRename, setShowBulkRename] = useState(false)
   const [importing, setImporting] = useState(false)
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
-  const [selectedField, setSelectedField] = useState<BulkRenameField>('description')
-  const [selectedValue, setSelectedValue] = useState('')
+  const [bulkEdit, setBulkEdit] = useState({
+    category: { enabled: false, value: '' },
+    date: { enabled: false, value: '' },
+    payment_method: { enabled: false, value: '' },
+    note: { enabled: false, value: '' },
+  })
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [printFromDate, setPrintFromDate] = useState(() => {
@@ -112,10 +120,10 @@ export default function TransactionsPage() {
       setErrorMessage('')
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
-      const queryTransactions = async (table: TransactionTable, includeTitle: boolean): Promise<TransactionQueryResult> => {
-        const columns = includeTitle
-          ? 'id, date, title, description, category, amount, currency'
-          : 'id, date, description, category, amount, currency'
+      const queryTransactions = async (table: TransactionTable, includeTitle: boolean, includeAccounting: boolean): Promise<TransactionQueryResult> => {
+        const columns = includeAccounting
+          ? 'id, date, title, description, category, amount, currency, note, payment_method'
+          : includeTitle ? 'id, date, title, description, category, amount, currency' : 'id, date, description, category, amount, currency'
         return await supabase
           .from(table)
           .select(columns)
@@ -124,14 +132,20 @@ export default function TransactionsPage() {
       }
 
       let [incomeRes, expenseRes] = await Promise.all([
-        queryTransactions('incomes', true),
-        queryTransactions('expenses', true),
+        queryTransactions('incomes', true, true),
+        queryTransactions('expenses', true, true),
       ])
 
       if (isMissingOptionalColumn(incomeRes.error) || isMissingOptionalColumn(expenseRes.error)) {
         ;[incomeRes, expenseRes] = await Promise.all([
-          queryTransactions('incomes', false),
-          queryTransactions('expenses', false),
+          queryTransactions('incomes', true, false),
+          queryTransactions('expenses', true, false),
+        ])
+      }
+      if (isMissingOptionalColumn(incomeRes.error) || isMissingOptionalColumn(expenseRes.error)) {
+        ;[incomeRes, expenseRes] = await Promise.all([
+          queryTransactions('incomes', false, false),
+          queryTransactions('expenses', false, false),
         ])
       }
 
@@ -143,12 +157,16 @@ export default function TransactionsPage() {
           ...item,
           type: 'income' as const,
           title: item.title ?? null,
+          note: item.note ?? null,
+          payment_method: item.payment_method ?? null,
           amount: Number(item.amount),
         })),
         ...((expenseRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
           ...item,
           type: 'expense' as const,
           title: item.title ?? null,
+          note: item.note ?? null,
+          payment_method: item.payment_method ?? null,
           amount: Number(item.amount),
         })),
       ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
@@ -443,10 +461,24 @@ export default function TransactionsPage() {
   const getSelectionKey = (transaction: TransactionRow) => `${transaction.type}:${transaction.id}`
 
   const handleSelectedUpdate = async () => {
-    if (!currentCompany || selectedTransactions.length === 0 || !selectedValue.trim()) {
-      setErrorMessage(t('transactions.bulkRenameRequired'))
+    if (!currentCompany || selectedTransactions.length === 0) return
+
+    const payload: Record<string, string | null> = {}
+    if (bulkEdit.category.enabled) payload.category = bulkEdit.category.value.trim() || null
+    if (bulkEdit.date.enabled) payload.date = bulkEdit.date.value
+    if (bulkEdit.payment_method.enabled) payload.payment_method = bulkEdit.payment_method.value || null
+    if (bulkEdit.note.enabled) payload.note = bulkEdit.note.value.trim() || null
+
+    if (Object.keys(payload).length === 0) {
+      setErrorMessage(t('transactions.bulkChooseField'))
       return
     }
+    if (bulkEdit.date.enabled && !bulkEdit.date.value) {
+      setErrorMessage(t('transactions.bulkChooseField'))
+      return
+    }
+
+    if (!window.confirm(t('transactions.bulkEditWarning').replace('{count}', String(selectedTransactions.length)))) return
 
     setErrorMessage('')
     setMessage('')
@@ -461,13 +493,13 @@ export default function TransactionsPage() {
 
       const { error } = await supabase
         .from(type === 'income' ? 'incomes' : 'expenses')
-        .update({ [selectedField]: selectedValue.trim() })
+        .update(payload)
         .eq('company_id', currentCompany.id)
         .in('id', ids)
 
       if (error) {
-        if (selectedField === 'title' && isMissingOptionalColumn(error)) {
-          setErrorMessage(t('transactions.titleMigrationRequired'))
+        if (isMissingOptionalColumn(error)) {
+          setErrorMessage(t('transactions.bulkMigrationRequired'))
           return
         }
         setErrorMessage(error.message)
@@ -479,7 +511,12 @@ export default function TransactionsPage() {
 
     setMessage(t('transactions.bulkSelectedDone').replace('{count}', String(updatedCount)))
     setSelectedTransactions([])
-    setSelectedValue('')
+    setBulkEdit({
+      category: { enabled: false, value: '' },
+      date: { enabled: false, value: '' },
+      payment_method: { enabled: false, value: '' },
+      note: { enabled: false, value: '' },
+    })
     await loadTransactions()
   }
 
@@ -811,33 +848,31 @@ export default function TransactionsPage() {
 
       {selectedTransactions.length > 0 && (
         <Card className="mb-6">
-          <CardContent className="grid gap-3 p-4 md:grid-cols-[auto_180px_1fr_auto] md:items-end">
-            <p className="self-center text-sm font-medium text-slate-700">
-              {t('transactions.selectedCount').replace('{count}', String(selectedTransactions.length))}
-            </p>
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">{t('transactions.bulkField')}</span>
-              <AppSelect
-                value={selectedField}
-                onChange={(value) => setSelectedField(value as BulkRenameField)}
-                options={[
-                  { value: 'title', label: t('transactions.titleLabel') },
-                  { value: 'description', label: t('common.description') },
-                  { value: 'category', label: t('common.category') },
-                ]}
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">{t('transactions.bulkValue')}</span>
-              <input
-                value={selectedValue}
-                onChange={(event) => setSelectedValue(event.target.value)}
-                className="w-full rounded-md border px-3 py-2"
-              />
-            </label>
-            <Button type="button" onClick={() => void handleSelectedUpdate()}>
-              {t('transactions.bulkEditSelected')}
-            </Button>
+          <CardHeader><CardTitle>{t('transactions.bulkEditTitle').replace('{count}', String(selectedTransactions.length))}</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-600">{t('transactions.bulkEditWarning').replace('{count}', String(selectedTransactions.length))}</p>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <label className="rounded-md border p-3">
+                <span className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={bulkEdit.category.enabled} onChange={(event) => setBulkEdit((current) => ({ ...current, category: { ...current.category, enabled: event.target.checked } }))} />{t('transactions.bulkCategory')}</span>
+                <input disabled={!bulkEdit.category.enabled} value={bulkEdit.category.value} onChange={(event) => setBulkEdit((current) => ({ ...current, category: { ...current.category, value: event.target.value } }))} className="mt-2 w-full rounded-md border px-3 py-2 disabled:bg-slate-100" />
+              </label>
+              <label className="rounded-md border p-3">
+                <span className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={bulkEdit.date.enabled} onChange={(event) => setBulkEdit((current) => ({ ...current, date: { ...current.date, enabled: event.target.checked } }))} />{t('transactions.bulkDate')}</span>
+                <input type="date" disabled={!bulkEdit.date.enabled} value={bulkEdit.date.value} onChange={(event) => setBulkEdit((current) => ({ ...current, date: { ...current.date, value: event.target.value } }))} className="mt-2 w-full rounded-md border px-3 py-2 disabled:bg-slate-100" />
+              </label>
+              <label className="rounded-md border p-3">
+                <span className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={bulkEdit.payment_method.enabled} onChange={(event) => setBulkEdit((current) => ({ ...current, payment_method: { ...current.payment_method, enabled: event.target.checked } }))} />{t('transactions.bulkPaymentMethod')}</span>
+                <AppSelect disabled={!bulkEdit.payment_method.enabled} value={bulkEdit.payment_method.value} onChange={(value) => setBulkEdit((current) => ({ ...current, payment_method: { ...current.payment_method, value } }))} options={[{ value: '', label: t('common.none') }, { value: 'cash', label: t('invoices.paymentCash') }, { value: 'bank_transfer', label: t('invoices.paymentBankTransfer') }, { value: 'card', label: t('invoices.paymentCard') }]} className="mt-2" />
+              </label>
+              <label className="rounded-md border p-3">
+                <span className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={bulkEdit.note.enabled} onChange={(event) => setBulkEdit((current) => ({ ...current, note: { ...current.note, enabled: event.target.checked } }))} />{t('transactions.bulkNote')}</span>
+                <input disabled={!bulkEdit.note.enabled} value={bulkEdit.note.value} onChange={(event) => setBulkEdit((current) => ({ ...current, note: { ...current.note, value: event.target.value } }))} className="mt-2 w-full rounded-md border px-3 py-2 disabled:bg-slate-100" />
+              </label>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setSelectedTransactions([])}>{t('common.cancel')}</Button>
+              <Button type="button" onClick={() => void handleSelectedUpdate()}>{t('transactions.bulkConfirm')}</Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1017,7 +1052,7 @@ export default function TransactionsPage() {
         <EmptyState title={t('common.noTransactions')} description={t('transactions.emptyDescription')} />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <div className="grid grid-cols-[auto_auto_1fr_auto_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid-cols-[auto_auto_1fr_160px_160px_auto]">
+          <div className="hidden gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto]">
             <span>{t('transactions.select')}</span>
             <span>{t('transactions.type')}</span>
             <span>{t('transactions.titleLabel')}</span>
@@ -1032,7 +1067,7 @@ export default function TransactionsPage() {
             return (
               <div
                 key={`${transaction.type}-${transaction.id}`}
-                className="grid grid-cols-[auto_auto_1fr_auto_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_1fr_160px_160px_auto]"
+                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto]"
               >
                 <input
                   type="checkbox"
@@ -1046,13 +1081,14 @@ export default function TransactionsPage() {
                   aria-label={`${t('transactions.select')} ${transaction.title || transaction.description || transaction.date}`}
                   className="mt-0.5 h-4 w-4"
                 />
-                <span className={`inline-flex items-center gap-1 font-medium ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}>
+                <span className={`hidden items-center gap-1 font-medium md:inline-flex ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}>
                   <Icon className="h-4 w-4" />
                   {isIncome ? t('income.title') : t('expenses.title')}
                 </span>
-                <span>
+                <span className="min-w-0">
                   <span className="block font-medium text-slate-900">{transaction.title || transaction.description || '-'}</span>
-                  <span className="text-xs text-slate-500">
+                  <span className="block break-words text-xs text-slate-500">
+                    <span className="md:hidden">{isIncome ? t('income.title') : t('expenses.title')} · </span>
                     {transaction.title && transaction.description ? `${transaction.description} · ` : ''}{transaction.date}
                   </span>
                 </span>
@@ -1060,7 +1096,7 @@ export default function TransactionsPage() {
                 <span className="text-right font-semibold">
                   {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
                 </span>
-                <Button size="sm" variant="outline" onClick={() => handleCopyTransaction(transaction)}>
+                <Button className="col-start-2 justify-self-start md:col-start-auto md:justify-self-auto" size="sm" variant="outline" onClick={() => handleCopyTransaction(transaction)}>
                   <Copy className="h-4 w-4" />
                   <span className="hidden sm:inline">{t('common.copy')}</span>
                 </Button>

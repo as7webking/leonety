@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-12T21:12:34.977Z",
+  "generatedAt": "2026-09-13T21:42:21.311Z",
   "locales": [
     "en",
     "de",
@@ -11,44 +11,45 @@
   ],
   "translationFiles": [
     "src/lib/business-modules-i18n.ts",
+    "src/lib/accounting-ux-i18n.ts",
     "src/lib/client-crm-i18n.ts",
     "src/lib/i18n.ts",
     "src/lib/public-website-i18n.ts"
   ],
   "coverage": {
     "en": {
-      "translated": 1700,
-      "total": 1700,
+      "translated": 1737,
+      "total": 1737,
       "percent": 100
     },
     "de": {
-      "translated": 1700,
-      "total": 1700,
+      "translated": 1737,
+      "total": 1737,
       "percent": 100
     },
     "ru": {
-      "translated": 1700,
-      "total": 1700,
+      "translated": 1737,
+      "total": 1737,
       "percent": 100
     },
     "tr": {
-      "translated": 1700,
-      "total": 1700,
+      "translated": 1737,
+      "total": 1737,
       "percent": 100
     },
     "uk": {
-      "translated": 1700,
-      "total": 1700,
+      "translated": 1737,
+      "total": 1737,
       "percent": 100
     },
     "pl": {
-      "translated": 1700,
-      "total": 1700,
+      "translated": 1737,
+      "total": 1737,
       "percent": 100
     },
     "fr": {
-      "translated": 1700,
-      "total": 1700,
+      "translated": 1737,
+      "total": 1737,
       "percent": 100
     }
   },
@@ -2090,7 +2091,7 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1700,
+    "englishKeyCount": 1737,
     "hardcodedStringCount": 15,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0

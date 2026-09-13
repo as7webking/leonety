@@ -11,6 +11,7 @@ import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
 import { AppSelect } from '@/components/app-select'
 import { Boxes, Building2, CalendarDays, Package, Users } from 'lucide-react'
+import { getIntlLocale } from '@/lib/i18n'
 
 interface Income {
   id: string
@@ -44,6 +45,30 @@ interface TimeEntry {
   company_id: string
 }
 
+type PeriodPreset = 'all' | 'this_month' | 'last_month' | 'this_year' | 'custom'
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getPeriodRange(preset: PeriodPreset) {
+  const now = new Date()
+  if (preset === 'all') return { from: '', to: '' }
+  if (preset === 'this_year') return { from: `${now.getFullYear()}-01-01`, to: toDateInputValue(now) }
+  if (preset === 'last_month') {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const to = new Date(now.getFullYear(), now.getMonth(), 0)
+    return { from: toDateInputValue(from), to: toDateInputValue(to) }
+  }
+  if (preset === 'this_month') {
+    return { from: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)), to: toDateInputValue(now) }
+  }
+  return null
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -53,17 +78,14 @@ export default function DashboardPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
-  const [filterFromDate, setFilterFromDate] = useState(() => {
-    const date = new Date()
-    date.setDate(1)
-    return date.toISOString().split('T')[0]
-  })
-  const [filterToDate, setFilterToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('this_month')
+  const [filterFromDate, setFilterFromDate] = useState(() => getPeriodRange('this_month')?.from ?? '')
+  const [filterToDate, setFilterToDate] = useState(() => getPeriodRange('this_month')?.to ?? '')
   const [groupByMonth, setGroupByMonth] = useState(false)
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const { accountAccess } = useAccountAccess(accountEmail)
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
 
   const loadDashboard = useCallback(async () => {
     if (!currentCompany) {
@@ -151,8 +173,6 @@ export default function DashboardPage() {
     return convertToCurrency(savedAmount, savedWorkspaceCurrency, currency)
   }
 
-  const totalHours = timeEntries.reduce((sum, item) => sum + Number(item.hours), 0)
-
   const formatMoney = (value: number) => formatCurrency(value, currency)
   const formatHours = (hoursValue: number) => {
     const totalMinutes = Math.round(Math.max(0, hoursValue) * 60)
@@ -173,6 +193,8 @@ export default function DashboardPage() {
 
   const periodIncomes = filterByDate(incomes)
   const periodExpenses = filterByDate(expenses)
+  const periodTimeEntries = filterByDate(timeEntries)
+  const totalHours = periodTimeEntries.reduce((sum, item) => sum + Number(item.hours), 0)
   const openingIncome = incomes
     .filter((item) => Boolean(filterFromDate) && item.date < filterFromDate)
     .reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
@@ -197,14 +219,14 @@ export default function DashboardPage() {
     return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
   })
 
-  const sortedTimeEntries = filterByDate(timeEntries).sort((left, right) => {
+  const sortedTimeEntries = periodTimeEntries.sort((left, right) => {
     const leftValue = new Date(left.date).getTime()
     const rightValue = new Date(right.date).getTime()
     return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
   })
 
   const formatMonthHeading = (date: string) =>
-    new Date(`${date.slice(0, 7)}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    new Date(`${date.slice(0, 7)}-01T00:00:00`).toLocaleDateString(getIntlLocale(locale), { month: 'long', year: 'numeric' })
 
   const renderGrouped = <T extends { id: string; date: string }>(
     items: T[],
@@ -238,14 +260,36 @@ export default function DashboardPage() {
           {t('billing.planSuffix').replace('{plan}', planLabel)}
         </span>
       </PageHeader>
-      <div className="mb-6 grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto_auto]">
+      <div className="mb-6 grid min-w-0 gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[minmax(150px,0.75fr)_minmax(160px,1fr)_minmax(160px,1fr)_auto_auto_auto]">
+        <label className="min-w-0 space-y-1 text-sm">
+          <span className="text-slate-600">{t('dashboard.periodPreset')}</span>
+          <AppSelect
+            value={periodPreset}
+            onChange={(value) => {
+              const nextPreset = value as PeriodPreset
+              setPeriodPreset(nextPreset)
+              const range = getPeriodRange(nextPreset)
+              if (range) {
+                setFilterFromDate(range.from)
+                setFilterToDate(range.to)
+              }
+            }}
+            options={[
+              { value: 'all', label: t('dashboard.periodAllTime') },
+              { value: 'this_month', label: t('dashboard.periodThisMonth') },
+              { value: 'last_month', label: t('dashboard.periodLastMonth') },
+              { value: 'this_year', label: t('dashboard.periodThisYear') },
+              { value: 'custom', label: t('dashboard.periodCustom') },
+            ]}
+          />
+        </label>
         <label className="space-y-1 text-sm">
           <span className="text-slate-600">{t('dashboard.filterFrom')}</span>
-          <input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} className="w-full rounded-md border px-3 py-2" />
+          <input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setPeriodPreset('custom') }} className="w-full rounded-md border px-3 py-2" />
         </label>
         <label className="space-y-1 text-sm">
           <span className="text-slate-600">{t('dashboard.filterTo')}</span>
-          <input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} className="w-full rounded-md border px-3 py-2" />
+          <input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setPeriodPreset('custom') }} className="w-full rounded-md border px-3 py-2" />
         </label>
         <AppSelect
           value={groupByMonth ? 'month' : 'none'}

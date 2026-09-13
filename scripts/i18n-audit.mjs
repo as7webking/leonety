@@ -6,6 +6,7 @@ const root = process.cwd()
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr']
 const translationFiles = [
   path.join(root, 'src/lib/business-modules-i18n.ts'),
+  path.join(root, 'src/lib/accounting-ux-i18n.ts'),
   path.join(root, 'src/lib/client-crm-i18n.ts'),
   path.join(root, 'src/lib/i18n.ts'),
   path.join(root, 'src/lib/public-website-i18n.ts'),
@@ -100,6 +101,7 @@ function collectDictionaryKeys() {
   const keysByLocale = Object.fromEntries(locales.map((locale) => [locale, new Set()]))
   const dictionaryObjects = [
     ['src/lib/business-modules-i18n.ts', 'businessModuleDictionaries'],
+    ['src/lib/accounting-ux-i18n.ts', 'accountingUxDictionaries'],
     ['src/lib/i18n.ts', 'dictionaries'],
     ['src/lib/i18n.ts', 'supplementalDictionaries'],
     ['src/lib/i18n.ts', 'productSortDictionaries'],

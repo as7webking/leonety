@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
-import { clientStatuses, emptyClientForm, type ClientFormValues, type ClientRecord } from '@/lib/client-crm'
+import { clientToForm, emptyClientForm, type ClientFormValues, type ClientRecord } from '@/lib/client-crm'
 import { createClient } from '@/lib/supabase-client'
 
 interface ClientFormProps {
@@ -26,22 +26,7 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
   const [supabase] = useState(() => createClient())
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
-  const [form, setForm] = useState<ClientFormValues>(() => client ? {
-    clientType: client.client_company ? 'company' : 'person',
-    name: client.name,
-    client_company: client.client_company ?? '',
-    email: client.email ?? '',
-    phone: client.phone ?? '',
-    street: client.street ?? '',
-    house_number: client.house_number ?? '',
-    postal_code: client.postal_code ?? '',
-    city: client.city ?? '',
-    country: client.country ?? '',
-    tax_number: client.tax_number ?? '',
-    interested_in: client.interested_in ?? '',
-    notes: client.notes ?? '',
-    status: client.status,
-  } : emptyClientForm)
+  const [form, setForm] = useState<ClientFormValues>(() => client ? clientToForm(client) : emptyClientForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -66,8 +51,12 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
       setError(t('common.noWorkspaceSelected'))
       return
     }
-    if (!form.name.trim()) {
+    if (form.clientType === 'person' && !form.name.trim()) {
       setError(t('clients.validation.nameRequired'))
+      return
+    }
+    if (form.clientType === 'company' && !form.client_company.trim()) {
+      setError(t('clients.validation.companyRequired'))
       return
     }
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
@@ -98,7 +87,7 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
     setSaving(true)
     const payload = {
       company_id: currentCompany.id,
-      name: form.name.trim(),
+      name: form.name.trim() || form.client_company.trim(),
       client_company: form.clientType === 'company' ? form.client_company.trim() || null : null,
       email: form.email.trim() || null,
       phone: form.phone.trim() || null,
@@ -157,16 +146,16 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
             ]}
           />
         </label>
-        <label className="min-w-0 space-y-1">
-          <span className="text-sm font-medium text-slate-800">{form.clientType === 'company' ? t('clients.crm.contactPerson') : t('clients.name')}</span>
-          <input value={form.name} onChange={(event) => setField('name', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" required />
-        </label>
         {form.clientType === 'company' && (
-          <label className="min-w-0 space-y-1 md:col-span-2">
+          <label className="min-w-0 space-y-1">
             <span className="text-sm font-medium text-slate-800">{t('clients.clientCompany')}</span>
-            <input value={form.client_company} onChange={(event) => setField('client_company', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" />
+            <input value={form.client_company} onChange={(event) => setField('client_company', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" required />
           </label>
         )}
+        <label className="min-w-0 space-y-1">
+          <span className="text-sm font-medium text-slate-800">{form.clientType === 'company' ? t('clients.crm.contactPersonOptional') : t('clients.name')}</span>
+          <input value={form.name} onChange={(event) => setField('name', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" required={form.clientType === 'person'} />
+        </label>
         <label className="min-w-0 space-y-1">
           <span className="text-sm font-medium text-slate-800">{t('clients.email')}</span>
           <input type="email" inputMode="email" value={form.email} onChange={(event) => setField('email', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" />
@@ -215,9 +204,13 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
         <label className="space-y-1">
           <span className="text-sm font-medium text-slate-800">{t('clients.status')}</span>
           <AppSelect
-            value={form.status}
-            onChange={(value) => setField('status', value as ClientFormValues['status'])}
-            options={clientStatuses.map((status) => ({ value: status, label: t(`clients.status.${status}`) }))}
+            value={form.status === 'client' ? 'active' : form.status === 'inactive' ? 'inactive' : 'potential'}
+            onChange={(value) => setField('status', value === 'active' ? 'client' : value === 'inactive' ? 'inactive' : 'lead')}
+            options={[
+              { value: 'active', label: t('clients.lifecycleActive') },
+              { value: 'potential', label: t('clients.lifecyclePotential') },
+              { value: 'inactive', label: t('clients.lifecycleInactive') },
+            ]}
           />
         </label>
         <label className="min-w-0 space-y-1">

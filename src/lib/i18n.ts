@@ -1,4 +1,5 @@
 import { businessModuleDictionaries } from '@/lib/business-modules-i18n'
+import { accountingUxDictionaries } from '@/lib/accounting-ux-i18n'
 import { clientCrmDictionaries } from '@/lib/client-crm-i18n'
 import { publicWebsiteDictionaries } from '@/lib/public-website-i18n'
 
@@ -8635,6 +8636,7 @@ const uxFeatureDictionaries: Record<Locale, Record<string, string>> = {
 }
 
 for (const locale of locales) {
+  Object.assign(dictionaries[locale], accountingUxDictionaries[locale])
   Object.assign(dictionaries[locale], uxFeatureDictionaries[locale])
   Object.assign(dictionaries[locale], clientCrmDictionaries[locale])
   Object.assign(dictionaries[locale], publicWebsiteDictionaries[locale])

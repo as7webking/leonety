@@ -24,9 +24,25 @@ interface Income extends IncomeForm {
   id: string
   company_id: string
   title?: string | null
+  reference?: string | null
+  note?: string | null
+  client_id?: string | null
+  invoice_id?: string | null
+  payment_method?: string | null
 }
 
-type IncomeFormState = Omit<IncomeForm, 'amount'> & { amount: string; title: string }
+interface RelatedClient { id: string; name: string; client_company: string | null }
+interface RelatedInvoice { id: string; invoice_number: string; client_id: string | null }
+
+type IncomeFormState = Omit<IncomeForm, 'amount'> & {
+  amount: string
+  title: string
+  reference: string
+  note: string
+  client_id: string
+  invoice_id: string
+  payment_method: string
+}
 
 function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
   return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
@@ -35,6 +51,16 @@ function isMissingOptionalColumn(error: { code?: string; message?: string } | nu
 function stripTitle<T extends Record<string, unknown>>(payload: T) {
   const next = { ...payload }
   delete next.title
+  return next
+}
+
+function stripAccountingFields<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload }
+  delete next.reference
+  delete next.note
+  delete next.client_id
+  delete next.invoice_id
+  delete next.payment_method
   return next
 }
 
@@ -58,6 +84,8 @@ export default function IncomePage() {
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
   const [incomes, setIncomes] = useState<Income[]>([])
+  const [clients, setClients] = useState<RelatedClient[]>([])
+  const [invoices, setInvoices] = useState<RelatedInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Income | null>(null)
@@ -66,6 +94,11 @@ export default function IncomePage() {
     title: '',
     description: '',
     category: '',
+    reference: '',
+    note: '',
+    client_id: '',
+    invoice_id: '',
+    payment_method: '',
     date: new Date().toISOString().split('T')[0],
     currency: 'USD',
   })
@@ -121,14 +154,18 @@ export default function IncomePage() {
       setLoading(true)
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
-      const { data, error } = await supabase
-        .from('incomes')
-        .select('*')
-        .eq('company_id', currentCompany.id)
-        .order('date', { ascending: false })
+      const [incomeResult, clientResult, invoiceResult] = await Promise.all([
+        supabase.from('incomes').select('*').eq('company_id', currentCompany.id).order('date', { ascending: false }),
+        supabase.from('clients').select('id, name, client_company').eq('company_id', currentCompany.id).order('name'),
+        supabase.from('invoices').select('id, invoice_number, client_id').eq('company_id', currentCompany.id).order('issue_date', { ascending: false }),
+      ])
 
-      if (error) throw error
-      setIncomes((data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
+      if (incomeResult.error) throw incomeResult.error
+      if (clientResult.error) throw clientResult.error
+      if (invoiceResult.error) throw invoiceResult.error
+      setIncomes((incomeResult.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
+      setClients((clientResult.data ?? []) as RelatedClient[])
+      setInvoices((invoiceResult.data ?? []) as RelatedInvoice[])
     } catch (error) {
       console.error('Failed to load incomes:', error)
       setErrorMessage(t('income.loadFailed'))
@@ -205,35 +242,37 @@ export default function IncomePage() {
         amount: validatedData.amount,
         currency: validatedData.currency,
         company_id: currentCompany.id,
+        reference: formData.reference.trim() || null,
+        note: formData.note.trim() || null,
+        client_id: formData.client_id || null,
+        invoice_id: formData.invoice_id || null,
+        payment_method: formData.payment_method || null,
       }
       let titleFallback = false
+      let accountingFallback = false
 
-      if (editingEntry) {
-        let { error } = await supabase
-          .from('incomes')
-          .update(payload)
-          .eq('id', editingEntry.id)
-          .eq('company_id', currentCompany.id)
+      const saveIncome = async (value: Record<string, unknown>) => editingEntry
+        ? await supabase.from('incomes').update(value).eq('id', editingEntry.id).eq('company_id', currentCompany.id)
+        : await supabase.from('incomes').insert(value)
+
+      {
+        let { error } = await saveIncome(payload)
         if (isMissingOptionalColumn(error)) {
-          const fallback = await supabase
-            .from('incomes')
-            .update(stripTitle(payload))
-            .eq('id', editingEntry.id)
-            .eq('company_id', currentCompany.id)
+          accountingFallback = Boolean(formData.reference || formData.note || formData.client_id || formData.invoice_id || formData.payment_method)
+          const fallback = await saveIncome(stripAccountingFields(payload))
+          error = fallback.error
+        }
+        if (isMissingOptionalColumn(error)) {
+          const fallback = await saveIncome(stripTitle(stripAccountingFields(payload)))
           error = fallback.error
           titleFallback = !error && Boolean(desiredTitle)
         }
         if (error) throw error
-        setSuccessMessage(titleFallback ? `${t('income.updated')} ${t('transactions.titleMigrationRequired')}` : t('income.updated'))
-      } else {
-        let { error } = await supabase.from('incomes').insert(payload)
-        if (isMissingOptionalColumn(error)) {
-          const fallback = await supabase.from('incomes').insert(stripTitle(payload))
-          error = fallback.error
-          titleFallback = !error && Boolean(desiredTitle)
-        }
-        if (error) throw error
-        setSuccessMessage(titleFallback ? `${t('income.created')} ${t('transactions.titleMigrationRequired')}` : t('income.created'))
+        const baseMessage = editingEntry ? t('income.updated') : t('income.created')
+        const migrationMessage = accountingFallback
+          ? t('income.accountingFieldsMigrationRequired')
+          : titleFallback ? t('transactions.titleMigrationRequired') : ''
+        setSuccessMessage(migrationMessage ? `${baseMessage} ${migrationMessage}` : baseMessage)
       }
 
       setFormData({
@@ -241,6 +280,11 @@ export default function IncomePage() {
         title: '',
         description: '',
         category: '',
+        reference: '',
+        note: '',
+        client_id: '',
+        invoice_id: '',
+        payment_method: '',
         currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'),
         date: new Date().toISOString().split('T')[0],
       })
@@ -263,6 +307,11 @@ export default function IncomePage() {
       title: entry.title ?? '',
       description: entry.description,
       category: entry.category,
+      reference: entry.reference ?? '',
+      note: entry.note ?? '',
+      client_id: entry.client_id ?? '',
+      invoice_id: entry.invoice_id ?? '',
+      payment_method: entry.payment_method ?? '',
       date: entry.date,
       currency: normalizeCurrencyCode(entry.currency),
     })
@@ -627,6 +676,16 @@ export default function IncomePage() {
                 <input type="text" list="income-title-suggestions" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} />
                 <datalist id="income-title-suggestions">{titleSuggestions.map((value) => <option key={value} value={value} />)}</datalist>
               </div>
+              {isBusinessWorkspace && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">{t('common.category')}</label>
+                  <AppSelect
+                    value={formData.category || 'Sales'}
+                    onChange={(value) => setFormData({ ...formData, category: value })}
+                    options={categoryOptions.map((option) => ({ value: option, label: formatCategoryLabel(option, t) }))}
+                  />
+                </div>
+              )}
               {isBusinessWorkspace ? (
                 <div>
                   <label className="mb-1 block text-sm font-medium">{t('common.description')}</label>
@@ -660,6 +719,47 @@ export default function IncomePage() {
                   )}
                 </div>
               )}
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-sm font-medium">{t('income.client')} <span className="font-normal text-slate-500">({t('income.optional')})</span></span>
+                  <AppSelect
+                    value={formData.client_id}
+                    onChange={(value) => setFormData({ ...formData, client_id: value, invoice_id: value ? formData.invoice_id : '' })}
+                    options={[{ value: '', label: t('income.noClient') }, ...clients.map((client) => ({ value: client.id, label: client.client_company || client.name }))]}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-sm font-medium">{t('income.invoiceReference')} <span className="font-normal text-slate-500">({t('income.optional')})</span></span>
+                  <AppSelect
+                    value={formData.invoice_id}
+                    onChange={(value) => {
+                      const invoice = invoices.find((item) => item.id === value)
+                      setFormData({ ...formData, invoice_id: value, client_id: invoice?.client_id || formData.client_id })
+                    }}
+                    options={[
+                      { value: '', label: t('income.noInvoice') },
+                      ...invoices.filter((invoice) => !formData.client_id || invoice.client_id === formData.client_id).map((invoice) => ({ value: invoice.id, label: invoice.invoice_number })),
+                    ]}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-sm font-medium">{t('income.reference')} <span className="font-normal text-slate-500">({t('income.optional')})</span></span>
+                  <input value={formData.reference} onChange={(event) => setFormData({ ...formData, reference: event.target.value })} className="w-full rounded-md border px-3 py-2" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-sm font-medium">{t('income.paymentMethod')} <span className="font-normal text-slate-500">({t('income.optional')})</span></span>
+                  <AppSelect value={formData.payment_method} onChange={(value) => setFormData({ ...formData, payment_method: value })} options={[
+                    { value: '', label: t('common.none') },
+                    { value: 'cash', label: t('invoices.paymentCash') },
+                    { value: 'bank_transfer', label: t('invoices.paymentBankTransfer') },
+                    { value: 'card', label: t('invoices.paymentCard') },
+                  ]} />
+                </label>
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-sm font-medium">{t('income.note')} <span className="font-normal text-slate-500">({t('income.optional')})</span></span>
+                  <textarea value={formData.note} onChange={(event) => setFormData({ ...formData, note: event.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" />
+                </label>
+              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">{t('common.date')}</label>
@@ -702,14 +802,14 @@ export default function IncomePage() {
               {groupItems.map((income) => (
             <div key={income.id} className="space-y-2">
             <Card>
-              <CardContent className="flex items-center justify-between pt-6">
-                <div>
+              <CardContent className="flex min-w-0 flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <p className="font-medium">{income.title || income.description}</p>
                   <p className="text-sm text-muted-foreground">
                     {income.title && income.description ? `${income.description} · ` : ''}{formatCategoryLabel(income.category, t)} · {income.date}
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
                   <div className="text-right">
                     <p className="font-normal">
                       {formatCurrency(
@@ -735,12 +835,18 @@ export default function IncomePage() {
             {editingEntry?.id === income.id && (
               <Card className="border-primary/30 bg-slate-50">
                 <CardContent className="p-4">
-                  <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
-                    <input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} aria-label={t('common.amount')} required />
-                    <input list="income-title-suggestions" value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} aria-label={t('transactions.titleLabel')} />
-                    <input list="income-description-suggestions" value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.description')} />
-                    <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="rounded-md border px-3 py-2" aria-label={t('common.date')} required />
-                    <div className="flex gap-2">
+                  <form onSubmit={handleSubmit} className="grid min-w-0 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('common.amount')}</span><input type="text" inputMode="decimal" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.amountPlaceholder')} required /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('transactions.titleLabel')}</span><input list="income-title-suggestions" value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} className="w-full rounded-md border px-3 py-2" placeholder={t('transactions.titlePlaceholder')} /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('common.category')}</span><input list="income-category-suggestions" value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('common.description')}</span><input list="income-description-suggestions" value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('income.reference')}</span><input value={formData.reference} onChange={(event) => setFormData({ ...formData, reference: event.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('common.date')}</span><input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('income.client')}</span><AppSelect value={formData.client_id} onChange={(value) => setFormData({ ...formData, client_id: value })} options={[{ value: '', label: t('income.noClient') }, ...clients.map((client) => ({ value: client.id, label: client.client_company || client.name }))]} /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('income.invoiceReference')}</span><AppSelect value={formData.invoice_id} onChange={(value) => setFormData({ ...formData, invoice_id: value })} options={[{ value: '', label: t('income.noInvoice') }, ...invoices.map((invoice) => ({ value: invoice.id, label: invoice.invoice_number }))]} /></label>
+                    <label className="space-y-1"><span className="text-xs font-medium text-slate-600">{t('income.paymentMethod')}</span><AppSelect value={formData.payment_method} onChange={(value) => setFormData({ ...formData, payment_method: value })} options={[{ value: '', label: t('common.none') }, { value: 'cash', label: t('invoices.paymentCash') }, { value: 'bank_transfer', label: t('invoices.paymentBankTransfer') }, { value: 'card', label: t('invoices.paymentCard') }]} /></label>
+                    <label className="space-y-1 md:col-span-2 lg:col-span-3"><span className="text-xs font-medium text-slate-600">{t('income.note')}</span><textarea value={formData.note} onChange={(event) => setFormData({ ...formData, note: event.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" /></label>
+                    <div className="flex gap-2 md:col-span-2 lg:col-span-3">
                       <Button type="submit">{t('common.saveChanges')}</Button>
                       <Button type="button" variant="outline" onClick={() => { setEditingEntry(null); setShowForm(false) }}>{t('common.cancel')}</Button>
                     </div>
