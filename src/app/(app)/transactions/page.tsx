@@ -15,7 +15,9 @@ import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrency
 import { parseCsv } from '@/lib/csv'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
+import { buildKassenbuch, getKassenbuchText } from '@/lib/kassenbuch'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 
 interface TransactionRow {
   id: string
@@ -27,7 +29,11 @@ interface TransactionRow {
   amount: number
   currency: string
   note: string | null
+  reference: string | null
   payment_method: string | null
+  invoice_id: string | null
+  created_at: string | null
+  cash_amount: number | null
 }
 
 interface SupabaseTransactionRow {
@@ -39,8 +45,19 @@ interface SupabaseTransactionRow {
   amount: number | string
   currency: string
   note?: string | null
+  reference?: string | null
   payment_method?: string | null
+  invoice_id?: string | null
+  created_at?: string | null
 }
+
+interface InvoicePaymentRow {
+  invoice_id: string
+  amount: number | string
+  method: string
+}
+
+type PrintFormat = 'standard' | 'kassenbuch'
 
 type BulkRenameTarget = 'all' | 'income' | 'expense'
 type BulkRenameField = 'title' | 'description' | 'category'
@@ -89,6 +106,9 @@ export default function TransactionsPage() {
   })
   const [printToDate, setPrintToDate] = useState(() => new Date().toISOString().split('T')[0])
   const [includeOpeningBalance, setIncludeOpeningBalance] = useState(false)
+  const [printFormatDialogOpen, setPrintFormatDialogOpen] = useState(false)
+  const [selectedPrintFormat, setSelectedPrintFormat] = useState<PrintFormat>('standard')
+  const [activePrintFormat, setActivePrintFormat] = useState<PrintFormat>('standard')
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [formData, setFormData] = useState({
@@ -108,6 +128,7 @@ export default function TransactionsPage() {
   })
   const [selectedBulkRenameIds, setSelectedBulkRenameIds] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  useBodyScrollLock(printFormatDialogOpen)
 
   const loadTransactions = useCallback(async () => {
     if (!currentCompany) {
@@ -122,8 +143,8 @@ export default function TransactionsPage() {
 
       const queryTransactions = async (table: TransactionTable, includeTitle: boolean, includeAccounting: boolean): Promise<TransactionQueryResult> => {
         const columns = includeAccounting
-          ? 'id, date, title, description, category, amount, currency, note, payment_method'
-          : includeTitle ? 'id, date, title, description, category, amount, currency' : 'id, date, description, category, amount, currency'
+          ? 'id, date, title, description, category, amount, currency, note, reference, payment_method, invoice_id, created_at'
+          : includeTitle ? 'id, date, title, description, category, amount, currency, created_at' : 'id, date, description, category, amount, currency, created_at'
         return await supabase
           .from(table)
           .select(columns)
@@ -158,7 +179,11 @@ export default function TransactionsPage() {
           type: 'income' as const,
           title: item.title ?? null,
           note: item.note ?? null,
+          reference: item.reference ?? null,
           payment_method: item.payment_method ?? null,
+          invoice_id: item.invoice_id ?? null,
+          created_at: item.created_at ?? null,
+          cash_amount: null,
           amount: Number(item.amount),
         })),
         ...((expenseRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
@@ -166,10 +191,43 @@ export default function TransactionsPage() {
           type: 'expense' as const,
           title: item.title ?? null,
           note: item.note ?? null,
+          reference: item.reference ?? null,
           payment_method: item.payment_method ?? null,
+          invoice_id: item.invoice_id ?? null,
+          created_at: item.created_at ?? null,
+          cash_amount: null,
           amount: Number(item.amount),
         })),
       ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+
+      const invoiceIds = Array.from(new Set(nextTransactions.flatMap((transaction) => (
+        transaction.invoice_id ? [transaction.invoice_id] : []
+      ))))
+      const paymentRows: InvoicePaymentRow[] = []
+
+      for (let index = 0; index < invoiceIds.length; index += 100) {
+        const { data, error } = await supabase
+          .from('invoice_payments')
+          .select('invoice_id, amount, method')
+          .in('invoice_id', invoiceIds.slice(index, index + 100))
+
+        if (error) break
+        paymentRows.push(...((data ?? []) as InvoicePaymentRow[]))
+      }
+
+      const invoicesWithAllocations = new Set(paymentRows.map((payment) => payment.invoice_id))
+      const invoiceCashAmounts = paymentRows.reduce<Record<string, number>>((totals, payment) => {
+        if (payment.method === 'cash') {
+          totals[payment.invoice_id] = (totals[payment.invoice_id] ?? 0) + Number(payment.amount)
+        }
+        return totals
+      }, {})
+
+      for (const transaction of nextTransactions) {
+        if (transaction.invoice_id && invoicesWithAllocations.has(transaction.invoice_id)) {
+          transaction.cash_amount = invoiceCashAmounts[transaction.invoice_id] ?? 0
+        }
+      }
 
       setTransactions(nextTransactions)
     } catch (error) {
@@ -551,13 +609,17 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handlePrint = () => {
-    const previousTitle = document.title
-    document.title = ' '
-    window.print()
+  const handlePrint = (format: PrintFormat) => {
+    setActivePrintFormat(format)
+    setPrintFormatDialogOpen(false)
     window.setTimeout(() => {
-      document.title = previousTitle
-    }, 500)
+      const previousTitle = document.title
+      document.title = ' '
+      window.print()
+      window.setTimeout(() => {
+        document.title = previousTitle
+      }, 500)
+    }, 0)
   }
 
   const sortedTransactions = useMemo(() => {
@@ -603,6 +665,17 @@ export default function TransactionsPage() {
   const openingTransactions = useMemo(
     () => printFromDate ? transactions.filter((transaction) => transaction.date < printFromDate) : [],
     [printFromDate, transactions]
+  )
+
+  const kassenbuchCurrency = normalizeCurrencyCode(currentCompany?.currency ?? 'EUR')
+  const kassenbuch = useMemo(() => buildKassenbuch({
+    openingTransactions,
+    periodTransactions: printableTransactions,
+    currency: kassenbuchCurrency,
+  }), [kassenbuchCurrency, openingTransactions, printableTransactions])
+
+  const formatMinorCurrency = (minorUnits: number) => (
+    formatCurrency(minorUnits / 100, kassenbuchCurrency, intlLocale)
   )
 
   const formatTotalsByCurrency = (items: TransactionRow[]) => {
@@ -758,7 +831,7 @@ export default function TransactionsPage() {
             ariaLabel={t('common.sortDirection')}
             className="w-40"
           />
-          <Button type="button" variant="outline" onClick={handlePrint} disabled={printableTransactions.length === 0}>
+          <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(true)} disabled={printableTransactions.length === 0}>
             <Printer className="h-4 w-4" />
             {t('common.print')}
           </Button>
@@ -775,7 +848,52 @@ export default function TransactionsPage() {
         </div>
       </PageHeader>
 
-      <div className="print-area print-compact print-report hidden">
+      {printFormatDialogOpen && (
+        <div
+          className="no-print fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-slate-950/40 px-4 py-[max(1rem,env(safe-area-inset-top))] sm:py-12"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPrintFormatDialogOpen(false)
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="print-format-title"
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+          >
+            <h2 id="print-format-title" className="text-lg font-semibold text-slate-950">
+              {t('kassenbuch.printFormat')}
+            </h2>
+            <div className="mt-4 grid gap-2">
+              {(['standard', 'kassenbuch'] as const).map((format) => (
+                <label key={format} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-md border border-slate-200 px-4 py-3 text-sm font-medium">
+                  <input
+                    type="radio"
+                    name="transaction-print-format"
+                    value={format}
+                    checked={selectedPrintFormat === format}
+                    onChange={() => setSelectedPrintFormat(format)}
+                    className="h-4 w-4"
+                  />
+                  {format === 'standard' ? t('kassenbuch.standard') : t('kassenbuch.title')}
+                </label>
+              ))}
+            </div>
+            <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="button" onClick={() => handlePrint(selectedPrintFormat)}>
+                <Printer className="h-4 w-4" />
+                {t('common.print')}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activePrintFormat === 'standard' && <div className="print-area print-compact print-report hidden">
         <div className="mb-2 flex items-start gap-3">
           {companyLogo ? (
             <img src={companyLogo} alt={currentCompany.name} className="h-12 w-12 object-contain" />
@@ -837,7 +955,78 @@ export default function TransactionsPage() {
             {t('dashboard.closingBalance')}: {formatNetTotals(closingTransactions)}
           </p>
         </div>
-      </div>
+      </div>}
+
+      {activePrintFormat === 'kassenbuch' && (
+        <div className="print-area print-kassenbuch hidden">
+          <header className="kassenbuch-header">
+            <div>
+              <h1>{t('kassenbuch.title')}</h1>
+              <p className="kassenbuch-company">{currentCompany.name}</p>
+              {companyAddress && <p className="kassenbuch-address">{companyAddress}</p>}
+            </div>
+            <dl>
+              <div><dt>{t('kassenbuch.period')}</dt><dd>{printFromDate || '...'} - {printToDate || '...'}</dd></div>
+              <div><dt>{t('kassenbuch.currency')}</dt><dd>{kassenbuchCurrency}</dd></div>
+            </dl>
+          </header>
+
+          <div className="kassenbuch-opening">
+            <span>{t('dashboard.openingBalance')}</span>
+            <strong>{formatMinorCurrency(kassenbuch.openingBalanceMinor)}</strong>
+          </div>
+
+          <table className="kassenbuch-table">
+            <colgroup>
+              <col className="kassenbuch-income-column" />
+              <col className="kassenbuch-expense-column" />
+              <col className="kassenbuch-date-column" />
+              <col className="kassenbuch-balance-column" />
+              <col className="kassenbuch-text-column" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{t('kassenbuch.income')}</th>
+                <th>{t('kassenbuch.expenses')}</th>
+                <th>{t('kassenbuch.date')}</th>
+                <th>{t('kassenbuch.balance')}</th>
+                <th>{t('kassenbuch.text')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {kassenbuch.rows.map((row, index) => row.kind === 'transaction' ? (
+                <tr key={`${row.transaction.type}:${row.transaction.id}`} className="kassenbuch-transaction-row">
+                  <td className="kassenbuch-amount">{row.incomeMinor === null ? '' : formatMinorCurrency(row.incomeMinor)}</td>
+                  <td className="kassenbuch-amount">{row.expenseMinor === null ? '' : formatMinorCurrency(row.expenseMinor)}</td>
+                  <td className="kassenbuch-date">{new Date(`${row.transaction.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
+                  <td className="kassenbuch-amount">{formatMinorCurrency(row.balanceMinor)}</td>
+                  <td className="kassenbuch-text">{getKassenbuchText(row.transaction, t('kassenbuch.genericTransaction'))}</td>
+                </tr>
+              ) : (
+                <tr key={`daily-closing:${row.date}:${index}`} className="kassenbuch-daily-closing">
+                  <td />
+                  <td />
+                  <td className="kassenbuch-date">{new Date(`${row.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
+                  <td className="kassenbuch-amount">{formatMinorCurrency(row.balanceMinor)}</td>
+                  <td className="kassenbuch-text">{t('kassenbuch.dailyClosing')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <footer className="kassenbuch-notes">
+            {kassenbuch.unclassifiedPaymentCount > 0 && (
+              <p>{t('kassenbuch.unclassifiedNotice').replace('{count}', String(kassenbuch.unclassifiedPaymentCount))}</p>
+            )}
+            {kassenbuch.excludedNonCashCount > 0 && (
+              <p>{t('kassenbuch.nonCashNotice').replace('{count}', String(kassenbuch.excludedNonCashCount))}</p>
+            )}
+            {kassenbuch.excludedCurrencyCount > 0 && (
+              <p>{t('kassenbuch.currencyNotice').replace('{count}', String(kassenbuch.excludedCurrencyCount))}</p>
+            )}
+          </footer>
+        </div>
+      )}
 
       {errorMessage && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>

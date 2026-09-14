@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-14T17:21:19.959Z",
+  "generatedAt": "2026-09-14T21:35:15.497Z",
   "locales": [
     "en",
     "de",
@@ -14,42 +14,43 @@
     "src/lib/accounting-ux-i18n.ts",
     "src/lib/client-crm-i18n.ts",
     "src/lib/i18n.ts",
-    "src/lib/public-website-i18n.ts"
+    "src/lib/public-website-i18n.ts",
+    "src/lib/kassenbuch-i18n.ts"
   ],
   "coverage": {
     "en": {
-      "translated": 1740,
-      "total": 1740,
+      "translated": 1755,
+      "total": 1755,
       "percent": 100
     },
     "de": {
-      "translated": 1740,
-      "total": 1740,
+      "translated": 1755,
+      "total": 1755,
       "percent": 100
     },
     "ru": {
-      "translated": 1740,
-      "total": 1740,
+      "translated": 1755,
+      "total": 1755,
       "percent": 100
     },
     "tr": {
-      "translated": 1740,
-      "total": 1740,
+      "translated": 1755,
+      "total": 1755,
       "percent": 100
     },
     "uk": {
-      "translated": 1740,
-      "total": 1740,
+      "translated": 1755,
+      "total": 1755,
       "percent": 100
     },
     "pl": {
-      "translated": 1740,
-      "total": 1740,
+      "translated": 1755,
+      "total": 1755,
       "percent": 100
     },
     "fr": {
-      "translated": 1740,
-      "total": 1740,
+      "translated": 1755,
+      "total": 1755,
       "percent": 100
     }
   },
@@ -2091,7 +2092,7 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1740,
+    "englishKeyCount": 1755,
     "hardcodedStringCount": 15,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0

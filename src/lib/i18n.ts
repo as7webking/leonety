@@ -2,6 +2,7 @@ import { businessModuleDictionaries } from '@/lib/business-modules-i18n'
 import { accountingUxDictionaries } from '@/lib/accounting-ux-i18n'
 import { clientCrmDictionaries } from '@/lib/client-crm-i18n'
 import { publicWebsiteDictionaries } from '@/lib/public-website-i18n'
+import { kassenbuchDictionaries } from '@/lib/kassenbuch-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8640,6 +8641,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], uxFeatureDictionaries[locale])
   Object.assign(dictionaries[locale], clientCrmDictionaries[locale])
   Object.assign(dictionaries[locale], publicWebsiteDictionaries[locale])
+  Object.assign(dictionaries[locale], kassenbuchDictionaries[locale])
 }
 
 for (const locale of locales) {

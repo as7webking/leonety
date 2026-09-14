@@ -10,6 +10,7 @@ const translationFiles = [
   path.join(root, 'src/lib/client-crm-i18n.ts'),
   path.join(root, 'src/lib/i18n.ts'),
   path.join(root, 'src/lib/public-website-i18n.ts'),
+  path.join(root, 'src/lib/kassenbuch-i18n.ts'),
 ]
 const reportPath = path.join(root, 'reports/i18n-audit.json')
 
@@ -124,6 +125,7 @@ function collectDictionaryKeys() {
     ['src/lib/i18n.ts', 'uxFeatureDictionaries'],
     ['src/lib/client-crm-i18n.ts', 'clientCrmDictionaries'],
     ['src/lib/public-website-i18n.ts', 'publicWebsiteDictionaries'],
+    ['src/lib/kassenbuch-i18n.ts', 'kassenbuchDictionaries'],
   ]
 
   for (const [relativeFile, objectName] of dictionaryObjects) {

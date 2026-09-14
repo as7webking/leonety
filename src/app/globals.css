@@ -349,6 +349,141 @@ html {
     background: #f8fafc !important;
   }
 
+  .print-area.print-kassenbuch {
+    width: 100% !important;
+    max-width: 186mm !important;
+    color: #111 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.5pt;
+  }
+
+  .print-kassenbuch .kassenbuch-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12mm;
+    margin-bottom: 5mm;
+    border-bottom: 2px solid #111;
+    padding-bottom: 3mm;
+  }
+
+  .print-kassenbuch .kassenbuch-header h1 {
+    margin: 0 0 1.5mm !important;
+    font-size: 18pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .print-kassenbuch .kassenbuch-company {
+    font-size: 11pt;
+    font-weight: 700;
+  }
+
+  .print-kassenbuch .kassenbuch-address {
+    margin-top: 1mm;
+    max-width: 90mm;
+    white-space: pre-line;
+    font-size: 8.5pt;
+  }
+
+  .print-kassenbuch .kassenbuch-header dl {
+    min-width: 58mm;
+    margin: 0;
+  }
+
+  .print-kassenbuch .kassenbuch-header dl > div {
+    display: grid;
+    grid-template-columns: 22mm 1fr;
+    gap: 3mm;
+    padding: 0.6mm 0;
+  }
+
+  .print-kassenbuch .kassenbuch-header dt {
+    font-weight: 700;
+  }
+
+  .print-kassenbuch .kassenbuch-header dd {
+    margin: 0;
+    text-align: right;
+  }
+
+  .print-kassenbuch .kassenbuch-opening {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5mm;
+    margin-bottom: 3mm;
+    border: 1px solid #111;
+    padding: 2mm 3mm;
+  }
+
+  .print-kassenbuch .kassenbuch-table {
+    border: 1.5px solid #111 !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .print-kassenbuch .kassenbuch-income-column,
+  .print-kassenbuch .kassenbuch-expense-column {
+    width: 15%;
+  }
+
+  .print-kassenbuch .kassenbuch-date-column {
+    width: 15%;
+  }
+
+  .print-kassenbuch .kassenbuch-balance-column {
+    width: 18%;
+  }
+
+  .print-kassenbuch .kassenbuch-text-column {
+    width: 33%;
+  }
+
+  .print-kassenbuch .kassenbuch-table th,
+  .print-kassenbuch .kassenbuch-table td {
+    border: 1px solid #333 !important;
+    padding: 2mm 2.2mm !important;
+  }
+
+  .print-kassenbuch .kassenbuch-table th {
+    background: #e5e7eb !important;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .print-kassenbuch .kassenbuch-transaction-row,
+  .print-kassenbuch .kassenbuch-daily-closing {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-kassenbuch .kassenbuch-amount {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .print-kassenbuch .kassenbuch-date {
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .print-kassenbuch .kassenbuch-text {
+    text-align: left;
+  }
+
+  .print-kassenbuch .kassenbuch-daily-closing td {
+    border-top: 2px solid #111 !important;
+    border-bottom: 2px solid #111 !important;
+    background: #f3f4f6 !important;
+    font-weight: 700;
+  }
+
+  .print-kassenbuch .kassenbuch-notes {
+    margin-top: 3mm;
+    font-size: 7.5pt;
+    line-height: 1.35;
+  }
+
   .print-area.print-invoice {
     display: block !important;
     width: 90% !important;
