@@ -38,6 +38,17 @@ interface ContractRow {
   updated_at: string
 }
 
+interface ClientTransactionRow {
+  id: string
+  type: 'income' | 'expense'
+  title: string | null
+  description: string | null
+  amount: number | string
+  currency: string
+  date: string
+  invoice_id: string | null
+}
+
 function sumInvoices(invoices: InvoiceRow[], kind: 'paid' | 'unpaid') {
   return invoices.reduce<Record<string, number>>((result, invoice) => {
     const total = Number(invoice.total || 0)
@@ -58,6 +69,7 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<ClientRecord | null>(null)
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [contracts, setContracts] = useState<ContractRow[]>([])
+  const [transactions, setTransactions] = useState<ClientTransactionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [tab, setTab] = useState<DetailTab>('overview')
@@ -87,10 +99,24 @@ export default function ClientDetailPage() {
         .eq('company_id', currentCompany.id)
         .eq('client_id', params.id)
         .order('updated_at', { ascending: false }),
+      supabase
+        .from('incomes')
+        .select('id, title, description, amount, currency, date, invoice_id')
+        .eq('company_id', currentCompany.id)
+        .eq('client_id', params.id)
+        .order('date', { ascending: false }),
+      supabase
+        .from('expenses')
+        .select('id, title, description, amount, currency, date, invoice_id')
+        .eq('company_id', currentCompany.id)
+        .eq('client_id', params.id)
+        .order('date', { ascending: false }),
     ])
     let clientResult = results[0]
     const invoiceResult = results[1]
     const contractResult = results[2]
+    const incomeResult = results[3]
+    const expenseResult = results[4]
 
     if (clientResult.error && ['42703', 'PGRST204', 'PGRST205'].includes(clientResult.error.code ?? '')) {
       clientResult = await supabase
@@ -135,6 +161,10 @@ export default function ClientDetailPage() {
     }
     setInvoices(invoiceRows)
     setContracts(contractResult.error ? [] : (contractResult.data ?? []) as ContractRow[])
+    setTransactions([
+      ...(incomeResult.error ? [] : (incomeResult.data ?? []).map((row) => ({ ...row, type: 'income' as const }))),
+      ...(expenseResult.error ? [] : (expenseResult.data ?? []).map((row) => ({ ...row, type: 'expense' as const }))),
+    ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()) as ClientTransactionRow[])
     setLoading(false)
   }, [currentCompany, params.id, supabase, t])
 
@@ -223,7 +253,7 @@ export default function ClientDetailPage() {
 
       {tab === 'invoices' && <InvoiceList invoices={invoices} locale={locale} t={t} />}
       {tab === 'contracts' && <ContractList contracts={contracts} locale={locale} t={t} />}
-      {tab === 'transactions' && <EmptyState icon={ReceiptText} title={t('clients.crm.noLinkedTransactions')} description={t('clients.crm.transactionsRelationRequired')} />}
+      {tab === 'transactions' && <TransactionList transactions={transactions} locale={locale} t={t} />}
       {tab === 'contacts' && <Card><CardContent className="space-y-3 p-5 text-sm"><p>{client.name}</p><p className="break-all">{client.email || '—'}</p><p>{client.phone || '—'}</p><p>{address || '—'}</p></CardContent></Card>}
       {tab === 'notes' && <Card><CardContent className="whitespace-pre-wrap p-5 text-sm text-slate-700">{client.notes || t('clients.crm.noNotes')}</CardContent></Card>}
     </PageContainer>
@@ -246,4 +276,9 @@ function InvoiceList({ invoices, locale, t }: { invoices: InvoiceRow[]; locale: 
 function ContractList({ contracts, locale, t }: { contracts: ContractRow[]; locale: Locale; t: (key: string) => string }) {
   if (contracts.length === 0) return <EmptyState title={t('clients.crm.noContracts')} description={t('clients.crm.noContractsDescription')} />
   return <div className="grid gap-3">{contracts.map((contract) => <Card key={contract.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium text-slate-950">{contract.title}</p><p className="text-sm text-slate-500">{contract.reference} · {new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(contract.updated_at))}</p></div><Button asChild variant="outline" size="sm"><Link href="/app/contracts">{t('clients.crm.open')}</Link></Button></CardContent></Card>)}</div>
+}
+
+function TransactionList({ transactions, locale, t }: { transactions: ClientTransactionRow[]; locale: Locale; t: (key: string) => string }) {
+  if (transactions.length === 0) return <EmptyState icon={ReceiptText} title={t('clients.crm.noLinkedTransactions')} description={t('clients.crm.transactionsRelationRequired')} />
+  return <div className="grid gap-3">{transactions.map((transaction) => <Card key={`${transaction.type}-${transaction.id}`}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate font-medium text-slate-950">{transaction.title || transaction.description || '—'}</p><p className="text-sm text-slate-500">{t(transaction.type === 'income' ? 'income.title' : 'expenses.title')} · {new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(transaction.date))}</p></div><p className="font-semibold">{formatCurrencyGroups({ [transaction.currency]: Number(transaction.amount) }, getIntlLocale(locale))}</p></CardContent></Card>)}</div>
 }

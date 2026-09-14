@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-13T21:42:21.311Z",
+  "generatedAt": "2026-09-14T17:21:19.959Z",
   "locales": [
     "en",
     "de",
@@ -18,38 +18,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1737,
-      "total": 1737,
+      "translated": 1740,
+      "total": 1740,
       "percent": 100
     },
     "de": {
-      "translated": 1737,
-      "total": 1737,
+      "translated": 1740,
+      "total": 1740,
       "percent": 100
     },
     "ru": {
-      "translated": 1737,
-      "total": 1737,
+      "translated": 1740,
+      "total": 1740,
       "percent": 100
     },
     "tr": {
-      "translated": 1737,
-      "total": 1737,
+      "translated": 1740,
+      "total": 1740,
       "percent": 100
     },
     "uk": {
-      "translated": 1737,
-      "total": 1737,
+      "translated": 1740,
+      "total": 1740,
       "percent": 100
     },
     "pl": {
-      "translated": 1737,
-      "total": 1737,
+      "translated": 1740,
+      "total": 1740,
       "percent": 100
     },
     "fr": {
-      "translated": 1737,
-      "total": 1737,
+      "translated": 1740,
+      "total": 1740,
       "percent": 100
     }
   },
@@ -2091,7 +2091,7 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1737,
+    "englishKeyCount": 1740,
     "hardcodedStringCount": 15,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0
