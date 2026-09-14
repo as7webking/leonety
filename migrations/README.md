@@ -1,149 +1,55 @@
-# Database Migrations
+# Database migration archive
 
-This folder contains SQL migrations for setting up your Leonety database.
+This directory is an archive of SQL files that were historically applied through
+the Supabase SQL Editor. It is **not** a replayable Supabase CLI migration chain.
 
-## How to Apply Migrations
+## Production safety
 
-### Option 1: Using Supabase SQL Editor (Recommended)
+- Do not run every file in this directory against an existing database.
+- Do not rerun `fix_auth_and_rls.sql`. It is a legacy bootstrap script that replaces
+  the signup trigger and recreates user-scoped policies from before workspaces were
+  introduced.
+- Do not run both `20260615_operations_inventory.sql` and
+  `20260615_operations_inventory_compact.sql`. They are alternative versions of the
+  same inventory foundation.
+- Do not run `20260905_inventory_accounting_links.sql` until the live type of
+  `public.expenses.id` has been verified. That file declares a `bigint` reference,
+  while the current schema snapshot and application types use `uuid`.
+- `test_setup.sql` contains inspection queries only. It is not a migration.
+- `migration.sql` and `src/lib/schema.sql` are historical snapshots, not executable
+  production migrations.
 
-1. Go to **Supabase Dashboard** → **SQL Editor**
-2. Click **New Query**
-3. Copy the entire contents of the migration file (e.g., `fix_auth_and_rls.sql`)
-4. Paste into the SQL editor
-5. Click **Run** (or press ⌘+Enter on Mac)
-6. Verify no errors appeared
+The linked production project currently has no rows in
+`supabase_migrations.schema_migrations`, even though the public schema contains the
+later application tables. This indicates that schema changes were applied manually.
+Deleting, renaming, replaying, or marking these files as applied would therefore be
+unsafe without comparing each file with the live catalog first.
 
-### Option 2: Using Supabase CLI
+## Baseline strategy
 
-```bash
-# Install Supabase CLI if not already installed
-npm install -g supabase
+1. Keep this archive unchanged for production history and incident investigation.
+2. Export the live `public` schema after installing Docker or Podman:
 
-# Link your project
-supabase link --project-ref <YOUR_PROJECT_REF>
+   ```bash
+   npx supabase db dump --linked --schema public --file supabase/baselines/CURRENT_SCHEMA_BASELINE.sql
+   ```
 
-# Apply migration
-supabase db push
-```
+3. Review the dump for grants, policies, functions, triggers, extensions, and any
+   accidental data statements. Do not include `auth` schema objects or row data.
+4. Store the reviewed baseline under `supabase/baselines/`; do not place it in
+   `supabase/migrations/` and do not run it against production.
+5. Put only future, forward-only changes in `supabase/migrations/` using unique
+   14-digit timestamps, for example
+   `supabase/migrations/20260913153000_add_example_index.sql`.
+6. Apply each future migration once with `supabase db push`, then verify the remote
+   migration list and application behavior.
 
-## Migrations
+Do not use `supabase migration repair` to claim that this archive was applied. Repair
+is appropriate only for a specific version whose exact SQL effect has independently
+been proven to match production.
 
-### fix_auth_and_rls.sql
-This migration sets up:
-- ✅ Row Level Security (RLS) on all tables
-- ✅ Auth trigger for automatic user profile creation
-- ✅ All RLS policies for secure data access
+## Read-only verification
 
-**When to run:** Before first user signup
-**Time to complete:** < 1 minute
-**Rollback:** Manual - save original policies first
-
-## Database Structure
-
-After migrations, your database will have:
-
-1. **auth.users** (Supabase managed)
-   - id, email, encrypted_password, confirmation_token, etc.
-
-2. **public.profiles**
-   - User-specific data (full_name, currency)
-   - Automatically created when user signs up
-
-3. **public.incomes, expenses, time_entries**
-   - User's financial data
-   - All protected by RLS policies
-
-## Verifying Migrations
-
-To check if migrations applied successfully:
-
-```sql
--- Check if trigger exists
-SELECT * FROM pg_trigger WHERE tgname = 'on_auth_user_created';
-
--- Check if function exists
-SELECT * FROM pg_proc WHERE proname = 'handle_new_user';
-
--- Check RLS status
-SELECT schemaname, tablename, rowsecurity 
-FROM pg_tables 
-WHERE rowsecurity = true;
-
--- Check existing policies
-SELECT * FROM pg_policies;
-```
-
-## Troubleshooting
-
-### Migration fails with "trigger already exists"
-- This is expected on subsequent runs
-- The migration includes `DROP IF EXISTS` to handle this
-- Safe to re-run
-
-### RLS policies not applied
-- Check Supabase logs for SQL errors
-- Verify you have sufficient permissions
-- Try re-applying the migration
-
-### Users can't sign up
-- Check the trigger is enabled: `SELECT * FROM pg_trigger WHERE tgname = 'on_auth_user_created'`
-- Check function exists: `SELECT * FROM pg_proc WHERE proname = 'handle_new_user'`
-- Review Supabase auth logs for errors
-
-### "Policy does not exist" error
-- This is fine - the migration drops old policies before creating new ones
-- Verify new policies exist with the SELECT query above
-
-## Next Steps
-
-1. Run the migration
-2. Go to your app and test signup
-3. Check your email for confirmation link
-4. Click link and log in
-5. Visit `/profile` to see your profile created automatically
-
-## Testing Your Setup
-
-After running the migration, verify everything works:
-
-1. **Run the test script:**
-   - Open `migrations/test_setup.sql`
-   - Copy and paste into Supabase SQL Editor
-   - Run it
-   - Check the results
-
-2. **Expected results:**
-   - Tables: profiles, incomes, expenses, time_entries should exist
-   - Trigger: on_auth_user_created should exist
-   - Function: handle_new_user should exist
-   - RLS: All tables should have rowsecurity = true
-   - Policies: Multiple policies should exist for each table
-
-3. **If something is missing:**
-   - Re-run the main migration (`fix_auth_and_rls.sql`)
-   - Check Supabase logs for errors
-   - Verify you have sufficient permissions
-
-## Common Issues & Solutions
-
-### Migration fails with "table already exists"
-- This is normal - the script uses `CREATE TABLE IF NOT EXISTS`
-- Safe to re-run
-
-### "Permission denied" error
-- Make sure you're logged into Supabase with admin access
-- Check your project permissions
-
-### "must be owner of table users" error
-- **This is normal!** You cannot modify the `auth.users` table
-- Supabase manages this table automatically
-- RLS is already enabled on `auth.users` by default
-- Just skip this error and continue with the rest of the migration
-
-### Trigger not created
-- Verify the function was created first
-- Check for syntax errors in the function
-
-### RLS policies not applied
-- Make sure RLS is enabled on the table first
-- Check policy syntax for errors
+Run the queries in `docs/database/PERFORMANCE_INSPECTION.sql` through the Supabase SQL
+Editor. They inspect identifiers, foreign-key types, policies, indexes, and query
+plans without changing schema or data.
