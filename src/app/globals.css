@@ -416,6 +416,34 @@ html {
     padding: 2mm 3mm;
   }
 
+  .print-kassenbuch .kassenbuch-month {
+    margin: 0 0 5mm !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .print-kassenbuch .kassenbuch-month + .kassenbuch-month {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-kassenbuch .kassenbuch-month h2 {
+    margin: 0 0 2.5mm !important;
+    border-bottom: 1px solid #111;
+    padding-bottom: 1.5mm;
+    font-size: 13pt;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .print-kassenbuch .kassenbuch-month-opening {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5mm;
+    margin-bottom: 2.5mm;
+    font-size: 9pt;
+  }
+
   .print-kassenbuch .kassenbuch-table {
     border: 1.5px solid #111 !important;
     break-inside: auto !important;
@@ -482,6 +510,45 @@ html {
     margin-top: 3mm;
     font-size: 7.5pt;
     line-height: 1.35;
+  }
+
+  .print-kassenbuch .kassenbuch-period-summary {
+    width: 92mm;
+    margin: 6mm 0 0 auto !important;
+    border: 1.5px solid #111;
+    padding: 4mm;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-kassenbuch .kassenbuch-period-summary h2 {
+    margin: 0 0 2mm !important;
+    font-size: 12pt;
+  }
+
+  .print-kassenbuch .kassenbuch-period-summary dl {
+    margin: 0;
+  }
+
+  .print-kassenbuch .kassenbuch-period-summary dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 6mm;
+    padding: 1mm 0;
+  }
+
+  .print-kassenbuch .kassenbuch-period-summary dd {
+    margin: 0;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  .print-kassenbuch .kassenbuch-final-balance {
+    margin-top: 1.5mm;
+    border-top: 2px solid #111;
+    padding-top: 2mm !important;
+    font-size: 12pt;
+    font-weight: 700;
   }
 
   .print-area.print-invoice {

@@ -677,6 +677,19 @@ export default function TransactionsPage() {
   const formatMinorCurrency = (minorUnits: number) => (
     formatCurrency(minorUnits / 100, kassenbuchCurrency, intlLocale)
   )
+  const formatPrintDate = (date: string) => date
+    ? new Date(`${date}T00:00:00`).toLocaleDateString(intlLocale)
+    : '...'
+  const formatPrintMonth = (monthKey: string) => new Intl.DateTimeFormat(intlLocale, {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${monthKey}-01T00:00:00`))
+  const lastKassenbuchRow = kassenbuch.rows.at(-1)
+  const periodEndDate = printToDate
+    || (lastKassenbuchRow?.kind === 'daily-closing'
+      ? lastKassenbuchRow.date
+      : lastKassenbuchRow?.transaction.date)
+    || printFromDate
 
   const formatTotalsByCurrency = (items: TransactionRow[]) => {
     const totals = getTotalsByCurrency(items)
@@ -966,7 +979,7 @@ export default function TransactionsPage() {
               {companyAddress && <p className="kassenbuch-address">{companyAddress}</p>}
             </div>
             <dl>
-              <div><dt>{t('kassenbuch.period')}</dt><dd>{printFromDate || '...'} - {printToDate || '...'}</dd></div>
+              <div><dt>{t('kassenbuch.period')}</dt><dd>{formatPrintDate(printFromDate)} – {formatPrintDate(printToDate)}</dd></div>
               <div><dt>{t('kassenbuch.currency')}</dt><dd>{kassenbuchCurrency}</dd></div>
             </dl>
           </header>
@@ -976,43 +989,67 @@ export default function TransactionsPage() {
             <strong>{formatMinorCurrency(kassenbuch.openingBalanceMinor)}</strong>
           </div>
 
-          <table className="kassenbuch-table">
-            <colgroup>
-              <col className="kassenbuch-income-column" />
-              <col className="kassenbuch-expense-column" />
-              <col className="kassenbuch-date-column" />
-              <col className="kassenbuch-balance-column" />
-              <col className="kassenbuch-text-column" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>{t('kassenbuch.income')}</th>
-                <th>{t('kassenbuch.expenses')}</th>
-                <th>{t('kassenbuch.date')}</th>
-                <th>{t('kassenbuch.balance')}</th>
-                <th>{t('kassenbuch.text')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kassenbuch.rows.map((row, index) => row.kind === 'transaction' ? (
-                <tr key={`${row.transaction.type}:${row.transaction.id}`} className="kassenbuch-transaction-row">
-                  <td className="kassenbuch-amount">{row.incomeMinor === null ? '' : formatMinorCurrency(row.incomeMinor)}</td>
-                  <td className="kassenbuch-amount">{row.expenseMinor === null ? '' : formatMinorCurrency(row.expenseMinor)}</td>
-                  <td className="kassenbuch-date">{new Date(`${row.transaction.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
-                  <td className="kassenbuch-amount">{formatMinorCurrency(row.balanceMinor)}</td>
-                  <td className="kassenbuch-text">{getKassenbuchText(row.transaction, t('kassenbuch.genericTransaction'))}</td>
-                </tr>
-              ) : (
-                <tr key={`daily-closing:${row.date}:${index}`} className="kassenbuch-daily-closing">
-                  <td />
-                  <td />
-                  <td className="kassenbuch-date">{new Date(`${row.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
-                  <td className="kassenbuch-amount">{formatMinorCurrency(row.balanceMinor)}</td>
-                  <td className="kassenbuch-text">{t('kassenbuch.dailyClosing')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {kassenbuch.months.map((month, monthIndex) => (
+            <section key={month.key} className="kassenbuch-month">
+              <h2>{formatPrintMonth(month.key)}</h2>
+              {monthIndex > 0 && (
+                <div className="kassenbuch-month-opening">
+                  <span>{t('dashboard.openingBalance')}</span>
+                  <strong>{formatMinorCurrency(month.openingBalanceMinor)}</strong>
+                </div>
+              )}
+              <table className="kassenbuch-table">
+                <colgroup>
+                  <col className="kassenbuch-income-column" />
+                  <col className="kassenbuch-expense-column" />
+                  <col className="kassenbuch-date-column" />
+                  <col className="kassenbuch-balance-column" />
+                  <col className="kassenbuch-text-column" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>{t('kassenbuch.income')}</th>
+                    <th>{t('kassenbuch.expenses')}</th>
+                    <th>{t('kassenbuch.date')}</th>
+                    <th>{t('kassenbuch.balance')}</th>
+                    <th>{t('kassenbuch.text')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {month.rows.map((row, index) => row.kind === 'transaction' ? (
+                    <tr key={`${row.transaction.type}:${row.transaction.id}`} className="kassenbuch-transaction-row">
+                      <td className="kassenbuch-amount">{row.incomeMinor === null ? '' : formatMinorCurrency(row.incomeMinor)}</td>
+                      <td className="kassenbuch-amount">{row.expenseMinor === null ? '' : formatMinorCurrency(row.expenseMinor)}</td>
+                      <td className="kassenbuch-date">{formatPrintDate(row.transaction.date)}</td>
+                      <td className="kassenbuch-amount">{formatMinorCurrency(row.balanceMinor)}</td>
+                      <td className="kassenbuch-text">{getKassenbuchText(row.transaction, t('kassenbuch.genericTransaction'))}</td>
+                    </tr>
+                  ) : (
+                    <tr key={`daily-closing:${row.date}:${index}`} className="kassenbuch-daily-closing">
+                      <td />
+                      <td />
+                      <td className="kassenbuch-date">{formatPrintDate(row.date)}</td>
+                      <td className="kassenbuch-amount">{formatMinorCurrency(row.balanceMinor)}</td>
+                      <td className="kassenbuch-text">{t('kassenbuch.dailyClosing')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+
+          <section className="kassenbuch-period-summary">
+            <h2>{t('kassenbuch.summary')}</h2>
+            <dl>
+              <div><dt>{t('dashboard.openingBalance')}</dt><dd>{formatMinorCurrency(kassenbuch.openingBalanceMinor)}</dd></div>
+              <div><dt>{t('kassenbuch.income')}</dt><dd>{formatMinorCurrency(kassenbuch.incomeTotalMinor)}</dd></div>
+              <div><dt>{t('kassenbuch.expenses')}</dt><dd>{formatMinorCurrency(kassenbuch.expenseTotalMinor)}</dd></div>
+              <div className="kassenbuch-final-balance">
+                <dt>{t('kassenbuch.finalBalanceOn').replace('{date}', formatPrintDate(periodEndDate))}</dt>
+                <dd>{formatMinorCurrency(kassenbuch.closingBalanceMinor)}</dd>
+              </div>
+            </dl>
+          </section>
 
           <footer className="kassenbuch-notes">
             {kassenbuch.unclassifiedPaymentCount > 0 && (

@@ -31,10 +31,20 @@ export interface KassenbuchClosingRow {
 
 export type KassenbuchRow = KassenbuchTransactionRow | KassenbuchClosingRow
 
-export interface KassenbuchResult {
+export interface KassenbuchMonth {
+  key: string
   openingBalanceMinor: number
   closingBalanceMinor: number
   rows: KassenbuchRow[]
+}
+
+export interface KassenbuchResult {
+  openingBalanceMinor: number
+  incomeTotalMinor: number
+  expenseTotalMinor: number
+  closingBalanceMinor: number
+  rows: KassenbuchRow[]
+  months: KassenbuchMonth[]
   excludedNonCashCount: number
   excludedCurrencyCount: number
   unclassifiedPaymentCount: number
@@ -103,20 +113,43 @@ export function buildKassenbuch({
     .reduce((balance, transaction) => balance + signedMinorAmount(transaction), 0)
 
   const rows: KassenbuchRow[] = []
+  const months: KassenbuchMonth[] = []
   let balanceMinor = openingBalanceMinor
+  let incomeTotalMinor = 0
+  let expenseTotalMinor = 0
   let activeDate = ''
+  let activeMonth: KassenbuchMonth | null = null
+
+  const appendRow = (row: KassenbuchRow) => {
+    rows.push(row)
+    activeMonth?.rows.push(row)
+    if (activeMonth) activeMonth.closingBalanceMinor = row.balanceMinor
+  }
 
   for (const transaction of [...periodTransactions].sort(compareTransactions)) {
     if (transaction.currency.toUpperCase() !== normalizedCurrency || isKnownNonCash(transaction)) continue
 
     if (activeDate && activeDate !== transaction.date) {
-      rows.push({ kind: 'daily-closing', date: activeDate, balanceMinor })
+      appendRow({ kind: 'daily-closing', date: activeDate, balanceMinor })
+    }
+
+    const monthKey = transaction.date.slice(0, 7)
+    if (!activeMonth || activeMonth.key !== monthKey) {
+      activeMonth = {
+        key: monthKey,
+        openingBalanceMinor: balanceMinor,
+        closingBalanceMinor: balanceMinor,
+        rows: [],
+      }
+      months.push(activeMonth)
     }
 
     activeDate = transaction.date
     const amountMinor = toMinorUnits(transaction.cash_amount ?? transaction.amount)
     balanceMinor += transaction.type === 'income' ? amountMinor : -amountMinor
-    rows.push({
+    if (transaction.type === 'income') incomeTotalMinor += amountMinor
+    else expenseTotalMinor += amountMinor
+    appendRow({
       kind: 'transaction',
       transaction,
       incomeMinor: transaction.type === 'income' ? amountMinor : null,
@@ -126,13 +159,16 @@ export function buildKassenbuch({
   }
 
   if (activeDate) {
-    rows.push({ kind: 'daily-closing', date: activeDate, balanceMinor })
+    appendRow({ kind: 'daily-closing', date: activeDate, balanceMinor })
   }
 
   return {
     openingBalanceMinor,
+    incomeTotalMinor,
+    expenseTotalMinor,
     closingBalanceMinor: balanceMinor,
     rows,
+    months,
     excludedNonCashCount: periodTransactions.filter(
       (transaction) => transaction.currency.toUpperCase() === normalizedCurrency
         && isKnownNonCash(transaction),

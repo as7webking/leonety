@@ -15,6 +15,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.unclassifiedNotice': '{count} movement(s) without a reliable payment method are included and cannot be verified as cash.',
     'kassenbuch.nonCashNotice': '{count} identified card/bank movement(s) are excluded.',
     'kassenbuch.currencyNotice': '{count} movement(s) in another currency are excluded.',
+    'kassenbuch.summary': 'Summary',
+    'kassenbuch.finalBalanceOn': 'Closing balance on {date}',
   },
   de: {
     'kassenbuch.title': 'Kassenbuch',
@@ -32,6 +34,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.unclassifiedNotice': '{count} Bewegung(en) ohne verlässliche Zahlungsart sind enthalten und können nicht als Bargeld verifiziert werden.',
     'kassenbuch.nonCashNotice': '{count} erkannte Karten-/Bankbewegung(en) sind ausgeschlossen.',
     'kassenbuch.currencyNotice': '{count} Bewegung(en) in einer anderen Währung sind ausgeschlossen.',
+    'kassenbuch.summary': 'Zusammenfassung',
+    'kassenbuch.finalBalanceOn': 'Endbestand zum {date}',
   },
   ru: {
     'kassenbuch.title': 'Кассовая книга',
@@ -49,6 +53,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.unclassifiedNotice': 'Включено операций без надёжно указанного способа оплаты: {count}. Нельзя подтвердить, что они были наличными.',
     'kassenbuch.nonCashNotice': 'Исключено банковских/карточных операций: {count}.',
     'kassenbuch.currencyNotice': 'Исключено операций в другой валюте: {count}.',
+    'kassenbuch.summary': 'Итоги',
+    'kassenbuch.finalBalanceOn': 'Конечный остаток на {date}',
   },
   tr: {
     'kassenbuch.title': 'Kasa defteri',
@@ -66,6 +72,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.unclassifiedNotice': 'Güvenilir ödeme yöntemi olmayan {count} hareket dahil edildi; nakit olduğu doğrulanamaz.',
     'kassenbuch.nonCashNotice': 'Tespit edilen {count} kart/banka hareketi hariç tutuldu.',
     'kassenbuch.currencyNotice': 'Farklı para birimindeki {count} hareket hariç tutuldu.',
+    'kassenbuch.summary': 'Özet',
+    'kassenbuch.finalBalanceOn': '{date} tarihli kapanış bakiyesi',
   },
   uk: {
     'kassenbuch.title': 'Касова книга',
@@ -83,6 +91,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.unclassifiedNotice': 'Включено операцій без надійно вказаного способу оплати: {count}. Неможливо підтвердити, що вони були готівковими.',
     'kassenbuch.nonCashNotice': 'Виключено банківських/карткових операцій: {count}.',
     'kassenbuch.currencyNotice': 'Виключено операцій в іншій валюті: {count}.',
+    'kassenbuch.summary': 'Підсумок',
+    'kassenbuch.finalBalanceOn': 'Кінцевий залишок на {date}',
   },
   pl: {
     'kassenbuch.title': 'Księga kasowa',
@@ -100,6 +110,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.unclassifiedNotice': 'Uwzględniono operacje bez wiarygodnej metody płatności: {count}. Nie można potwierdzić, że były gotówkowe.',
     'kassenbuch.nonCashNotice': 'Wykluczono operacje kartowe/bankowe: {count}.',
     'kassenbuch.currencyNotice': 'Wykluczono operacje w innej walucie: {count}.',
+    'kassenbuch.summary': 'Podsumowanie',
+    'kassenbuch.finalBalanceOn': 'Saldo końcowe na dzień {date}',
   },
   fr: {
     'kassenbuch.title': 'Livre de caisse',
@@ -117,5 +129,7 @@ export const kassenbuchDictionaries = {
     'kassenbuch.unclassifiedNotice': '{count} opération(s) sans mode de paiement fiable sont incluses et ne peuvent pas être confirmées comme espèces.',
     'kassenbuch.nonCashNotice': '{count} opération(s) carte/bancaire identifiée(s) sont exclues.',
     'kassenbuch.currencyNotice': '{count} opération(s) dans une autre devise sont exclues.',
+    'kassenbuch.summary': 'Récapitulatif',
+    'kassenbuch.finalBalanceOn': 'Solde final au {date}',
   },
 } as const
