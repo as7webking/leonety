@@ -16,8 +16,10 @@ import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { IncomeBulkTitleDialog } from '@/components/income-bulk-title-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
+import { applyIncomeTitleToSelection } from '@/lib/income-bulk-title'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 
 interface Income extends IncomeForm {
@@ -120,6 +122,9 @@ export default function IncomePage() {
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [selectedIncomeIds, setSelectedIncomeIds] = useState<string[]>([])
+  const [showBulkTitleDialog, setShowBulkTitleDialog] = useState(false)
+  const [bulkTitleSubmitting, setBulkTitleSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const isBusinessWorkspace = currentCompany?.type === 'business'
   const categoryOptions = currentCompany?.type === 'business'
@@ -152,6 +157,7 @@ export default function IncomePage() {
 
     try {
       setLoading(true)
+      setSelectedIncomeIds([])
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
       const [incomeResult, clientResult, invoiceResult] = await Promise.all([
@@ -371,6 +377,58 @@ export default function IncomePage() {
     })
   }, [filterFromDate, filterToDate, incomes, sortBy, sortDirection])
 
+  const visibleIncomeIds = useMemo(() => sortedIncomes.map((income) => income.id), [sortedIncomes])
+  const selectedIncomeIdSet = useMemo(() => new Set(selectedIncomeIds), [selectedIncomeIds])
+  const allVisibleSelected = visibleIncomeIds.length > 0 && visibleIncomeIds.every((id) => selectedIncomeIdSet.has(id))
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    setSelectedIncomeIds((current) => {
+      const next = new Set(current)
+      for (const id of visibleIncomeIds) {
+        if (checked) next.add(id)
+        else next.delete(id)
+      }
+      return [...next]
+    })
+  }
+
+  const handleBulkTitleUpdate = async (title: string) => {
+    if (!currentCompany || selectedIncomeIds.length === 0 || bulkTitleSubmitting) return
+
+    setBulkTitleSubmitting(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    try {
+      const response = await fetch('/api/income/bulk-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: currentCompany.id,
+          incomeIds: selectedIncomeIds,
+          title,
+        }),
+      })
+      const result = await response.json().catch(() => ({})) as { updatedCount?: number }
+
+      if (!response.ok || result.updatedCount !== selectedIncomeIds.length) {
+        throw new Error('bulk_income_title_update_failed')
+      }
+
+      const updatedCount = result.updatedCount
+      setIncomes((current) => applyIncomeTitleToSelection(current, selectedIncomeIds, title))
+      setSelectedIncomeIds([])
+      setShowBulkTitleDialog(false)
+      setSuccessMessage(t('income.bulkUpdated').replace('{count}', String(updatedCount)))
+      window.setTimeout(() => setSuccessMessage(''), 3000)
+    } catch {
+      setErrorMessage(t('income.bulkUpdateFailed'))
+      window.setTimeout(() => setErrorMessage(''), 5000)
+    } finally {
+      setBulkTitleSubmitting(false)
+    }
+  }
+
   const groupedIncomes = sortedIncomes.reduce<Record<string, Income[]>>((groups, income) => {
     const key = income.date.slice(0, 7)
     return {
@@ -560,14 +618,20 @@ export default function IncomePage() {
               <input
                 type="date"
                 value={filterFromDate}
-                onChange={(event) => setFilterFromDate(event.target.value)}
+                onChange={(event) => {
+                  setFilterFromDate(event.target.value)
+                  setSelectedIncomeIds([])
+                }}
                 className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 aria-label={t('dashboard.filterFrom')}
               />
               <input
                 type="date"
                 value={filterToDate}
-                onChange={(event) => setFilterToDate(event.target.value)}
+                onChange={(event) => {
+                  setFilterToDate(event.target.value)
+                  setSelectedIncomeIds([])
+                }}
                 className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 aria-label={t('dashboard.filterTo')}
               />
@@ -659,6 +723,28 @@ export default function IncomePage() {
 
       {successMessage && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{successMessage}</div>}
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
+
+      {sortedIncomes.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-white p-3">
+          <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={(event) => toggleVisibleSelection(event.target.checked)}
+              className="h-4 w-4"
+            />
+            {t('income.bulkSelectVisible')}
+          </label>
+          <span className="text-sm text-slate-500">
+            {t('income.bulkSelectedCount').replace('{count}', String(selectedIncomeIds.length))}
+          </span>
+          {selectedIncomeIds.length > 0 && (
+            <Button type="button" size="sm" className="sm:ml-auto" onClick={() => setShowBulkTitleDialog(true)}>
+              {t('income.bulkEdit')}
+            </Button>
+          )}
+        </div>
+      )}
 
       {showForm && !editingEntry && (
         <Card className="mb-6">
@@ -803,11 +889,27 @@ export default function IncomePage() {
             <div key={income.id} className="space-y-2">
             <Card>
               <CardContent className="flex min-w-0 flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-start gap-3">
+                  <label className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={selectedIncomeIdSet.has(income.id)}
+                      onChange={(event) => setSelectedIncomeIds((current) => event.target.checked
+                        ? [...new Set([...current, income.id])]
+                        : current.filter((id) => id !== income.id)
+                      )}
+                      className="h-4 w-4"
+                    />
+                    <span className="sr-only">
+                      {t('income.bulkSelectRow').replace('{title}', income.title || income.description)}
+                    </span>
+                  </label>
+                  <div className="min-w-0">
                   <p className="font-medium">{income.title || income.description}</p>
                   <p className="text-sm text-muted-foreground">
                     {income.title && income.description ? `${income.description} · ` : ''}{formatCategoryLabel(income.category, t)} · {income.date}
                   </p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
                   <div className="text-right">
@@ -874,6 +976,25 @@ export default function IncomePage() {
           if (id) void handleDelete(id)
         }}
       />
+      {showBulkTitleDialog && (
+        <IncomeBulkTitleDialog
+          submitting={bulkTitleSubmitting}
+          labels={{
+            title: t('income.bulkDialogTitle').replace('{count}', String(selectedIncomeIds.length)),
+            warning: t('income.bulkWarning').replace('{count}', String(selectedIncomeIds.length)),
+            changeTitle: t('income.bulkChangeTitle'),
+            titleLabel: t('transactions.titleLabel'),
+            titlePlaceholder: t('transactions.titlePlaceholder'),
+            titleRequired: t('income.bulkTitleRequired'),
+            cancel: t('common.cancel'),
+            update: t('income.bulkUpdateButton').replace('{count}', String(selectedIncomeIds.length)),
+          }}
+          onCancel={() => {
+            if (!bulkTitleSubmitting) setShowBulkTitleDialog(false)
+          }}
+          onSubmit={(title) => void handleBulkTitleUpdate(title)}
+        />
+      )}
     </PageContainer>
   )
 }
