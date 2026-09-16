@@ -123,6 +123,7 @@ function collectDictionaryKeys() {
     ['src/lib/i18n.ts', 'productManagementUxDictionaries'],
     ['src/lib/i18n.ts', 'featureExpansionDictionaries'],
     ['src/lib/i18n.ts', 'uxFeatureDictionaries'],
+    ['src/lib/i18n.ts', 'workspaceEntitlementDictionaries'],
     ['src/lib/client-crm-i18n.ts', 'clientCrmDictionaries'],
     ['src/lib/public-website-i18n.ts', 'publicWebsiteDictionaries'],
     ['src/lib/kassenbuch-i18n.ts', 'kassenbuchDictionaries'],

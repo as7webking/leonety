@@ -27,7 +27,7 @@ export function WorkspaceSelectorClient() {
         value={currentCompanyId ?? ''}
         onChange={(value) => {
           if (value === WORKSPACE_ACTION_VALUE) {
-            router.push('/app/workspaces')
+            router.push('/app/workspaces?create=1')
             return
           }
           if (value) setCurrentCompanyId(value)

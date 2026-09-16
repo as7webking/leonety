@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
-import { useAccountAccess } from '@/hooks/use-account-access'
-import { canCreateWorkspace } from '@/lib/account-access'
 import { AppSearch } from '@/components/app-search'
 import { AppSelect } from '@/components/app-select'
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -24,19 +22,14 @@ export function Nav() {
   const [businessOpen, setBusinessOpen] = useState(false)
   const [wooConnected, setWooConnected] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [supabase] = useState(() => createClient())
   const router = useRouter()
   const { companies, currentCompanyId, loading, setCurrentCompanyId } = useCompany()
-  const { accountAccess } = useAccountAccess(accountEmail)
   const { t } = useI18n()
-  const canAddWorkspace = canCreateWorkspace(companies.length, accountAccess)
-  const workspaceActionHref = canAddWorkspace ? '/app/workspaces' : '/app/upgrade'
-  const workspaceActionLabel = canAddWorkspace ? t('nav.addWorkspace') : t('nav.switchToPro')
   const companyOptions = [
     ...(companies.length === 0 ? [{ value: '', label: t('nav.noWorkspace'), disabled: true }] : []),
     ...companies.map((company) => ({ value: company.id, label: `${company.name} (${company.type})` })),
-    { value: WORKSPACE_ACTION_VALUE, label: workspaceActionLabel },
+    { value: WORKSPACE_ACTION_VALUE, label: t('nav.addWorkspace') },
   ]
   const showBusinessModules = currentCompanyId
     ? companies.find((company) => company.id === currentCompanyId)?.type === 'business'
@@ -74,7 +67,6 @@ export function Nav() {
       const { data } = await supabase.auth.getSession()
       if (mounted) {
         setIsAuthenticated(!!data.session)
-        setAccountEmail(data.session?.user?.email ?? null)
       }
     }
 
@@ -83,7 +75,6 @@ export function Nav() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setIsAuthenticated(!!session)
-        setAccountEmail(session?.user?.email ?? null)
       }
     })
 
@@ -127,7 +118,7 @@ export function Nav() {
 
   const handleCompanyChange = (value: string) => {
     if (value === WORKSPACE_ACTION_VALUE) {
-      router.push(workspaceActionHref)
+      router.push('/app/workspaces?create=1')
       setIsOpen(false)
       return
     }

@@ -7,8 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
-import { canCreateWorkspace } from '@/lib/account-access'
-import { useAccountAccess } from '@/hooks/use-account-access'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
 import { useI18n } from '@/contexts/i18n-context'
 import { AppSelect } from '@/components/app-select'
@@ -22,16 +20,13 @@ export default function OnboardingPage() {
   const [workspaceCurrency, setWorkspaceCurrency] = useState('USD')
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
-  const [accountEmail, setAccountEmail] = useState<string | null>(null)
+  const [canCreateWorkspace, setCanCreateWorkspace] = useState<boolean | null>(null)
 
-  const { accountAccess } = useAccountAccess(accountEmail)
   const { t } = useI18n()
   useEffect(() => {
     const loadAccountContext = async () => {
       const { data: authData } = await supabase.auth.getUser()
       const user = authData.user
-      const email = user?.email ?? null
-      setAccountEmail(email)
 
       if (!user) return
 
@@ -48,12 +43,30 @@ export default function OnboardingPage() {
   }, [supabase])
 
   useEffect(() => {
-    if (!loading && !canCreateWorkspace(companies.length, accountAccess)) {
-      setMessage(t('workspaces.limitReached'))
-    } else if (!loading) {
-      setMessage('')
+    if (loading) return
+    let active = true
+
+    const loadEntitlement = async () => {
+      try {
+        const response = await fetch('/api/workspaces', { cache: 'no-store' })
+        const data = await response.json().catch(() => ({})) as { canCreate?: boolean }
+        if (active) {
+          setCanCreateWorkspace(response.ok ? Boolean(data.canCreate) : false)
+          setMessage(response.ok && !data.canCreate ? t('workspaces.limitReached') : '')
+        }
+      } catch {
+        if (active) {
+          setCanCreateWorkspace(false)
+          setMessage(t('workspaces.entitlementLoadFailed'))
+        }
+      }
     }
-  }, [accountAccess, companies.length, loading, router, t])
+
+    void loadEntitlement()
+    return () => {
+      active = false
+    }
+  }, [companies.length, loading, t])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -75,11 +88,6 @@ export default function OnboardingPage() {
         .eq('id', user.id)
         .maybeSingle()
 
-      if (!canCreateWorkspace(companies.length, accountAccess)) {
-        router.replace('/upgrade')
-        return
-      }
-
       const trimmedName = workspaceName.trim()
       if (workspaceType === 'business' && !trimmedName) {
         setMessage(t('workspaces.companyNameRequired'))
@@ -90,26 +98,32 @@ export default function OnboardingPage() {
       const name =
         trimmedName || (profile?.full_name?.trim() ? t('onboarding.namedWorkspace').replace('{name}', profile.full_name.trim()) : t('workspaces.personalWorkspace'))
 
-      const { data, error } = await supabase
-        .from('companies')
-        .insert({
-          owner_id: user.id,
+      const response = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           type: workspaceType,
           name,
           currency: normalizeCurrencyCode(workspaceCurrency || profile?.currency || 'USD'),
-        })
-        .select('id')
-        .single()
-
-      if (error) {
-        throw error
+        }),
+      })
+      const data = await response.json().catch(() => ({})) as { id?: string; error?: string }
+      if (!response.ok || !data.id) {
+        if (data.error === 'workspace_limit_reached') {
+          setCanCreateWorkspace(false)
+          setMessage(t('workspaces.limitReached'))
+          return
+        }
+        throw new Error(data.error || 'workspace_create_failed')
       }
 
       await refreshCompanies(data.id)
       router.push('/app/dashboard')
     } catch (error) {
-      console.error('Onboarding failed:', error)
-      setMessage(error instanceof Error ? error.message : t('workspaces.createFailed'))
+      console.error('[onboarding] workspace creation failed', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      })
+      setMessage(t('workspaces.createFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -166,7 +180,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {!canCreateWorkspace(companies.length, accountAccess) ? (
+          {canCreateWorkspace === false ? (
             <div className="space-y-4">
               <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 {message || t('workspaces.limitReached')}
@@ -174,8 +188,12 @@ export default function OnboardingPage() {
               <div className="flex flex-wrap gap-3">
                 <Button onClick={() => router.push('/app/dashboard')}>{t('onboarding.goToDashboard')}</Button>
                 <Button variant="outline" onClick={() => router.push('/app/workspaces')}>{t('onboarding.openWorkspaceSettings')}</Button>
-                <Button variant="outline" onClick={() => router.push('/app/upgrade')}>{t('nav.switchToPro')}</Button>
+                <Button variant="outline" onClick={() => router.push('/upgrade')}>{t('nav.switchToPro')}</Button>
               </div>
+            </div>
+          ) : canCreateWorkspace === null ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              {t('workspaces.checkingEntitlement')}
             </div>
           ) : (
           <form onSubmit={handleSubmit} className="space-y-6">

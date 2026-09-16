@@ -37,10 +37,12 @@ interface ManagedProfile {
   workspaceNames: string[]
   isAdmin: boolean
   isPro: boolean
-  plan: 'free' | 'pro'
+  plan: 'free' | 'starter' | 'pro' | 'business'
   subscriptionEndsAt: string | null
   subscriptionSource: 'default' | 'manual' | 'payment'
-  subscriptionStatus: 'active' | 'canceled' | 'expired'
+  subscriptionStatus: 'trialing' | 'active' | 'past_due' | 'paused' | 'cancelled' | 'expired'
+  trialEndsAt: string | null
+  trialProvider: 'stripe' | 'paddle' | null
   emailConfirmed: boolean
   isDeactivated: boolean
   lastSignInAt: string | null
@@ -90,6 +92,7 @@ export default function ProfilePage() {
   const [adminError, setAdminError] = useState('')
   const [billingAction, setBillingAction] = useState<'cancel' | 'portal' | null>(null)
   const [monthsByProfile, setMonthsByProfile] = useState<Record<string, number>>({})
+  const [trialEndByProfile, setTrialEndByProfile] = useState<Record<string, string>>({})
   const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
   const [reportFromDate, setReportFromDate] = useState(() => {
     const date = new Date()
@@ -588,6 +591,35 @@ export default function ProfilePage() {
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : t('profile.adminEmailActionFailed'))
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
+  const handleTrialEndUpdate = async (managedProfile: ManagedProfile) => {
+    const trialEndsAt = trialEndByProfile[managedProfile.id] ?? managedProfile.trialEndsAt?.slice(0, 10) ?? ''
+    if (!trialEndsAt) return
+
+    setAdminLoading(true)
+    setMessage('')
+    setAdminError('')
+
+    try {
+      const response = await fetch('/api/admin/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: managedProfile.id, trialEndsAt }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(t('profile.trialUpdateFailed'))
+
+      setManagedProfiles(data.profiles ?? [])
+      setUpgradeRequests(data.upgradeRequests ?? [])
+      setMessage(t('profile.trialUpdated'))
+      if (data.auditEventRecorded === false) setAdminError(t('profile.adminAuditMissing'))
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : t('profile.trialUpdateFailed'))
     } finally {
       setAdminLoading(false)
     }
@@ -1496,6 +1528,11 @@ export default function ProfilePage() {
                                 : ` · ${t('common.noExpiry')}`
                               : ''}
                           </p>
+                          {managedProfile.subscriptionStatus === 'trialing' && managedProfile.trialEndsAt && (
+                            <p className="text-sm text-slate-500">
+                              {t('billing.trialEnds')}: {formatBillingDate(managedProfile.trialEndsAt)}
+                            </p>
+                          )}
                           <p className="text-sm text-slate-500">
                             {t('billing.source')}: {managedProfile.subscriptionSource} · {t('billing.status')}: {managedProfile.subscriptionStatus}
                           </p>
@@ -1591,6 +1628,35 @@ export default function ProfilePage() {
                             <span className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
                               {t('billing.paidSubscription')}
                             </span>
+                          )}
+                          {managedProfile.subscriptionStatus === 'trialing' && managedProfile.trialProvider === 'paddle' && (
+                            <div className="flex w-full flex-col gap-2 rounded-md border border-slate-200 p-3 sm:w-auto sm:min-w-72">
+                              <label className="text-xs font-medium text-slate-600" htmlFor={`trial-end-${managedProfile.id}`}>
+                                {t('profile.trialEndDate')}
+                              </label>
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <input
+                                  id={`trial-end-${managedProfile.id}`}
+                                  type="date"
+                                  min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)}
+                                  value={trialEndByProfile[managedProfile.id] ?? managedProfile.trialEndsAt?.slice(0, 10) ?? ''}
+                                  onChange={(event) => setTrialEndByProfile((current) => ({
+                                    ...current,
+                                    [managedProfile.id]: event.target.value,
+                                  }))}
+                                  className="min-h-10 min-w-0 rounded-md border border-slate-300 px-3 text-base"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={adminLoading}
+                                  onClick={() => void handleTrialEndUpdate(managedProfile)}
+                                >
+                                  {t('profile.updateTrial')}
+                                </Button>
+                              </div>
+                              <p className="text-xs text-slate-500">{t('profile.trialPaddleNotice')}</p>
+                            </div>
                           )}
                           <Button
                             type="button"

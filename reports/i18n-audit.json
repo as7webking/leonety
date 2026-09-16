@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-15T15:00:39.836Z",
+  "generatedAt": "2026-09-15T21:09:21.242Z",
   "locales": [
     "en",
     "de",
@@ -19,38 +19,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1757,
-      "total": 1757,
+      "translated": 1783,
+      "total": 1783,
       "percent": 100
     },
     "de": {
-      "translated": 1757,
-      "total": 1757,
+      "translated": 1783,
+      "total": 1783,
       "percent": 100
     },
     "ru": {
-      "translated": 1757,
-      "total": 1757,
+      "translated": 1783,
+      "total": 1783,
       "percent": 100
     },
     "tr": {
-      "translated": 1757,
-      "total": 1757,
+      "translated": 1783,
+      "total": 1783,
       "percent": 100
     },
     "uk": {
-      "translated": 1757,
-      "total": 1757,
+      "translated": 1783,
+      "total": 1783,
       "percent": 100
     },
     "pl": {
-      "translated": 1757,
-      "total": 1757,
+      "translated": 1783,
+      "total": 1783,
       "percent": 100
     },
     "fr": {
-      "translated": 1757,
-      "total": 1757,
+      "translated": 1783,
+      "total": 1783,
       "percent": 100
     }
   },
@@ -79,8 +79,7 @@
       "profile.loadFailed",
       "time.activeTimerLimitReached",
       "transactions.bulkNewValuePlaceholder",
-      "transactions.bulkOldValuePlaceholder",
-      "workspaces.workspace"
+      "transactions.bulkOldValuePlaceholder"
     ],
     "ru": [
       "Color",
@@ -96,8 +95,7 @@
       "profile.loadFailed",
       "time.activeTimerLimitReached",
       "transactions.bulkNewValuePlaceholder",
-      "transactions.bulkOldValuePlaceholder",
-      "workspaces.workspace"
+      "transactions.bulkOldValuePlaceholder"
     ],
     "tr": [
       "Color",
@@ -2092,7 +2090,7 @@
   ],
   "nativeFileInputs": [],
   "summary": {
-    "englishKeyCount": 1757,
+    "englishKeyCount": 1783,
     "hardcodedStringCount": 15,
     "nativeFileInputCount": 0,
     "usedMissingInEnglishCount": 0

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAccountAccess } from '@/lib/account-access'
+import { getPaddleApiBaseUrl, getProviderApiKey } from '@/lib/billing/server-config'
+import type { AppPlan } from '@/lib/billing/plans'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
@@ -26,6 +28,15 @@ interface AppAccessRow {
   manual_override: boolean
   active: boolean
   expires_at: string | null
+}
+
+interface BillingSubscriptionRow {
+  company_id: string
+  provider: 'stripe' | 'paddle'
+  provider_subscription_id: string
+  plan: AppPlan
+  status: 'trialing' | 'active' | 'past_due' | 'paused' | 'cancelled' | 'expired'
+  current_period_end: string | null
 }
 
 interface AuthUserStatus {
@@ -83,7 +94,8 @@ async function recordAdminAuditEvent(
   adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
   adminUserId: string,
   targetUserId: string,
-  action: string
+  action: string,
+  metadata?: Record<string, unknown>,
 ) {
   const { error } = await adminSupabase
     .from('admin_audit_events')
@@ -91,6 +103,7 @@ async function recordAdminAuditEvent(
       admin_user_id: adminUserId,
       target_user_id: targetUserId,
       action,
+      ...(metadata ? { metadata } : {}),
       created_at: new Date().toISOString(),
     })
 
@@ -104,6 +117,12 @@ async function recordAdminAuditEvent(
 async function isCurrentUserAdmin(userId: string, email: string | undefined) {
   const fallbackAccess = getAccountAccess(email)
   if (fallbackAccess.isAdmin) {
+    return true
+  }
+
+  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase()
+    || process.env.UPGRADE_REQUEST_ADMIN_EMAIL?.trim().toLowerCase()
+  if (configuredAdminEmail && email?.trim().toLowerCase() === configuredAdminEmail) {
     return true
   }
 
@@ -125,6 +144,7 @@ async function loadManagedProfiles() {
     { data: companies, error: companiesError },
     { data: adminAccounts, error: adminsError },
     { data: appAccessRows, error: appAccessError },
+    { data: billingSubscriptions, error: billingSubscriptionsError },
     authUsersResponse,
   ] = await Promise.all([
     adminSupabase
@@ -141,6 +161,10 @@ async function loadManagedProfiles() {
     adminSupabase
       .from('app_access')
       .select('company_id, tier, manual_override, active, expires_at'),
+    adminSupabase
+      .from('billing_subscriptions')
+      .select('company_id, provider, provider_subscription_id, plan, status, current_period_end')
+      .order('updated_at', { ascending: false }),
     adminSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch((error) => ({ data: { users: [] }, error })),
   ])
 
@@ -148,6 +172,7 @@ async function loadManagedProfiles() {
   if (companiesError) throw companiesError
   if (adminsError) throw adminsError
   if (appAccessError) throw appAccessError
+  if (billingSubscriptionsError) throw billingSubscriptionsError
   if (authUsersResponse.error) {
     console.warn('Admin auth user listing unavailable; falling back to profiles table:', formatError(authUsersResponse.error))
   }
@@ -165,6 +190,12 @@ async function loadManagedProfiles() {
   const appAccessByCompany = new Map(
     ((appAccessRows ?? []) as AppAccessRow[]).map((access) => [access.company_id, access])
   )
+  const billingByCompany = new Map<string, BillingSubscriptionRow>()
+  for (const subscription of (billingSubscriptions ?? []) as BillingSubscriptionRow[]) {
+    if (!billingByCompany.has(subscription.company_id)) {
+      billingByCompany.set(subscription.company_id, subscription)
+    }
+  }
   const authUsersById = new Map(
     (authUsersResponse.data.users as AuthUserStatus[]).map((user) => [user.id, user])
   )
@@ -181,9 +212,13 @@ async function loadManagedProfiles() {
     const activeAccess = userCompanies
       .map((company) => appAccessByCompany.get(company.id))
       .find((access) => isActiveAppAccess(access))
+    const currentSubscription = userCompanies
+      .map((company) => billingByCompany.get(company.id))
+      .find((subscription) => subscription?.status === 'trialing')
+      ?? userCompanies.map((company) => billingByCompany.get(company.id)).find(Boolean)
     const fallbackAccess = getAccountAccess(email)
     const isAdmin = fallbackAccess.isAdmin || adminIds.has(userId)
-    const isPro = fallbackAccess.plan === 'pro' || isActiveAppAccess(activeAccess)
+    const isPro = fallbackAccess.plan === 'pro' || isActiveAppAccess(activeAccess) || Boolean(currentSubscription && ['trialing', 'active'].includes(currentSubscription.status))
     const subscriptionSource = activeAccess
       ? activeAccess.manual_override ? 'manual' : 'payment'
       : fallbackAccess.overrideSource
@@ -198,12 +233,14 @@ async function loadManagedProfiles() {
       workspaceNames: userCompanies.map((company) => company.name),
       isAdmin,
       isPro,
-      plan: isPro ? 'pro' : 'free',
-      subscriptionEndsAt: isPro ? activeAccess?.expires_at ?? null : null,
-      subscriptionSource,
-      subscriptionStatus: activeAccess
+      plan: currentSubscription?.plan ?? activeAccess?.tier ?? (isPro ? 'pro' : 'free'),
+      subscriptionEndsAt: currentSubscription?.current_period_end ?? (isPro ? activeAccess?.expires_at ?? null : null),
+      subscriptionSource: currentSubscription ? 'payment' : subscriptionSource,
+      subscriptionStatus: currentSubscription?.status ?? (activeAccess
         ? isActiveAppAccess(activeAccess) ? 'active' : 'expired'
-        : 'active',
+        : 'active'),
+      trialEndsAt: currentSubscription?.status === 'trialing' ? currentSubscription.current_period_end : null,
+      trialProvider: currentSubscription?.status === 'trialing' ? currentSubscription.provider : null,
       emailConfirmed: Boolean(authUser?.email_confirmed_at ?? authUser?.confirmed_at),
       isDeactivated: Boolean(bannedUntil && bannedUntil > new Date()),
       lastSignInAt: authUser?.last_sign_in_at ?? null,
@@ -298,6 +335,7 @@ export async function POST(request: Request) {
       : null
     const noExpiry = Boolean(body.noExpiry)
     const monthsPaid = Math.max(1, Math.min(120, Number(body.monthsPaid) || 1))
+    const trialEndsAt = typeof body.trialEndsAt === 'string' ? body.trialEndsAt.trim() : ''
 
     if (!targetUserId) {
       return NextResponse.json({ error: 'Target user is required' }, { status: 400 })
@@ -305,6 +343,101 @@ export async function POST(request: Request) {
 
     const adminSupabase = createSupabaseAdminClient()
     let auditEventRecorded = true
+
+    if (trialEndsAt) {
+      const requestedTrialEnd = new Date(`${trialEndsAt}T23:59:59.000Z`)
+      if (!Number.isFinite(requestedTrialEnd.getTime()) || requestedTrialEnd <= new Date()) {
+        return NextResponse.json({ error: 'Trial end must be a future date' }, { status: 400 })
+      }
+
+      const { data: targetCompanies, error: targetCompaniesError } = await adminSupabase
+        .from('companies')
+        .select('id')
+        .eq('owner_id', targetUserId)
+      if (targetCompaniesError) throw targetCompaniesError
+
+      const companyIds = (targetCompanies ?? []).map((company) => company.id)
+      if (companyIds.length === 0) {
+        return NextResponse.json({ error: 'Target user has no workspace' }, { status: 400 })
+      }
+
+      const { data: trialSubscription, error: trialError } = await adminSupabase
+        .from('billing_subscriptions')
+        .select('company_id, provider, provider_subscription_id, current_period_end, status')
+        .in('company_id', companyIds)
+        .eq('provider', 'paddle')
+        .eq('status', 'trialing')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle<Pick<BillingSubscriptionRow, 'company_id' | 'provider' | 'provider_subscription_id' | 'current_period_end' | 'status'>>()
+      if (trialError) throw trialError
+      if (!trialSubscription) {
+        return NextResponse.json({ error: 'No active Paddle trial found for this account' }, { status: 409 })
+      }
+
+      const apiKey = getProviderApiKey('paddle')
+      if (!apiKey) {
+        return NextResponse.json({ error: 'Paddle billing is not configured' }, { status: 500 })
+      }
+
+      const paddleResponse = await fetch(
+        `${getPaddleApiBaseUrl()}/subscriptions/${encodeURIComponent(trialSubscription.provider_subscription_id)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            next_billed_at: requestedTrialEnd.toISOString(),
+            proration_billing_mode: 'do_not_bill',
+          }),
+        },
+      )
+      const paddleData = await paddleResponse.json().catch(() => ({})) as {
+        data?: {
+          status?: string
+          next_billed_at?: string | null
+          current_billing_period?: { ends_at?: string | null } | null
+        }
+        error?: { code?: string }
+      }
+      if (!paddleResponse.ok || paddleData.data?.status !== 'trialing') {
+        console.warn('[admin.trial] Paddle trial update rejected', {
+          status: paddleResponse.status,
+          code: paddleData.error?.code ?? null,
+        })
+        return NextResponse.json({ error: 'Paddle could not update the active trial' }, { status: 502 })
+      }
+
+      const confirmedTrialEnd = paddleData.data.current_billing_period?.ends_at
+        ?? paddleData.data.next_billed_at
+        ?? requestedTrialEnd.toISOString()
+      const { error: localTrialError } = await adminSupabase
+        .from('billing_subscriptions')
+        .update({
+          current_period_end: confirmedTrialEnd,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('company_id', trialSubscription.company_id)
+        .eq('provider', 'paddle')
+        .eq('provider_subscription_id', trialSubscription.provider_subscription_id)
+        .eq('status', 'trialing')
+      if (localTrialError) throw localTrialError
+
+      auditEventRecorded = await recordAdminAuditEvent(
+        adminSupabase,
+        authData.user.id,
+        targetUserId,
+        'update_trial_end',
+        {
+          old_trial_end: trialSubscription.current_period_end,
+          new_trial_end: confirmedTrialEnd,
+          provider: 'paddle',
+          company_id: trialSubscription.company_id,
+        },
+      )
+    }
 
     if (adminEmailAction) {
       const { data: targetUserData, error: targetUserError } = await adminSupabase.auth.admin.getUserById(targetUserId)
