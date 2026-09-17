@@ -15,7 +15,7 @@ import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrency
 import { parseCsv } from '@/lib/csv'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
-import { buildKassenbuch, getKassenbuchText } from '@/lib/kassenbuch'
+import { buildKassenbuch, getKassenbuchText, isFullCalendarMonthSelected } from '@/lib/kassenbuch'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 
@@ -109,6 +109,7 @@ export default function TransactionsPage() {
   const [printFormatDialogOpen, setPrintFormatDialogOpen] = useState(false)
   const [selectedPrintFormat, setSelectedPrintFormat] = useState<PrintFormat>('standard')
   const [activePrintFormat, setActivePrintFormat] = useState<PrintFormat>('standard')
+  const [showKassenbuchMonthEndBalance, setShowKassenbuchMonthEndBalance] = useState(false)
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [formData, setFormData] = useState({
@@ -893,6 +894,23 @@ export default function TransactionsPage() {
                 </label>
               ))}
             </div>
+            {selectedPrintFormat === 'kassenbuch' && (
+              <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={showKassenbuchMonthEndBalance}
+                    onChange={(event) => setShowKassenbuchMonthEndBalance(event.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  {t('kassenbuch.showMonthEndBalance')}
+                </label>
+                <p className="text-xs leading-5 text-slate-600">
+                  <span className="font-medium text-slate-700">{t('kassenbuch.page')} X / Y:</span>{' '}
+                  {t('kassenbuch.pageNumberingHint')}
+                </p>
+              </div>
+            )}
             <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
               <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(false)}>
                 {t('common.cancel')}
@@ -1035,6 +1053,17 @@ export default function TransactionsPage() {
                   ))}
                 </tbody>
               </table>
+              {showKassenbuchMonthEndBalance && (
+                <div className="kassenbuch-month-end">
+                  <span>
+                    {(isFullCalendarMonthSelected(month.key, printFromDate, printToDate)
+                      ? t('kassenbuch.monthEndBalance')
+                      : t('kassenbuch.partialMonthEndBalance'))
+                      .replace('{month}', formatPrintMonth(month.key))}
+                  </span>
+                  <strong>{formatMinorCurrency(month.closingBalanceMinor)}</strong>
+                </div>
+              )}
             </section>
           ))}
 

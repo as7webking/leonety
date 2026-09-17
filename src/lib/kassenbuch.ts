@@ -57,6 +57,26 @@ export function toMinorUnits(amount: number) {
   return Math.round((amount + Number.EPSILON) * 100)
 }
 
+export function isFullCalendarMonthSelected(
+  monthKey: string,
+  periodStart: string,
+  periodEnd: string,
+) {
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey)
+  if (!match) return false
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (!Number.isInteger(year) || month < 1 || month > 12) return false
+
+  const firstDay = `${monthKey}-01`
+  const lastDayNumber = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const lastDay = `${monthKey}-${String(lastDayNumber).padStart(2, '0')}`
+
+  return (!periodStart || periodStart <= firstDay)
+    && (!periodEnd || periodEnd >= lastDay)
+}
+
 export function getKassenbuchText(
   transaction: KassenbuchTransaction,
   genericLabel: string,

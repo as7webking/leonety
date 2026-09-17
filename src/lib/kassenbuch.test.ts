@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
-import { buildKassenbuch, getKassenbuchText, type KassenbuchTransaction } from './kassenbuch.ts'
+import { buildKassenbuch, getKassenbuchText, isFullCalendarMonthSelected, type KassenbuchTransaction } from './kassenbuch.ts'
 
 function transaction(overrides: Partial<KassenbuchTransaction>): KassenbuchTransaction {
   return {
@@ -88,6 +88,14 @@ test('groups a December to January year boundary', () => {
   assert.deepEqual(result.months.map((month) => month.key), ['2026-12', '2027-01'])
   assert.equal(result.months[1]?.openingBalanceMinor, 1000)
   assert.equal(result.months[1]?.closingBalanceMinor, 1500)
+})
+
+test('distinguishes full calendar months from partial selected periods', () => {
+  assert.equal(isFullCalendarMonthSelected('2026-09', '2026-09-01', '2026-09-30'), true)
+  assert.equal(isFullCalendarMonthSelected('2026-10', '2026-09-15', '2026-11-20'), true)
+  assert.equal(isFullCalendarMonthSelected('2026-09', '2026-09-15', '2026-10-20'), false)
+  assert.equal(isFullCalendarMonthSelected('2026-10', '2026-09-15', '2026-10-20'), false)
+  assert.equal(isFullCalendarMonthSelected('invalid', '2026-09-01', '2026-09-30'), false)
 })
 
 test('does not create a section for an empty month', () => {
