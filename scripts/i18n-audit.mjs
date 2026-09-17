@@ -11,6 +11,7 @@ const translationFiles = [
   path.join(root, 'src/lib/i18n.ts'),
   path.join(root, 'src/lib/public-website-i18n.ts'),
   path.join(root, 'src/lib/kassenbuch-i18n.ts'),
+  path.join(root, 'src/lib/employee-profile-i18n.ts'),
 ]
 const reportPath = path.join(root, 'reports/i18n-audit.json')
 
@@ -98,6 +99,14 @@ function extractKeysFromBlock(block) {
   return keys
 }
 
+function extractIdentifierKeysFromBlock(block) {
+  const keys = new Set()
+  const keyPattern = /(?:^|[,{])\s*([A-Za-z][A-Za-z0-9_-]*)\s*:/gm
+  let match
+  while ((match = keyPattern.exec(block))) keys.add(match[1])
+  return keys
+}
+
 function collectDictionaryKeys() {
   const keysByLocale = Object.fromEntries(locales.map((locale) => [locale, new Set()]))
   const dictionaryObjects = [
@@ -127,6 +136,7 @@ function collectDictionaryKeys() {
     ['src/lib/client-crm-i18n.ts', 'clientCrmDictionaries'],
     ['src/lib/public-website-i18n.ts', 'publicWebsiteDictionaries'],
     ['src/lib/kassenbuch-i18n.ts', 'kassenbuchDictionaries'],
+    ['src/lib/employee-profile-i18n.ts', 'employeeProfileDictionaries'],
   ]
 
   for (const [relativeFile, objectName] of dictionaryObjects) {
@@ -139,6 +149,14 @@ function collectDictionaryKeys() {
       for (const key of extractKeysFromBlock(block)) {
         keysByLocale[locale].add(key)
       }
+    }
+  }
+
+  const employeeProfileSource = removeComments(read(path.join(root, 'src/lib/employee-profile-i18n.ts')))
+  for (const locale of locales) {
+    const block = extractObjectAfter(employeeProfileSource, `const ${locale}`)
+    for (const key of extractIdentifierKeysFromBlock(block)) {
+      keysByLocale[locale].add(`employees.profile.${key}`)
     }
   }
 
