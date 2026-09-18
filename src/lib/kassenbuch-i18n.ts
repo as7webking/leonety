@@ -21,7 +21,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.monthEndBalance': 'Month-end balance for {month}',
     'kassenbuch.partialMonthEndBalance': 'Closing balance for the selected part of {month}',
     'kassenbuch.page': 'Page',
-    'kassenbuch.pageNumberingHint': 'Enable headers and footers in the browser print dialog for accurate numbering.',
+    'kassenbuch.showPageNumbers': 'Show page numbers',
+    'kassenbuch.pageNumberingHint': 'Document page numbers depend on browser paged-media support. Browser print headers and footers are separate and may add a URL, title, or date.',
   },
   de: {
     'kassenbuch.title': 'Kassenbuch',
@@ -45,7 +46,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.monthEndBalance': 'Monatsendbestand {month}',
     'kassenbuch.partialMonthEndBalance': 'Endbestand des ausgewählten Zeitraums in {month}',
     'kassenbuch.page': 'Seite',
-    'kassenbuch.pageNumberingHint': 'Aktivieren Sie für eine genaue Nummerierung Kopf- und Fußzeilen im Druckdialog des Browsers.',
+    'kassenbuch.showPageNumbers': 'Seitenzahlen anzeigen',
+    'kassenbuch.pageNumberingHint': 'Dokumentseitenzahlen hängen von der Paged-Media-Unterstützung des Browsers ab. Browser-Kopf- und Fußzeilen sind separat und können URL, Titel oder Datum ergänzen.',
   },
   ru: {
     'kassenbuch.title': 'Кассовая книга',
@@ -69,7 +71,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.monthEndBalance': 'Остаток на конец месяца: {month}',
     'kassenbuch.partialMonthEndBalance': 'Остаток за выбранную часть месяца: {month}',
     'kassenbuch.page': 'Страница',
-    'kassenbuch.pageNumberingHint': 'Для точной нумерации включите колонтитулы в диалоге печати браузера.',
+    'kassenbuch.showPageNumbers': 'Показывать номера страниц',
+    'kassenbuch.pageNumberingHint': 'Нумерация документа зависит от поддержки печатных страниц браузером. Системные колонтитулы браузера настраиваются отдельно и могут добавлять URL, заголовок или дату.',
   },
   tr: {
     'kassenbuch.title': 'Kasa defteri',
@@ -93,7 +96,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.monthEndBalance': '{month} ay sonu bakiyesi',
     'kassenbuch.partialMonthEndBalance': '{month} seçili dönem sonu bakiyesi',
     'kassenbuch.page': 'Sayfa',
-    'kassenbuch.pageNumberingHint': 'Doğru numaralandırma için tarayıcının yazdırma iletişim kutusunda üstbilgi ve altbilgileri etkinleştirin.',
+    'kassenbuch.showPageNumbers': 'Sayfa numaralarını göster',
+    'kassenbuch.pageNumberingHint': 'Belge sayfa numaraları tarayıcının sayfalı medya desteğine bağlıdır. Tarayıcı üstbilgi ve altbilgileri ayrıdır ve URL, başlık veya tarih ekleyebilir.',
   },
   uk: {
     'kassenbuch.title': 'Касова книга',
@@ -117,7 +121,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.monthEndBalance': 'Залишок на кінець місяця: {month}',
     'kassenbuch.partialMonthEndBalance': 'Залишок за вибрану частину місяця: {month}',
     'kassenbuch.page': 'Сторінка',
-    'kassenbuch.pageNumberingHint': 'Для точної нумерації увімкніть колонтитули у вікні друку браузера.',
+    'kassenbuch.showPageNumbers': 'Показувати номери сторінок',
+    'kassenbuch.pageNumberingHint': 'Нумерація документа залежить від підтримки друкованих сторінок браузером. Системні колонтитули браузера налаштовуються окремо й можуть додавати URL, заголовок або дату.',
   },
   pl: {
     'kassenbuch.title': 'Księga kasowa',
@@ -141,7 +146,8 @@ export const kassenbuchDictionaries = {
     'kassenbuch.monthEndBalance': 'Saldo na koniec miesiąca: {month}',
     'kassenbuch.partialMonthEndBalance': 'Saldo za wybraną część miesiąca: {month}',
     'kassenbuch.page': 'Strona',
-    'kassenbuch.pageNumberingHint': 'Aby uzyskać dokładną numerację, włącz nagłówki i stopki w oknie drukowania przeglądarki.',
+    'kassenbuch.showPageNumbers': 'Pokaż numery stron',
+    'kassenbuch.pageNumberingHint': 'Numeracja dokumentu zależy od obsługi mediów stronicowanych przez przeglądarkę. Nagłówki i stopki przeglądarki są oddzielne i mogą dodać adres URL, tytuł lub datę.',
   },
   fr: {
     'kassenbuch.title': 'Livre de caisse',
@@ -165,6 +171,7 @@ export const kassenbuchDictionaries = {
     'kassenbuch.monthEndBalance': 'Solde de fin de mois pour {month}',
     'kassenbuch.partialMonthEndBalance': 'Solde pour la partie sélectionnée de {month}',
     'kassenbuch.page': 'Page',
-    'kassenbuch.pageNumberingHint': 'Pour une numérotation exacte, activez les en-têtes et pieds de page dans la boîte de dialogue d’impression du navigateur.',
+    'kassenbuch.showPageNumbers': 'Afficher les numéros de page',
+    'kassenbuch.pageNumberingHint': 'La numérotation du document dépend de la prise en charge des médias paginés par le navigateur. Les en-têtes et pieds de page du navigateur sont distincts et peuvent ajouter une URL, un titre ou une date.',
   },
 } as const

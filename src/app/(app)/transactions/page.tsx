@@ -110,6 +110,7 @@ export default function TransactionsPage() {
   const [selectedPrintFormat, setSelectedPrintFormat] = useState<PrintFormat>('standard')
   const [activePrintFormat, setActivePrintFormat] = useState<PrintFormat>('standard')
   const [showKassenbuchMonthEndBalance, setShowKassenbuchMonthEndBalance] = useState(false)
+  const [showKassenbuchPageNumbers, setShowKassenbuchPageNumbers] = useState(false)
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [formData, setFormData] = useState({
@@ -905,8 +906,16 @@ export default function TransactionsPage() {
                   />
                   {t('kassenbuch.showMonthEndBalance')}
                 </label>
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={showKassenbuchPageNumbers}
+                    onChange={(event) => setShowKassenbuchPageNumbers(event.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  {t('kassenbuch.showPageNumbers')}
+                </label>
                 <p className="text-xs leading-5 text-slate-600">
-                  <span className="font-medium text-slate-700">{t('kassenbuch.page')} X / Y:</span>{' '}
                   {t('kassenbuch.pageNumberingHint')}
                 </p>
               </div>
@@ -990,16 +999,38 @@ export default function TransactionsPage() {
 
       {activePrintFormat === 'kassenbuch' && (
         <div className="print-area print-kassenbuch hidden">
+          {showKassenbuchPageNumbers && (
+            <style media="print">{`
+              @page {
+                margin-bottom: 16mm;
+                @bottom-center {
+                  content: ${JSON.stringify(`${t('kassenbuch.page')} `)} counter(page);
+                  color: #4b5563;
+                  font-family: Arial, Helvetica, sans-serif;
+                  font-size: 8pt;
+                }
+              }
+            `}</style>
+          )}
           <header className="kassenbuch-header">
-            <div>
-              <h1>{t('kassenbuch.title')}</h1>
-              <p className="kassenbuch-company">{currentCompany.name}</p>
-              {companyAddress && <p className="kassenbuch-address">{companyAddress}</p>}
+            <div className="kassenbuch-identity">
+              {companyLogo && (
+                // The print-only workspace logo may be a data URL or an external provider URL.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={companyLogo} alt="" className="kassenbuch-company-logo" />
+              )}
+              <div>
+                <p className="kassenbuch-company">{currentCompany.name}</p>
+                {companyAddress && <p className="kassenbuch-address">{companyAddress}</p>}
+              </div>
             </div>
-            <dl>
-              <div><dt>{t('kassenbuch.period')}</dt><dd>{formatPrintDate(printFromDate)} – {formatPrintDate(printToDate)}</dd></div>
-              <div><dt>{t('kassenbuch.currency')}</dt><dd>{kassenbuchCurrency}</dd></div>
-            </dl>
+            <div className="kassenbuch-document-meta">
+              <h1>{t('kassenbuch.title')}</h1>
+              <dl>
+                <div><dt>{t('kassenbuch.period')}</dt><dd>{formatPrintDate(printFromDate)} – {formatPrintDate(printToDate)}</dd></div>
+                <div><dt>{t('kassenbuch.currency')}</dt><dd>{kassenbuchCurrency}</dd></div>
+              </dl>
+            </div>
           </header>
 
           <div className="kassenbuch-opening">

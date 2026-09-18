@@ -359,13 +359,32 @@ html {
   }
 
   .print-kassenbuch .kassenbuch-header {
-    display: flex;
+    display: flex !important;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12mm;
     margin-bottom: 5mm;
     border-bottom: 2px solid #111;
     padding-bottom: 3mm;
+  }
+
+  .print-kassenbuch .kassenbuch-identity {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 4mm;
+  }
+
+  .print-kassenbuch .kassenbuch-company-logo {
+    display: block !important;
+    width: 18mm;
+    height: 18mm;
+    flex: 0 0 18mm;
+    object-fit: contain;
+  }
+
+  .print-kassenbuch .kassenbuch-document-meta {
+    min-width: 70mm;
   }
 
   .print-kassenbuch .kassenbuch-header h1 {
@@ -388,7 +407,7 @@ html {
   }
 
   .print-kassenbuch .kassenbuch-header dl {
-    min-width: 58mm;
+    min-width: 70mm;
     margin: 0;
   }
 
@@ -527,6 +546,7 @@ html {
   }
 
   .print-kassenbuch .kassenbuch-notes {
+    display: block !important;
     margin-top: 3mm;
     font-size: 7.5pt;
     line-height: 1.35;
