@@ -14,12 +14,15 @@ import {
   employeeProfileToForm,
   employeeStatuses,
   employmentTypes,
+  isGermanyEmployeeProfile,
+  normalizeEmployeeCountryCode,
   type CompensationType,
   type EmployeeProfile,
   type EmployeeProfileForm as FormState,
   type EmployeeStatus,
   type EmploymentType,
 } from '@/lib/employee-profile'
+import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 
 interface Props {
@@ -29,10 +32,15 @@ interface Props {
 }
 
 const inputClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm'
+const suggestedCountryCodes = [
+  'DE', 'AT', 'CH', 'FR', 'PL', 'TR', 'UA', 'GB', 'IE', 'NL', 'BE', 'LU', 'ES', 'PT',
+  'IT', 'CZ', 'SK', 'HU', 'RO', 'BG', 'GR', 'DK', 'SE', 'NO', 'FI', 'US', 'CA', 'AU',
+  'NZ', 'IN', 'CN', 'JP', 'BR', 'MX', 'ZA', 'AE',
+]
 
 export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   const router = useRouter()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [supabase] = useState(() => createClient())
   const initial = useMemo(() => employee
     ? employeeProfileToForm(employee)
@@ -40,6 +48,19 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   const [form, setForm] = useState<FormState>(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const normalizedCountryCode = normalizeEmployeeCountryCode(form.country_code)
+  const showGermanyExtension = normalizedCountryCode === 'DE'
+    || (!normalizedCountryCode && Boolean(employee && isGermanyEmployeeProfile(employee)))
+  const visibleEmploymentTypes = employmentTypes.filter((value) => value !== 'minijob'
+    || showGermanyExtension
+    || form.employment_type === 'minijob')
+  const countryDisplayNames = useMemo(() => {
+    try {
+      return new Intl.DisplayNames([getIntlLocale(locale)], { type: 'region' })
+    } catch {
+      return null
+    }
+  }, [locale])
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -52,6 +73,10 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
 
     if (!form.first_name.trim() || !form.last_name.trim() || !form.job_title.trim()) {
       setError(t('employees.profile.required'))
+      return
+    }
+    if (normalizedCountryCode && !/^[A-Z]{2}$/.test(normalizedCountryCode)) {
+      setError(t('employees.profile.countryInvalid'))
       return
     }
     if (!form.is_permanent && !form.fixed_term_end_date) {
@@ -114,12 +139,15 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
       {section(t('employees.profile.personal'), <>
         {field('first_name', t('employees.profile.firstName'), { required: true })}
         {field('last_name', t('employees.profile.lastName'), { required: true })}
-        {field('email', t('employees.email'), { type: 'email' })}
-        {field('phone', t('employees.phone'), { type: 'tel' })}
         {field('birth_date', t('employees.profile.birthDate'), { type: 'date' })}
         {field('birth_place', t('employees.profile.birthPlace'))}
         {field('birth_country', t('employees.profile.birthCountry'))}
         {field('nationality', t('employees.profile.nationality'))}
+      </>)}
+
+      {section(t('employees.profile.contact'), <>
+        {field('email', t('employees.email'), { type: 'email' })}
+        {field('phone', t('employees.phone'), { type: 'tel' })}
       </>)}
 
       {section(t('employees.profile.address'), <>
@@ -127,14 +155,22 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
         {field('house_number', t('employees.profile.houseNumber'))}
         {field('postal_code', t('employees.profile.postalCode'), { inputMode: 'text' })}
         {field('city', t('employees.profile.city'))}
-      </>)}
-
-      {section(t('employees.profile.taxSocial'), <>
-        {field('tax_id', t('employees.profile.taxId'))}
-        {field('tax_class', t('employees.profile.taxClass'))}
-        {field('social_security_number', t('employees.profile.socialSecurityNumber'))}
-        {field('health_insurance_provider', t('employees.profile.healthInsurance'))}
-        <p className="text-xs leading-5 text-slate-500 sm:col-span-2">{t('employees.profile.sensitiveNotice')}</p>
+        <label className="space-y-1">
+          <span className="text-sm font-medium">{t('employees.profile.country')}</span>
+          <input
+            list="employee-country-codes"
+            value={form.country_code}
+            maxLength={2}
+            autoComplete="off"
+            onChange={(event) => update('country_code', event.target.value.toUpperCase())}
+            className={inputClass}
+            placeholder="DE"
+          />
+          <datalist id="employee-country-codes">
+            {suggestedCountryCodes.map((code) => <option key={code} value={code}>{countryDisplayNames?.of(code) ?? code}</option>)}
+          </datalist>
+          <span className="block text-xs leading-5 text-slate-500">{t('employees.profile.countryHint')}</span>
+        </label>
       </>)}
 
       {section(t('employees.profile.employment'), <>
@@ -142,7 +178,7 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
         {field('employment_start_date', t('employees.profile.startDate'), { type: 'date' })}
         <label className="space-y-1">
           <span className="text-sm font-medium">{t('employees.employmentType')}</span>
-          <AppSelect value={form.employment_type} onChange={(value) => update('employment_type', value as EmploymentType)} options={employmentTypes.map((value) => ({ value, label: t(`employees.type.${value}`) }))} />
+          <AppSelect value={form.employment_type} onChange={(value) => update('employment_type', value as EmploymentType)} options={visibleEmploymentTypes.map((value) => ({ value, label: t(`employees.type.${value}`) }))} />
         </label>
         <label className="space-y-1">
           <span className="text-sm font-medium">{t('employees.status')}</span>
@@ -154,12 +190,6 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
           <label className="inline-flex min-h-11 items-center gap-2"><input type="radio" checked={!form.is_permanent} onChange={() => update('is_permanent', false)} />{t('employees.profile.fixedTerm')}</label>
         </fieldset>
         {!form.is_permanent && field('fixed_term_end_date', t('employees.profile.fixedUntil'), { type: 'date', required: true })}
-        {form.employment_type === 'minijob' && (
-          <div className="space-y-2 sm:col-span-2">
-            <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={form.minijob_flat_tax_2_percent} onChange={(event) => update('minijob_flat_tax_2_percent', event.target.checked)} />{t('employees.profile.minijobFlatTax')}</label>
-            <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={form.pension_insurance_exemption} onChange={(event) => update('pension_insurance_exemption', event.target.checked)} />{t('employees.profile.pensionExemption')}</label>
-          </div>
-        )}
       </>)}
 
       {section(t('employees.profile.compensation'), <>
@@ -178,6 +208,23 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
         {form.compensation_type === 'hourly' && field('hourly_wage', t('employees.profile.hourlyWage'), { inputMode: 'decimal', required: true })}
         {form.compensation_type === 'fixed' && field('fixed_salary', t('employees.profile.fixedSalary'), { inputMode: 'decimal', required: true })}
       </>)}
+
+      {section(t('employees.profile.countrySpecific'), showGermanyExtension ? <>
+        <p className="text-sm leading-6 text-slate-600 sm:col-span-2">{t('employees.profile.germanyExtension')}</p>
+        {field('tax_id', t('employees.profile.taxId'))}
+        {field('tax_class', t('employees.profile.taxClass'))}
+        {field('social_security_number', t('employees.profile.socialSecurityNumber'))}
+        {field('health_insurance_provider', t('employees.profile.healthInsurance'))}
+        {form.employment_type === 'minijob' && (
+          <div className="space-y-2 sm:col-span-2">
+            <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={form.minijob_flat_tax_2_percent} onChange={(event) => update('minijob_flat_tax_2_percent', event.target.checked)} />{t('employees.profile.minijobFlatTax')}</label>
+            <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={form.pension_insurance_exemption} onChange={(event) => update('pension_insurance_exemption', event.target.checked)} />{t('employees.profile.pensionExemption')}</label>
+          </div>
+        )}
+        <p className="text-xs leading-5 text-slate-500 sm:col-span-2">{t('employees.profile.sensitiveNotice')}</p>
+      </> : <p className="text-sm leading-6 text-slate-600 sm:col-span-2">
+        {normalizedCountryCode ? t('employees.profile.noCountryFields') : t('employees.profile.selectCountry')}
+      </p>)}
 
       {section(t('employees.profile.documents'), <p className="text-sm leading-6 text-slate-600 sm:col-span-2">{t('employees.profile.documentsNotice')}</p>)}
 

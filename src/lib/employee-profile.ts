@@ -5,6 +5,13 @@ export const compensationTypes = ['hourly', 'fixed'] as const
 export type EmployeeStatus = typeof employeeStatuses[number]
 export type EmploymentType = typeof employmentTypes[number]
 export type CompensationType = typeof compensationTypes[number]
+export type EmployeeCountryProfileValue = string | number | boolean | null
+export interface EmployeeCountryProfile {
+  version: 1
+  modules: Record<string, Record<string, EmployeeCountryProfileValue>>
+}
+
+const emptyCountryProfile = (): EmployeeCountryProfile => ({ version: 1, modules: {} })
 
 export interface EmployeeProfile {
   id: string
@@ -26,6 +33,8 @@ export interface EmployeeProfile {
   house_number: string | null
   postal_code: string | null
   city: string | null
+  country_code: string | null
+  country_profile: EmployeeCountryProfile
   birth_date: string | null
   birth_place: string | null
   birth_country: string | null
@@ -62,6 +71,8 @@ export type EmployeeProfileForm = {
   house_number: string
   postal_code: string
   city: string
+  country_code: string
+  country_profile: EmployeeCountryProfile
   birth_date: string
   birth_place: string
   birth_country: string
@@ -82,7 +93,7 @@ export type EmployeeProfileForm = {
 export const employeeProfileColumns = [
   'id', 'company_id', 'name', 'first_name', 'last_name', 'email', 'phone', 'job_title',
   'employment_type', 'status', 'notes', 'tax_id', 'tax_class', 'social_security_number',
-  'nationality', 'street', 'house_number', 'postal_code', 'city', 'birth_date', 'birth_place',
+  'nationality', 'street', 'house_number', 'postal_code', 'city', 'country_code', 'country_profile', 'birth_date', 'birth_place',
   'birth_country', 'health_insurance_provider', 'employment_start_date', 'is_permanent',
   'fixed_term_end_date', 'minijob_flat_tax_2_percent', 'pension_insurance_exemption',
   'hours_per_week', 'compensation_type', 'hourly_wage', 'fixed_salary',
@@ -93,7 +104,7 @@ export function createEmptyEmployeeProfileForm(currency = 'EUR'): EmployeeProfil
   return {
     first_name: '', last_name: '', email: '', phone: '', job_title: '', employment_type: 'full_time',
     status: 'active', notes: '', tax_id: '', tax_class: '', social_security_number: '', nationality: '',
-    street: '', house_number: '', postal_code: '', city: '', birth_date: '', birth_place: '',
+    street: '', house_number: '', postal_code: '', city: '', country_code: '', country_profile: emptyCountryProfile(), birth_date: '', birth_place: '',
     birth_country: '', health_insurance_provider: '', employment_start_date: '', is_permanent: true,
     fixed_term_end_date: '', minijob_flat_tax_2_percent: false, pension_insurance_exemption: false,
     hours_per_week: '', compensation_type: '', hourly_wage: '', fixed_salary: '',
@@ -109,7 +120,8 @@ export function employeeProfileToForm(employee: EmployeeProfile): EmployeeProfil
     status: employee.status, notes: employee.notes ?? '', tax_id: employee.tax_id ?? '',
     tax_class: employee.tax_class ?? '', social_security_number: employee.social_security_number ?? '',
     nationality: employee.nationality ?? '', street: employee.street ?? '', house_number: employee.house_number ?? '',
-    postal_code: employee.postal_code ?? '', city: employee.city ?? '', birth_date: employee.birth_date ?? '',
+    postal_code: employee.postal_code ?? '', city: employee.city ?? '', country_code: employee.country_code ?? '',
+    country_profile: employee.country_profile ?? emptyCountryProfile(), birth_date: employee.birth_date ?? '',
     birth_place: employee.birth_place ?? '', birth_country: employee.birth_country ?? '',
     health_insurance_provider: employee.health_insurance_provider ?? '',
     employment_start_date: employee.employment_start_date ?? '', is_permanent: employee.is_permanent,
@@ -132,10 +144,25 @@ function nullableNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+export function normalizeEmployeeCountryCode(value: string) {
+  return value.trim().toUpperCase()
+}
+
+export function isGermanyEmployeeProfile(employee: Pick<EmployeeProfile,
+  'country_code' | 'tax_id' | 'tax_class' | 'social_security_number' | 'health_insurance_provider' | 'employment_type'
+>) {
+  const countryCode = normalizeEmployeeCountryCode(employee.country_code ?? '')
+  if (countryCode) return countryCode === 'DE'
+
+  return employee.employment_type === 'minijob'
+    || Boolean(employee.tax_id || employee.tax_class || employee.social_security_number || employee.health_insurance_provider)
+}
+
 export function buildEmployeeProfilePayload(form: EmployeeProfileForm, companyId: string) {
   const firstName = form.first_name.trim()
   const lastName = form.last_name.trim()
   const isMinijob = form.employment_type === 'minijob'
+  const countryCode = normalizeEmployeeCountryCode(form.country_code)
 
   return {
     company_id: companyId,
@@ -147,7 +174,8 @@ export function buildEmployeeProfilePayload(form: EmployeeProfileForm, companyId
     tax_id: nullableText(form.tax_id), tax_class: nullableText(form.tax_class),
     social_security_number: nullableText(form.social_security_number), nationality: nullableText(form.nationality),
     street: nullableText(form.street), house_number: nullableText(form.house_number),
-    postal_code: nullableText(form.postal_code), city: nullableText(form.city),
+    postal_code: nullableText(form.postal_code), city: nullableText(form.city), country_code: countryCode || null,
+    country_profile: form.country_profile,
     birth_date: form.birth_date || null, birth_place: nullableText(form.birth_place),
     birth_country: nullableText(form.birth_country), health_insurance_provider: nullableText(form.health_insurance_provider),
     employment_start_date: form.employment_start_date || null, is_permanent: form.is_permanent,

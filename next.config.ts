@@ -16,6 +16,7 @@ const appRoutes = [
   '/contracts',
   '/contracts/:path*',
   '/employees',
+  '/employees/:path*',
   '/locations',
   '/shifts',
   '/products',
