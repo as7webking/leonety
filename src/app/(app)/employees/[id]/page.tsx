@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { ArrowLeft, Building2, CalendarDays, Edit } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
+import { EmployeeDocumentManager } from '@/components/employees/employee-document-manager'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
@@ -66,8 +67,8 @@ export default function EmployeeDetailPage() {
         {section(t('employees.profile.employment'), <><Value label={t('employees.jobTitle')} value={employee.job_title} /><Value label={t('employees.profile.startDate')} value={date(employee.employment_start_date)} /><Value label={t('employees.employmentType')} value={t(`employees.type.${employee.employment_type}`)} /><Value label={t('employees.status')} value={t(`employees.status.${employee.status}`)} /><Value label={t('employees.profile.term')} value={employee.is_permanent ? t('employees.profile.permanent') : `${t('employees.profile.fixedUntil')}: ${date(employee.fixed_term_end_date)}`} /></>)}
         {section(t('employees.profile.compensation'), <><Value label={t('employees.profile.hoursPerWeek')} value={employee.hours_per_week} /><Value label={t('employees.profile.compensationType')} value={employee.compensation_type ? t(`employees.profile.compensation.${employee.compensation_type}`) : null} /><Value label={t('employees.profile.hourlyWage')} value={money(employee.hourly_wage)} /><Value label={t('employees.profile.fixedSalary')} value={money(employee.fixed_salary)} /><Value label={t('employees.profile.annualVacation')} value={employee.annual_vacation_days} /></>)}
         {showGermanyExtension && section(t('employees.profile.countrySpecific'), <><Value label={t('employees.profile.taxId')} value={employee.tax_id} /><Value label={t('employees.profile.taxClass')} value={employee.tax_class} /><Value label={t('employees.profile.socialSecurityNumber')} value={employee.social_security_number} /><Value label={t('employees.profile.healthInsurance')} value={employee.health_insurance_provider} />{employee.employment_type === 'minijob' && <><Value label={t('employees.profile.minijobFlatTax')} value={employee.minijob_flat_tax_2_percent ? t('employees.profile.yes') : t('employees.profile.no')} /><Value label={t('employees.profile.pensionExemption')} value={employee.pension_insurance_exemption ? t('employees.profile.yes') : t('employees.profile.no')} /></>}</>)}
-        {section(t('employees.profile.documents'), <Value label={t('employees.profile.documents')} value={t('employees.profile.documentsNotice')} />)}
         {employee.notes && <div className="lg:col-span-2">{section(t('employees.notes'), <Value label={t('employees.notes')} value={<span className="whitespace-pre-wrap">{employee.notes}</span>} />)}</div>}
+        <div className="lg:col-span-2"><EmployeeDocumentManager companyId={currentCompany.id} employeeId={employee.id} countryCode={employee.country_code} jobTitle={employee.job_title} /></div>
       </div>
     </PageContainer>
   )

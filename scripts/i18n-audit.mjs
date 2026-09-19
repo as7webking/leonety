@@ -12,6 +12,7 @@ const translationFiles = [
   path.join(root, 'src/lib/public-website-i18n.ts'),
   path.join(root, 'src/lib/kassenbuch-i18n.ts'),
   path.join(root, 'src/lib/employee-profile-i18n.ts'),
+  path.join(root, 'src/lib/employee-documents-i18n.ts'),
 ]
 const reportPath = path.join(root, 'reports/i18n-audit.json')
 
@@ -158,6 +159,12 @@ function collectDictionaryKeys() {
     for (const key of extractIdentifierKeysFromBlock(block)) {
       keysByLocale[locale].add(`employees.profile.${key}`)
     }
+  }
+
+  const employeeDocumentsSource = removeComments(read(path.join(root, 'src/lib/employee-documents-i18n.ts')))
+  const employeeDocumentKeys = extractIdentifierKeysFromBlock(extractObjectAfter(employeeDocumentsSource, 'const en'))
+  for (const locale of locales) {
+    for (const key of employeeDocumentKeys) keysByLocale[locale].add(`employees.documents.${key}`)
   }
 
   return keysByLocale
