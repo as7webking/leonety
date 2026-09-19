@@ -7,7 +7,7 @@ export function AppNavigationShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-slate-50">
       <AppSidebar />
       <MobileDrawerClient />
-      <main className="min-w-0 pt-16 md:pl-64 md:pt-0">
+      <main className="min-w-0 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-16 md:pb-0 md:pl-64 md:pt-0">
         {children}
       </main>
     </div>

@@ -10,8 +10,10 @@ import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
 import { AppSelect } from '@/components/app-select'
-import { Boxes, Building2, CalendarDays, Package, Users } from 'lucide-react'
+import { Boxes, Building2, CalendarDays, Filter, Package, Users, X } from 'lucide-react'
 import { getIntlLocale } from '@/lib/i18n'
+import { Button } from '@/components/ui/button'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 
 interface Income {
   id: string
@@ -84,8 +86,10 @@ export default function DashboardPage() {
   const [groupByMonth, setGroupByMonth] = useState(false)
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const { accountAccess } = useAccountAccess(accountEmail)
   const { locale, t } = useI18n()
+  useBodyScrollLock(mobileFiltersOpen)
 
   const loadDashboard = useCallback(async () => {
     if (!currentCompany) {
@@ -260,7 +264,14 @@ export default function DashboardPage() {
           {t('billing.planSuffix').replace('{plan}', planLabel)}
         </span>
       </PageHeader>
-      <div className="mb-6 grid min-w-0 gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[minmax(150px,0.75fr)_minmax(160px,1fr)_minmax(160px,1fr)_auto_auto_auto]">
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 md:hidden">
+        <label className="min-w-0 space-y-1 text-sm">
+          <span className="text-slate-600">{t('dashboard.periodPreset')}</span>
+          <AppSelect value={periodPreset} onChange={(value) => { const next = value as PeriodPreset; setPeriodPreset(next); const range = getPeriodRange(next); if (range) { setFilterFromDate(range.from); setFilterToDate(range.to) } }} options={[{ value:'all', label:t('dashboard.periodAllTime') },{ value:'this_month', label:t('dashboard.periodThisMonth') },{ value:'last_month', label:t('dashboard.periodLastMonth') },{ value:'this_year', label:t('dashboard.periodThisYear') },{ value:'custom', label:t('dashboard.periodCustom') }]} />
+        </label>
+        <Button type="button" variant="outline" onClick={() => setMobileFiltersOpen(true)} aria-label={t('common.filters')}><Filter />{t('common.filters')}</Button>
+      </div>
+      <div className="mb-6 hidden min-w-0 gap-2 rounded-lg border border-slate-200 bg-white p-3 md:grid md:grid-cols-2 lg:grid-cols-[minmax(150px,0.75fr)_minmax(160px,1fr)_minmax(160px,1fr)_auto_auto_auto]">
         <label className="min-w-0 space-y-1 text-sm">
           <span className="text-slate-600">{t('dashboard.periodPreset')}</span>
           <AppSelect
@@ -319,26 +330,27 @@ export default function DashboardPage() {
           className="self-end"
         />
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-lg bg-card p-6">
+      {mobileFiltersOpen && <div className="fixed inset-0 z-[80] bg-slate-950/40 md:hidden" onClick={() => setMobileFiltersOpen(false)}><section role="dialog" aria-modal="true" aria-label={t('common.filters')} className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-xl bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">{t('common.filters')}</h2><Button type="button" size="icon" variant="ghost" onClick={() => setMobileFiltersOpen(false)} aria-label={t('common.cancel')}><X /></Button></div><div className="grid gap-4"><label className="space-y-1 text-sm"><span className="text-slate-600">{t('dashboard.filterFrom')}</span><input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setPeriodPreset('custom') }} className="w-full rounded-md border px-3 py-2 text-base" /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('dashboard.filterTo')}</span><input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setPeriodPreset('custom') }} className="w-full rounded-md border px-3 py-2 text-base" /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('common.groupByMonth')}</span><AppSelect value={groupByMonth ? 'month':'none'} onChange={(value) => setGroupByMonth(value === 'month')} options={[{value:'none',label:t('common.noMonthGrouping')},{value:'month',label:t('common.groupByMonth')}]} /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('common.sortDate')}</span><AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date'|'amount')} options={[{value:'date',label:t('common.sortDate')},{value:'amount',label:t('common.sortAmount')}]} /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('common.descending')}</span><AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc'|'desc')} options={[{value:'desc',label:t('common.descending')},{value:'asc',label:t('common.ascending')}]} /></label><Button type="button" onClick={() => setMobileFiltersOpen(false)}>{t('common.apply')}</Button></div></section></div>}
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-5">
+        <div className="rounded-lg bg-card p-3 sm:p-6">
           <h3 className="text-sm font-medium text-slate-500">{t('dashboard.openingBalance')}</h3>
-          <p className={`mt-2 text-2xl ${openingBalance < 0 ? 'text-red-600' : ''}`}>{formatMoney(openingBalance)}</p>
+          <p className={`mt-2 break-words text-xl sm:text-2xl ${openingBalance < 0 ? 'text-red-600' : ''}`}>{formatMoney(openingBalance)}</p>
         </div>
-        <div className="rounded-lg bg-card p-6">
+        <div className="rounded-lg bg-card p-3 sm:p-6">
           <h3 className="text-sm font-medium text-slate-500">{t('dashboard.periodIncome')}</h3>
-          <p className="mt-2 text-2xl text-green-600">{formatMoney(periodIncome)}</p>
+          <p className="mt-2 break-words text-xl text-green-600 sm:text-2xl">{formatMoney(periodIncome)}</p>
         </div>
-        <div className="rounded-lg bg-card p-6">
+        <div className="rounded-lg bg-card p-3 sm:p-6">
           <h3 className="text-sm font-medium text-slate-500">{t('dashboard.periodExpenses')}</h3>
-          <p className="mt-2 text-2xl text-red-600">{formatMoney(periodExpense)}</p>
+          <p className="mt-2 break-words text-xl text-red-600 sm:text-2xl">{formatMoney(periodExpense)}</p>
         </div>
-        <div className="rounded-lg bg-card p-6">
+        <div className="rounded-lg bg-card p-3 sm:p-6">
           <h3 className="text-sm font-medium text-slate-500">{t('dashboard.periodResult')}</h3>
-          <p className={`mt-2 text-2xl ${periodResult >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(periodResult)}</p>
+          <p className={`mt-2 break-words text-xl sm:text-2xl ${periodResult >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(periodResult)}</p>
         </div>
-        <div className="rounded-lg border-2 border-slate-900 bg-card p-6">
+        <div className="col-span-2 rounded-lg border-2 border-slate-900 bg-card p-3 sm:col-span-1 sm:p-6">
           <h3 className="text-sm font-medium text-slate-500">{t('dashboard.closingBalance')}</h3>
-          <p className={`mt-2 text-2xl font-semibold ${closingBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatMoney(closingBalance)}</p>
+          <p className={`mt-2 break-words text-xl font-semibold sm:text-2xl ${closingBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatMoney(closingBalance)}</p>
         </div>
       </div>
 
@@ -352,20 +364,20 @@ export default function DashboardPage() {
       {currentCompany.type === 'business' && (
         <div className="mt-8">
           <h2 className="mb-3 text-lg font-semibold">{t('dashboard.businessTools')}</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Link href="/app/employees" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Users className="mb-3 h-5 w-5 text-blue-600" /><p className="font-medium">{t('nav.employees')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.employeesLink')}</p></Link>
-            <Link href="/app/shifts" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><CalendarDays className="mb-3 h-5 w-5 text-violet-600" /><p className="font-medium">{t('nav.shifts')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.shiftsLink')}</p></Link>
-            <Link href="/app/products" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Package className="mb-3 h-5 w-5 text-emerald-600" /><p className="font-medium">{t('nav.products')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.productsLink')}</p></Link>
-            <Link href="/app/inventory" className="rounded-lg border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"><Boxes className="mb-3 h-5 w-5 text-amber-600" /><p className="font-medium">{t('nav.inventory')}</p><p className="mt-1 text-sm text-slate-500">{t('dashboard.inventoryLink')}</p></Link>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+            <Link href="/app/employees" className="rounded-lg border bg-white p-3 transition hover:border-slate-400 hover:shadow-sm sm:p-4"><Users className="mb-2 h-5 w-5 text-blue-600 sm:mb-3" /><p className="font-medium">{t('nav.employees')}</p><p className="mt-1 hidden text-sm text-slate-500 sm:block">{t('dashboard.employeesLink')}</p></Link>
+            <Link href="/app/shifts" className="rounded-lg border bg-white p-3 transition hover:border-slate-400 hover:shadow-sm sm:p-4"><CalendarDays className="mb-2 h-5 w-5 text-violet-600 sm:mb-3" /><p className="font-medium">{t('nav.shifts')}</p><p className="mt-1 hidden text-sm text-slate-500 sm:block">{t('dashboard.shiftsLink')}</p></Link>
+            <Link href="/app/products" className="rounded-lg border bg-white p-3 transition hover:border-slate-400 hover:shadow-sm sm:p-4"><Package className="mb-2 h-5 w-5 text-emerald-600 sm:mb-3" /><p className="font-medium">{t('nav.products')}</p><p className="mt-1 hidden text-sm text-slate-500 sm:block">{t('dashboard.productsLink')}</p></Link>
+            <Link href="/app/inventory" className="rounded-lg border bg-white p-3 transition hover:border-slate-400 hover:shadow-sm sm:p-4"><Boxes className="mb-2 h-5 w-5 text-amber-600 sm:mb-3" /><p className="font-medium">{t('nav.inventory')}</p><p className="mt-1 hidden text-sm text-slate-500 sm:block">{t('dashboard.inventoryLink')}</p></Link>
           </div>
         </div>
       )}
 
       <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="rounded-lg bg-card p-6">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold">{t('dashboard.recentIncome')}</h3>
-          </div>
+        <details className="group rounded-lg bg-card p-4 md:block md:p-6">
+          <summary className="cursor-pointer font-semibold md:hidden">{t('dashboard.recentIncome')}</summary>
+          <div className="hidden pt-4 group-open:block md:block md:pt-0">
+          <h3 className="mb-4 hidden text-lg font-semibold md:block">{t('dashboard.recentIncome')}</h3>
           {renderGrouped(sortedIncomes, (income) => (
             <div key={income.id} className="flex justify-between border-b py-2">
               <span>{income.description}</span>
@@ -375,11 +387,12 @@ export default function DashboardPage() {
           <Link href="/app/income" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
             {t('dashboard.viewAllIncome')}
           </Link>
-        </div>
-        <div className="rounded-lg bg-card p-6">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold">{t('dashboard.recentExpenses')}</h3>
           </div>
+        </details>
+        <details className="group rounded-lg bg-card p-4 md:block md:p-6">
+          <summary className="cursor-pointer font-semibold md:hidden">{t('dashboard.recentExpenses')}</summary>
+          <div className="hidden pt-4 group-open:block md:block md:pt-0">
+          <h3 className="mb-4 hidden text-lg font-semibold md:block">{t('dashboard.recentExpenses')}</h3>
           {renderGrouped(sortedExpenses, (expense) => (
             <div key={expense.id} className="flex justify-between border-b py-2">
               <span>{expense.description}</span>
@@ -389,16 +402,20 @@ export default function DashboardPage() {
           <Link href="/app/expenses" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
             {t('dashboard.viewAllExpenses')}
           </Link>
-        </div>
-        <div className="rounded-lg bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">{t('dashboard.recentTime')}</h3>
+          </div>
+        </details>
+        <details className="group rounded-lg bg-card p-4 md:block md:p-6">
+          <summary className="cursor-pointer font-semibold md:hidden">{t('dashboard.recentTime')}</summary>
+          <div className="hidden pt-4 group-open:block md:block md:pt-0">
+          <h3 className="mb-4 hidden text-lg font-semibold md:block">{t('dashboard.recentTime')}</h3>
           {renderGrouped(sortedTimeEntries, (entry) => (
             <div key={entry.id} className="flex justify-between border-b py-2">
               <span>{entry.description}</span>
               <span>{formatHours(Number(entry.hours))}</span>
             </div>
           ), t('dashboard.noTime'))}
-        </div>
+          </div>
+        </details>
       </div>
     </PageContainer>
   )

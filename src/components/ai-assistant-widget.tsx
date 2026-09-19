@@ -6,6 +6,7 @@ import { Bot, Edit3, LifeBuoy, Plus, RefreshCcw, Send, Trash2, X } from 'lucide-
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 
 type ChatRole = 'user' | 'assistant'
 
@@ -72,6 +73,7 @@ export function AiAssistantWidget() {
   const storageScope = currentCompany?.id ?? 'personal'
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0] ?? null
   const messages = activeChat?.messages ?? []
+  useBodyScrollLock(open)
 
   const suggestedQuestions = useMemo(() => [
     t('assistant.suggestion.expense'),
@@ -200,13 +202,16 @@ export function AiAssistantWidget() {
   }
 
   return (
-    <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 print:hidden sm:right-5">
+    <>
       {open && (
+        <div className="fixed inset-0 z-[80] bg-slate-950/35 print:hidden sm:pointer-events-none sm:bg-transparent">
         <section
+          role="dialog"
+          aria-modal="true"
           aria-label={t('assistant.title')}
-        className="mb-3 flex h-[min(78dvh,42rem)] w-[min(calc(100vw-2rem),44rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:h-[38rem] lg:w-[44rem]"
+          className="absolute inset-0 flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-white shadow-2xl sm:pointer-events-auto sm:inset-auto sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:right-5 sm:h-[min(38rem,calc(100dvh-6rem))] sm:w-[min(calc(100vw-2.5rem),44rem)] sm:rounded-xl sm:border sm:border-slate-200"
         >
-          <header className="flex items-start justify-between gap-3 border-b border-slate-200 p-4">
+          <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:p-4">
             <div className="min-w-0">
               <p className="flex items-center gap-2 font-semibold text-slate-950">
                 <Bot className="h-4 w-4 text-blue-600" />
@@ -324,7 +329,7 @@ export function AiAssistantWidget() {
                 )}
               </div>
 
-              <form onSubmit={handleSubmit} className="border-t border-slate-200 p-3">
+              <form onSubmit={handleSubmit} className="border-t border-slate-200 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
                 <label className="sr-only" htmlFor="leonety-assistant-input">{t('assistant.inputLabel')}</label>
                 <div className="flex items-end gap-2">
                   <textarea
@@ -359,18 +364,19 @@ export function AiAssistantWidget() {
             </div>
           </div>
         </section>
+        </div>
       )}
 
       <Button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="h-12 rounded-xl px-4 shadow-lg"
+        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[60] h-12 rounded-xl px-4 shadow-lg print:hidden ${open ? 'hidden sm:inline-flex' : ''}`}
         aria-label={t('assistant.button')}
         title={t('assistant.button')}
       >
         <LifeBuoy className="h-4 w-4" />
         <span>{t('assistant.button')}</span>
       </Button>
-    </div>
+    </>
   )
 }
