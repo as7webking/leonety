@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { OrderNotificationsSettings } from '@/components/order-notifications-settings'
 
 interface WooConnectionStatus {
   connected: boolean
@@ -405,6 +406,8 @@ export default function WooCommerceSettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      <OrderNotificationsSettings companyId={currentCompany.id} companyName={currentCompany.name} wooConnected={status.connected} />
 
       {(previewProducts.length > 0 || previewCategories.length > 0) && (
         <Card className="mt-5">

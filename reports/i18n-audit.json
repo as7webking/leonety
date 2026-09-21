@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T21:11:53.759Z",
+  "generatedAt": "2026-09-20T15:52:13.878Z",
   "locales": [
     "en",
     "de",
@@ -16,42 +16,43 @@
     "src/lib/i18n.ts",
     "src/lib/public-website-i18n.ts",
     "src/lib/kassenbuch-i18n.ts",
-    "src/lib/employee-profile-i18n.ts"
+    "src/lib/employee-profile-i18n.ts",
+    "src/lib/employee-documents-i18n.ts"
   ],
   "coverage": {
     "en": {
-      "translated": 1840,
-      "total": 1840,
+      "translated": 1907,
+      "total": 1907,
       "percent": 100
     },
     "de": {
-      "translated": 1840,
-      "total": 1840,
+      "translated": 1907,
+      "total": 1907,
       "percent": 100
     },
     "ru": {
-      "translated": 1840,
-      "total": 1840,
+      "translated": 1907,
+      "total": 1907,
       "percent": 100
     },
     "tr": {
-      "translated": 1840,
-      "total": 1840,
+      "translated": 1907,
+      "total": 1907,
       "percent": 100
     },
     "uk": {
-      "translated": 1840,
-      "total": 1840,
+      "translated": 1907,
+      "total": 1907,
       "percent": 100
     },
     "pl": {
-      "translated": 1840,
-      "total": 1840,
+      "translated": 1907,
+      "total": 1907,
       "percent": 100
     },
     "fr": {
-      "translated": 1840,
-      "total": 1840,
+      "translated": 1907,
+      "total": 1907,
       "percent": 100
     }
   },
@@ -1996,7 +1997,616 @@
       "Taille"
     ]
   },
-  "usedMissingInEnglish": [],
+  "usedMissingInEnglish": [
+    {
+      "key": "orderNotifications.acknowledge",
+      "usages": [
+        {
+          "file": "src/components/incoming-order-alert.tsx",
+          "line": 83
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.activeDevice",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 197
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.alertDevice",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 178
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.allowed",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 166
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.backgroundSound",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 200
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.blocked",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 166
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.cancel",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 193
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.chooseSound",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 202
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.consentText",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 191
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.consentTitle",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 191
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.continue",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 193
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.copy",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.currentDevice",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 197
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.description",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 172
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.deviceLabel",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 192
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.devicePlaceholder",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 192
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.disable",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 189
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.disabled",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 177
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 197
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.disabledSuccess",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 189
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.enableDevice",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 187
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.enabled",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 177
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.enabledSuccess",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 105
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 197
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.foregroundSound",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 200
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.foregroundSoundEnabled",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 201
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.generateWebhook",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.invalidSound",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 152
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 155
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.iosInstall",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 183
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.loadFailed",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 73
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.makeActive",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 197
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.migrationRequired",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 73
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 131
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.needsAttention",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 197
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.newOrder",
+      "usages": [
+        {
+          "file": "src/components/incoming-order-alert.tsx",
+          "line": 77
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.noDevice",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 178
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.noWoo",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.notRequested",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 166
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.openIntegration",
+      "usages": [
+        {
+          "file": "src/components/incoming-order-alert.tsx",
+          "line": 84
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.permission",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 179
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.permissionDenied",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 107
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.play",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 203
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.registeredDevices",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 196
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.removeSound",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 203
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.rotateWebhook",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.saveFailed",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 107
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 114
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 122
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 131
+        },
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 161
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.schemaNotice",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 184
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.soundHint",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 200
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.soundRemoved",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 162
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.soundSaved",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 156
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.soundSettingSaved",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 201
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.status",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 177
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.stop",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 203
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.systemDefault",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 200
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.systemHint",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 200
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.test",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 188
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.testSent",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 123
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.title",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 170
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.unsupported",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 182
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.uploadSound",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 203
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.webhookConfigured",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.webhookDescription",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 206
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.webhookNotConfigured",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.webhookSecretOnce",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.webhookTitle",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 206
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.webhookTopic",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    },
+    {
+      "key": "orderNotifications.webhookUrl",
+      "usages": [
+        {
+          "file": "src/components/order-notifications-settings.tsx",
+          "line": 207
+        }
+      ]
+    }
+  ],
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/settings/integrations/[connectionId]/page.tsx",
@@ -2059,6 +2669,12 @@
       "text": "© 2026 Leonety."
     },
     {
+      "file": "src/components/incoming-order-alert.tsx",
+      "line": 78,
+      "type": "jsx-text",
+      "text": "WooCommerce · #"
+    },
+    {
       "file": "src/components/logo.tsx",
       "line": 51,
       "type": "jsx-text",
@@ -2089,11 +2705,22 @@
       "text": "admin@ahmedsultanline.com"
     }
   ],
-  "nativeFileInputs": [],
+  "nativeFileInputs": [
+    {
+      "file": "src/components/employees/employee-document-manager.tsx",
+      "line": 111,
+      "type": "native-file-input"
+    },
+    {
+      "file": "src/components/order-notifications-settings.tsx",
+      "line": 202,
+      "type": "native-file-input"
+    }
+  ],
   "summary": {
-    "englishKeyCount": 1840,
-    "hardcodedStringCount": 15,
-    "nativeFileInputCount": 0,
-    "usedMissingInEnglishCount": 0
+    "englishKeyCount": 1907,
+    "hardcodedStringCount": 16,
+    "nativeFileInputCount": 2,
+    "usedMissingInEnglishCount": 64
   }
 }

@@ -5,6 +5,7 @@ import { publicWebsiteDictionaries } from '@/lib/public-website-i18n'
 import { kassenbuchDictionaries } from '@/lib/kassenbuch-i18n'
 import { employeeProfileDictionaries } from '@/lib/employee-profile-i18n'
 import { employeeDocumentDictionaries } from '@/lib/employee-documents-i18n'
+import { orderNotificationDictionaries } from '@/lib/order-notifications-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8800,6 +8801,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], kassenbuchDictionaries[locale])
   Object.assign(dictionaries[locale], employeeProfileDictionaries[locale])
   Object.assign(dictionaries[locale], employeeDocumentDictionaries[locale])
+  Object.assign(dictionaries[locale], orderNotificationDictionaries[locale])
 }
 
 for (const locale of locales) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'leonety-v4'
+const CACHE_NAME = 'leonety-v5'
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/brand/icon-192.png',
@@ -74,4 +74,46 @@ self.addEventListener('fetch', (event) => {
       })
     })
   )
+})
+
+self.addEventListener('push', (event) => {
+  event.waitUntil((async () => {
+    let payload
+    try {
+      payload = event.data ? event.data.json() : null
+    } catch {
+      payload = null
+    }
+
+    if (!payload || payload.type !== 'incoming-order') return
+
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const foregroundClient = windows.find((client) => client.focused) || windows.find((client) => client.visibilityState === 'visible')
+    if (foregroundClient) foregroundClient.postMessage(payload)
+
+    await self.registration.showNotification(payload.title || 'New order', {
+      body: payload.body || 'WooCommerce',
+      icon: '/brand/icon-192.png',
+      badge: '/brand/icon-96.png',
+      tag: `leonety-order-${payload.companyId}-${payload.provider}-${payload.orderId}`,
+      renotify: true,
+      requireInteraction: true,
+      silent: Boolean(foregroundClient),
+      data: { url: payload.url || '/app/settings/integrations/woocommerce' },
+    })
+  })())
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const destination = new URL(event.notification.data?.url || '/app/settings/integrations/woocommerce', self.location.origin).href
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const existing = windows.find((client) => client.url.startsWith(self.location.origin))
+    if (existing) {
+      await existing.navigate(destination)
+      return existing.focus()
+    }
+    return self.clients.openWindow(destination)
+  })())
 })
