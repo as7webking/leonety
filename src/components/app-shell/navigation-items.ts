@@ -2,14 +2,17 @@ import {
   BarChart3,
   BriefcaseBusiness,
   Building2,
+  CalendarDays,
   Clock3,
   FileText,
   FileSignature,
   Landmark,
+  MapPin,
   Package,
   ReceiptText,
   Repeat2,
   Timer,
+  UserRoundCog,
   Users,
   WalletCards,
 } from 'lucide-react'
@@ -18,6 +21,7 @@ export type NavigationItem = {
   href: string
   labelKey: string
   icon: React.ComponentType<{ className?: string }>
+  desktopOnly?: boolean
 }
 
 export type NavigationGroup = {
@@ -49,6 +53,9 @@ export const navigationGroups: NavigationGroup[] = [
       { href: '/app/products', labelKey: 'nav.products', icon: Package },
       { href: '/app/inventory', labelKey: 'nav.inventory', icon: Landmark },
       { href: '/app/stock-movements', labelKey: 'nav.stockMovements', icon: Timer },
+      { href: '/app/employees', labelKey: 'nav.employees', icon: UserRoundCog, desktopOnly: true },
+      { href: '/app/shifts', labelKey: 'nav.shifts', icon: CalendarDays, desktopOnly: true },
+      { href: '/app/locations', labelKey: 'nav.locations', icon: MapPin, desktopOnly: true },
       { href: '/app/settings/integrations', labelKey: 'nav.storeIntegrations', icon: BriefcaseBusiness },
     ],
   },
@@ -58,3 +65,9 @@ export const flatNavigationItems = [
   ...primaryNavigation,
   ...navigationGroups.flatMap((group) => group.items),
 ]
+
+export function isNavigationItemActive(pathname: string, href: string) {
+  const normalizedPathname = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+  const normalizedHref = href.length > 1 ? href.replace(/\/+$/, '') : href
+  return normalizedPathname === normalizedHref || normalizedPathname.startsWith(`${normalizedHref}/`)
+}

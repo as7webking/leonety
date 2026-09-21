@@ -99,7 +99,7 @@ export function MobileDrawerClient() {
             {navigationGroups.map((group) => (
               <section key={group.labelKey} className="space-y-1">
                 <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{t(group.labelKey)}</p>
-                {group.items.map((item) => {
+                {group.items.filter((item) => !item.desktopOnly).map((item) => {
                   const Icon = item.icon
                   return (
                     <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950">

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
+import { calculateAppSelectPosition, type AppSelectPlacement } from '@/lib/app-select-position'
 
 export interface AppSelectOption {
   value: string
@@ -18,7 +19,7 @@ interface AppSelectProps {
   disabled?: boolean
   ariaLabel?: string
   className?: string
-  placement?: 'bottom' | 'top' | 'auto'
+  placement?: AppSelectPlacement
 }
 
 export function AppSelect({ value, options, onChange, disabled, ariaLabel, className = '', placement = 'auto' }: AppSelectProps) {
@@ -34,34 +35,24 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
     if (!button) return
 
     const rect = button.getBoundingClientRect()
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-    const padding = 12
-    const offset = 6
-    const availableBelow = viewportHeight - rect.bottom - padding
-    const availableAbove = rect.top - padding
-    const preferredTop = placement === 'top'
-    const openAbove = preferredTop
-      ? availableAbove >= 160 || availableAbove > availableBelow
-      : placement === 'bottom'
-        ? availableBelow < 220 && availableAbove > availableBelow
-        : availableBelow < 220 && availableAbove > availableBelow
-    const availableHeight = Math.max(120, openAbove ? availableAbove - offset : availableBelow - offset)
-    const width = Math.min(rect.width, viewportWidth - padding * 2)
-    const left = Math.min(Math.max(padding, rect.left), viewportWidth - width - padding)
-    const top = openAbove
-      ? Math.max(padding, rect.top - offset - Math.min(288, availableHeight))
-      : Math.min(viewportHeight - padding, rect.bottom + offset)
+    const position = calculateAppSelectPosition({
+      rect,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      optionCount: options.length,
+      placement,
+    })
 
     setMenuStyle({
       position: 'fixed',
-      left,
-      top,
-      width,
-      maxHeight: Math.min(288, availableHeight),
+      left: position.left,
+      top: position.top,
+      bottom: position.bottom,
+      width: position.width,
+      maxHeight: position.maxHeight,
       zIndex: 140,
     })
-  }, [placement])
+  }, [options.length, placement])
 
   useEffect(() => {
     if (!open) return
