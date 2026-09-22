@@ -708,8 +708,10 @@ export default function ExpensesPage() {
                   <Link href="/app/transactions">
                     <Button variant="outline" size="sm">{t('nav.transactions')}</Button>
                   </Link>
-                  <Button variant="outline" size="icon" onClick={() => handleEdit(expense)}><Edit className="h-4 w-4" /></Button>
-                  <Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" onClick={() => handleEdit(expense)} aria-label={`${t('common.edit')} ${expense.title || expense.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button>
+                    <Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)} aria-label={`${t('common.delete')} ${expense.title || expense.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

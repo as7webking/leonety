@@ -392,6 +392,13 @@ export default function IncomePage() {
     })
   }
 
+  const toggleIncomeSelection = (id: string, checked: boolean) => {
+    setSelectedIncomeIds((current) => checked
+      ? [...new Set([...current, id])]
+      : current.filter((currentId) => currentId !== id)
+    )
+  }
+
   const handleBulkTitleUpdate = async (title: string) => {
     if (!currentCompany || selectedIncomeIds.length === 0 || bulkTitleSubmitting) return
 
@@ -890,14 +897,11 @@ export default function IncomePage() {
             <Card>
               <CardContent className="flex min-w-0 flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
-                  <label className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200">
+                  <label className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 lg:hidden">
                     <input
                       type="checkbox"
                       checked={selectedIncomeIdSet.has(income.id)}
-                      onChange={(event) => setSelectedIncomeIds((current) => event.target.checked
-                        ? [...new Set([...current, income.id])]
-                        : current.filter((id) => id !== income.id)
-                      )}
+                      onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)}
                       className="h-4 w-4"
                     />
                     <span className="sr-only">
@@ -929,8 +933,19 @@ export default function IncomePage() {
                       </p>
                     )}
                   </div>
-                  <Button variant="outline" size="icon" onClick={() => handleEdit(income)}><Edit className="h-4 w-4" /></Button>
-                  <Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <label className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 lg:flex">
+                    <input
+                      type="checkbox"
+                      checked={selectedIncomeIdSet.has(income.id)}
+                      onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    <span className="sr-only">{t('income.bulkSelectRow').replace('{title}', income.title || income.description)}</span>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" onClick={() => handleEdit(income)} aria-label={`${t('common.edit')} ${income.title || income.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button>
+                    <Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)} aria-label={`${t('common.delete')} ${income.title || income.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

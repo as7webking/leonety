@@ -1338,13 +1338,13 @@ export default function TransactionsPage() {
         <EmptyState title={t('common.noTransactions')} description={t('transactions.emptyDescription')} />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <div className="hidden gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto]">
-            <span>{t('transactions.select')}</span>
-            <span>{t('transactions.type')}</span>
-            <span>{t('transactions.titleLabel')}</span>
-            <span className="hidden md:block">{t('common.category')}</span>
-            <span className="text-right">{t('common.amount')}</span>
-            <span className="sr-only">{t('common.copy')}</span>
+          <div className="hidden gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto] lg:grid-cols-[auto_minmax(0,1fr)_160px_160px_48px_auto]">
+            <span className="lg:col-start-5 lg:row-start-1 lg:text-center">{t('transactions.select')}</span>
+            <span className="lg:col-start-1 lg:row-start-1">{t('transactions.type')}</span>
+            <span className="lg:col-start-2 lg:row-start-1">{t('transactions.titleLabel')}</span>
+            <span className="hidden md:block lg:col-start-3 lg:row-start-1">{t('common.category')}</span>
+            <span className="text-right lg:col-start-4 lg:row-start-1">{t('common.amount')}</span>
+            <span className="sr-only lg:col-start-6 lg:row-start-1">{t('common.copy')}</span>
           </div>
           {sortedTransactions.map((transaction) => {
             const isIncome = transaction.type === 'income'
@@ -1353,7 +1353,7 @@ export default function TransactionsPage() {
             return (
               <div
                 key={`${transaction.type}-${transaction.id}`}
-                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto]"
+                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto] lg:grid-cols-[auto_minmax(0,1fr)_160px_160px_48px_auto]"
               >
                 <input
                   type="checkbox"
@@ -1365,24 +1365,24 @@ export default function TransactionsPage() {
                       : current.filter((value) => value !== key))
                   }}
                   aria-label={`${t('transactions.select')} ${transaction.title || transaction.description || transaction.date}`}
-                  className="mt-0.5 h-4 w-4"
+                  className="mt-0.5 h-4 w-4 lg:col-start-5 lg:row-start-1 lg:justify-self-center"
                 />
-                <span className={`hidden items-center gap-1 font-medium md:inline-flex ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}>
+                <span className={`hidden items-center gap-1 font-medium md:inline-flex lg:col-start-1 lg:row-start-1 ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}>
                   <Icon className="h-4 w-4" />
                   {isIncome ? t('income.title') : t('expenses.title')}
                 </span>
-                <span className="min-w-0">
+                <span className="min-w-0 lg:col-start-2 lg:row-start-1">
                   <span className="block font-medium text-slate-900">{transaction.title || transaction.description || '-'}</span>
                   <span className="block break-words text-xs text-slate-500">
                     <span className="md:hidden">{isIncome ? t('income.title') : t('expenses.title')} · </span>
                     {transaction.title && transaction.description ? `${transaction.description} · ` : ''}{transaction.date}
                   </span>
                 </span>
-                <span className="hidden text-slate-600 md:block">{formatCategoryLabel(transaction.category, t)}</span>
-                <span className="text-right font-semibold">
+                <span className="hidden text-slate-600 md:block lg:col-start-3 lg:row-start-1">{formatCategoryLabel(transaction.category, t)}</span>
+                <span className="text-right font-semibold lg:col-start-4 lg:row-start-1">
                   {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
                 </span>
-                <Button className="col-start-2 justify-self-start md:col-start-auto md:justify-self-auto" size="sm" variant="outline" onClick={() => handleCopyTransaction(transaction)}>
+                <Button className="col-start-2 justify-self-start md:col-start-auto md:justify-self-auto lg:col-start-6 lg:row-start-1" size="sm" variant="outline" onClick={() => handleCopyTransaction(transaction)} aria-label={`${t('common.copy')} ${transaction.title || transaction.description || transaction.date}`} title={t('common.copy')}>
                   <Copy className="h-4 w-4" />
                   <span className="hidden sm:inline">{t('common.copy')}</span>
                 </Button>
