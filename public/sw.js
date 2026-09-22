@@ -1,19 +1,21 @@
-const CACHE_NAME = 'leonety-v5'
+const CACHE_PREFIX = 'leonety-'
+const CACHE_NAME = 'leonety-v6'
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/brand/icon-192.png',
   '/brand/icon-512.png',
 ]
+const CACHEABLE_ASSET_PATHS = new Set(ASSETS_TO_CACHE)
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
+  event.waitUntil(Promise.all([
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE).catch(() => {
         console.log('Some assets could not be cached during installation')
       })
-    })
-  )
-  self.skipWaiting()
+    }),
+    self.skipWaiting(),
+  ]))
 })
 
 self.addEventListener('activate', (event) => {
@@ -21,12 +23,11 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       )
-    })
+    }).then(() => self.clients.claim())
   )
-  self.clients.claim()
 })
 
 self.addEventListener('fetch', (event) => {
@@ -40,21 +41,29 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (
+  const isNextServerRequest =
     requestUrl.pathname.startsWith('/_next/') ||
-    requestUrl.pathname.startsWith('/api/') ||
-    requestUrl.pathname === '/sw.js'
+    requestUrl.searchParams.has('_rsc') ||
+    event.request.headers.get('RSC') === '1' ||
+    event.request.headers.has('Next-Router-Prefetch')
+
+  const isDynamicApplicationRequest =
+    event.request.mode === 'navigate' ||
+    requestUrl.pathname.startsWith('/app/') ||
+    requestUrl.pathname.startsWith('/auth/') ||
+    requestUrl.pathname.startsWith('/api/')
+
+  if (
+    isNextServerRequest ||
+    isDynamicApplicationRequest ||
+    requestUrl.pathname === '/sw.js' ||
+    !CACHEABLE_ASSET_PATHS.has(requestUrl.pathname)
   ) {
     return
   }
 
-  if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request))
-    return
-  }
-
   event.respondWith(
-    caches.match(event.request).then((response) => {
+    caches.match(event.request, { ignoreSearch: true }).then((response) => {
       if (response) {
         return response
       }
@@ -71,7 +80,10 @@ self.addEventListener('fetch', (event) => {
         })
 
         return response
-      })
+      }).catch(() => new Response('PWA asset unavailable while offline', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      }))
     })
   )
 })

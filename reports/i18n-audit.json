@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-20T15:52:13.878Z",
+  "generatedAt": "2026-09-21T22:08:37.522Z",
   "locales": [
     "en",
     "de",
@@ -21,38 +21,38 @@
   ],
   "coverage": {
     "en": {
-      "translated": 1907,
-      "total": 1907,
+      "translated": 1909,
+      "total": 1909,
       "percent": 100
     },
     "de": {
-      "translated": 1907,
-      "total": 1907,
+      "translated": 1909,
+      "total": 1909,
       "percent": 100
     },
     "ru": {
-      "translated": 1907,
-      "total": 1907,
+      "translated": 1909,
+      "total": 1909,
       "percent": 100
     },
     "tr": {
-      "translated": 1907,
-      "total": 1907,
+      "translated": 1909,
+      "total": 1909,
       "percent": 100
     },
     "uk": {
-      "translated": 1907,
-      "total": 1907,
+      "translated": 1909,
+      "total": 1909,
       "percent": 100
     },
     "pl": {
-      "translated": 1907,
-      "total": 1907,
+      "translated": 1909,
+      "total": 1909,
       "percent": 100
     },
     "fr": {
-      "translated": 1907,
-      "total": 1907,
+      "translated": 1909,
+      "total": 1909,
       "percent": 100
     }
   },
@@ -2622,7 +2622,7 @@
     },
     {
       "file": "src/components/app-shell/app-sidebar.tsx",
-      "line": 17,
+      "line": 18,
       "type": "jsx-text",
       "text": "Leonety"
     },
@@ -2718,7 +2718,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 1907,
+    "englishKeyCount": 1909,
     "hardcodedStringCount": 16,
     "nativeFileInputCount": 2,
     "usedMissingInEnglishCount": 64

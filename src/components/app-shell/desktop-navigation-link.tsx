@@ -2,17 +2,23 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { ReactNode } from 'react'
 import { T } from '@/components/t'
-import { isNavigationItemActive, type NavigationItem } from '@/components/app-shell/navigation-items'
+import { isNavigationItemActive } from '@/components/app-shell/navigation-items'
 
-export function DesktopNavigationLink({ item }: { item: NavigationItem }) {
+interface DesktopNavigationLinkProps {
+  href: string
+  labelKey: string
+  icon: ReactNode
+}
+
+export function DesktopNavigationLink({ href, labelKey, icon }: DesktopNavigationLinkProps) {
   const pathname = usePathname()
-  const active = isNavigationItemActive(pathname, item.href)
-  const Icon = item.icon
+  const active = isNavigationItemActive(pathname, href)
 
   return (
     <Link
-      href={item.href}
+      href={href}
       aria-current={active ? 'page' : undefined}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
         active
@@ -20,8 +26,8 @@ export function DesktopNavigationLink({ item }: { item: NavigationItem }) {
           : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
       }`}
     >
-      <Icon className="h-4 w-4" aria-hidden="true" />
-      <span><T k={item.labelKey} /></span>
+      {icon}
+      <span><T k={labelKey} /></span>
     </Link>
   )
 }

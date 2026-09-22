@@ -27,14 +27,20 @@ export function AppSidebar() {
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-labelledby="app-sidebar-main-nav-label">
         <span id="app-sidebar-main-nav-label" className="sr-only"><T k="nav.mainAppNavigation" /></span>
         <div className="space-y-1">
-          {primaryNavigation.map((item) => <DesktopNavigationLink key={item.href} item={item} />)}
+          {primaryNavigation.map((item) => {
+            const Icon = item.icon
+            return <DesktopNavigationLink key={item.href} href={item.href} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
+          })}
         </div>
 
         <div className="mt-5 space-y-5">
           {navigationGroups.map((group) => (
             <section key={group.labelKey} className="space-y-1">
               <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400"><T k={group.labelKey} /></p>
-              {group.items.map((item) => <DesktopNavigationLink key={item.href} item={item} />)}
+              {group.items.map((item) => {
+                const Icon = item.icon
+                return <DesktopNavigationLink key={item.href} href={item.href} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
+              })}
             </section>
           ))}
         </div>
