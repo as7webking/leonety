@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import { BriefcaseBusiness, Building2, Edit, MapPin, Plus, Trash2 } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CountrySelector } from '@/components/country-selector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 
 interface Location {
@@ -27,7 +29,7 @@ export default function LocationsPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [locations, setLocations] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -145,7 +147,7 @@ export default function LocationsPage() {
               <label className="space-y-1"><span className="text-sm font-medium">{t('locations.name')}</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('locations.address')}</span><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('locations.city')}</span><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
-              <label className="space-y-1"><span className="text-sm font-medium">{t('locations.country')}</span><input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
+              <CountrySelector label={t('locations.country')} value={form.country} onChange={(country) => setForm({ ...form, country })} required />
               <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">{t('locations.notes')}</span><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="min-h-24 w-full rounded-md border px-3 py-2" /></label>
               <div className="flex gap-2 md:col-span-2"><Button type="submit">{t('common.save')}</Button><Button type="button" variant="outline" onClick={resetForm}>{t('common.cancel')}</Button></div>
             </form>
@@ -161,7 +163,7 @@ export default function LocationsPage() {
             <Card key={location.id}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div><h2 className="font-semibold">{location.name}</h2><p className="text-sm text-slate-500">{location.city}, {location.country}</p></div>
+                  <div><h2 className="font-semibold">{location.name}</h2><p className="text-sm text-slate-500">{location.city}, {formatCountryValue(location.country, locale)}</p></div>
                   <MapPin className="h-5 w-5 text-slate-400" />
                 </div>
                 {location.address && <p className="mt-3 text-sm text-slate-600">{location.address}</p>}

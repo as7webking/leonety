@@ -13,8 +13,9 @@ import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
-import { getIntlLocale } from '@/lib/i18n'
+import { getIntlLocale, type Locale } from '@/lib/i18n'
 
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type InvoiceStatusFilter = 'all' | 'paid' | 'unpaid' | 'overdue' | 'cancelled'
@@ -372,12 +373,12 @@ function getVatOptions(countryCode: TaxCountryCode, t: (key: string) => string) 
   ]
 }
 
-function getClientAddressLines(client: ClientOption | null | undefined) {
+function getClientAddressLines(client: ClientOption | null | undefined, locale: Locale) {
   if (!client) return []
   const streetLine = [client.street, client.house_number].filter(Boolean).join(' ')
   const cityLine = [client.postal_code, client.city].filter(Boolean).join(' ')
 
-  return [streetLine, cityLine, client.country].filter(Boolean)
+  return [streetLine, cityLine, formatCountryValue(client.country, locale)].filter(Boolean)
 }
 
 function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
@@ -1294,7 +1295,7 @@ export default function InvoicesPage() {
             {clientPrintFields.company && printingInvoice.clients?.client_company && <p>{printingInvoice.clients.client_company}</p>}
             {clientPrintFields.email && printingInvoice.clients?.email && <p>{printingInvoice.clients.email}</p>}
             {clientPrintFields.phone && printingInvoice.clients?.phone && <p>{printingInvoice.clients.phone}</p>}
-            {clientPrintFields.address && getClientAddressLines(printingInvoice.clients).map((line) => (
+            {clientPrintFields.address && getClientAddressLines(printingInvoice.clients, locale).map((line) => (
               <p key={line}>{line}</p>
             ))}
             {clientPrintFields.taxNumber && printingInvoice.clients?.tax_number && (
@@ -1397,7 +1398,7 @@ export default function InvoicesPage() {
                   {clientPrintFields.company && invoice.clients?.client_company && <p>{invoice.clients.client_company}</p>}
                   {clientPrintFields.email && invoice.clients?.email && <p>{invoice.clients.email}</p>}
                   {clientPrintFields.phone && invoice.clients?.phone && <p>{invoice.clients.phone}</p>}
-                  {clientPrintFields.address && getClientAddressLines(invoice.clients).map((line) => <p key={line}>{line}</p>)}
+                  {clientPrintFields.address && getClientAddressLines(invoice.clients, locale).map((line) => <p key={line}>{line}</p>)}
                   {clientPrintFields.taxNumber && invoice.clients?.tax_number && <p>{t('clients.taxNumber')}: {invoice.clients.tax_number}</p>}
                   {invoice.notes && <p className="mt-2 whitespace-pre-line text-slate-700">{invoice.notes}</p>}
                 </div>

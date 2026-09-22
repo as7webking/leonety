@@ -12,6 +12,27 @@ export interface EmployeeCountryProfile {
 }
 
 const emptyCountryProfile = (): EmployeeCountryProfile => ({ version: 1, modules: {} })
+const globalCountryModule = 'global'
+const customCountryField = 'custom_country'
+
+export function getEmployeeCustomCountry(profile: EmployeeCountryProfile | null | undefined) {
+  const value = profile?.modules?.[globalCountryModule]?.[customCountryField]
+  return typeof value === 'string' ? value : ''
+}
+
+export function withEmployeeCustomCountry(profile: EmployeeCountryProfile, value: string): EmployeeCountryProfile {
+  const modules = { ...profile.modules }
+  const globalModule = { ...(modules[globalCountryModule] ?? {}) }
+  const trimmed = value.trim()
+
+  if (trimmed) globalModule[customCountryField] = value
+  else delete globalModule[customCountryField]
+
+  if (Object.keys(globalModule).length > 0) modules[globalCountryModule] = globalModule
+  else delete modules[globalCountryModule]
+
+  return { ...profile, modules }
+}
 
 export interface EmployeeProfile {
   id: string

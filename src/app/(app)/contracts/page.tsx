@@ -17,10 +17,13 @@ import {
 } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
+import { CountrySelector } from '@/components/country-selector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { formatCountryValue } from '@/lib/countries'
+import type { Locale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 import {
   contractLanguages,
@@ -113,11 +116,11 @@ function normalizeTerms(value: unknown): ContractTerms {
   }
 }
 
-function formatClientAddress(client: ClientOption) {
+function formatClientAddress(client: ClientOption, locale: Locale) {
   return [
     [client.street, client.house_number].filter(Boolean).join(' '),
     [client.postal_code, client.city].filter(Boolean).join(' '),
-    client.country,
+    formatCountryValue(client.country, locale),
   ].filter(Boolean).join(', ')
 }
 
@@ -308,7 +311,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     setPartyB({
       name: client.name,
       company: client.client_company ?? '',
-      address: formatClientAddress(client),
+      address: formatClientAddress(client, locale),
       email: client.email ?? '',
       phone: client.phone ?? '',
       taxId: client.tax_number ?? '',
@@ -867,12 +870,13 @@ function PartyEditor({
     <div className="rounded-md border border-slate-200 p-4">
       <h3 className="mb-3 text-lg font-semibold">{title}</h3>
       <div className="grid gap-3 sm:grid-cols-2">
-        {(['name', 'company', 'email', 'phone', 'taxId', 'representative', 'country'] as Array<keyof ContractPartySnapshot>).map((field) => (
+        {(['name', 'company', 'email', 'phone', 'taxId', 'representative'] as Array<keyof ContractPartySnapshot>).map((field) => (
           <label key={field} className="space-y-1">
             <span className="text-sm font-medium">{t(`contracts.party.${field}`)}</span>
             <input value={party[field]} onChange={(event) => update(field, event.target.value)} className="w-full rounded-md border px-3 py-2 text-sm" />
           </label>
         ))}
+        <CountrySelector label={t('contracts.party.country')} value={party.country} onChange={(value) => update('country', value)} />
         <label className="space-y-1 sm:col-span-2">
           <span className="text-sm font-medium">{t('contracts.party.address')}</span>
           <textarea value={party.address} onChange={(event) => update('address', event.target.value)} className="min-h-20 w-full rounded-md border px-3 py-2 text-sm" />

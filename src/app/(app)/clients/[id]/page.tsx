@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { formatCountryValue } from '@/lib/countries'
 import { formatCurrencyGroups, type ClientRecord } from '@/lib/client-crm'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
@@ -204,7 +205,7 @@ export default function ClientDetailPage() {
   if (!client) return <PageContainer><EmptyState title={t('clients.crm.notFound')} description={error || t('clients.crm.notFoundDescription')} /></PageContainer>
 
   const tabs: DetailTab[] = ['overview', 'invoices', 'contracts', 'transactions', 'contacts', 'notes']
-  const address = [[client.street, client.house_number].filter(Boolean).join(' '), [client.postal_code, client.city].filter(Boolean).join(' '), client.country].filter(Boolean).join(', ')
+  const address = [[client.street, client.house_number].filter(Boolean).join(' '), [client.postal_code, client.city].filter(Boolean).join(' '), formatCountryValue(client.country, locale)].filter(Boolean).join(', ')
 
   return (
     <PageContainer>

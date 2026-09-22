@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AddressAutocomplete } from '@/components/address-autocomplete'
 import { AppSelect } from '@/components/app-select'
+import { CountrySelector } from '@/components/country-selector'
 import { Button } from '@/components/ui/button'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { clientToForm, emptyClientForm, type ClientFormValues, type ClientRecord } from '@/lib/client-crm'
+import { formatCountryValue, resolveCountryCode } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 
 interface ClientFormProps {
@@ -22,7 +24,7 @@ const FREE_CLIENT_LIMIT = 25
 export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
   const router = useRouter()
   const { currentCompany } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [supabase] = useState(() => createClient())
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
@@ -166,14 +168,14 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
         </label>
         <div className="md:col-span-2">
           <AddressAutocomplete
-            country={form.country}
+            country={formatCountryValue(form.country, locale)}
             onSelect={(address) => setForm((current) => ({
               ...current,
               street: address.street || current.street,
               house_number: address.houseNumber || current.house_number,
               postal_code: address.postalCode || current.postal_code,
               city: address.city || current.city,
-              country: address.country || current.country,
+              country: resolveCountryCode(address.country) || address.country || current.country,
             }))}
           />
         </div>
@@ -193,10 +195,7 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
           <span className="text-sm font-medium text-slate-800">{t('clients.city')}</span>
           <input value={form.city} onChange={(event) => setField('city', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" />
         </label>
-        <label className="min-w-0 space-y-1">
-          <span className="text-sm font-medium text-slate-800">{t('clients.country')}</span>
-          <input value={form.country} onChange={(event) => setField('country', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" />
-        </label>
+        <CountrySelector label={t('clients.country')} value={form.country} onChange={(value) => setField('country', value)} />
         <label className="min-w-0 space-y-1">
           <span className="text-sm font-medium text-slate-800">{t('clients.taxNumber')}</span>
           <input value={form.tax_number} onChange={(event) => setField('tax_number', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" />

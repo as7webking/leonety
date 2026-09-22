@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppSelect } from '@/components/app-select'
+import { CountrySelector } from '@/components/country-selector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/contexts/i18n-context'
@@ -15,14 +16,15 @@ import {
   employeeStatuses,
   employmentTypes,
   isGermanyEmployeeProfile,
+  getEmployeeCustomCountry,
   normalizeEmployeeCountryCode,
+  withEmployeeCustomCountry,
   type CompensationType,
   type EmployeeProfile,
   type EmployeeProfileForm as FormState,
   type EmployeeStatus,
   type EmploymentType,
 } from '@/lib/employee-profile'
-import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 
 interface Props {
@@ -32,15 +34,9 @@ interface Props {
 }
 
 const inputClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm'
-const suggestedCountryCodes = [
-  'DE', 'AT', 'CH', 'FR', 'PL', 'TR', 'UA', 'GB', 'IE', 'NL', 'BE', 'LU', 'ES', 'PT',
-  'IT', 'CZ', 'SK', 'HU', 'RO', 'BG', 'GR', 'DK', 'SE', 'NO', 'FI', 'US', 'CA', 'AU',
-  'NZ', 'IN', 'CN', 'JP', 'BR', 'MX', 'ZA', 'AE',
-]
-
 export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   const router = useRouter()
-  const { locale, t } = useI18n()
+  const { t } = useI18n()
   const [supabase] = useState(() => createClient())
   const initial = useMemo(() => employee
     ? employeeProfileToForm(employee)
@@ -49,19 +45,12 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const normalizedCountryCode = normalizeEmployeeCountryCode(form.country_code)
+  const customCountry = getEmployeeCustomCountry(form.country_profile)
   const showGermanyExtension = normalizedCountryCode === 'DE'
     || (!normalizedCountryCode && Boolean(employee && isGermanyEmployeeProfile(employee)))
   const visibleEmploymentTypes = employmentTypes.filter((value) => value !== 'minijob'
     || showGermanyExtension
     || form.employment_type === 'minijob')
-  const countryDisplayNames = useMemo(() => {
-    try {
-      return new Intl.DisplayNames([getIntlLocale(locale)], { type: 'region' })
-    } catch {
-      return null
-    }
-  }, [locale])
-
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }))
   }
@@ -141,8 +130,8 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
         {field('last_name', t('employees.profile.lastName'), { required: true })}
         {field('birth_date', t('employees.profile.birthDate'), { type: 'date' })}
         {field('birth_place', t('employees.profile.birthPlace'))}
-        {field('birth_country', t('employees.profile.birthCountry'))}
-        {field('nationality', t('employees.profile.nationality'))}
+        <CountrySelector label={t('employees.profile.birthCountry')} value={form.birth_country} onChange={(value) => update('birth_country', value)} />
+        <CountrySelector label={t('employees.profile.nationality')} value={form.nationality} onChange={(value) => update('nationality', value)} kind="nationality" />
       </>)}
 
       {section(t('employees.profile.contact'), <>
@@ -155,22 +144,13 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
         {field('house_number', t('employees.profile.houseNumber'))}
         {field('postal_code', t('employees.profile.postalCode'), { inputMode: 'text' })}
         {field('city', t('employees.profile.city'))}
-        <label className="space-y-1">
-          <span className="text-sm font-medium">{t('employees.profile.country')}</span>
-          <input
-            list="employee-country-codes"
-            value={form.country_code}
-            maxLength={2}
-            autoComplete="off"
-            onChange={(event) => update('country_code', event.target.value.toUpperCase())}
-            className={inputClass}
-            placeholder="DE"
-          />
-          <datalist id="employee-country-codes">
-            {suggestedCountryCodes.map((code) => <option key={code} value={code}>{countryDisplayNames?.of(code) ?? code}</option>)}
-          </datalist>
-          <span className="block text-xs leading-5 text-slate-500">{t('employees.profile.countryHint')}</span>
-        </label>
+        <CountrySelector
+          label={t('employees.profile.country')}
+          value={form.country_code}
+          customValue={customCountry}
+          onChange={(value) => update('country_code', value)}
+          onCustomValueChange={(value) => update('country_profile', withEmployeeCustomCountry(form.country_profile, value))}
+        />
       </>)}
 
       {section(t('employees.profile.employment'), <>
@@ -223,7 +203,7 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
         )}
         <p className="text-xs leading-5 text-slate-500 sm:col-span-2">{t('employees.profile.sensitiveNotice')}</p>
       </> : <p className="text-sm leading-6 text-slate-600 sm:col-span-2">
-        {normalizedCountryCode ? t('employees.profile.noCountryFields') : t('employees.profile.selectCountry')}
+        {normalizedCountryCode || customCountry ? t('employees.profile.noCountryFields') : t('employees.profile.selectCountry')}
       </p>)}
 
       {section(t('employees.profile.documents'), <p className="text-sm leading-6 text-slate-600 sm:col-span-2">{t('employees.profile.documentsNotice')}</p>)}

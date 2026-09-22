@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
-import { buildEmployeeProfilePayload, createEmptyEmployeeProfileForm, isGermanyEmployeeProfile } from './employee-profile.ts'
+import { buildEmployeeProfilePayload, createEmptyEmployeeProfileForm, getEmployeeCustomCountry, isGermanyEmployeeProfile, withEmployeeCustomCountry } from './employee-profile.ts'
 
 test('builds a structured display name and preserves identifiers as text', () => {
   const form = createEmptyEmployeeProfileForm('EUR')
@@ -77,4 +77,13 @@ test('shows the German extension only for Germany or identifiable legacy German 
   assert.equal(isGermanyEmployeeProfile(base), false)
   assert.equal(isGermanyEmployeeProfile({ ...base, country_code: 'DE' }), true)
   assert.equal(isGermanyEmployeeProfile({ ...base, country_code: null, tax_class: '1' }), true)
+})
+
+test('preserves an employee custom country in the existing country profile', () => {
+  const form = createEmptyEmployeeProfileForm('EUR')
+  form.country_profile = withEmployeeCustomCountry(form.country_profile, 'Kosovo')
+  assert.equal(getEmployeeCustomCountry(form.country_profile), 'Kosovo')
+
+  form.country_profile = withEmployeeCustomCountry(form.country_profile, '')
+  assert.equal(getEmployeeCustomCountry(form.country_profile), '')
 })

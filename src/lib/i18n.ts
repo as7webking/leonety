@@ -6,6 +6,7 @@ import { kassenbuchDictionaries } from '@/lib/kassenbuch-i18n'
 import { employeeProfileDictionaries } from '@/lib/employee-profile-i18n'
 import { employeeDocumentDictionaries } from '@/lib/employee-documents-i18n'
 import { orderNotificationDictionaries } from '@/lib/order-notifications-i18n'
+import { countrySelectorDictionaries } from '@/lib/country-selector-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -30,6 +31,7 @@ type Dictionary = Record<string, string>
 export const dictionaries: Record<Locale, Dictionary> = {
   en: {
     ...businessModuleDictionaries.en,
+    ...countrySelectorDictionaries.en,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Income',
     'nav.expenses': 'Expenses',
@@ -512,6 +514,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety is monitored to keep your financial workflow available.',
   },
   de: {
+    ...countrySelectorDictionaries.de,
     ...businessModuleDictionaries.de,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Einnahmen',
@@ -994,6 +997,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety wird überwacht, damit dein Finanzworkflow verfügbar bleibt.',
   },
   ru: {
+    ...countrySelectorDictionaries.ru,
     ...businessModuleDictionaries.ru,
     'nav.dashboard': 'Панель',
     'nav.income': 'Доходы',
@@ -1476,6 +1480,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety контролируется, чтобы ваш финансовый процесс оставался доступным.',
   },
   tr: {
+    ...countrySelectorDictionaries.tr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
     'nav.income': 'Gelir',
@@ -1765,6 +1770,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.heroText': 'Gelir, gider, zaman, müşteriler, ürünler ve faturaları tek çalışma alanında yönetin.',
   },
   uk: {
+    ...countrySelectorDictionaries.uk,
     ...businessModuleDictionaries.en,
     ...businessModuleDictionaries.ru,
     'nav.dashboard': 'Панель',
@@ -1880,6 +1886,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'time.deleteConfirm': 'Видалити цей запис часу?',
   },
   pl: {
+    ...countrySelectorDictionaries.pl,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
     'nav.transactions': 'Transakcje',
@@ -1994,6 +2001,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'time.deleteConfirm': 'Usunąć ten wpis czasu?',
   },
   fr: {
+    ...countrySelectorDictionaries.fr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Tableau de bord',
     'nav.transactions': 'Transactions',

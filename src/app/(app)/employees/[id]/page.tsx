@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCurrency } from '@/lib/currency'
-import { employeeProfileColumns, isGermanyEmployeeProfile, type EmployeeProfile } from '@/lib/employee-profile'
+import { employeeProfileColumns, getEmployeeCustomCountry, isGermanyEmployeeProfile, type EmployeeProfile } from '@/lib/employee-profile'
+import { formatCountryValue } from '@/lib/countries'
 import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 
@@ -48,8 +49,8 @@ export default function EmployeeDetailPage() {
   const date = (value: string | null) => value ? new Date(`${value}T00:00:00`).toLocaleDateString(getIntlLocale(locale)) : null
   const money = (value: number | null) => value === null ? null : formatCurrency(value, employee.compensation_currency ?? currentCompany.currency ?? 'EUR', getIntlLocale(locale))
   const countryName = employee.country_code
-    ? new Intl.DisplayNames([getIntlLocale(locale)], { type: 'region' }).of(employee.country_code) ?? employee.country_code
-    : null
+    ? formatCountryValue(employee.country_code, locale)
+    : getEmployeeCustomCountry(employee.country_profile) || null
   const showGermanyExtension = isGermanyEmployeeProfile(employee)
   const section = (title: string, children: React.ReactNode) => <Card><CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent><dl className="grid gap-5 sm:grid-cols-2">{children}</dl></CardContent></Card>
 
@@ -61,7 +62,7 @@ export default function EmployeeDetailPage() {
         <Button asChild><Link href={`/app/employees/${employee.id}/edit`}><Edit />{t('common.edit')}</Link></Button>
       </PageHeader>
       <div className="grid gap-5 lg:grid-cols-2">
-        {section(t('employees.profile.personal'), <><Value label={t('employees.profile.firstName')} value={employee.first_name} /><Value label={t('employees.profile.lastName')} value={employee.last_name} /><Value label={t('employees.profile.birthDate')} value={date(employee.birth_date)} /><Value label={t('employees.profile.birthPlace')} value={employee.birth_place} /><Value label={t('employees.profile.birthCountry')} value={employee.birth_country} /><Value label={t('employees.profile.nationality')} value={employee.nationality} /></>)}
+        {section(t('employees.profile.personal'), <><Value label={t('employees.profile.firstName')} value={employee.first_name} /><Value label={t('employees.profile.lastName')} value={employee.last_name} /><Value label={t('employees.profile.birthDate')} value={date(employee.birth_date)} /><Value label={t('employees.profile.birthPlace')} value={employee.birth_place} /><Value label={t('employees.profile.birthCountry')} value={formatCountryValue(employee.birth_country, locale)} /><Value label={t('employees.profile.nationality')} value={formatCountryValue(employee.nationality, locale)} /></>)}
         {section(t('employees.profile.contact'), <><Value label={t('employees.email')} value={employee.email} /><Value label={t('employees.phone')} value={employee.phone} /></>)}
         {section(t('employees.profile.address'), <><Value label={t('employees.profile.street')} value={[employee.street, employee.house_number].filter(Boolean).join(' ')} /><Value label={t('employees.profile.city')} value={[employee.postal_code, employee.city].filter(Boolean).join(' ')} /><Value label={t('employees.profile.country')} value={countryName} /></>)}
         {section(t('employees.profile.employment'), <><Value label={t('employees.jobTitle')} value={employee.job_title} /><Value label={t('employees.profile.startDate')} value={date(employee.employment_start_date)} /><Value label={t('employees.employmentType')} value={t(`employees.type.${employee.employment_type}`)} /><Value label={t('employees.status')} value={t(`employees.status.${employee.status}`)} /><Value label={t('employees.profile.term')} value={employee.is_permanent ? t('employees.profile.permanent') : `${t('employees.profile.fixedUntil')}: ${date(employee.fixed_term_end_date)}`} /></>)}
