@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Barcode, BriefcaseBusiness, Building2, Plus, Save, UploadCloud } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
+import { getSafeProductReturnPath } from '@/lib/product-editor-navigation'
 import { createClient } from '@/lib/supabase-client'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
@@ -209,10 +210,13 @@ function formFromProduct(product: Product): ProductForm {
 export default function ProductEditPage() {
   const params = useParams<{ productId?: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { t } = useI18n()
   const productId = typeof params.productId === 'string' ? params.productId : ''
+  const returnPath = getSafeProductReturnPath(searchParams.get('returnTo'))
+  const returnLabel = returnPath.startsWith('/app/inventory') ? t('productUx.backToInventory') : t('products.backToProducts')
 
   const [product, setProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductForm | null>(null)
@@ -598,11 +602,7 @@ export default function ProductEditPage() {
   }
 
   const goBack = () => {
-    if (window.history.length > 1) {
-      router.back()
-      return
-    }
-    router.push('/app/products')
+    router.push(returnPath)
   }
 
   if (companyLoading || loading) {
@@ -621,7 +621,7 @@ export default function ProductEditPage() {
     return (
       <PageContainer>
         <PageHeader title={t('products.edit')} />
-        <EmptyState title={t('products.notFound')} description={t('products.notFoundDescription')} action={{ label: t('products.backToProducts'), onClick: () => router.push('/app/products') }} />
+        <EmptyState title={t('products.notFound')} description={t('products.notFoundDescription')} action={{ label: returnLabel, onClick: goBack }} />
       </PageContainer>
     )
   }
@@ -631,7 +631,7 @@ export default function ProductEditPage() {
       <PageHeader title={t('products.edit')} description={`${product.name} · ${currentCompany.name}`}>
         <Button type="button" variant="outline" onClick={goBack}>
           <ArrowLeft className="h-4 w-4" />
-          {t('products.backToProducts')}
+          {returnLabel}
         </Button>
       </PageHeader>
 

@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, PackagePlus, RefreshCw, RotateCcw, Search, Trash2, UploadCloud, X } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, Eye, PackagePlus, RefreshCw, RotateCcw, Search, Trash2, UploadCloud, X } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { buildProductEditorHref, rememberProductReturnScroll, restoreProductReturnScroll } from '@/lib/product-editor-navigation'
 import { createClient } from '@/lib/supabase-client'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
@@ -366,6 +367,7 @@ async function compressImageToJpeg(
 
 export default function ProductsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { t } = useI18n()
@@ -388,19 +390,26 @@ export default function ProductsPage() {
   const [form, setForm] = useState<ProductForm>(makeEmptyForm())
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categoriesAvailable, setCategoriesAvailable] = useState(true)
-  const [query, setQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | ProductStatus>('all')
-  const [categoryFilter, setCategoryFilter] = useState('all')
-  const [stockFilter, setStockFilter] = useState<ProductStockFilter>('all')
-  const [providerFilter, setProviderFilter] = useState<ProductProviderFilter>('all')
-  const [imageFilter, setImageFilter] = useState<ProductImageFilter>('all')
-  const [sortBy, setSortBy] = useState<ProductSort>('name_asc')
+  const initialQuery = searchParams.get('q') ?? ''
+  const initialStatus = searchParams.get('status')
+  const initialStock = searchParams.get('stock')
+  const initialProvider = searchParams.get('provider')
+  const initialImage = searchParams.get('image')
+  const initialSort = searchParams.get('sort')
+  const [query, setQuery] = useState(initialQuery)
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery)
+  const [statusFilter, setStatusFilter] = useState<'all' | ProductStatus>(productStatuses.includes(initialStatus as ProductStatus) ? initialStatus as ProductStatus : 'all')
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') ?? 'all')
+  const [stockFilter, setStockFilter] = useState<ProductStockFilter>(initialStock === 'low' ? 'low' : 'all')
+  const [providerFilter, setProviderFilter] = useState<ProductProviderFilter>(productChannels.some((item) => item.channel === initialProvider) || initialProvider === 'none' ? initialProvider as ProductProviderFilter : 'all')
+  const [imageFilter, setImageFilter] = useState<ProductImageFilter>(initialImage === 'has_image' || initialImage === 'missing_image' ? initialImage : 'all')
+  const [sortBy, setSortBy] = useState<ProductSort>(productSortOptions.includes(initialSort as ProductSort) ? initialSort as ProductSort : 'name_asc')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const editorRef = useRef<HTMLDivElement | null>(null)
   const firstEditorInputRef = useRef<HTMLInputElement | null>(null)
   const productImageInputRef = useRef<HTMLInputElement | null>(null)
+  const restoredScrollRef = useRef(false)
 
   useBodyScrollLock(showForm || Boolean(viewingProduct))
 
@@ -503,6 +512,25 @@ export default function ProductsPage() {
 
   const visibleProducts = useMemo(() => sortProducts(filteredProducts, sortBy), [filteredProducts, sortBy])
 
+  const productsReturnPath = useMemo(() => {
+    const params = new URLSearchParams()
+    if (query.trim()) params.set('q', query.trim())
+    if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (categoryFilter !== 'all') params.set('category', categoryFilter)
+    if (stockFilter !== 'all') params.set('stock', stockFilter)
+    if (providerFilter !== 'all') params.set('provider', providerFilter)
+    if (imageFilter !== 'all') params.set('image', imageFilter)
+    if (sortBy !== 'name_asc') params.set('sort', sortBy)
+    const queryString = params.toString()
+    return `/app/products${queryString ? `?${queryString}` : ''}`
+  }, [categoryFilter, imageFilter, providerFilter, query, sortBy, statusFilter, stockFilter])
+
+  useEffect(() => {
+    if (loading || restoredScrollRef.current) return
+    restoredScrollRef.current = true
+    restoreProductReturnScroll(productsReturnPath)
+  }, [loading, productsReturnPath])
+
   const selectedProducts = useMemo(
     () => visibleProducts.filter((product) => selectedProductIds.has(product.id)),
     [visibleProducts, selectedProductIds]
@@ -531,7 +559,8 @@ export default function ProductsPage() {
   }, [resetForm, showForm])
 
   const handleEdit = (product: Product) => {
-    router.push(`/app/products/${product.id}/edit`)
+    rememberProductReturnScroll(productsReturnPath, window.scrollY)
+    router.push(buildProductEditorHref(product.id, productsReturnPath))
   }
 
   const handleImageFileChange = async (file: File | null) => {
@@ -1041,18 +1070,21 @@ export default function ProductsPage() {
         <div className="flex flex-wrap gap-2">
           <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
           <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
-          <Button variant="outline" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}>
-            <Download className="h-4 w-4" />
-            {t('products.exportGeneric')}
-          </Button>
-          <Button variant="outline" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}>
-            <Download className="h-4 w-4" />
-            {t('products.exportShopify')}
-          </Button>
-          <Button variant="outline" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}>
-            <Download className="h-4 w-4" />
-            {t('products.exportGoogle')}
-          </Button>
+          <div className="contents lg:hidden">
+            <Button variant="outline" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
+            <Button variant="outline" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
+            <Button variant="outline" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
+          </div>
+          <details className="relative hidden lg:block">
+            <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50">
+              <Download className="h-4 w-4" />{t('productUx.exportMenu')}
+            </summary>
+            <div className="absolute right-0 top-full z-40 mt-2 grid min-w-56 gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-lg">
+              <button type="button" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGeneric')}</button>
+              <button type="button" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportShopify')}</button>
+              <button type="button" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGoogle')}</button>
+            </div>
+          </details>
           <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
             {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
             {t('woocommerce.exportAll')}
@@ -1384,57 +1416,108 @@ export default function ProductsPage() {
       {visibleProducts.length === 0 ? (
         <EmptyState title={t('products.empty')} description={t('products.emptyDescription')} />
       ) : (
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {visibleProducts.map((product) => {
-            const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
-            const descriptionPreview = decodeHtmlText(product.description ?? '')
-            const providerNames = (syncs[product.id] ?? []).map((sync) => sync.channel.replace('_', ' '))
-            return (
-              <Card key={product.id} className={`${lowStock ? 'border-amber-300' : ''} ${editing?.id === product.id ? 'ring-2 ring-blue-200' : ''}`}>
-                <CardContent className="p-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} className="mt-1 shrink-0" aria-label={`${t('transactions.select')} ${product.name}`} />
-                    {product.image_url ? (
-                      <img src={product.image_url} alt="" className="h-16 w-16 shrink-0 rounded-md border object-cover" />
-                    ) : (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-slate-50 text-xs text-slate-400">
-                        {t('products.imagePreview')}
+        <>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:hidden">
+            {visibleProducts.map((product) => {
+              const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
+              const descriptionPreview = decodeHtmlText(product.description ?? '')
+              const providerNames = (syncs[product.id] ?? []).map((sync) => sync.channel.replace('_', ' '))
+              return (
+                <Card key={product.id} className={`${lowStock ? 'border-amber-300' : ''} ${editing?.id === product.id ? 'ring-2 ring-blue-200' : ''}`}>
+                  <CardContent className="p-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} className="mt-1 shrink-0" aria-label={`${t('transactions.select')} ${product.name}`} />
+                      {product.image_url ? <img src={product.image_url} alt="" className="h-16 w-16 shrink-0 rounded-md border object-cover" /> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-slate-50 text-xs text-slate-400">{t('products.imagePreview')}</div>}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-start justify-between gap-2"><h2 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug" title={product.name}>{product.name}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span></div>
+                        <p className="mt-1 truncate text-xs text-slate-500" title={[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}>{[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}</p>
+                        {product.category && <p className="mt-1 truncate text-xs text-slate-500" title={product.category}>{product.category}</p>}
+                        {descriptionPreview && <p className="mt-1 line-clamp-2 text-xs text-slate-600" title={descriptionPreview}>{descriptionPreview}</p>}
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-start justify-between gap-2">
-                        <h2 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug" title={product.name}>{product.name}</h2>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-slate-500" title={[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}>{[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}</p>
-                      {product.category && <p className="mt-1 truncate text-xs text-slate-500" title={product.category}>{product.category}</p>}
-                      {descriptionPreview && <p className="mt-1 line-clamp-2 text-xs text-slate-600" title={descriptionPreview}>{descriptionPreview}</p>}
                     </div>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.currentStock')}</p><p className="font-semibold">{product.current_stock} {t('products.unitPiece')}</p></div>
-                    <div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.sellingPrice')}</p><p className="font-semibold">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</p></div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {providerNames.map((name) => <span key={name} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">{name}</span>)}
-                    {renderSyncBadge(product)}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}>{t('products.view')}</Button>
-                    <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
-                    <Link href="/app/stock-movements"><Button size="sm" variant="outline">{t('products.adjustStock')}</Button></Link>
-                    <Button size="sm" variant="outline" onClick={() => handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
-                    <Button size="sm" variant="outline" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)}>
-                      {syncingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                      {getWooActionLabel(product)}
-                    </Button>
-                    {product.status !== 'archived' && <Button size="sm" variant="outline" onClick={() => void handleArchive(product)}><Archive className="h-4 w-4" />{t('products.archive')}</Button>}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.currentStock')}</p><p className="font-semibold">{product.current_stock} {t('products.unitPiece')}</p></div><div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.sellingPrice')}</p><p className="font-semibold">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</p></div></div>
+                    <div className="mt-3 flex flex-wrap gap-1">{providerNames.map((name) => <span key={name} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">{name}</span>)}{renderSyncBadge(product)}</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}>{t('products.view')}</Button>
+                      <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
+                      <Link href="/app/stock-movements"><Button size="sm" variant="outline">{t('products.adjustStock')}</Button></Link>
+                      <Button size="sm" variant="outline" onClick={() => handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
+                      <Button size="sm" variant="outline" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)}>{syncingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}{getWooActionLabel(product)}</Button>
+                      {product.status !== 'archived' && <Button size="sm" variant="outline" onClick={() => void handleArchive(product)}><Archive className="h-4 w-4" />{t('products.archive')}</Button>}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+          <Card className="hidden lg:block">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="min-w-[1120px] w-full table-fixed text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+                  <tr>
+                    <th className="w-10 p-3"><span className="sr-only">{t('transactions.select')}</span></th>
+                    <th className="w-[27%] p-3">{t('products.name')}</th>
+                    <th className="w-[13%] p-3">{t('products.sku')}</th>
+                    <th className="w-[12%] p-3 text-right">{t('products.sellingPrice')}</th>
+                    <th className="w-[9%] p-3 text-right">{t('products.currentStock')}</th>
+                    <th className="w-[11%] p-3">{t('products.status')}</th>
+                    <th className="w-[16%] p-3">{t('productUx.channelsColumn')}</th>
+                    <th className="w-[300px] p-3">{t('productUx.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleProducts.map((product) => {
+                    const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
+                    const productSyncs = syncs[product.id] ?? []
+                    const providerNames = productSyncs.map((sync) => {
+                      const config = productChannels.find((item) => item.channel === sync.channel)
+                      return config ? t(config.labelKey) : sync.channel.replaceAll('_', ' ')
+                    })
+                    return (
+                      <tr key={product.id} className="border-b border-slate-100 align-middle last:border-0 hover:bg-slate-50/70">
+                        <td className="p-3 align-top"><input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} aria-label={`${t('transactions.select')} ${product.name}`} /></td>
+                        <td className="p-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {product.image_url ? <img src={product.image_url} alt="" className="h-11 w-11 shrink-0 rounded-md border object-cover" /> : <div className="h-11 w-11 shrink-0 rounded-md border bg-slate-100" />}
+                            <div className="min-w-0">
+                              <button type="button" onClick={() => setViewingProduct(product)} className="block max-w-full truncate text-left font-semibold text-slate-950 hover:text-blue-700" title={product.name}>{product.name}</button>
+                              <p className="truncate text-xs text-slate-500" title={product.category ?? undefined}>{product.category || '—'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3"><p className="truncate font-medium" title={product.sku ?? undefined}>{product.sku || '—'}</p><p className="truncate text-xs text-slate-500" title={product.barcode ?? undefined}>{product.barcode || ''}</p></td>
+                        <td className="p-3 text-right font-medium">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</td>
+                        <td className={`p-3 text-right font-semibold ${lowStock ? 'text-amber-700' : 'text-slate-900'}`}>{product.current_stock}</td>
+                        <td className="p-3"><span className={`inline-flex rounded-full px-2 py-1 text-xs ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span></td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-1">
+                            {providerNames.length > 0 ? providerNames.map((name) => <span key={name} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{name}</span>) : <span className="text-slate-400">—</span>}
+                            {renderSyncBadge(product)}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-1.5">
+                            <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}><Eye className="h-4 w-4" />{t('products.view')}</Button>
+                            <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleCopyProduct(product)} title={t('productUx.duplicate')}><Copy className="h-4 w-4" /><span className="sr-only">{t('productUx.duplicate')}</span></Button>
+                            <Link href="/app/stock-movements" title={t('products.adjustStock')}><Button size="sm" variant="ghost"><Barcode className="h-4 w-4" /><span className="sr-only">{t('products.adjustStock')}</span></Button></Link>
+                            <Button size="sm" variant="ghost" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)} title={getWooActionLabel(product)}>
+                              {syncingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                              <span className="sr-only">{getWooActionLabel(product)}</span>
+                            </Button>
+                            {product.status !== 'archived' && <Button size="sm" variant="ghost" onClick={() => void handleArchive(product)} title={t('products.archive')}><Archive className="h-4 w-4" /><span className="sr-only">{t('products.archive')}</span></Button>}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+          </Card>
+        </>
       )}
 
       {viewingProduct && (

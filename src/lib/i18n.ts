@@ -7,6 +7,7 @@ import { employeeProfileDictionaries } from '@/lib/employee-profile-i18n'
 import { employeeDocumentDictionaries } from '@/lib/employee-documents-i18n'
 import { orderNotificationDictionaries } from '@/lib/order-notifications-i18n'
 import { countrySelectorDictionaries } from '@/lib/country-selector-i18n'
+import { productInventoryUxDictionaries } from '@/lib/product-inventory-ux-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -32,6 +33,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   en: {
     ...businessModuleDictionaries.en,
     ...countrySelectorDictionaries.en,
+    ...productInventoryUxDictionaries.en,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Income',
     'nav.expenses': 'Expenses',
@@ -515,6 +517,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   de: {
     ...countrySelectorDictionaries.de,
+    ...productInventoryUxDictionaries.de,
     ...businessModuleDictionaries.de,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Einnahmen',
@@ -998,6 +1001,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   ru: {
     ...countrySelectorDictionaries.ru,
+    ...productInventoryUxDictionaries.ru,
     ...businessModuleDictionaries.ru,
     'nav.dashboard': 'Панель',
     'nav.income': 'Доходы',
@@ -1481,6 +1485,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   tr: {
     ...countrySelectorDictionaries.tr,
+    ...productInventoryUxDictionaries.tr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
     'nav.income': 'Gelir',
@@ -1771,6 +1776,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   uk: {
     ...countrySelectorDictionaries.uk,
+    ...productInventoryUxDictionaries.uk,
     ...businessModuleDictionaries.en,
     ...businessModuleDictionaries.ru,
     'nav.dashboard': 'Панель',
@@ -1887,6 +1893,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   pl: {
     ...countrySelectorDictionaries.pl,
+    ...productInventoryUxDictionaries.pl,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
     'nav.transactions': 'Transakcje',
@@ -2002,6 +2009,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   fr: {
     ...countrySelectorDictionaries.fr,
+    ...productInventoryUxDictionaries.fr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Tableau de bord',
     'nav.transactions': 'Transactions',
