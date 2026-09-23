@@ -5,42 +5,18 @@ import { BellRing, Clipboard, Play, RotateCw, Smartphone, Square, Upload, Volume
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/contexts/i18n-context'
-
-const INSTALLATION_KEY = 'leonety-order-alert-installation-id'
+import {
+  createCurrentPushSubscription,
+  detectDevicePlatform,
+  getPushInstallationId,
+  getWebPushCapability,
+} from '@/lib/web-push-client'
 
 interface DeviceView { id:string; label:string; platform:string; status:'enabled'|'invalid'|'disabled'; lastSeenAt:string; isCurrent:boolean }
 interface SettingsView {
   enabled:boolean; activeDeviceId:string|null; devices:DeviceView[]; vapidPublicKey:string
   sound:{enabled:boolean;hasCustom:boolean;name:string;mime:string}
   wooCommerce:{connected:boolean;webhookConfigured:boolean;webhookUrl:string;configuredAt:string|null}
-}
-
-function getInstallationId() {
-  const saved = window.localStorage.getItem(INSTALLATION_KEY)
-  if (saved && /^[0-9a-f-]{36}$/i.test(saved)) return saved
-  const next = crypto.randomUUID()
-  window.localStorage.setItem(INSTALLATION_KEY, next)
-  return next
-}
-
-function detectPlatform() {
-  const ua = navigator.userAgent.toLowerCase()
-  if (/iphone|ipad|ipod/.test(ua)) return 'iOS/iPadOS'
-  if (/android/.test(ua)) return 'Android'
-  if (/mac/.test(ua)) return 'macOS'
-  if (/windows/.test(ua)) return 'Windows'
-  return 'Web browser'
-}
-
-function isIos() { return /iphone|ipad|ipod/i.test(navigator.userAgent) }
-function isStandalone() {
-  const nav = navigator as Navigator & { standalone?: boolean }
-  return window.matchMedia('(display-mode: standalone)').matches || Boolean(nav.standalone)
-}
-function base64ToBytes(value:string) {
-  const padding = '='.repeat((4 - value.length % 4) % 4)
-  const binary = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'))
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0))
 }
 
 export function OrderNotificationsSettings({ companyId, companyName, wooConnected }: { companyId:string; companyName:string; wooConnected:boolean }) {
@@ -60,12 +36,11 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
 
   const capability = useMemo(() => {
     if (typeof window === 'undefined') return { supported:false, iosInstallRequired:false }
-    const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
-    return { supported, iosInstallRequired:isIos() && !isStandalone() }
+    return getWebPushCapability()
   }, [])
 
   const load = useCallback(async () => {
-    const id = installationId || getInstallationId()
+    const id = installationId || getPushInstallationId()
     if (!installationId) setInstallationId(id)
     const response = await fetch(`/api/order-notifications?companyId=${encodeURIComponent(companyId)}&installationId=${encodeURIComponent(id)}`, { cache:'no-store' })
     const payload = await response.json().catch(() => ({}))
@@ -75,7 +50,7 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
     }
     setSettings(payload as SettingsView)
     const current = (payload.devices as DeviceView[]).find((device) => device.isCurrent)
-    setDeviceLabel(current?.label || `${companyName} · ${detectPlatform()}`.slice(0,80))
+    setDeviceLabel(current?.label || `${companyName} · ${detectDevicePlatform()}`.slice(0,80))
   }, [companyId, companyName, installationId, t])
 
   useEffect(() => {
@@ -96,10 +71,8 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
       const nextPermission = await Notification.requestPermission()
       setPermission(nextPermission)
       if (nextPermission !== 'granted') throw new Error('permission_denied')
-      const registration = await navigator.serviceWorker.ready
-      const existingSubscription = await registration.pushManager.getSubscription()
-      const subscription = existingSubscription ?? await registration.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:base64ToBytes(settings.vapidPublicKey) })
-      const response = await fetch('/api/order-notifications', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ companyId, installationId, deviceLabel:deviceLabel.trim(), platform:detectPlatform(), locale, subscription:subscription.toJSON() }) })
+      const subscription = await createCurrentPushSubscription(settings.vapidPublicKey)
+      const response = await fetch('/api/order-notifications', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ companyId, installationId, deviceLabel:deviceLabel.trim(), platform:detectDevicePlatform(), locale, subscription:subscription.toJSON() }) })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'save_failed')
       setConsenting(false); setMessage(t('orderNotifications.enabledSuccess')); await load()

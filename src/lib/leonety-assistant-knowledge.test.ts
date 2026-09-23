@@ -5,7 +5,7 @@ import { buildLeonetyAssistantKnowledge, normalizeAssistantRoute } from './leone
 
 test('grounds implemented employee, product, notification and Kassenbuch workflows', () => {
   const knowledge = JSON.parse(buildLeonetyAssistantKnowledge('en', '/app/settings/integrations/woocommerce'))
-  assert.match(knowledge.features.notifications, /Enable on this device/)
+  assert.match(knowledge.features.notifications, /Settings > Notifications/)
   assert.match(knowledge.features.products, /same product editor/)
   assert.match(knowledge.features.kassenbuch, /print-only five-column cash-book view/)
   assert.match(knowledge.features.employees, /dedicated list, create, profile and edit pages/)

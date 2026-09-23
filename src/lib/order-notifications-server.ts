@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createIncomingOrderPushPayload, isPermanentPushFailure, type IncomingOrderPushPayload } from '@/lib/order-notifications'
 import type { Locale } from '@/lib/i18n'
 
-interface DeviceRow {
+export interface WebPushDeviceRow {
   id: string
   company_id: string
   locale: Locale
@@ -12,6 +12,13 @@ interface DeviceRow {
   push_p256dh: string
   push_auth: string
   status: 'enabled' | 'invalid' | 'disabled'
+}
+
+export interface SystemNotificationPayload {
+  type: 'system-notification'
+  title: string
+  body: string
+  url: string
 }
 
 function getVapidConfiguration() {
@@ -26,7 +33,7 @@ export function getWebPushPublicKey() {
   return process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() || ''
 }
 
-async function sendToDevice(device: DeviceRow, payload: IncomingOrderPushPayload) {
+export async function sendWebPushNotification(device: WebPushDeviceRow, payload: IncomingOrderPushPayload | SystemNotificationPayload) {
   const vapid = getVapidConfiguration()
   webPush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey)
   const subscription: PushSubscription = {
@@ -67,7 +74,7 @@ export async function deliverIncomingOrderAlert(input: {
     .eq('company_id', input.companyId)
     .maybeSingle()
   if (error) throw error
-  const device = data as DeviceRow | null
+  const device = data as WebPushDeviceRow | null
 
   if (!device || device.status !== 'enabled') {
     await input.admin.from('incoming_order_alert_events').update({
@@ -86,7 +93,7 @@ export async function deliverIncomingOrderAlert(input: {
   })
 
   try {
-    await sendToDevice(device, payload)
+    await sendWebPushNotification(device, payload)
     await input.admin.from('incoming_order_alert_events').update({
       notification_status: 'sent', notified_device_id: device.id, notified_at: new Date().toISOString(), notification_error_code: null,
     }).eq('id', input.eventId)
@@ -110,7 +117,7 @@ export async function deliverIncomingOrderAlert(input: {
   }
 }
 
-export async function sendOrderNotificationTest(device: DeviceRow, companyName: string) {
+export async function sendOrderNotificationTest(device: WebPushDeviceRow, companyName: string) {
   const localeCopy: Record<Locale, { title: string; body: string }> = {
     en: { title: 'Leonety test notification', body: `Incoming order alerts are enabled for ${companyName}.` },
     de: { title: 'Leonety-Testbenachrichtigung', body: `Bestellbenachrichtigungen sind für ${companyName} aktiviert.` },
@@ -124,5 +131,24 @@ export async function sendOrderNotificationTest(device: DeviceRow, companyName: 
   const payload: IncomingOrderPushPayload = {
     type: 'incoming-order', companyId: device.company_id, provider: 'woocommerce', orderId: 'test', orderNumber: 'TEST', amount: '', currency: '', title: copy.title, body: copy.body, url: '/app/settings/integrations/woocommerce',
   }
-  return sendToDevice(device, payload)
+  return sendWebPushNotification(device, payload)
+}
+
+export async function sendSystemNotificationTest(device: WebPushDeviceRow, companyName: string) {
+  const localeCopy: Record<Locale, { title: string; body: string }> = {
+    en: { title: 'Leonety test notification', body: `System notifications are enabled for ${companyName}.` },
+    de: { title: 'Leonety-Testbenachrichtigung', body: `Systembenachrichtigungen sind für ${companyName} aktiviert.` },
+    ru: { title: 'Тестовое уведомление Leonety', body: `Системные уведомления включены для ${companyName}.` },
+    tr: { title: 'Leonety test bildirimi', body: `${companyName} için sistem bildirimleri etkin.` },
+    uk: { title: 'Тестове сповіщення Leonety', body: `Системні сповіщення ввімкнено для ${companyName}.` },
+    pl: { title: 'Powiadomienie testowe Leonety', body: `Powiadomienia systemowe są włączone dla ${companyName}.` },
+    fr: { title: 'Notification de test Leonety', body: `Les notifications système sont activées pour ${companyName}.` },
+  }
+  const copy = localeCopy[device.locale] ?? localeCopy.en
+  return sendWebPushNotification(device, {
+    type: 'system-notification',
+    title: copy.title,
+    body: copy.body,
+    url: '/app/settings/notifications',
+  })
 }

@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bell,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
@@ -57,6 +58,7 @@ export const navigationGroups: NavigationGroup[] = [
       { href: '/app/shifts', labelKey: 'nav.shifts', icon: CalendarDays, desktopOnly: true },
       { href: '/app/locations', labelKey: 'nav.locations', icon: MapPin, desktopOnly: true },
       { href: '/app/settings/integrations', labelKey: 'nav.storeIntegrations', icon: BriefcaseBusiness },
+      { href: '/app/settings/notifications', labelKey: 'nav.notifications', icon: Bell },
     ],
   },
 ]

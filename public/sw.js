@@ -97,28 +97,39 @@ self.addEventListener('push', (event) => {
       payload = null
     }
 
-    if (!payload || payload.type !== 'incoming-order') return
+    if (!payload || !['incoming-order', 'system-notification'].includes(payload.type)) return
 
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const foregroundClient = windows.find((client) => client.focused) || windows.find((client) => client.visibilityState === 'visible')
-    if (foregroundClient) foregroundClient.postMessage(payload)
+    if (payload.type === 'incoming-order' && foregroundClient) foregroundClient.postMessage(payload)
 
-    await self.registration.showNotification(payload.title || 'New order', {
-      body: payload.body || 'WooCommerce',
+    const isOrder = payload.type === 'incoming-order'
+    const tag = isOrder
+      ? `leonety-order-${payload.companyId}-${payload.provider}-${payload.orderId}`
+      : 'leonety-system-test'
+
+    await self.registration.showNotification(payload.title || 'Leonety', {
+      body: payload.body || '',
       icon: '/brand/icon-192.png',
       badge: '/brand/icon-96.png',
-      tag: `leonety-order-${payload.companyId}-${payload.provider}-${payload.orderId}`,
-      renotify: true,
-      requireInteraction: true,
-      silent: Boolean(foregroundClient),
-      data: { url: payload.url || '/app/settings/integrations/woocommerce' },
+      tag,
+      renotify: isOrder,
+      requireInteraction: isOrder,
+      silent: isOrder ? Boolean(foregroundClient) : false,
+      data: { url: payload.url || '/app/settings/notifications' },
     })
-  })())
+  })().catch((error) => {
+    console.warn('Push notification could not be displayed', error)
+  }))
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const destination = new URL(event.notification.data?.url || '/app/settings/integrations/woocommerce', self.location.origin).href
+  const requestedUrl = new URL(event.notification.data?.url || '/app/settings/notifications', self.location.origin)
+  const safePath = requestedUrl.origin === self.location.origin && requestedUrl.pathname.startsWith('/app/')
+    ? `${requestedUrl.pathname}${requestedUrl.search}${requestedUrl.hash}`
+    : '/app/dashboard'
+  const destination = new URL(safePath, self.location.origin).href
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const existing = windows.find((client) => client.url.startsWith(self.location.origin))
