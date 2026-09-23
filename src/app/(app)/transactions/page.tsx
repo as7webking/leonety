@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDownCircle, ArrowUpCircle, Building2, Copy, Printer, Plus } from 'lucide-react'
-import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { DesktopPageUtilities, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
@@ -787,15 +787,9 @@ export default function TransactionsPage() {
 
   return (
     <PageContainer>
+      <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportCSV} />
       <PageHeader title={t('transactions.title')} description={`${t('transactions.description')} · ${currentCompany.name}`}>
-        <div className="flex flex-wrap gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={handleImportCSV}
-          />
+        <div className="flex flex-wrap gap-2 lg:hidden">
           <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
             {importing ? t('transactions.importing') : t('common.importCsv')}
           </Button>
@@ -861,7 +855,37 @@ export default function TransactionsPage() {
             {showForm ? t('common.cancel') : t('transactions.add')}
           </Button>
         </div>
+        <Button className="hidden lg:inline-flex" type="button" onClick={() => setShowForm((value) => !value)}>
+          <Plus className="h-4 w-4" />
+          {showForm ? t('common.cancel') : t('transactions.add')}
+        </Button>
       </PageHeader>
+
+      <DesktopPageUtilities title={t('pageUtilities.title')}>
+        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+          {importing ? t('transactions.importing') : t('common.importCsv')}
+        </Button>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <span>{t('transactions.printFrom')}</span>
+          <input type="date" value={printFromDate} onChange={(event) => setPrintFromDate(event.target.value)} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm" />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <span>{t('transactions.printTo')}</span>
+          <input type="date" value={printToDate} onChange={(event) => setPrintToDate(event.target.value)} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm" />
+        </label>
+        <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+          <input type="checkbox" checked={includeOpeningBalance} onChange={(event) => handleOpeningBalanceChange(event.target.checked)} className="h-4 w-4" />
+          {t('transactions.includeOpeningBalance')}
+        </label>
+        <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(true)} disabled={printableTransactions.length === 0}><Printer className="h-4 w-4" />{t('common.print')}</Button>
+        <Button type="button" variant="outline" onClick={handleEksExport} disabled={printableTransactions.length === 0}>{t('transactions.exportEks')}</Button>
+      </DesktopPageUtilities>
+
+      <div className="mb-5 hidden flex-wrap items-center gap-2 lg:flex">
+        <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-36" />
+        <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-40" />
+        <Button type="button" variant="outline" onClick={() => setShowBulkRename((value) => !value)}>{showBulkRename ? t('common.cancel') : t('transactions.bulkRename')}</Button>
+      </div>
 
       {printFormatDialogOpen && (
         <div

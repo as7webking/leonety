@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, Eye, PackagePlus, RefreshCw, RotateCcw, Search, Trash2, UploadCloud, X } from 'lucide-react'
-import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { DesktopPageUtilities, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -1067,31 +1067,39 @@ export default function ProductsPage() {
   return (
     <PageContainer>
       <PageHeader title={t('products.title')} description={`${t('products.description')} · ${currentCompany.name}`}>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 lg:hidden">
           <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
           <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
-          <div className="contents lg:hidden">
-            <Button variant="outline" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
-            <Button variant="outline" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
-            <Button variant="outline" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
-          </div>
-          <details className="relative hidden lg:block">
-            <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50">
-              <Download className="h-4 w-4" />{t('productUx.exportMenu')}
-            </summary>
-            <div className="absolute right-0 top-full z-40 mt-2 grid min-w-56 gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-lg">
-              <button type="button" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGeneric')}</button>
-              <button type="button" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportShopify')}</button>
-              <button type="button" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGoogle')}</button>
-            </div>
-          </details>
+          <Button variant="outline" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
+          <Button variant="outline" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
+          <Button variant="outline" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
           <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
             {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
             {t('woocommerce.exportAll')}
           </Button>
           <Button onClick={() => showForm ? resetForm() : setShowForm(true)}><PackagePlus className="h-4 w-4" />{showForm ? t('common.cancel') : t('products.add')}</Button>
         </div>
+        <Button className="hidden lg:inline-flex" onClick={() => showForm ? resetForm() : setShowForm(true)}><PackagePlus className="h-4 w-4" />{showForm ? t('common.cancel') : t('products.add')}</Button>
       </PageHeader>
+
+      <DesktopPageUtilities title={t('pageUtilities.title')}>
+        <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
+        <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
+        <details className="relative">
+          <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50">
+            <Download className="h-4 w-4" />{t('productUx.exportMenu')}
+          </summary>
+          <div className="absolute left-0 top-full z-40 mt-2 grid min-w-56 gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-lg">
+            <button type="button" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGeneric')}</button>
+            <button type="button" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportShopify')}</button>
+            <button type="button" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGoogle')}</button>
+          </div>
+        </details>
+        <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
+          {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+          {t('woocommerce.exportAll')}
+        </Button>
+      </DesktopPageUtilities>
 
       <div className="mb-5 grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_220px_180px_180px_190px_170px]">
         <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-md border py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} /></div>

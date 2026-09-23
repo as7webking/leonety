@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { DesktopPageUtilities, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { formatValidationError, incomeSchema, type IncomeForm } from '@/lib/validations'
@@ -596,15 +596,9 @@ export default function IncomePage() {
 
   return (
     <PageContainer>
+      <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportCSV} />
       <PageHeader title={t('income.title')} description={t('income.pageDescription').replace('{workspace}', currentCompany.name)}>
-        <div className="flex flex-wrap gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={handleImportCSV}
-          />
+        <div className="flex flex-wrap gap-2 lg:hidden">
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
             {importing ? t('transactions.importing') : t('common.importCsv')}
           </Button>
@@ -674,7 +668,28 @@ export default function IncomePage() {
             {showForm ? t('common.cancel') : t('income.add')}
           </Button>
         </div>
+        <Button className="hidden lg:inline-flex" onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
+          {showForm ? t('common.cancel') : t('income.add')}
+        </Button>
       </PageHeader>
+
+      <DesktopPageUtilities title={t('pageUtilities.title')}>
+        <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
+          {importing ? t('transactions.importing') : t('common.importCsv')}
+        </Button>
+        {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
+        {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
+      </DesktopPageUtilities>
+
+      {incomes.length > 0 && (
+        <div className="mb-5 hidden flex-wrap items-center gap-2 lg:flex">
+          <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-48" />
+          <input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setSelectedIncomeIds([]) }} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" aria-label={t('dashboard.filterFrom')} />
+          <input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setSelectedIncomeIds([]) }} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" aria-label={t('dashboard.filterTo')} />
+          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-36" />
+          <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-40" />
+        </div>
+      )}
 
       <div className="print-area print-report hidden">
         <div className="mb-4 flex items-start gap-3">

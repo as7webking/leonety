@@ -1,5 +1,6 @@
 export { PageContainer } from "./page-container"
 export { PageHeader } from "./page-header"
+export { DesktopPageUtilities } from "./desktop-page-utilities"
 export { EmptyState } from "./empty-state"
 export { LoadingSkeleton } from "./loading-skeleton"
 export { AuthenticatedLayout } from "./authenticated-layout"

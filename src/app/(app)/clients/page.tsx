@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Archive, Building2, ChevronLeft, ChevronRight, FileSignature, FileText, FileUp, Search, UserRoundPlus, X } from 'lucide-react'
-import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { DesktopPageUtilities, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -383,11 +383,16 @@ export default function ClientsPage() {
   return (
     <PageContainer>
       <PageHeader title={t('clients.title')} description={`${t('clients.crm.databaseDescription')} · ${currentCompany.name}`}>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 lg:hidden">
           <Button variant="outline" onClick={() => setShowImport(true)}><FileUp className="h-4 w-4" />{t('clients.importClients')}</Button>
           <Button asChild><Link href="/app/clients/new"><UserRoundPlus className="h-4 w-4" />{t('clients.crm.createClient')}</Link></Button>
         </div>
+        <Button className="hidden lg:inline-flex" asChild><Link href="/app/clients/new"><UserRoundPlus className="h-4 w-4" />{t('clients.crm.createClient')}</Link></Button>
       </PageHeader>
+
+      <DesktopPageUtilities title={t('pageUtilities.title')}>
+        <Button variant="outline" onClick={() => setShowImport(true)}><FileUp className="h-4 w-4" />{t('clients.importClients')}</Button>
+      </DesktopPageUtilities>
 
       <div className="mb-5 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
         <label className="relative min-w-0">
