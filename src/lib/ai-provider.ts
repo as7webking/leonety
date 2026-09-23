@@ -15,6 +15,20 @@ export interface AiProviderCapabilities {
   streaming: boolean
 }
 
+export type AiProviderErrorCode =
+  | 'provider_not_configured'
+  | 'provider_auth_failed'
+  | 'provider_rate_limited'
+  | 'provider_timeout'
+  | 'provider_unavailable'
+  | 'provider_invalid_response'
+
+export class AiProviderError extends Error {
+  constructor(public readonly code: AiProviderErrorCode) {
+    super(code)
+  }
+}
+
 interface AiProviderAdapter {
   name: AiProviderName
   capabilities: AiProviderCapabilities
@@ -24,7 +38,7 @@ interface AiProviderAdapter {
 export function getAiProviderName(): AiProviderName {
   const provider = process.env.AI_PROVIDER?.trim().toLowerCase()
   if (!provider || provider === 'openai') return 'openai'
-  throw new Error('Unsupported AI_PROVIDER. Supported value: openai.')
+  throw new AiProviderError('provider_not_configured')
 }
 
 export function getAiModelName() {
@@ -34,7 +48,7 @@ export function getAiModelName() {
 function getAiApiKey() {
   const key = process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim()
   if (!key) {
-    throw new Error('AI_API_KEY is required server-side.')
+    throw new AiProviderError('provider_not_configured')
   }
   return key
 }
@@ -74,12 +88,22 @@ const openAiProvider: AiProviderAdapter = {
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new Error('AI provider request failed.')
+        if (response.status === 401 || response.status === 403) {
+          throw new AiProviderError('provider_auth_failed')
+        }
+        if (response.status === 429) throw new AiProviderError('provider_rate_limited')
+        throw new AiProviderError('provider_unavailable')
       }
 
       const text = extractResponseText(payload)
-      if (!text) throw new Error('AI provider returned an empty response.')
+      if (!text) throw new AiProviderError('provider_invalid_response')
       return text
+    } catch (error) {
+      if (error instanceof AiProviderError) throw error
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new AiProviderError('provider_timeout')
+      }
+      throw new AiProviderError('provider_unavailable')
     } finally {
       clearTimeout(timeout)
     }
@@ -89,7 +113,7 @@ const openAiProvider: AiProviderAdapter = {
 function getAiProviderAdapter(): AiProviderAdapter {
   const provider = getAiProviderName()
   if (provider === 'openai') return openAiProvider
-  throw new Error('Unsupported AI_PROVIDER. Supported value: openai.')
+  throw new AiProviderError('provider_not_configured')
 }
 
 export function getAiProviderCapabilities() {

@@ -7540,6 +7540,9 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.workspace': 'This workspace cannot be used for the assistant request.',
     'assistant.error.rateLimit': 'Too many assistant requests. Please wait a moment and try again.',
     'assistant.error.provider': 'The AI assistant is not configured yet.',
+    'assistant.error.timeout': 'The AI provider took too long to respond. Please try again.',
+    'assistant.error.invalidResponse': 'The AI provider returned an unusable response. Please retry.',
+    'assistant.error.unavailable': 'The AI provider is temporarily unavailable. Please try again shortly.',
     'assistant.error.generic': 'The assistant could not answer right now. Please try again.',
   },
   de: {
@@ -7562,6 +7565,9 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.workspace': 'Dieser Workspace kann für die Assistentenanfrage nicht verwendet werden.',
     'assistant.error.rateLimit': 'Zu viele Assistentenanfragen. Bitte warte kurz und versuche es erneut.',
     'assistant.error.provider': 'Der KI-Assistent ist noch nicht konfiguriert.',
+    'assistant.error.timeout': 'Der KI-Anbieter hat nicht rechtzeitig geantwortet. Bitte versuche es erneut.',
+    'assistant.error.invalidResponse': 'Der KI-Anbieter hat keine verwendbare Antwort geliefert. Bitte versuche es erneut.',
+    'assistant.error.unavailable': 'Der KI-Anbieter ist vorübergehend nicht erreichbar. Bitte versuche es gleich noch einmal.',
     'assistant.error.generic': 'Der Assistent kann gerade nicht antworten. Bitte versuche es erneut.',
   },
   ru: {
@@ -7584,6 +7590,9 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.workspace': 'Этот workspace нельзя использовать для запроса ассистента.',
     'assistant.error.rateLimit': 'Слишком много запросов к ассистенту. Подождите немного и попробуйте снова.',
     'assistant.error.provider': 'AI-ассистент еще не настроен.',
+    'assistant.error.timeout': 'Провайдер AI не ответил вовремя. Попробуйте снова.',
+    'assistant.error.invalidResponse': 'Провайдер AI вернул непригодный ответ. Повторите запрос.',
+    'assistant.error.unavailable': 'Провайдер AI временно недоступен. Попробуйте немного позже.',
     'assistant.error.generic': 'Ассистент сейчас не смог ответить. Попробуйте снова.',
   },
   tr: {
@@ -7606,6 +7615,9 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.workspace': 'Bu workspace asistan isteği için kullanılamaz.',
     'assistant.error.rateLimit': 'Çok fazla asistan isteği. Lütfen biraz bekleyip tekrar deneyin.',
     'assistant.error.provider': 'AI asistan henüz yapılandırılmadı.',
+    'assistant.error.timeout': 'AI sağlayıcısı zamanında yanıt vermedi. Lütfen tekrar deneyin.',
+    'assistant.error.invalidResponse': 'AI sağlayıcısı kullanılabilir bir yanıt vermedi. Lütfen yeniden deneyin.',
+    'assistant.error.unavailable': 'AI sağlayıcısı geçici olarak kullanılamıyor. Lütfen kısa süre sonra tekrar deneyin.',
     'assistant.error.generic': 'Asistan şu anda yanıt veremedi. Lütfen tekrar deneyin.',
   },
   uk: {
@@ -7628,6 +7640,9 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.workspace': 'Цей workspace не можна використати для запиту асистента.',
     'assistant.error.rateLimit': 'Забагато запитів до асистента. Зачекайте трохи й спробуйте знову.',
     'assistant.error.provider': 'AI-асистент ще не налаштований.',
+    'assistant.error.timeout': 'AI-провайдер не відповів вчасно. Спробуйте ще раз.',
+    'assistant.error.invalidResponse': 'AI-провайдер повернув непридатну відповідь. Повторіть запит.',
+    'assistant.error.unavailable': 'AI-провайдер тимчасово недоступний. Спробуйте трохи пізніше.',
     'assistant.error.generic': 'Асистент зараз не зміг відповісти. Спробуйте ще раз.',
   },
   pl: {
@@ -7650,6 +7665,9 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.workspace': 'Tego workspace nie można użyć dla zapytania asystenta.',
     'assistant.error.rateLimit': 'Zbyt wiele zapytań do asystenta. Poczekaj chwilę i spróbuj ponownie.',
     'assistant.error.provider': 'Asystent AI nie jest jeszcze skonfigurowany.',
+    'assistant.error.timeout': 'Dostawca AI nie odpowiedział na czas. Spróbuj ponownie.',
+    'assistant.error.invalidResponse': 'Dostawca AI zwrócił nieprawidłową odpowiedź. Ponów próbę.',
+    'assistant.error.unavailable': 'Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.',
     'assistant.error.generic': 'Asystent nie może teraz odpowiedzieć. Spróbuj ponownie.',
   },
   fr: {
@@ -7672,6 +7690,9 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.workspace': 'Ce workspace ne peut pas être utilisé pour la demande à l’assistant.',
     'assistant.error.rateLimit': 'Trop de demandes à l’assistant. Attendez un instant puis réessayez.',
     'assistant.error.provider': 'L’assistant IA n’est pas encore configuré.',
+    'assistant.error.timeout': 'Le fournisseur d’IA n’a pas répondu à temps. Réessayez.',
+    'assistant.error.invalidResponse': 'Le fournisseur d’IA a renvoyé une réponse inutilisable. Réessayez.',
+    'assistant.error.unavailable': 'Le fournisseur d’IA est temporairement indisponible. Réessayez dans quelques instants.',
     'assistant.error.generic': 'L’assistant ne peut pas répondre pour le moment. Réessayez.',
   },
 }

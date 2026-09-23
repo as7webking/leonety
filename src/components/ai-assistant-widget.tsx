@@ -7,6 +7,8 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
+import { buildAssistantChatStorageKey, getAssistantErrorKey } from '@/lib/assistant-context'
+import { createClient } from '@/lib/supabase-client'
 
 type ChatRole = 'user' | 'assistant'
 
@@ -34,10 +36,6 @@ function makeMessage(role: ChatRole, content: string): ChatMessage {
   }
 }
 
-function chatStorageKey(userScope: string) {
-  return `leonety-assistant-chats:${userScope}`
-}
-
 function makeChat(title = 'assistant.newChatTitle'): ChatSession {
   const now = new Date().toISOString()
   return {
@@ -49,18 +47,13 @@ function makeChat(title = 'assistant.newChatTitle'): ChatSession {
   }
 }
 
-function errorKeyForStatus(status: number, code: string | undefined) {
-  if (status === 401) return 'assistant.error.auth'
-  if (status === 403) return 'assistant.error.workspace'
-  if (status === 429 || code === 'rate_limited') return 'assistant.error.rateLimit'
-  if (status === 503 || code === 'provider_unavailable') return 'assistant.error.provider'
-  return 'assistant.error.generic'
-}
-
 export function AiAssistantWidget() {
   const pathname = usePathname()
   const { currentCompany } = useCompany()
   const { locale, t } = useI18n()
+  const [supabase] = useState(() => createClient())
+  const [authenticatedUserId, setAuthenticatedUserId] = useState('')
+  const [loadedStorageKey, setLoadedStorageKey] = useState('')
   const [open, setOpen] = useState(false)
   const [chats, setChats] = useState<ChatSession[]>([])
   const [activeChatId, setActiveChatId] = useState('')
@@ -70,9 +63,16 @@ export function AiAssistantWidget() {
   const [renamingChatId, setRenamingChatId] = useState('')
   const [renameValue, setRenameValue] = useState('')
   const lastUserInputRef = useRef('')
-  const storageScope = currentCompany?.id ?? 'personal'
+  const storageKey = useMemo(
+    () => buildAssistantChatStorageKey(authenticatedUserId, currentCompany?.id ?? null),
+    [authenticatedUserId, currentCompany?.id]
+  )
+  const legacyWorkspaceStorageKey = currentCompany?.id
+    ? `leonety-assistant-chats:${currentCompany.id}`
+    : null
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0] ?? null
   const messages = activeChat?.messages ?? []
+  const chatReady = Boolean(storageKey && loadedStorageKey === storageKey && activeChat)
   useBodyScrollLock(open)
 
   const suggestedQuestions = useMemo(() => [
@@ -83,11 +83,35 @@ export function AiAssistantWidget() {
   ], [t])
 
   useEffect(() => {
+    let active = true
+    void supabase.auth.getUser().then(({ data }) => {
+      if (active) setAuthenticatedUserId(data.user?.id ?? '')
+    })
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setAuthenticatedUserId(session?.user.id ?? '')
+    })
+
+    return () => {
+      active = false
+      data.subscription.unsubscribe()
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    if (!storageKey) {
+      setChats([])
+      setActiveChatId('')
+      setLoadedStorageKey('')
+      return
+    }
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(chatStorageKey(storageScope)) ?? '[]') as ChatSession[]
+      const stored = window.localStorage.getItem(storageKey)
+        ?? (legacyWorkspaceStorageKey ? window.localStorage.getItem(legacyWorkspaceStorageKey) : null)
+      const parsed = JSON.parse(stored ?? '[]') as ChatSession[]
       if (Array.isArray(parsed) && parsed.length > 0) {
         setChats(parsed)
         setActiveChatId(parsed[0].id)
+        setLoadedStorageKey(storageKey)
         return
       }
     } catch {
@@ -96,12 +120,13 @@ export function AiAssistantWidget() {
     const firstChat = makeChat()
     setChats([firstChat])
     setActiveChatId(firstChat.id)
-  }, [storageScope])
+    setLoadedStorageKey(storageKey)
+  }, [legacyWorkspaceStorageKey, storageKey])
 
   useEffect(() => {
-    if (chats.length === 0) return
-    window.localStorage.setItem(chatStorageKey(storageScope), JSON.stringify(chats.slice(0, 20)))
-  }, [chats, storageScope])
+    if (!storageKey || loadedStorageKey !== storageKey || chats.length === 0) return
+    window.localStorage.setItem(storageKey, JSON.stringify(chats.slice(0, 20)))
+  }, [chats, loadedStorageKey, storageKey])
 
   const updateActiveChatMessages = (nextMessages: ChatMessage[]) => {
     const now = new Date().toISOString()
@@ -151,7 +176,7 @@ export function AiAssistantWidget() {
 
   const askAssistant = async (text: string) => {
     const trimmed = text.trim()
-    if (!trimmed || loading) return
+    if (!trimmed || loading || !chatReady) return
 
     const nextMessages = [...messages, makeMessage('user', trimmed)].slice(-12)
     updateActiveChatMessages(nextMessages)
@@ -167,6 +192,7 @@ export function AiAssistantWidget() {
         body: JSON.stringify({
           locale,
           pathname,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           companyId: currentCompany?.id ?? null,
           messages: nextMessages.map((message) => ({
             role: message.role,
@@ -177,7 +203,7 @@ export function AiAssistantWidget() {
       const payload = await response.json().catch(() => ({})) as { answer?: string; error?: string }
 
       if (!response.ok || !payload.answer) {
-        throw new Error(errorKeyForStatus(response.status, payload.error))
+        throw new Error(getAssistantErrorKey(response.status, payload.error))
       }
 
       updateActiveChatMessages([...nextMessages, makeMessage('assistant', payload.answer ?? '')].slice(-12))
@@ -231,7 +257,7 @@ export function AiAssistantWidget() {
 
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[14rem_minmax(0,1fr)]">
             <aside className="min-h-0 border-b border-slate-200 bg-slate-50 p-3 md:border-b-0 md:border-r">
-              <Button type="button" variant="outline" size="sm" className="w-full justify-start bg-white" onClick={createNewChat}>
+              <Button type="button" variant="outline" size="sm" className="w-full justify-start bg-white" onClick={createNewChat} disabled={!chatReady}>
                 <Plus className="h-4 w-4" />
                 {t('assistant.newChat')}
               </Button>
@@ -339,9 +365,9 @@ export function AiAssistantWidget() {
                     rows={2}
                     className="min-h-11 flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-base leading-5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
                     placeholder={t('assistant.placeholder')}
-                    disabled={loading}
+                    disabled={loading || !chatReady}
                   />
-                  <Button type="submit" size="icon" disabled={loading || !input.trim()} aria-label={t('assistant.send')}>
+                  <Button type="submit" size="icon" disabled={loading || !chatReady || !input.trim()} aria-label={t('assistant.send')}>
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
