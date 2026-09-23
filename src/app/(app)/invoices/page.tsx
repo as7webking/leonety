@@ -16,6 +16,7 @@ import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/cu
 import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
+import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
 
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type InvoiceStatusFilter = 'all' | 'paid' | 'unpaid' | 'overdue' | 'cancelled'
@@ -435,6 +436,8 @@ export default function InvoicesPage() {
   const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
   const [supportsClientDetails, setSupportsClientDetails] = useState(true)
   const [clientPrintFields, setClientPrintFields] = useState<InvoiceClientPrintFields>(defaultClientPrintFields)
+  const requestedClientId = searchParams.get('clientId')?.trim() ?? ''
+  const createForClientRequested = searchParams.get('create') === '1'
   const [formData, setFormData] = useState<InvoiceFormState>({
     client_id: '',
     invoice_number: makeInvoiceNumber(),
@@ -452,11 +455,15 @@ export default function InvoicesPage() {
     items: [newItem()],
   })
 
-  const filteredInvoices = useMemo(() => invoices.filter((invoice) => {
+  const filteredInvoices = useMemo(() => filterInvoicesForClient(invoices, requestedClientId).filter((invoice) => {
     if (statusFilter === 'all') return true
     if (statusFilter === 'unpaid') return invoice.status === 'draft' || invoice.status === 'sent' || invoice.status === 'overdue'
     return invoice.status === statusFilter
-  }), [invoices, statusFilter])
+  }), [invoices, requestedClientId, statusFilter])
+  const filteredClient = useMemo(
+    () => requestedClientId ? clients.find((client) => client.id === requestedClientId) ?? null : null,
+    [clients, requestedClientId]
+  )
   const selectedInvoices = useMemo(
     () => invoices.filter((invoice) => selectedInvoiceIds.has(invoice.id)),
     [invoices, selectedInvoiceIds]
@@ -522,11 +529,11 @@ export default function InvoicesPage() {
     setSourceContractClientId('')
   }, [currentCompany, invoices])
 
-  const openCreateForm = () => {
+  const openCreateForm = (clientId = '') => {
     const defaultTaxRate = getTaxRate('DE', 'standard')
     setEditingInvoice(null)
     setFormData({
-      client_id: '',
+      client_id: clientId,
       invoice_number: makeInvoiceNumber(invoices),
       issue_date: today(),
       due_date: '',
@@ -558,11 +565,14 @@ export default function InvoicesPage() {
       setErrorMessage('')
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
-      const extendedInvoiceQuery = supabase
+      const baseExtendedInvoiceQuery = supabase
         .from('invoices')
         .select('*, clients(id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number), invoice_items(*)')
         .eq('company_id', currentCompany.id)
         .order('created_at', { ascending: false })
+      const extendedInvoiceQuery = requestedClientId
+        ? baseExtendedInvoiceQuery.eq('client_id', requestedClientId)
+        : baseExtendedInvoiceQuery
       const extendedClientQuery = supabase
         .from('clients')
         .select('id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number')
@@ -589,11 +599,16 @@ export default function InvoicesPage() {
       ) {
         setSupportsClientDetails(false)
         ;[invoiceRes, clientRes] = await Promise.all([
-          supabase
+          (requestedClientId ? supabase
             .from('invoices')
             .select('*, clients(id, name, email, phone, client_company), invoice_items(*)')
             .eq('company_id', currentCompany.id)
-            .order('created_at', { ascending: false }),
+            .eq('client_id', requestedClientId)
+            .order('created_at', { ascending: false }) : supabase
+            .from('invoices')
+            .select('*, clients(id, name, email, phone, client_company), invoice_items(*)')
+            .eq('company_id', currentCompany.id)
+            .order('created_at', { ascending: false })),
           supabase
             .from('clients')
             .select('id, name, email, phone, client_company')
@@ -651,7 +666,7 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false)
     }
-  }, [currentCompany, supabase])
+  }, [currentCompany, requestedClientId, supabase])
 
   useEffect(() => {
     void loadInvoices()
@@ -659,7 +674,7 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     const clientId = searchParams.get('clientId') ?? ''
-    if (!clientId || prefilledClientId === clientId || clients.length === 0) return
+    if (!createForClientRequested || !clientId || prefilledClientId === clientId || clients.length === 0) return
     if (!clients.some((client) => client.id === clientId)) {
       setPrefilledClientId(clientId)
       return
@@ -677,7 +692,11 @@ export default function InvoicesPage() {
     setQuickClient({ name: '', phone: '', interested_in: '' })
     setShowForm(true)
     setPrefilledClientId(clientId)
-  }, [clients, currentCompany?.currency, invoices, prefilledClientId, searchParams])
+  }, [clients, createForClientRequested, currentCompany?.currency, invoices, prefilledClientId, searchParams])
+
+  useEffect(() => {
+    setSelectedInvoiceIds(new Set())
+  }, [currentCompany?.id, requestedClientId])
 
   useEffect(() => {
     const contractId = searchParams.get('contractId') ?? ''
@@ -1244,11 +1263,21 @@ export default function InvoicesPage() {
   return (
     <PageContainer>
       <PageHeader title={t('invoices.title')} description={`${t('invoices.description')} · ${currentCompany.name}`}>
-        <Button onClick={() => showForm ? resetForm() : openCreateForm()}>
+        <Button onClick={() => showForm ? resetForm() : openCreateForm(filteredClient?.id ?? '')}>
           <FileText className="h-4 w-4" />
           {showForm ? t('common.cancel') : t('invoices.add')}
         </Button>
       </PageHeader>
+
+      {filteredClient && (
+        <div className="mb-5 hidden items-center justify-between gap-4 border-y border-slate-200 bg-slate-50 px-3 py-3 lg:flex">
+          <p className="min-w-0 text-sm text-slate-700">
+            <span className="font-medium">{t('invoices.client')}:</span>{' '}
+            <span className="break-words">{filteredClient.client_company || filteredClient.name}</span>
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => router.push('/app/invoices')}>{t('common.clear')}</Button>
+        </div>
+      )}
 
       {printingInvoice && (
         <div className="print-area print-invoice hidden">
@@ -1779,7 +1808,11 @@ export default function InvoicesPage() {
       )}
 
       {invoices.length === 0 ? (
-        <EmptyState title={t('invoices.noInvoices')} description={t('invoices.noInvoicesDescription')} />
+        <EmptyState
+          title={filteredClient ? t('clients.crm.noInvoices') : t('invoices.noInvoices')}
+          description={filteredClient ? t('clients.crm.noInvoicesDescription') : t('invoices.noInvoicesDescription')}
+          action={filteredClient ? { label: t('clients.crm.createInvoice'), onClick: () => openCreateForm(filteredClient.id) } : undefined}
+        />
       ) : (
         <div className="space-y-3">
           <Card>

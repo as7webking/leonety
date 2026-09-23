@@ -13,6 +13,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCountryValue } from '@/lib/countries'
 import { formatCurrencyGroups, type ClientRecord } from '@/lib/client-crm'
+import { buildClientInvoicesHref } from '@/lib/client-invoice-navigation'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 
@@ -214,7 +215,7 @@ export default function ClientDetailPage() {
       </div>
       <PageHeader title={client.client_company || client.name} description={client.client_company ? client.name : client.email || client.phone || t('clients.crm.clientRecord')}>
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline"><Link href={`/app/invoices?clientId=${client.id}`}><FileText className="h-4 w-4" />{t('clients.crm.createInvoice')}</Link></Button>
+          <Button asChild variant="outline"><Link href={buildClientInvoicesHref(client.id, { create: true })}><FileText className="h-4 w-4" />{t('clients.crm.createInvoice')}</Link></Button>
           <Button asChild variant="outline"><Link href={`/app/contracts/new?clientId=${client.id}`}><FileSignature className="h-4 w-4" />{t('clients.crm.createContract')}</Link></Button>
           <Button variant="outline" onClick={() => setEditing((value) => !value)}><Pencil className="h-4 w-4" />{t('common.edit')}</Button>
           {client.status !== 'inactive' && <Button variant="outline" onClick={() => void archive()}><Archive className="h-4 w-4" />{t('clients.crm.archive')}</Button>}
@@ -252,7 +253,7 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      {tab === 'invoices' && <InvoiceList invoices={invoices} locale={locale} t={t} />}
+      {tab === 'invoices' && <InvoiceList invoices={invoices} clientId={client.id} locale={locale} t={t} />}
       {tab === 'contracts' && <ContractList contracts={contracts} locale={locale} t={t} />}
       {tab === 'transactions' && <TransactionList transactions={transactions} locale={locale} t={t} />}
       {tab === 'contacts' && <Card><CardContent className="space-y-3 p-5 text-sm"><p>{client.name}</p><p className="break-all">{client.email || '—'}</p><p>{client.phone || '—'}</p><p>{address || '—'}</p></CardContent></Card>}
@@ -269,8 +270,8 @@ function ActivityList({ items, t, locale }: { items: Array<{ id: string; date: s
   return <Card><CardHeader><CardTitle>{t('clients.crm.recentActivity')}</CardTitle></CardHeader><CardContent>{items.length === 0 ? <p className="text-sm text-slate-500">{t('clients.crm.noActivity')}</p> : <ol className="space-y-4">{items.map((item) => <li key={item.id} className="border-l-2 border-slate-200 pl-4"><p className="text-sm font-medium text-slate-900">{item.label}{item.detail ? ` · ${item.detail}` : ''}</p><p className="text-xs text-slate-500">{new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(new Date(item.date))}</p></li>)}</ol>}</CardContent></Card>
 }
 
-function InvoiceList({ invoices, locale, t }: { invoices: InvoiceRow[]; locale: Locale; t: (key: string) => string }) {
-  if (invoices.length === 0) return <EmptyState title={t('clients.crm.noInvoices')} description={t('clients.crm.noInvoicesDescription')} />
+function InvoiceList({ invoices, clientId, locale, t }: { invoices: InvoiceRow[]; clientId: string; locale: Locale; t: (key: string) => string }) {
+  if (invoices.length === 0) return <div><EmptyState title={t('clients.crm.noInvoices')} description={t('clients.crm.noInvoicesDescription')} /><div className="-mt-8 hidden justify-center lg:flex"><Button asChild><Link href={buildClientInvoicesHref(clientId, { create: true })}>{t('clients.crm.createInvoice')}</Link></Button></div></div>
   return <div className="grid gap-3">{invoices.map((invoice) => <Card key={invoice.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium text-slate-950">{invoice.invoice_number}</p><p className="text-sm text-slate-500">{new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(invoice.issue_date))} · {t(`invoices.status.${invoice.status}`)}</p></div><p className="font-semibold">{formatCurrencyGroups({ [invoice.currency]: Number(invoice.total) }, getIntlLocale(locale))}</p></CardContent></Card>)}</div>
 }
 
