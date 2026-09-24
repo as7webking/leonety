@@ -178,6 +178,7 @@ export function getAssistantErrorKey(status: number, code?: string) {
   if (status === 401) return 'assistant.error.auth'
   if (status === 403 || code === 'workspace_check_failed') return 'assistant.error.workspace'
   if (status === 429 || code === 'rate_limited' || code === 'provider_rate_limited') return 'assistant.error.rateLimit'
+  if (code === 'provider_quota_exhausted') return 'assistant.error.quota'
   if (code === 'provider_not_configured' || code === 'provider_auth_failed') return 'assistant.error.provider'
   if (status === 504 || code === 'provider_timeout') return 'assistant.error.timeout'
   if (status === 502 || code === 'provider_invalid_response') return 'assistant.error.invalidResponse'

@@ -1,25 +1,14 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
 import { AiProviderError, generateAiText, getAiConfigurationStatus } from '@/lib/ai-provider'
 import { analyzeAssistantRequest, buildAssistantRequestEnvelope, getBlockedAssistantResponse } from '@/lib/assistant-context'
 import { AssistantWorkspaceAccessError, loadAuthorizedAssistantData } from '@/lib/assistant-data-server'
 import { createAssistantRateLimiter } from '@/lib/assistant-rate-limit'
+import { assistantRequestSchema } from '@/lib/assistant-request'
 import { defaultLocale, normalizeLocale } from '@/lib/i18n'
 import { buildLeonetyAssistantKnowledge, normalizeAssistantRoute } from '@/lib/leonety-assistant-knowledge'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
-
-const requestSchema = z.object({
-  locale: z.string().optional(),
-  pathname: z.string().optional(),
-  timeZone: z.string().trim().min(1).max(64).optional(),
-  companyId: z.string().uuid().optional().nullable(),
-  messages: z.array(z.object({
-    role: z.enum(['user', 'assistant']),
-    content: z.string().trim().min(1).max(1800),
-  })).min(1).max(12),
-})
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 10
@@ -29,6 +18,8 @@ const checkRateLimit = createAssistantRateLimiter({
 })
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID()
+
   try {
     const supabase = await createServerSupabaseClient()
     const { data: authData, error: authError } = await supabase.auth.getUser()
@@ -41,7 +32,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
     }
 
-    const parsed = requestSchema.safeParse(await request.json().catch(() => ({})))
+    const parsed = assistantRequestSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) {
       return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
     }
@@ -93,22 +84,29 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof AssistantWorkspaceAccessError) {
       const status = error.code === 'workspace_access_denied' ? 403 : 500
-      return NextResponse.json({ error: error.code }, { status })
+      console.warn('[assistant]', { requestId, code: error.code, status })
+      return NextResponse.json({ error: error.code, requestId }, { status })
     }
     if (error instanceof AiProviderError) {
       const status = error.code === 'provider_rate_limited'
         ? 429
+        : error.code === 'provider_quota_exhausted'
+          ? 503
         : error.code === 'provider_timeout'
           ? 504
           : error.code === 'provider_invalid_response'
             ? 502
             : 503
-      return NextResponse.json({ error: error.code }, { status })
+      console.warn('[assistant]', { requestId, code: error.code, status })
+      return NextResponse.json({ error: error.code, requestId }, { status })
     }
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[assistant]', error instanceof Error ? error.message : 'Unknown assistant error')
-    }
+    console.error('[assistant]', {
+      requestId,
+      code: 'assistant_failed',
+      errorType: error instanceof Error ? error.name : typeof error,
+      status: 500,
+    })
 
-    return NextResponse.json({ error: 'assistant_failed' }, { status: 500 })
+    return NextResponse.json({ error: 'assistant_failed', requestId }, { status: 500 })
   }
 }

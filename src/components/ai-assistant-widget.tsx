@@ -16,6 +16,7 @@ import {
   type AssistantChatSession as ChatSession,
 } from '@/lib/assistant-chat-storage'
 import { buildAssistantChatStorageKey, getAssistantErrorKey } from '@/lib/assistant-context'
+import { ASSISTANT_MAX_CONTEXT_MESSAGES, normalizeAssistantMessagesForRequest } from '@/lib/assistant-request'
 import { createClient } from '@/lib/supabase-client'
 
 function makeMessage(role: ChatRole, content: string): ChatMessage {
@@ -50,10 +51,10 @@ export function AiAssistantWidget() {
   const [activeChatId, setActiveChatId] = useState('')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [failedRequest, setFailedRequest] = useState<{ chatId: string; text: string; errorKey: string } | null>(null)
   const [renamingChatId, setRenamingChatId] = useState('')
   const [renameValue, setRenameValue] = useState('')
-  const lastUserInputRef = useRef('')
+  const activeRequestRef = useRef<{ chatId: string; controller: AbortController } | null>(null)
   const storageKey = useMemo(
     () => buildAssistantChatStorageKey(authenticatedUserId, currentCompany?.id ?? null),
     [authenticatedUserId, currentCompany?.id]
@@ -123,10 +124,10 @@ export function AiAssistantWidget() {
     }
   }, [chats, loadedStorageKey, storageKey])
 
-  const updateActiveChatMessages = (nextMessages: ChatMessage[]) => {
+  const updateChatMessages = (chatId: string, nextMessages: ChatMessage[]) => {
     const now = new Date().toISOString()
     setChats((current) => current.map((chat) => {
-      if (chat.id !== activeChatId) return chat
+      if (chat.id !== chatId) return chat
       const firstUserMessage = nextMessages.find((message) => message.role === 'user')?.content.trim()
       return {
         ...chat,
@@ -138,15 +139,23 @@ export function AiAssistantWidget() {
   }
 
   const createNewChat = () => {
+    activeRequestRef.current?.controller.abort()
+    activeRequestRef.current = null
     const nextChat = makeChat()
     setChats((current) => [nextChat, ...current].slice(0, 20))
     setActiveChatId(nextChat.id)
-    setError('')
+    setFailedRequest(null)
+    setLoading(false)
     setInput('')
-    lastUserInputRef.current = ''
   }
 
   const deleteChat = (chatId: string) => {
+    if (activeRequestRef.current?.chatId === chatId) {
+      activeRequestRef.current.controller.abort()
+      activeRequestRef.current = null
+      setLoading(false)
+    }
+    setFailedRequest((current) => current?.chatId === chatId ? null : current)
     setChats((current) => {
       const next = current.filter((chat) => chat.id !== chatId)
       if (activeChatId === chatId) {
@@ -171,47 +180,55 @@ export function AiAssistantWidget() {
 
   const askAssistant = async (text: string, retryExistingMessage = false) => {
     const trimmed = text.trim()
-    if (!trimmed || loading || !chatReady) return
+    if (!trimmed || loading || !chatReady || !activeChat) return
+
+    const requestChatId = activeChat.id
 
     const reuseLastMessage = retryExistingMessage && isRetryingLastUserMessage(messages, trimmed)
     const nextMessages = reuseLastMessage
-      ? messages.slice(-12)
-      : [...messages, makeMessage('user', trimmed)].slice(-12)
-    if (!reuseLastMessage) updateActiveChatMessages(nextMessages)
+      ? messages.slice(-ASSISTANT_MAX_CONTEXT_MESSAGES)
+      : [...messages, makeMessage('user', trimmed)].slice(-ASSISTANT_MAX_CONTEXT_MESSAGES)
+    if (!reuseLastMessage) updateChatMessages(requestChatId, nextMessages)
     setInput('')
-    setError('')
+    setFailedRequest(null)
     setLoading(true)
-    lastUserInputRef.current = trimmed
+    const requestState = { chatId: requestChatId, controller: new AbortController() }
+    activeRequestRef.current = requestState
 
     try {
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: requestState.controller.signal,
         body: JSON.stringify({
           locale,
           pathname,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           companyId: currentCompany?.id ?? null,
-          messages: nextMessages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
+          messages: normalizeAssistantMessagesForRequest(nextMessages),
         }),
       })
       const payload = await response.json().catch(() => ({})) as { answer?: string; error?: string }
 
-      if (!response.ok || !payload.answer) {
+      if (!response.ok || !payload.answer?.trim()) {
         throw new Error(getAssistantErrorKey(response.status, payload.error))
       }
 
-      updateActiveChatMessages([...nextMessages, makeMessage('assistant', payload.answer ?? '')].slice(-12))
+      updateChatMessages(
+        requestChatId,
+        [...nextMessages, makeMessage('assistant', payload.answer.trim())].slice(-ASSISTANT_MAX_CONTEXT_MESSAGES)
+      )
     } catch (requestError) {
+      if (requestError instanceof Error && requestError.name === 'AbortError') return
       const key = requestError instanceof Error && requestError.message.startsWith('assistant.error.')
         ? requestError.message
         : 'assistant.error.generic'
-      setError(t(key))
+      setFailedRequest({ chatId: requestChatId, text: trimmed, errorKey: key })
     } finally {
-      setLoading(false)
+      if (activeRequestRef.current === requestState) {
+        activeRequestRef.current = null
+        setLoading(false)
+      }
     }
   }
 
@@ -221,9 +238,24 @@ export function AiAssistantWidget() {
   }
 
   const retry = () => {
-    if (!lastUserInputRef.current) return
-    void askAssistant(lastUserInputRef.current, true)
+    if (!failedRequest || failedRequest.chatId !== activeChatId) return
+    void askAssistant(failedRequest.text, true)
   }
+
+  const clearActiveChat = () => {
+    if (!activeChatId) return
+    if (activeRequestRef.current?.chatId === activeChatId) {
+      activeRequestRef.current.controller.abort()
+      activeRequestRef.current = null
+      setLoading(false)
+    }
+    updateChatMessages(activeChatId, [])
+    setFailedRequest((current) => current?.chatId === activeChatId ? null : current)
+  }
+
+  useEffect(() => () => {
+    activeRequestRef.current?.controller.abort()
+  }, [storageKey])
 
   return (
     <>
@@ -255,7 +287,7 @@ export function AiAssistantWidget() {
 
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[14rem_minmax(0,1fr)]">
             <aside className="min-h-0 border-b border-slate-200 bg-slate-50 p-3 md:border-b-0 md:border-r">
-              <Button type="button" variant="outline" size="sm" className="w-full justify-start bg-white" onClick={createNewChat} disabled={!chatReady}>
+              <Button type="button" variant="outline" size="sm" className="w-full justify-start bg-white" onClick={createNewChat} disabled={!chatReady || loading}>
                 <Plus className="h-4 w-4" />
                 {t('assistant.newChat')}
               </Button>
@@ -276,7 +308,7 @@ export function AiAssistantWidget() {
                         autoFocus
                       />
                     ) : (
-                      <button type="button" onClick={() => setActiveChatId(chat.id)} className="block w-full truncate text-left text-sm font-medium text-slate-700">
+                      <button type="button" onClick={() => setActiveChatId(chat.id)} disabled={loading} className="block w-full truncate text-left text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60">
                         {chat.title === 'assistant.newChatTitle' ? t('assistant.newChatTitle') : chat.title}
                       </button>
                     )}
@@ -287,7 +319,8 @@ export function AiAssistantWidget() {
                           setRenamingChatId(chat.id)
                           setRenameValue(chat.title === 'assistant.newChatTitle' ? '' : chat.title)
                         }}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        disabled={loading}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label={t('assistant.renameChat')}
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -295,7 +328,8 @@ export function AiAssistantWidget() {
                       <button
                         type="button"
                         onClick={() => deleteChat(chat.id)}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                        disabled={loading}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label={t('assistant.deleteChat')}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -342,10 +376,10 @@ export function AiAssistantWidget() {
                     {t('assistant.thinking')}
                   </div>
                 )}
-                {error && (
+                {failedRequest?.chatId === activeChatId && (
                   <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                    <p>{error}</p>
-                    <Button type="button" variant="outline" size="sm" onClick={retry} disabled={loading || !lastUserInputRef.current}>
+                    <p>{t(failedRequest.errorKey)}</p>
+                    <Button type="button" variant="outline" size="sm" onClick={retry} disabled={loading}>
                       <RefreshCcw className="h-4 w-4" />
                       {t('assistant.retry')}
                     </Button>
@@ -373,11 +407,7 @@ export function AiAssistantWidget() {
                   <p className="text-xs text-slate-500">{t('assistant.privacy')}</p>
                   <button
                     type="button"
-                    onClick={() => {
-                      updateActiveChatMessages([])
-                      setError('')
-                      lastUserInputRef.current = ''
-                    }}
+                    onClick={clearActiveChat}
                     className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

@@ -4,13 +4,10 @@ import test from 'node:test'
 
 const routeSource = readFileSync(new URL('../app/api/assistant/route.ts', import.meta.url), 'utf8')
 const dataSource = readFileSync(new URL('./assistant-data-server.ts', import.meta.url), 'utf8')
+const requestSource = readFileSync(new URL('./assistant-request.ts', import.meta.url), 'utf8')
 
 test('derives user identity from the authenticated session rather than request JSON', () => {
-  const requestSchema = routeSource.slice(
-    routeSource.indexOf('const requestSchema'),
-    routeSource.indexOf('const RATE_LIMIT_WINDOW_MS')
-  )
-  assert.doesNotMatch(requestSchema, /user_?id/i)
+  assert.doesNotMatch(requestSource, /user_?id/i)
   assert.match(routeSource, /if \(authError \|\| !authData\.user\)[\s\S]*status: 401/)
   assert.match(routeSource, /userId:\s*authData\.user\.id/)
 })

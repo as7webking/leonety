@@ -7,6 +7,9 @@ test('classifies provider authentication, rate-limit and availability failures',
   assert.equal(classifyAiProviderStatus(401), 'provider_auth_failed')
   assert.equal(classifyAiProviderStatus(403), 'provider_auth_failed')
   assert.equal(classifyAiProviderStatus(429), 'provider_rate_limited')
+  assert.equal(classifyAiProviderStatus(429, {
+    error: { type: 'insufficient_quota', code: 'credit_balance_exhausted' },
+  }), 'provider_quota_exhausted')
   assert.equal(classifyAiProviderStatus(500), 'provider_unavailable')
   assert.equal(classifyAiProviderStatus(503), 'provider_unavailable')
 })

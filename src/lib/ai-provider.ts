@@ -21,6 +21,7 @@ export type AiProviderErrorCode =
   | 'provider_not_configured'
   | 'provider_auth_failed'
   | 'provider_rate_limited'
+  | 'provider_quota_exhausted'
   | 'provider_timeout'
   | 'provider_unavailable'
   | 'provider_invalid_response'
@@ -90,7 +91,7 @@ const openAiProvider: AiProviderAdapter = {
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new AiProviderError(classifyAiProviderStatus(response.status))
+        throw new AiProviderError(classifyAiProviderStatus(response.status, payload))
       }
 
       const text = extractAiResponseText(payload)
