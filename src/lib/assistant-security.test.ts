@@ -11,11 +11,13 @@ test('derives user identity from the authenticated session rather than request J
     routeSource.indexOf('const RATE_LIMIT_WINDOW_MS')
   )
   assert.doesNotMatch(requestSchema, /user_?id/i)
+  assert.match(routeSource, /if \(authError \|\| !authData\.user\)[\s\S]*status: 401/)
   assert.match(routeSource, /userId:\s*authData\.user\.id/)
 })
 
 test('authorizes the requested workspace by both id and authenticated owner', () => {
   assert.match(dataSource, /\.eq\('id', companyId\)[\s\S]*\.eq\('owner_id', userId\)/)
+  assert.match(dataSource, /if \(!data\) throw new AssistantWorkspaceAccessError\('workspace_access_denied'\)/)
   assert.match(dataSource, /\.eq\('company_id', workspace\.id\)/)
 })
 

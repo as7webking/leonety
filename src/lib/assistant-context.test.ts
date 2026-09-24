@@ -80,5 +80,6 @@ test('maps provider and authorization failures to localized UI error keys', () =
   assert.equal(getAssistantErrorKey(429, 'provider_rate_limited'), 'assistant.error.rateLimit')
   assert.equal(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.error.timeout')
   assert.equal(getAssistantErrorKey(502, 'provider_invalid_response'), 'assistant.error.invalidResponse')
+  assert.equal(getAssistantErrorKey(503, 'provider_not_configured'), 'assistant.error.provider')
   assert.equal(getAssistantErrorKey(503, 'provider_unavailable'), 'assistant.error.unavailable')
 })

@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { classifyAiProviderStatus, extractAiResponseText } from '@/lib/ai-provider-response'
+
 export type AiProviderName = 'openai'
 
 export interface GenerateAiTextInput {
@@ -88,14 +90,10 @@ const openAiProvider: AiProviderAdapter = {
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new AiProviderError('provider_auth_failed')
-        }
-        if (response.status === 429) throw new AiProviderError('provider_rate_limited')
-        throw new AiProviderError('provider_unavailable')
+        throw new AiProviderError(classifyAiProviderStatus(response.status))
       }
 
-      const text = extractResponseText(payload)
+      const text = extractAiResponseText(payload)
       if (!text) throw new AiProviderError('provider_invalid_response')
       return text
     } catch (error) {
@@ -137,21 +135,6 @@ export function getAiConfigurationStatus() {
     model: getAiModelName(),
     configured: Boolean(process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim()),
   }
-}
-
-function extractResponseText(payload: unknown) {
-  const record = payload as {
-    output_text?: string
-    output?: Array<{ content?: Array<{ text?: string; type?: string }> }>
-  }
-
-  if (typeof record.output_text === 'string') return record.output_text
-
-  return record.output
-    ?.flatMap((item) => item.content ?? [])
-    .map((content) => content.text)
-    .filter(Boolean)
-    .join('\n') ?? ''
 }
 
 export async function generateAiText({

@@ -7,25 +7,16 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
+import {
+  isRetryingLastUserMessage,
+  parseAssistantChatCache,
+  serializeAssistantChatCache,
+  type AssistantChatMessage as ChatMessage,
+  type AssistantChatRole as ChatRole,
+  type AssistantChatSession as ChatSession,
+} from '@/lib/assistant-chat-storage'
 import { buildAssistantChatStorageKey, getAssistantErrorKey } from '@/lib/assistant-context'
 import { createClient } from '@/lib/supabase-client'
-
-type ChatRole = 'user' | 'assistant'
-
-interface ChatMessage {
-  id: string
-  role: ChatRole
-  content: string
-  createdAt: string
-}
-
-interface ChatSession {
-  id: string
-  title: string
-  messages: ChatMessage[]
-  createdAt: string
-  updatedAt: string
-}
 
 function makeMessage(role: ChatRole, content: string): ChatMessage {
   return {
@@ -107,8 +98,8 @@ export function AiAssistantWidget() {
     try {
       const stored = window.localStorage.getItem(storageKey)
         ?? (legacyWorkspaceStorageKey ? window.localStorage.getItem(legacyWorkspaceStorageKey) : null)
-      const parsed = JSON.parse(stored ?? '[]') as ChatSession[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      const parsed = parseAssistantChatCache(stored)
+      if (parsed.length > 0) {
         setChats(parsed)
         setActiveChatId(parsed[0].id)
         setLoadedStorageKey(storageKey)
@@ -125,7 +116,11 @@ export function AiAssistantWidget() {
 
   useEffect(() => {
     if (!storageKey || loadedStorageKey !== storageKey || chats.length === 0) return
-    window.localStorage.setItem(storageKey, JSON.stringify(chats.slice(0, 20)))
+    try {
+      window.localStorage.setItem(storageKey, serializeAssistantChatCache(chats))
+    } catch {
+      // Keep the active chat usable when browser storage is unavailable or full.
+    }
   }, [chats, loadedStorageKey, storageKey])
 
   const updateActiveChatMessages = (nextMessages: ChatMessage[]) => {
@@ -174,12 +169,15 @@ export function AiAssistantWidget() {
     setRenameValue('')
   }
 
-  const askAssistant = async (text: string) => {
+  const askAssistant = async (text: string, retryExistingMessage = false) => {
     const trimmed = text.trim()
     if (!trimmed || loading || !chatReady) return
 
-    const nextMessages = [...messages, makeMessage('user', trimmed)].slice(-12)
-    updateActiveChatMessages(nextMessages)
+    const reuseLastMessage = retryExistingMessage && isRetryingLastUserMessage(messages, trimmed)
+    const nextMessages = reuseLastMessage
+      ? messages.slice(-12)
+      : [...messages, makeMessage('user', trimmed)].slice(-12)
+    if (!reuseLastMessage) updateActiveChatMessages(nextMessages)
     setInput('')
     setError('')
     setLoading(true)
@@ -224,7 +222,7 @@ export function AiAssistantWidget() {
 
   const retry = () => {
     if (!lastUserInputRef.current) return
-    void askAssistant(lastUserInputRef.current)
+    void askAssistant(lastUserInputRef.current, true)
   }
 
   return (

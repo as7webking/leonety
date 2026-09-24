@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
     const aiStatus = getAiConfigurationStatus()
     if (!aiStatus.configured) {
-      return NextResponse.json({ error: 'provider_unavailable' }, { status: 503 })
+      return NextResponse.json({ error: 'provider_not_configured' }, { status: 503 })
     }
 
     const pathname = normalizeAssistantRoute(parsed.data.pathname)
