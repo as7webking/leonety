@@ -25,6 +25,8 @@ import { useI18n } from '@/contexts/i18n-context'
 import { formatCountryValue } from '@/lib/countries'
 import type { Locale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
+import { useOfflineMode } from '@/contexts/offline-mode-context'
+import { useLocalDraft } from '@/hooks/use-local-draft'
 import {
   contractLanguages,
   contractStatuses,
@@ -81,6 +83,18 @@ interface ContractRow {
 }
 
 type RewriteAction = 'professional' | 'shorter' | 'detailed' | 'simple' | 'provider' | 'client' | 'neutral'
+
+interface ContractLocalDraft {
+  clientId: string
+  templateId: ContractTemplateId
+  contractLanguage: ContractLanguage
+  title: string
+  status: 'draft'
+  partyA: Partial<ContractPartySnapshot>
+  partyB: Partial<ContractPartySnapshot>
+  terms: ContractTerms
+  document: GeneratedContractDocument
+}
 
 const rewriteActions: RewriteAction[] = ['professional', 'shorter', 'detailed', 'simple', 'provider', 'client', 'neutral']
 
@@ -159,6 +173,7 @@ function parseContractRow(row: Record<string, unknown>): ContractRow {
 
 function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' | 'create' }) {
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { isOnline } = useOfflineMode()
   const { locale, t } = useI18n()
   const searchParams = useSearchParams()
   const pageMode = searchParams.get('mode') === 'create' ? 'create' : initialMode
@@ -188,6 +203,9 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   const [terms, setTerms] = useState<ContractTerms>(emptyContractTerms)
   const [document, setDocument] = useState<GeneratedContractDocument>(createEmptyDocument())
   const editorRef = useRef<HTMLDivElement | null>(null)
+  const restoredDraftKeyRef = useRef<string | null>(null)
+  const editorWorkspaceRef = useRef<string | null>(null)
+  const { draft: contractDraft, loading: contractDraftLoading, save: saveContractDraft, discard: discardContractDraft } = useLocalDraft<ContractLocalDraft>('contract', currentCompany?.id)
 
   const template = getContractTemplate(templateId)
 
@@ -243,6 +261,64 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
       setEditorVisible(true)
     }
   }, [pageMode])
+
+  useEffect(() => {
+    const nextWorkspaceId = currentCompany?.id ?? null
+    if (editorWorkspaceRef.current === nextWorkspaceId) return
+    editorWorkspaceRef.current = nextWorkspaceId
+    restoredDraftKeyRef.current = null
+    setEditingId(null)
+    setClientId('')
+    setTitle('')
+    setStatus('draft')
+    setPartyA(currentCompany ? { ...emptyPartySnapshot, name: currentCompany.name, company: currentCompany.name } : emptyPartySnapshot)
+    setPartyB(emptyPartySnapshot)
+    setTerms({ ...emptyContractTerms, currency: currentCompany?.currency ?? 'EUR' })
+    setDocument(createEmptyDocument())
+    setEditorVisible(pageMode === 'create')
+  }, [currentCompany, pageMode])
+
+  useEffect(() => {
+    if (pageMode !== 'create' || !contractDraft || contractDraft.workspaceId !== currentCompany?.id || restoredDraftKeyRef.current === contractDraft.key) return
+    restoredDraftKeyRef.current = contractDraft.key
+    const payload = contractDraft.payload
+    setClientId(payload.clientId)
+    setTemplateId(payload.templateId)
+    setContractLanguage(payload.contractLanguage)
+    setTitle(payload.title)
+    setStatus('draft')
+    setPartyA({ ...emptyPartySnapshot, ...payload.partyA, taxId: '' })
+    setPartyB({ ...emptyPartySnapshot, ...payload.partyB, taxId: '' })
+    setTerms({ ...emptyContractTerms, ...payload.terms })
+    setDocument(normalizeDocument(payload.document, payload.title))
+    setEditingId(null)
+    setEditorVisible(true)
+    setMessage(t('offline.draftRestored'))
+  }, [contractDraft, currentCompany?.id, pageMode, t])
+
+  useEffect(() => {
+    if (contractDraftLoading || !editorVisible || editingId) return
+    const hasMeaningfulInput = Boolean(
+      title || clientId || partyB.name || partyB.company ||
+      document.title || document.introduction || document.clauses.length || document.closing ||
+      Object.entries(terms).some(([key, value]) => key !== 'currency' && Boolean(value))
+    )
+    if (!hasMeaningfulInput) return
+    const timeout = window.setTimeout(() => {
+      void saveContractDraft({
+        clientId,
+        templateId,
+        contractLanguage,
+        title,
+        status: 'draft',
+        partyA,
+        partyB,
+        terms,
+        document,
+      }).catch(() => undefined)
+    }, 800)
+    return () => window.clearTimeout(timeout)
+  }, [clientId, contractDraftLoading, contractLanguage, document, editingId, editorVisible, partyA, partyB, saveContractDraft, templateId, terms, title])
 
   useEffect(() => {
     if (!currentCompany) return
@@ -327,6 +403,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   }
 
   function editContract(contract: ContractRow) {
+    if (!isOnline) {
+      setError(t('offline.requiresConnection'))
+      return
+    }
     setEditingId(contract.id)
     setEditorVisible(true)
     setClientId(contract.client_id ?? '')
@@ -344,6 +424,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   }
 
   function duplicateContract(contract: ContractRow) {
+    if (!isOnline) {
+      setError(t('offline.requiresConnection'))
+      return
+    }
     setEditingId(null)
     setEditorVisible(true)
     setClientId(contract.client_id ?? '')
@@ -384,6 +468,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
 
   async function handleGenerate() {
     if (!currentCompany || generating) return
+    if (!isOnline) {
+      setError(t('offline.requiresConnection'))
+      return
+    }
     setGenerating(true)
     setError('')
     setMessage('')
@@ -423,6 +511,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
 
   async function handleRewriteClause(clause: ContractClause, action: RewriteAction) {
     if (!currentCompany || rewritingClauseId) return
+    if (!isOnline) {
+      setError(t('offline.requiresConnection'))
+      return
+    }
     setRewritingClauseId(clause.id)
     setError('')
 
@@ -456,6 +548,20 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     if (!currentCompany || saving) return
     if (!title.trim()) {
       setError(t('contracts.titleRequired'))
+      return
+    }
+
+    if (!isOnline) {
+      if (editingId || nextStatus === 'finalized') {
+        setError(t('offline.requiresConnection'))
+        return
+      }
+      try {
+        await saveContractDraft({ clientId, templateId, contractLanguage, title, status: 'draft', partyA, partyB, terms, document })
+        setMessage(t('offline.savedLocally'))
+      } catch {
+        setError(t('offline.storageUnavailable'))
+      }
       return
     }
 
@@ -505,6 +611,8 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
         generated_document: nextDocument,
       })
 
+      if (!editingId) void discardContractDraft().catch(() => undefined)
+
       setMessage(nextStatus === 'finalized' ? t('contracts.finalizedMessage') : t('contracts.saved'))
     } catch (saveError) {
       const record = saveError as { code?: string }
@@ -518,6 +626,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
 
   async function archiveContract(contract: ContractRow) {
     if (!currentCompany) return
+    if (!isOnline) {
+      setError(t('offline.requiresConnection'))
+      return
+    }
     const confirmed = window.confirm(t('contracts.archiveConfirm'))
     if (!confirmed) return
 
@@ -682,6 +794,16 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
               <CardDescription>{t('contracts.editorDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {!editingId && contractDraft && (
+                <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <strong>{t('offline.localDraft')}</strong>
+                  <span>{isOnline ? t('offline.draftRestored') : t('offline.savedLocally')}</span>
+                  <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={() => void discardContractDraft().then(() => {
+                    resetEditor()
+                    setMessage('')
+                  })}>{t('offline.discardDraft')}</Button>
+                </div>
+              )}
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <label className="space-y-1 md:col-span-2">
                   <span className="text-sm font-medium">{t('contracts.contractTitle')}</span>
@@ -716,6 +838,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
                   <AppSelect
                     value={status}
                     onChange={(value) => setStatus(value as ContractStatus)}
+                    disabled={!isOnline}
                     options={contractStatuses.filter((item) => item !== 'archived').map((item) => ({ value: item, label: t(`contracts.status.${item}`) }))}
                   />
                 </label>
@@ -826,7 +949,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
                   <Save className="h-4 w-4" />
                   {saving ? t('common.loading') : t('contracts.saveDraft')}
                 </Button>
-                <Button type="button" onClick={() => handleSave('finalized')} disabled={saving}>
+                <Button type="button" onClick={() => handleSave('finalized')} disabled={saving || !isOnline}>
                   {saving ? t('common.loading') : t('contracts.finalize')}
                 </Button>
               </div>

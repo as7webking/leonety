@@ -21,6 +21,8 @@ import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
 import { matchesFinanceSearch } from '@/lib/finance-ui'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
+import { useOfflineMode } from '@/contexts/offline-mode-context'
+import { useLocalDraft } from '@/hooks/use-local-draft'
 
 interface Expense extends ExpenseForm {
   id: string
@@ -29,6 +31,7 @@ interface Expense extends ExpenseForm {
 }
 
 type ExpenseFormState = Omit<ExpenseForm, 'amount'> & { amount: string; title: string }
+type ExpenseLocalDraft = ExpenseFormState & { customCategory: string }
 
 function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
   return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
@@ -57,11 +60,13 @@ export default function ExpensesPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { isOnline } = useOfflineMode()
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Expense | null>(null)
   const [formData, setFormData] = useState<ExpenseFormState>({
     amount: '',
@@ -92,6 +97,9 @@ export default function ExpensesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const restoredDraftKeyRef = useRef<string | null>(null)
+  const formWorkspaceRef = useRef<string | null>(null)
+  const { draft: expenseDraft, loading: expenseDraftLoading, save: saveExpenseDraft, discard: discardExpenseDraft } = useLocalDraft<ExpenseLocalDraft>('expense', currentCompany?.id)
   const categoryOptions = ['Food', 'Utilities', 'Rent', 'Other']
   const titleSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.title || expense.description), [expenses])
   const descriptionSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.description), [expenses])
@@ -104,6 +112,41 @@ export default function ExpensesPage() {
 
     return () => window.clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    const nextWorkspaceId = currentCompany?.id ?? null
+    if (formWorkspaceRef.current === nextWorkspaceId) return
+    formWorkspaceRef.current = nextWorkspaceId
+    restoredDraftKeyRef.current = null
+    setEditingEntry(null)
+    setShowForm(false)
+    setCustomCategory('')
+    setFormData({
+      amount: '', title: '', description: '', category: '',
+      currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
+      date: new Date().toISOString().split('T')[0],
+    })
+  }, [currentCompany?.currency, currentCompany?.id])
+
+  useEffect(() => {
+    if (!expenseDraft || expenseDraft.workspaceId !== currentCompany?.id || restoredDraftKeyRef.current === expenseDraft.key) return
+    restoredDraftKeyRef.current = expenseDraft.key
+    setFormData(expenseDraft.payload)
+    setCustomCategory(expenseDraft.payload.customCategory)
+    setEditingEntry(null)
+    setShowForm(true)
+    setSuccessMessage(t('offline.draftRestored'))
+  }, [currentCompany?.id, expenseDraft, t])
+
+  useEffect(() => {
+    if (expenseDraftLoading || !showForm || editingEntry) return
+    const hasMeaningfulInput = Boolean(formData.amount || formData.title || formData.description || formData.category || customCategory)
+    if (!hasMeaningfulInput) return
+    const timeout = window.setTimeout(() => {
+      void saveExpenseDraft({ ...formData, customCategory }).catch(() => undefined)
+    }, 600)
+    return () => window.clearTimeout(timeout)
+  }, [customCategory, editingEntry, expenseDraftLoading, formData, saveExpenseDraft, showForm])
 
   useEffect(() => {
     if (!currentCompany) return
@@ -179,6 +222,21 @@ export default function ExpensesPage() {
       return
     }
 
+    if (!isOnline) {
+      if (editingEntry) {
+        setErrorMessage(t('offline.requiresConnection'))
+        return
+      }
+      try {
+        await saveExpenseDraft({ ...formData, customCategory })
+        setSuccessMessage(t('offline.savedLocally'))
+      } catch {
+        setErrorMessage(t('offline.storageUnavailable'))
+      }
+      return
+    }
+
+    setSubmitting(true)
     try {
       const desiredTitle = formData.title.trim()
       const isOtherExpense = formData.category === 'Other'
@@ -201,6 +259,8 @@ export default function ExpensesPage() {
         currency: validatedData.currency,
         company_id: currentCompany.id,
       }
+
+      void discardExpenseDraft().catch(() => undefined)
       let titleFallback = false
 
       if (editingEntry) {
@@ -248,10 +308,16 @@ export default function ExpensesPage() {
       console.error('Expense submit error:', formatValidationError(error))
       setErrorMessage(formatValidationError(error))
       window.setTimeout(() => setErrorMessage(''), 5000)
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleEdit = (entry: Expense) => {
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      return
+    }
     setEditingEntry(entry)
     setCustomCategory(entry.category === 'Other' ? entry.description : '')
     setFormData({
@@ -267,6 +333,10 @@ export default function ExpensesPage() {
 
   const handleDelete = async (id: string) => {
     if (!currentCompany) return
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      return
+    }
 
     try {
       const { error } = await supabase.from('expenses').delete().eq('id', id).eq('company_id', currentCompany.id)
@@ -368,6 +438,11 @@ export default function ExpensesPage() {
   const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !currentCompany) return
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      event.target.value = ''
+      return
+    }
 
     setImporting(true)
     setSuccessMessage('')
@@ -567,6 +642,17 @@ export default function ExpensesPage() {
             <CardTitle>{editingEntry ? t('expenses.edit') : t('expenses.add')}</CardTitle>
           </CardHeader>
           <CardContent>
+            {expenseDraft && (
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <strong>{t('offline.localDraft')}</strong>
+                <span>{isOnline ? t('offline.draftRestored') : t('offline.savedLocally')}</span>
+                <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={() => void discardExpenseDraft().then(() => {
+                  setShowForm(false)
+                  setFormData({ amount: '', title: '', description: '', category: '', currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'), date: new Date().toISOString().split('T')[0] })
+                  setCustomCategory('')
+                })}>{t('offline.discardDraft')}</Button>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('common.amount')}</label>
@@ -613,7 +699,7 @@ export default function ExpensesPage() {
                   />
                 </div>
               </div>
-              <Button type="submit">{editingEntry ? t('common.saveChanges') : t('expenses.save')}</Button>
+              <Button type="submit" disabled={submitting}>{!isOnline ? t('offline.saveLocalDraft') : submitting ? t('common.loading') : t('expenses.save')}</Button>
               <p className="text-sm text-slate-500">
                 {latestRateLoading
                   ? t('expenses.latestRateLoading')

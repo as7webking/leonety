@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { clearOfflineDataForUser } from '@/lib/offline-drafts'
 import { useCompany } from '@/contexts/company-context'
 import { profileUpdateSchema, formatValidationError } from '@/lib/validations'
 import { useAccountAccess } from '@/hooks/use-account-access'
@@ -388,6 +389,8 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     try {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
       await supabase.auth.signOut()
       router.push('/login')
     } catch {

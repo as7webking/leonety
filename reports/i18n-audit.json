@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24T13:24:48.341Z",
+  "generatedAt": "2026-09-24T21:17:01.073Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -22,6 +22,7 @@
     "src/lib/finance-ui-i18n.ts",
     "src/lib/i18n.ts",
     "src/lib/kassenbuch-i18n.ts",
+    "src/lib/offline-mode-i18n.ts",
     "src/lib/order-notifications-i18n.ts",
     "src/lib/page-utilities-i18n.ts",
     "src/lib/product-inventory-ux-i18n.ts",
@@ -30,30 +31,30 @@
   ],
   "coverage": {
     "en": {
-      "translated": 2094,
-      "total": 2094,
+      "translated": 2107,
+      "total": 2107,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2094,
-      "total": 2094,
+      "translated": 2107,
+      "total": 2107,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2094,
-      "total": 2094,
+      "translated": 2107,
+      "total": 2107,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 1851,
-      "total": 2094,
-      "percent": 88.4,
+      "translated": 1864,
+      "total": 2107,
+      "percent": 88.47,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -428,9 +429,9 @@
       ]
     },
     "uk": {
-      "translated": 1797,
-      "total": 2094,
-      "percent": 85.82,
+      "translated": 1810,
+      "total": 2107,
+      "percent": 85.9,
       "missing": [
         "support.button",
         "support.title",
@@ -893,9 +894,9 @@
       ]
     },
     "pl": {
-      "translated": 1797,
-      "total": 2094,
-      "percent": 85.82,
+      "translated": 1810,
+      "total": 2107,
+      "percent": 85.9,
       "missing": [
         "support.button",
         "support.title",
@@ -1358,9 +1359,9 @@
       ]
     },
     "fr": {
-      "translated": 1797,
-      "total": 2094,
-      "percent": 85.82,
+      "translated": 1810,
+      "total": 2107,
+      "percent": 85.9,
       "missing": [
         "support.button",
         "support.title",
@@ -1881,7 +1882,7 @@
     },
     {
       "file": "src/app/(app)/profile/page.tsx",
-      "line": 1027,
+      "line": 1030,
       "type": "attribute:placeholder",
       "text": "INV / RE"
     },
@@ -1917,8 +1918,8 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2094,
-    "authenticatedSourceFileCount": 71,
+    "englishKeyCount": 2107,
+    "authenticatedSourceFileCount": 72,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 15
   }

@@ -22,6 +22,8 @@ import { getIntlLocale } from '@/lib/i18n'
 import { matchesFinanceSearch } from '@/lib/finance-ui'
 import { applyIncomeTitleToSelection } from '@/lib/income-bulk-title'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
+import { useOfflineMode } from '@/contexts/offline-mode-context'
+import { useLocalDraft } from '@/hooks/use-local-draft'
 
 interface Income extends IncomeForm {
   id: string
@@ -46,6 +48,8 @@ type IncomeFormState = Omit<IncomeForm, 'amount'> & {
   invoice_id: string
   payment_method: string
 }
+
+type IncomeLocalDraft = IncomeFormState & { customCategory: string }
 
 function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
   return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
@@ -84,6 +88,7 @@ export default function IncomePage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { isOnline } = useOfflineMode()
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
   const [incomes, setIncomes] = useState<Income[]>([])
@@ -91,6 +96,7 @@ export default function IncomePage() {
   const [invoices, setInvoices] = useState<RelatedInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Income | null>(null)
   const [formData, setFormData] = useState<IncomeFormState>({
     amount: '',
@@ -129,6 +135,9 @@ export default function IncomePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const restoredDraftKeyRef = useRef<string | null>(null)
+  const formWorkspaceRef = useRef<string | null>(null)
+  const { draft: incomeDraft, loading: incomeDraftLoading, save: saveIncomeDraft, discard: discardIncomeDraft } = useLocalDraft<IncomeLocalDraft>('income', currentCompany?.id)
   const isBusinessWorkspace = currentCompany?.type === 'business'
   const categoryOptions = currentCompany?.type === 'business'
     ? ['Sales', 'Service', 'Invoice Payment', 'Salary', 'Other']
@@ -144,6 +153,46 @@ export default function IncomePage() {
 
     return () => window.clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    const nextWorkspaceId = currentCompany?.id ?? null
+    if (formWorkspaceRef.current === nextWorkspaceId) return
+    formWorkspaceRef.current = nextWorkspaceId
+    restoredDraftKeyRef.current = null
+    setEditingEntry(null)
+    setShowForm(false)
+    setCustomCategory('')
+    setFormData({
+      amount: '', title: '', description: '', category: '', reference: '', note: '',
+      client_id: '', invoice_id: '', payment_method: '',
+      currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
+      date: new Date().toISOString().split('T')[0],
+    })
+  }, [currentCompany?.currency, currentCompany?.id])
+
+  useEffect(() => {
+    if (!incomeDraft || incomeDraft.workspaceId !== currentCompany?.id || restoredDraftKeyRef.current === incomeDraft.key) return
+    restoredDraftKeyRef.current = incomeDraft.key
+    setFormData(incomeDraft.payload)
+    setCustomCategory(incomeDraft.payload.customCategory)
+    setEditingEntry(null)
+    setShowForm(true)
+    setSuccessMessage(t('offline.draftRestored'))
+  }, [currentCompany?.id, incomeDraft, t])
+
+  useEffect(() => {
+    if (incomeDraftLoading || !showForm || editingEntry) return
+    const hasMeaningfulInput = Boolean(
+      formData.amount || formData.title || formData.description || formData.category ||
+      formData.reference || formData.note || formData.client_id || formData.invoice_id ||
+      formData.payment_method || customCategory
+    )
+    if (!hasMeaningfulInput) return
+    const timeout = window.setTimeout(() => {
+      void saveIncomeDraft({ ...formData, customCategory }).catch(() => undefined)
+    }, 600)
+    return () => window.clearTimeout(timeout)
+  }, [customCategory, editingEntry, formData, incomeDraftLoading, saveIncomeDraft, showForm])
 
   useEffect(() => {
     if (!currentCompany) return
@@ -224,6 +273,21 @@ export default function IncomePage() {
       return
     }
 
+    if (!isOnline) {
+      if (editingEntry) {
+        setErrorMessage(t('offline.requiresConnection'))
+        return
+      }
+      try {
+        await saveIncomeDraft({ ...formData, customCategory })
+        setSuccessMessage(t('offline.savedLocally'))
+      } catch {
+        setErrorMessage(t('offline.storageUnavailable'))
+      }
+      return
+    }
+
+    setSubmitting(true)
     try {
       const desiredTitle = formData.title.trim()
       const effectiveCategory = isBusinessWorkspace ? (formData.category || 'Sales') : formData.category
@@ -284,6 +348,8 @@ export default function IncomePage() {
         setSuccessMessage(migrationMessage ? `${baseMessage} ${migrationMessage}` : baseMessage)
       }
 
+      void discardIncomeDraft().catch(() => undefined)
+
       setFormData({
         amount: '',
         title: '',
@@ -306,10 +372,16 @@ export default function IncomePage() {
       console.error('Income submit error:', formatValidationError(error))
       setErrorMessage(formatValidationError(error))
       window.setTimeout(() => setErrorMessage(''), 5000)
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleEdit = (entry: Income) => {
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      return
+    }
     setEditingEntry(entry)
     setFormData({
       amount: String(entry.amount),
@@ -329,6 +401,10 @@ export default function IncomePage() {
 
   const handleDelete = async (id: string) => {
     if (!currentCompany) return
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      return
+    }
 
     try {
       const { error } = await supabase.from('incomes').delete().eq('id', id).eq('company_id', currentCompany.id)
@@ -409,6 +485,10 @@ export default function IncomePage() {
 
   const handleBulkTitleUpdate = async (title: string) => {
     if (!currentCompany || selectedIncomeIds.length === 0 || bulkTitleSubmitting) return
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      return
+    }
 
     setBulkTitleSubmitting(true)
     setErrorMessage('')
@@ -489,6 +569,11 @@ export default function IncomePage() {
   const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !currentCompany) return
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      event.target.value = ''
+      return
+    }
 
     setImporting(true)
     setSuccessMessage('')
@@ -698,6 +783,17 @@ export default function IncomePage() {
             <CardTitle>{editingEntry ? t('income.edit') : t('income.add')}</CardTitle>
           </CardHeader>
           <CardContent>
+            {incomeDraft && (
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <strong>{t('offline.localDraft')}</strong>
+                <span>{isOnline ? t('offline.draftRestored') : t('offline.savedLocally')}</span>
+                <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={() => void discardIncomeDraft().then(() => {
+                  setShowForm(false)
+                  setFormData({ amount: '', title: '', description: '', category: '', reference: '', note: '', client_id: '', invoice_id: '', payment_method: '', currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD'), date: new Date().toISOString().split('T')[0] })
+                  setCustomCategory('')
+                })}>{t('offline.discardDraft')}</Button>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium">{t('common.amount')}</label>
@@ -808,7 +904,7 @@ export default function IncomePage() {
                 </div>
                 )}
               </div>
-              <Button type="submit">{editingEntry ? t('common.saveChanges') : t('income.save')}</Button>
+              <Button type="submit" disabled={submitting}>{!isOnline ? t('offline.saveLocalDraft') : submitting ? t('common.loading') : t('income.save')}</Button>
               {!isBusinessWorkspace && (
                 <p className="text-sm text-slate-500">
                   {latestRateLoading

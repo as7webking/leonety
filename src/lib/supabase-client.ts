@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { createOfflineSafeFetch } from '@/lib/offline-fetch'
 
 function validateEnvVars() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -13,5 +14,7 @@ function validateEnvVars() {
 
 export function createClient() {
   const { url, key } = validateEnvVars()
-  return createBrowserClient(url, key)
+  return createBrowserClient(url, key, {
+    global: { fetch: createOfflineSafeFetch(url) },
+  })
 }

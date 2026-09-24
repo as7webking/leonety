@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { LogOut, Settings, UserRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
 import { useI18n } from '@/contexts/i18n-context'
+import { clearOfflineDataForUser } from '@/lib/offline-drafts'
 
 export function ProfileMenuClient() {
   const router = useRouter()
@@ -66,6 +67,8 @@ export function ProfileMenuClient() {
             type="button"
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50"
             onClick={async () => {
+              const { data } = await supabase.auth.getUser()
+              if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
               await supabase.auth.signOut()
               setOpen(false)
               router.push('/login')

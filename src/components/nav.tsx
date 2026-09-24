@@ -12,6 +12,7 @@ import { Logo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/contexts/i18n-context'
 import { ChevronDown, Menu, X, User } from 'lucide-react'
+import { clearOfflineDataForUser } from '@/lib/offline-drafts'
 
 const WORKSPACE_ACTION_VALUE = '__workspace_action__'
 
@@ -111,6 +112,8 @@ export function Nav() {
   }, [isOpen])
 
   const handleLogout = async () => {
+    const { data } = await supabase.auth.getUser()
+    if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
     await supabase.auth.signOut()
     router.push('/login')
     setIsOpen(false)
