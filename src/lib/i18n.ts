@@ -14,6 +14,7 @@ import { appModeDictionaries } from '@/lib/app-mode-i18n'
 import { financeUiDictionaries } from '@/lib/finance-ui-i18n'
 import { authenticatedQaDictionaries, ukrainianAuthenticatedFixes } from '@/lib/authenticated-qa-i18n'
 import { offlineModeDictionaries } from '@/lib/offline-mode-i18n'
+import { clientStatusDictionaries } from '@/lib/client-status-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8878,6 +8879,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], financeUiDictionaries[locale])
   Object.assign(dictionaries[locale], authenticatedQaDictionaries[locale])
   Object.assign(dictionaries[locale], offlineModeDictionaries[locale])
+  Object.assign(dictionaries[locale], clientStatusDictionaries[locale])
 }
 
 Object.assign(dictionaries.uk, ukrainianAuthenticatedFixes)

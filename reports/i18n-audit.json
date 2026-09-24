@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24T21:17:01.073Z",
+  "generatedAt": "2026-09-24T21:43:36.787Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -16,6 +16,7 @@
     "src/lib/authenticated-qa-i18n.ts",
     "src/lib/business-modules-i18n.ts",
     "src/lib/client-crm-i18n.ts",
+    "src/lib/client-status-i18n.ts",
     "src/lib/country-selector-i18n.ts",
     "src/lib/employee-documents-i18n.ts",
     "src/lib/employee-profile-i18n.ts",
@@ -31,30 +32,30 @@
   ],
   "coverage": {
     "en": {
-      "translated": 2107,
-      "total": 2107,
+      "translated": 2120,
+      "total": 2120,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2107,
-      "total": 2107,
+      "translated": 2120,
+      "total": 2120,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2107,
-      "total": 2107,
+      "translated": 2120,
+      "total": 2120,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 1864,
-      "total": 2107,
-      "percent": 88.47,
+      "translated": 1877,
+      "total": 2120,
+      "percent": 88.54,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -323,7 +324,6 @@
         "clients.clientCompany",
         "clients.notes",
         "clients.status",
-        "clients.noClients",
         "clients.searchPlaceholder",
         "invoices.title",
         "invoices.description",
@@ -429,9 +429,9 @@
       ]
     },
     "uk": {
-      "translated": 1810,
-      "total": 2107,
-      "percent": 85.9,
+      "translated": 1823,
+      "total": 2120,
+      "percent": 85.99,
       "missing": [
         "support.button",
         "support.title",
@@ -771,7 +771,6 @@
         "clients.interestedIn",
         "clients.notes",
         "clients.status",
-        "clients.noClients",
         "clients.searchPlaceholder",
         "invoices.title",
         "invoices.description",
@@ -894,9 +893,9 @@
       ]
     },
     "pl": {
-      "translated": 1810,
-      "total": 2107,
-      "percent": 85.9,
+      "translated": 1823,
+      "total": 2120,
+      "percent": 85.99,
       "missing": [
         "support.button",
         "support.title",
@@ -1236,7 +1235,6 @@
         "clients.interestedIn",
         "clients.notes",
         "clients.status",
-        "clients.noClients",
         "clients.searchPlaceholder",
         "invoices.title",
         "invoices.description",
@@ -1359,9 +1357,9 @@
       ]
     },
     "fr": {
-      "translated": 1810,
-      "total": 2107,
-      "percent": 85.9,
+      "translated": 1823,
+      "total": 2120,
+      "percent": 85.99,
       "missing": [
         "support.button",
         "support.title",
@@ -1701,7 +1699,6 @@
         "clients.interestedIn",
         "clients.notes",
         "clients.status",
-        "clients.noClients",
         "clients.searchPlaceholder",
         "invoices.title",
         "invoices.description",
@@ -1918,7 +1915,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2107,
+    "englishKeyCount": 2120,
     "authenticatedSourceFileCount": 72,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 15
