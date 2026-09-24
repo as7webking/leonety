@@ -187,6 +187,26 @@ export function AppSearch() {
       setError(false)
 
       try {
+        const businessSearches = currentCompany.type === 'business'
+          ? [
+              supabase
+                .from('clients')
+                .select('id, name, phone, interested_in, status, company_id')
+                .eq('company_id', currentCompany.id)
+                .order('created_at', { ascending: false })
+                .limit(100),
+              supabase
+                .from('invoices')
+                .select('id, invoice_number, status, total, currency, company_id')
+                .eq('company_id', currentCompany.id)
+                .order('created_at', { ascending: false })
+                .limit(100),
+            ]
+          : [
+              Promise.resolve({ data: [], error: null }),
+              Promise.resolve({ data: [], error: null }),
+            ]
+
         const [incomeRes, expenseRes, timeRes, clientRes, invoiceRes] = await Promise.all([
           supabase
             .from('incomes')
@@ -206,18 +226,8 @@ export function AppSearch() {
             .eq('company_id', currentCompany.id)
             .order('date', { ascending: false })
             .limit(100),
-          supabase
-            .from('clients')
-            .select('id, name, phone, interested_in, status, company_id')
-            .eq('company_id', currentCompany.id)
-            .order('created_at', { ascending: false })
-            .limit(100),
-          supabase
-            .from('invoices')
-            .select('id, invoice_number, status, total, currency, company_id')
-            .eq('company_id', currentCompany.id)
-            .order('created_at', { ascending: false })
-            .limit(100),
+          businessSearches[0],
+          businessSearches[1],
         ])
 
         if (incomeRes.error) throw incomeRes.error

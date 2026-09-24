@@ -90,3 +90,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'workspace_create_failed' }, { status: 500 })
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await getAuthenticatedUser()
+    if (!user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
+
+    const body = await request.json().catch(() => null) as {
+      companyId?: unknown
+      name?: unknown
+      type?: unknown
+      currency?: unknown
+    } | null
+    const companyId = typeof body?.companyId === 'string' ? body.companyId.trim() : ''
+    const type = body?.type === 'business' ? 'business' : body?.type === 'personal' ? 'personal' : null
+    const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 160) : ''
+    const currency = typeof body?.currency === 'string' ? body.currency.trim().toUpperCase() : ''
+
+    if (!companyId || !type || !name || !isSupportedCurrency(currency)) {
+      return NextResponse.json({ error: 'invalid_workspace' }, { status: 400 })
+    }
+
+    const adminSupabase = createSupabaseAdminClient()
+    const { data, error } = await adminSupabase
+      .from('companies')
+      .update({
+        name,
+        type,
+        currency: normalizeCurrencyCode(currency),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId)
+      .eq('owner_id', user.id)
+      .select('id, owner_id, name, type, currency, created_at, updated_at')
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) return NextResponse.json({ error: 'workspace_not_found' }, { status: 404 })
+
+    return NextResponse.json({ workspace: data })
+  } catch (error) {
+    console.error('[workspaces] update failed', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+    })
+    return NextResponse.json({ error: 'workspace_update_failed' }, { status: 500 })
+  }
+}

@@ -1,23 +1,22 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
 import { profileUpdateSchema, formatValidationError } from '@/lib/validations'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
-import { loadCompanyBranding, saveCompanyBranding } from '@/lib/company-branding'
+import { loadCompanyBranding } from '@/lib/company-branding'
 import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { getIntlLocale } from '@/lib/i18n'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AppSelect } from '@/components/app-select'
-import { AddressAutocomplete } from '@/components/address-autocomplete'
 import { useI18n } from '@/contexts/i18n-context'
 import { LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { User, Mail, DollarSign, LogOut, BriefcaseBusiness } from 'lucide-react'
+import { User, Mail, DollarSign, LogOut } from 'lucide-react'
 
 interface UserProfile {
   id: string
@@ -77,14 +76,8 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [currency, setCurrency] = useState('USD')
-  const [workspaceName, setWorkspaceName] = useState('')
-  const [workspaceCurrency, setWorkspaceCurrency] = useState('USD')
   const [workspaceLogo, setWorkspaceLogo] = useState('')
   const [workspaceAddress, setWorkspaceAddress] = useState('')
-  const [workspaceEmail, setWorkspaceEmail] = useState('')
-  const [workspaceIban, setWorkspaceIban] = useState('')
-  const [workspaceBic, setWorkspaceBic] = useState('')
-  const [workspaceTaxNumber, setWorkspaceTaxNumber] = useState('')
   const [message, setMessage] = useState('')
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([])
   const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([])
@@ -111,10 +104,9 @@ export default function ProfilePage() {
   const [isPreparingPrint, setIsPreparingPrint] = useState(false)
   const router = useRouter()
   const [supabase] = useState(() => createClient())
-  const { currentCompany, refreshCompanies } = useCompany()
+  const { currentCompany } = useCompany()
   const { accountAccess, refreshAccountAccess } = useAccountAccess(profile?.email)
   const { locale, t } = useI18n()
-  const workspaceLogoInputRef = useRef<HTMLInputElement | null>(null)
   const planLabel = t(`billing.plan.${accountAccess.plan}`)
   const billingStatusLabel = accountAccess.status ? t(`billing.status.${accountAccess.status}`) : t('billing.status.free')
   const billingSourceLabel = t(`billing.source.${accountAccess.overrideSource}`)
@@ -297,54 +289,11 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (currentCompany) {
-      setWorkspaceName(currentCompany.name)
-      setWorkspaceCurrency(normalizeCurrencyCode(currentCompany.currency ?? 'USD'))
       const branding = loadCompanyBranding(currentCompany.id)
       setWorkspaceLogo(branding.logo)
       setWorkspaceAddress(branding.address)
-      setWorkspaceEmail(branding.email)
-      setWorkspaceIban(branding.iban)
-      setWorkspaceBic(branding.bic)
-      setWorkspaceTaxNumber(branding.taxNumber)
     }
   }, [currentCompany])
-
-  const persistWorkspaceBranding = (
-    nextLogo = workspaceLogo,
-    nextAddress = workspaceAddress,
-    nextEmail = workspaceEmail,
-    nextIban = workspaceIban,
-    nextBic = workspaceBic,
-    nextTaxNumber = workspaceTaxNumber
-  ) => {
-    if (!currentCompany) return
-    saveCompanyBranding(currentCompany.id, {
-      logo: nextLogo,
-      address: nextAddress,
-      email: nextEmail,
-      iban: nextIban,
-      bic: nextBic,
-      taxNumber: nextTaxNumber,
-    })
-  }
-
-  const handleWorkspaceLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      setMessage('Error: Please choose an image file.')
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : ''
-      setWorkspaceLogo(result)
-      persistWorkspaceBranding(result, workspaceAddress, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
-    }
-    reader.readAsDataURL(file)
-  }
 
   useEffect(() => {
     if (!accountAccess.isAdmin) return
@@ -443,35 +392,6 @@ export default function ProfilePage() {
       router.push('/login')
     } catch {
       setMessage('Error logging out')
-    }
-  }
-
-  const handleSaveWorkspace = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!currentCompany) {
-      setMessage('No workspace selected')
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('companies')
-        .update({
-          name: workspaceName.trim() || currentCompany.name,
-          currency: workspaceCurrency,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentCompany.id)
-
-      if (error) throw error
-
-      await refreshCompanies(currentCompany.id)
-      persistWorkspaceBranding()
-      setMessage('Workspace updated successfully!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (error) {
-      setMessage(error instanceof Error ? `Error: ${error.message}` : 'Error updating workspace')
     }
   }
 
@@ -1048,176 +968,13 @@ export default function ProfilePage() {
 
         <Card className="h-full">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BriefcaseBusiness className="h-5 w-5" />
-              {t('profile.currentWorkspace')}
-            </CardTitle>
-            <CardDescription>{t('profile.currentWorkspaceDescription')}</CardDescription>
+            <CardTitle>{t('settings.workspaceTitle')}</CardTitle>
+            <CardDescription>{t('settings.workspaceDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
-            {currentCompany ? (
-              <form onSubmit={handleSaveWorkspace} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">{t('profile.workspaceName')}</label>
-                  <input
-                    type="text"
-                    value={workspaceName}
-                    onChange={(e) => setWorkspaceName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder={t('profile.workspaceName')}
-                    required
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">{t('profile.workspaceType')}</label>
-                    <input
-                      type="text"
-                      value={currentCompany.type}
-                      disabled
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed capitalize"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">{t('profile.workspaceCurrency')}</label>
-                    <AppSelect
-                      value={workspaceCurrency}
-                      onChange={(value) => setWorkspaceCurrency(normalizeCurrencyCode(value))}
-                      options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  {t('profile.currentPlanInline').replace('{plan}', planLabel)}
-                </div>
-
-                <div className="space-y-3 rounded-md border border-slate-200 p-4">
-                  <div className="flex items-center gap-4">
-                    {workspaceLogo ? (
-                      <img src={workspaceLogo} alt={workspaceName || 'Workspace logo'} className="h-14 w-14 rounded-md object-contain" />
-                    ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-500">
-                        {(workspaceName || currentCompany.name).slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <label className="block text-sm font-medium">{t('profile.companyLogo')}</label>
-                      <input
-                        ref={workspaceLogoInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleWorkspaceLogoChange}
-                        className="hidden"
-                      />
-                      <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => workspaceLogoInputRef.current?.click()}>
-                        {t('common.chooseFile')}
-                      </Button>
-                    </div>
-                    {workspaceLogo && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setWorkspaceLogo('')
-                          persistWorkspaceBranding('', workspaceAddress, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
-                        }}
-                      >
-                        {t('common.delete')}
-                      </Button>
-                    )}
-                  </div>
-                  <div className="block space-y-1">
-                    <span className="text-sm font-medium">{t('profile.companyAddress')}</span>
-                    <AddressAutocomplete
-                      onSelect={(suggestion) => {
-                        const nextAddress = [
-                          [suggestion.street, suggestion.houseNumber].filter(Boolean).join(' '),
-                          [suggestion.postalCode, suggestion.city].filter(Boolean).join(' '),
-                          suggestion.state,
-                          suggestion.country,
-                        ].filter(Boolean).join('\n')
-                        setWorkspaceAddress(nextAddress)
-                        persistWorkspaceBranding(workspaceLogo, nextAddress, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
-                      }}
-                    />
-                    <textarea
-                      value={workspaceAddress}
-                      onChange={(event) => {
-                        setWorkspaceAddress(event.target.value)
-                        persistWorkspaceBranding(workspaceLogo, event.target.value, workspaceEmail, workspaceIban, workspaceBic, workspaceTaxNumber)
-                      }}
-                      className="min-h-20 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder={t('profile.companyAddressPlaceholder')}
-                    />
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="block space-y-1">
-                      <span className="text-sm font-medium">{t('profile.companyEmail')}</span>
-                      <input
-                        type="email"
-                        value={workspaceEmail}
-                        onChange={(event) => {
-                          setWorkspaceEmail(event.target.value)
-                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, event.target.value, workspaceIban, workspaceBic, workspaceTaxNumber)
-                        }}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder={t('auth.emailPlaceholder')}
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-sm font-medium">{t('profile.companyIban')}</span>
-                      <input
-                        value={workspaceIban}
-                        onChange={(event) => {
-                          setWorkspaceIban(event.target.value)
-                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, event.target.value, workspaceBic, workspaceTaxNumber)
-                        }}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder="DE00 0000 0000 0000 0000 00"
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-sm font-medium">{t('profile.companyBic')}</span>
-                      <input
-                        value={workspaceBic}
-                        onChange={(event) => {
-                          setWorkspaceBic(event.target.value)
-                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, workspaceIban, event.target.value, workspaceTaxNumber)
-                        }}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder="GENODEF1..."
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-sm font-medium">{t('profile.companyTaxNumber')}</span>
-                      <input
-                        value={workspaceTaxNumber}
-                        onChange={(event) => {
-                          setWorkspaceTaxNumber(event.target.value)
-                          persistWorkspaceBranding(workspaceLogo, workspaceAddress, workspaceEmail, workspaceIban, workspaceBic, event.target.value)
-                        }}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder={t('profile.companyTaxNumber')}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button type="submit" className="w-full">{t('profile.saveWorkspace')}</Button>
-                  <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/app/workspaces')}>
-                    {t('profile.manageWorkspaces')}
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                {t('profile.completeOnboarding')}
-              </div>
-            )}
+            <Button type="button" variant="outline" onClick={() => router.push('/app/settings')}>
+              {t('nav.settings')}
+            </Button>
           </CardContent>
         </Card>
 

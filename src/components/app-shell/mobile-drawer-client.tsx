@@ -8,13 +8,17 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { Logo } from '@/components/logo'
 import { ProfileMenuClient } from '@/components/app-shell/profile-menu-client'
 import { WorkspaceSelectorClient } from '@/components/app-shell/workspace-selector-client'
-import { navigationGroups, primaryNavigation } from '@/components/app-shell/navigation-items'
+import { getNavigationForMode } from '@/components/app-shell/navigation-items'
 import { useI18n } from '@/contexts/i18n-context'
+import { useCompany } from '@/contexts/company-context'
+import { normalizeAppMode } from '@/lib/app-mode'
 
 export function MobileDrawerClient() {
   const [open, setOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const { t } = useI18n()
+  const { currentCompany } = useCompany()
+  const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
 
   useEffect(() => {
     if (!open) return
@@ -85,7 +89,7 @@ export function MobileDrawerClient() {
             <WorkspaceSelectorClient />
             <nav className="space-y-1" aria-labelledby="mobile-primary-navigation-label">
               <span id="mobile-primary-navigation-label" className="sr-only">{t('nav.primaryNavigation')}</span>
-              {primaryNavigation.map((item) => {
+              {navigation.primary.map((item) => {
                 const Icon = item.icon
                 return (
                   <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950">
@@ -96,7 +100,7 @@ export function MobileDrawerClient() {
               })}
             </nav>
 
-            {navigationGroups.map((group) => (
+            {navigation.groups.map((group) => (
               <section key={group.labelKey} className="space-y-1">
                 <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{t(group.labelKey)}</p>
                 {group.items.filter((item) => !item.desktopOnly).map((item) => {

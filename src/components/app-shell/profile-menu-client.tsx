@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogOut, UserRound } from 'lucide-react'
+import { LogOut, Settings, UserRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
 import { useI18n } from '@/contexts/i18n-context'
 
@@ -57,6 +57,10 @@ export function ProfileMenuClient() {
           <Link href="/app/profile" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
             <UserRound className="h-4 w-4" />
             {t('nav.profile')}
+          </Link>
+          <Link href="/app/settings" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
+            <Settings className="h-4 w-4" />
+            {t('nav.settings')}
           </Link>
           <button
             type="button"

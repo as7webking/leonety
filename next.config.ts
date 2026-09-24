@@ -23,8 +23,8 @@ const appRoutes = [
   '/products/:path*',
   '/inventory',
   '/stock-movements',
-  '/settings/integrations',
-  '/settings/integrations/woocommerce',
+  '/settings',
+  '/settings/:path*',
 ]
 
 const nextConfig: NextConfig = {

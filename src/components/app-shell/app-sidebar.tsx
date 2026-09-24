@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import { AppSearch } from '@/components/app-search'
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -5,10 +7,15 @@ import { Logo } from '@/components/logo'
 import { T } from '@/components/t'
 import { ProfileMenuClient } from '@/components/app-shell/profile-menu-client'
 import { WorkspaceSelectorClient } from '@/components/app-shell/workspace-selector-client'
-import { navigationGroups, primaryNavigation } from '@/components/app-shell/navigation-items'
+import { getNavigationForMode } from '@/components/app-shell/navigation-items'
 import { DesktopNavigationLink } from '@/components/app-shell/desktop-navigation-link'
+import { useCompany } from '@/contexts/company-context'
+import { normalizeAppMode } from '@/lib/app-mode'
 
 export function AppSidebar() {
+  const { currentCompany } = useCompany()
+  const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
+
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white md:flex md:flex-col" aria-labelledby="app-sidebar-label">
       <span id="app-sidebar-label" className="sr-only"><T k="nav.appNavigation" /></span>
@@ -27,14 +34,14 @@ export function AppSidebar() {
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-labelledby="app-sidebar-main-nav-label">
         <span id="app-sidebar-main-nav-label" className="sr-only"><T k="nav.mainAppNavigation" /></span>
         <div className="space-y-1">
-          {primaryNavigation.map((item) => {
+          {navigation.primary.map((item) => {
             const Icon = item.icon
             return <DesktopNavigationLink key={item.href} href={item.href} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
           })}
         </div>
 
         <div className="mt-5 space-y-5">
-          {navigationGroups.map((group) => (
+          {navigation.groups.map((group) => (
             <section key={group.labelKey} className="space-y-1">
               <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400"><T k={group.labelKey} /></p>
               {group.items.map((item) => {
