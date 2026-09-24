@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { DesktopPageUtilities, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { formatValidationError, incomeSchema, type IncomeForm } from '@/lib/validations'
@@ -19,6 +19,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { IncomeBulkTitleDialog } from '@/components/income-bulk-title-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
+import { matchesFinanceSearch } from '@/lib/finance-ui'
 import { applyIncomeTitleToSelection } from '@/lib/income-bulk-title'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 
@@ -125,6 +126,8 @@ export default function IncomePage() {
   const [selectedIncomeIds, setSelectedIncomeIds] = useState<string[]>([])
   const [showBulkTitleDialog, setShowBulkTitleDialog] = useState(false)
   const [bulkTitleSubmitting, setBulkTitleSubmitting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const isBusinessWorkspace = currentCompany?.type === 'business'
   const categoryOptions = currentCompany?.type === 'business'
@@ -369,15 +372,20 @@ export default function IncomePage() {
     return incomes.filter((income) => {
       const afterStart = !filterFromDate || income.date >= filterFromDate
       const beforeEnd = !filterToDate || income.date <= filterToDate
-      return afterStart && beforeEnd
+      const matchesSearch = matchesFinanceSearch(searchQuery, [income.title, income.description, income.category, income.reference])
+      return afterStart && beforeEnd && matchesSearch
     }).sort((left, right) => {
       const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
       const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
       return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
     })
-  }, [filterFromDate, filterToDate, incomes, sortBy, sortDirection])
+  }, [filterFromDate, filterToDate, incomes, searchQuery, sortBy, sortDirection])
+  const totalPages = Math.max(1, Math.ceil(sortedIncomes.length / FINANCE_PAGE_SIZE))
+  const paginatedIncomes = useMemo(() => sortedIncomes.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedIncomes])
+  useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
+  useEffect(() => setPage(1), [filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
-  const visibleIncomeIds = useMemo(() => sortedIncomes.map((income) => income.id), [sortedIncomes])
+  const visibleIncomeIds = useMemo(() => paginatedIncomes.map((income) => income.id), [paginatedIncomes])
   const selectedIncomeIdSet = useMemo(() => new Set(selectedIncomeIds), [selectedIncomeIds])
   const allVisibleSelected = visibleIncomeIds.length > 0 && visibleIncomeIds.every((id) => selectedIncomeIdSet.has(id))
 
@@ -436,16 +444,15 @@ export default function IncomePage() {
     }
   }
 
-  const groupedIncomes = sortedIncomes.reduce<Record<string, Income[]>>((groups, income) => {
+  const groupIncomes = (items: Income[]) => items.reduce<Record<string, Income[]>>((groups, income) => {
     const key = income.date.slice(0, 7)
     return {
       ...groups,
       [key]: [...(groups[key] ?? []), income],
     }
   }, {})
-
-  const displayGroups = groupReportsByMonth ? Object.entries(groupedIncomes).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedIncomes] as const]
-  const printGroups = displayGroups
+  const displayGroups = groupReportsByMonth ? Object.entries(groupIncomes(paginatedIncomes)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', paginatedIncomes] as const]
+  const printGroups = groupReportsByMonth ? Object.entries(groupIncomes(sortedIncomes)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedIncomes] as const]
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
     const [year, month] = monthKey.split('-').map(Number)
@@ -598,98 +605,27 @@ export default function IncomePage() {
     <PageContainer>
       <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportCSV} />
       <PageHeader title={t('income.title')} description={t('income.pageDescription').replace('{workspace}', currentCompany.name)}>
-        <div className="flex flex-wrap gap-2 lg:hidden">
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
-            {importing ? t('transactions.importing') : t('common.importCsv')}
-          </Button>
-          {incomes.length > 0 && (
-            <AppSelect
-              value={groupReportsByMonth ? 'month' : 'default'}
-              onChange={(value) => setGroupReportsByMonth(value === 'month')}
-              options={[
-                { value: 'default', label: t('common.noMonthGrouping') },
-                { value: 'month', label: t('common.groupByMonth') },
-              ]}
-                ariaLabel={t('common.groupByMonth')}
-              className="w-48"
-            />
-          )}
-          {incomes.length > 0 && (
-            <>
-              <input
-                type="date"
-                value={filterFromDate}
-                onChange={(event) => {
-                  setFilterFromDate(event.target.value)
-                  setSelectedIncomeIds([])
-                }}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                aria-label={t('dashboard.filterFrom')}
-              />
-              <input
-                type="date"
-                value={filterToDate}
-                onChange={(event) => {
-                  setFilterToDate(event.target.value)
-                  setSelectedIncomeIds([])
-                }}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                aria-label={t('dashboard.filterTo')}
-              />
-            </>
-          )}
-          {incomes.length > 0 && (
-            <>
-              <AppSelect
-                value={sortBy}
-                onChange={(value) => setSortBy(value as 'date' | 'amount')}
-                options={[
-                  { value: 'date', label: t('common.sortDate') },
-                  { value: 'amount', label: t('common.sortAmount') },
-                ]}
-                ariaLabel={t('common.sortBy')}
-                className="w-36"
-              />
-              <AppSelect
-                value={sortDirection}
-                onChange={(value) => setSortDirection(value as 'asc' | 'desc')}
-                options={[
-                  { value: 'desc', label: t('common.descending') },
-                  { value: 'asc', label: t('common.ascending') },
-                ]}
-                ariaLabel={t('common.sortDirection')}
-                className="w-40"
-              />
-            </>
-          )}
-          {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
-          {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
-          <Button onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
-            {showForm ? t('common.cancel') : t('income.add')}
-          </Button>
-        </div>
-        <Button className="hidden lg:inline-flex" onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
+        <Button onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
           {showForm ? t('common.cancel') : t('income.add')}
         </Button>
       </PageHeader>
-
-      <DesktopPageUtilities title={t('pageUtilities.title')}>
-        <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
-          {importing ? t('transactions.importing') : t('common.importCsv')}
-        </Button>
-        {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
-        {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
-      </DesktopPageUtilities>
-
-      {incomes.length > 0 && (
-        <div className="mb-5 hidden flex-wrap items-center gap-2 lg:flex">
-          <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-48" />
-          <input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setSelectedIncomeIds([]) }} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" aria-label={t('dashboard.filterFrom')} />
-          <input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setSelectedIncomeIds([]) }} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" aria-label={t('dashboard.filterTo')} />
-          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-36" />
-          <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-40" />
-        </div>
-      )}
+      <FinanceToolbar
+        filtersLabel={t('finance.filters')}
+        utilitiesLabel={t('finance.utilities')}
+        filters={incomes.length > 0 ? <>
+          <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setSelectedIncomeIds([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
+          <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
+          <input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setSelectedIncomeIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterFrom')} />
+          <input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setSelectedIncomeIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterTo')} />
+          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-full lg:w-36" />
+          <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-full lg:w-40" />
+        </> : undefined}
+        utilities={<>
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>{importing ? t('transactions.importing') : t('common.importCsv')}</Button>
+          {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
+          {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
+        </>}
+      />
 
       <div className="print-area print-report hidden">
         <div className="mb-4 flex items-start gap-3">
@@ -747,25 +683,13 @@ export default function IncomePage() {
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
 
       {sortedIncomes.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-white p-3">
-          <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={allVisibleSelected}
-              onChange={(event) => toggleVisibleSelection(event.target.checked)}
-              className="h-4 w-4"
-            />
-            {t('income.bulkSelectVisible')}
-          </label>
-          <span className="text-sm text-slate-500">
-            {t('income.bulkSelectedCount').replace('{count}', String(selectedIncomeIds.length))}
-          </span>
+        <FinanceSelectionBar checked={allVisibleSelected} onCheckedChange={toggleVisibleSelection} selectVisibleLabel={t('finance.selectVisible')} selectedLabel={t('finance.selectedCount').replace('{count}', String(selectedIncomeIds.length))}>
           {selectedIncomeIds.length > 0 && (
-            <Button type="button" size="sm" className="sm:ml-auto" onClick={() => setShowBulkTitleDialog(true)}>
+            <Button type="button" size="sm" onClick={() => setShowBulkTitleDialog(true)}>
               {t('income.bulkEdit')}
             </Button>
           )}
-        </div>
+        </FinanceSelectionBar>
       )}
 
       {showForm && !editingEntry && (
@@ -900,70 +824,26 @@ export default function IncomePage() {
         </Card>
       )}
 
-      {incomes.length === 0 ? (
-        <EmptyState title={t('income.noEntries')} description={t('income.emptyDescription')} />
+      {sortedIncomes.length === 0 ? (
+        <FinanceEmptyState filtered={incomes.length > 0} emptyTitle={t('income.noEntries')} emptyDescription={t('income.emptyDescription')} filteredTitle={t('finance.filteredEmptyTitle')} filteredDescription={t('finance.filteredEmptyDescription')} action={{ label: t('income.add'), onClick: () => { setShowForm(true); setEditingEntry(null) } }} />
       ) : (
         <div className="space-y-4">
           {displayGroups.map(([groupKey, groupItems]) => (
             <div key={groupKey} className="space-y-4">
               {groupReportsByMonth && <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{formatMonthLabel(groupKey)}</h2>}
+              <FinanceListShell titleLabel={t('transactions.titleLabel')} categoryLabel={t('common.category')} dateLabel={t('common.date')} amountLabel={t('common.amount')} selectionLabel={t('transactions.select')} actionsLabel={t('finance.actions')}>
               {groupItems.map((income) => (
-            <div key={income.id} className="space-y-2">
-            <Card>
-              <CardContent className="flex min-w-0 flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
-                  <label className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 lg:hidden">
-                    <input
-                      type="checkbox"
-                      checked={selectedIncomeIdSet.has(income.id)}
-                      onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    <span className="sr-only">
-                      {t('income.bulkSelectRow').replace('{title}', income.title || income.description)}
-                    </span>
-                  </label>
-                  <div className="min-w-0">
-                  <p className="font-medium">{income.title || income.description}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {income.title && income.description ? `${income.description} · ` : ''}{formatCategoryLabel(income.category, t)} · {income.date}
-                  </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-                  <div className="text-right">
-                    <p className="font-normal">
-                      {formatCurrency(
-                        convertToCurrency(
-                          Number(income.amount),
-                          income.currency,
-                          normalizeCurrencyCode(currentCompany.currency ?? 'USD')
-                        ),
-                        normalizeCurrencyCode(currentCompany.currency ?? 'USD')
-                      )}
-                    </p>
-                    {normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && (
-                      <p className="text-sm text-slate-500">
-                        {formatCurrency(Number(income.amount), income.currency)}
-                      </p>
-                    )}
-                  </div>
-                  <label className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 lg:flex">
-                    <input
-                      type="checkbox"
-                      checked={selectedIncomeIdSet.has(income.id)}
-                      onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    <span className="sr-only">{t('income.bulkSelectRow').replace('{title}', income.title || income.description)}</span>
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => handleEdit(income)} aria-label={`${t('common.edit')} ${income.title || income.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button>
-                    <Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)} aria-label={`${t('common.delete')} ${income.title || income.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div key={income.id}>
+              <FinanceListRow
+                title={income.title || income.description}
+                description={income.title ? income.description : undefined}
+                category={formatCategoryLabel(income.category, t)}
+                date={income.date}
+                amount={formatCurrency(convertToCurrency(Number(income.amount), income.currency, normalizeCurrencyCode(currentCompany.currency ?? 'USD')), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
+                amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') ? formatCurrency(Number(income.amount), income.currency) : undefined}
+                selection={<label className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedIncomeIdSet.has(income.id)} onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)} className="h-4 w-4" /><span className="sr-only">{t('income.bulkSelectRow').replace('{title}', income.title || income.description)}</span></label>}
+                actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(income)} aria-label={`${t('common.edit')} ${income.title || income.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)} aria-label={`${t('common.delete')} ${income.title || income.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button></>}
+              />
             {editingEntry?.id === income.id && (
               <Card className="border-primary/30 bg-slate-50">
                 <CardContent className="p-4">
@@ -988,8 +868,10 @@ export default function IncomePage() {
             )}
             </div>
               ))}
+              </FinanceListShell>
             </div>
           ))}
+          <FinancePagination page={page} totalPages={totalPages} totalItems={sortedIncomes.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} />
         </div>
       )}
       <ConfirmDialog

@@ -1,5 +1,50 @@
 @import "tailwindcss";
 
+@layer components {
+  .finance-list-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 0.75rem;
+  }
+
+  .finance-list-grid > :nth-child(1),
+  .finance-list-grid > :nth-child(2),
+  .finance-list-grid > :nth-child(3) {
+    grid-column: 1;
+  }
+
+  .finance-list-grid > :nth-child(4) {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .finance-list-grid > :nth-child(5),
+  .finance-list-grid > :nth-child(6) {
+    grid-row: 3;
+  }
+
+  .finance-list-grid > :nth-child(5) {
+    grid-column: 1;
+  }
+
+  .finance-list-grid > :nth-child(6) {
+    grid-column: 2;
+  }
+
+  @media (min-width: 1024px) {
+    .finance-list-grid {
+      grid-template-columns: minmax(0, 1.5fr) minmax(120px, 0.8fr) 120px 140px 56px minmax(88px, auto);
+      column-gap: 0.75rem;
+      align-items: center;
+    }
+
+    .finance-list-grid > :nth-child(n) {
+      grid-column: auto;
+      grid-row: auto;
+    }
+  }
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));

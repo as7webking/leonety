@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { DesktopPageUtilities, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
-import { Building2, Edit, Trash2 } from "lucide-react"
+import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { ArrowRightLeft, Building2, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { expenseSchema, formatValidationError, type ExpenseForm } from '@/lib/validations'
 import { useCompany } from '@/contexts/company-context'
@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
+import { matchesFinanceSearch } from '@/lib/finance-ui'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 
 interface Expense extends ExpenseForm {
@@ -88,6 +89,8 @@ export default function ExpensesPage() {
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const categoryOptions = ['Food', 'Utilities', 'Rent', 'Other']
   const titleSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.title || expense.description), [expenses])
@@ -307,24 +310,28 @@ export default function ExpensesPage() {
     return expenses.filter((expense) => {
       const afterStart = !filterFromDate || expense.date >= filterFromDate
       const beforeEnd = !filterToDate || expense.date <= filterToDate
-      return afterStart && beforeEnd
+      const matchesSearch = matchesFinanceSearch(searchQuery, [expense.title, expense.description, expense.category])
+      return afterStart && beforeEnd && matchesSearch
     }).sort((left, right) => {
       const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
       const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
       return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
     })
-  }, [expenses, filterFromDate, filterToDate, sortBy, sortDirection])
+  }, [expenses, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
+  const totalPages = Math.max(1, Math.ceil(sortedExpenses.length / FINANCE_PAGE_SIZE))
+  const paginatedExpenses = useMemo(() => sortedExpenses.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedExpenses])
+  useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
+  useEffect(() => setPage(1), [filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
-  const groupedExpenses = sortedExpenses.reduce<Record<string, Expense[]>>((groups, expense) => {
+  const groupExpenses = (items: Expense[]) => items.reduce<Record<string, Expense[]>>((groups, expense) => {
     const key = expense.date.slice(0, 7)
     return {
       ...groups,
       [key]: [...(groups[key] ?? []), expense],
     }
   }, {})
-
-  const displayGroups = groupReportsByMonth ? Object.entries(groupedExpenses).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedExpenses] as const]
-  const printGroups = displayGroups.filter(([, groupItems]) => groupItems.length > 0)
+  const displayGroups = groupReportsByMonth ? Object.entries(groupExpenses(paginatedExpenses)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', paginatedExpenses] as const]
+  const printGroups = (groupReportsByMonth ? Object.entries(groupExpenses(sortedExpenses)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedExpenses] as const]).filter(([, groupItems]) => groupItems.length > 0)
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
     const [year, month] = monthKey.split('-').map(Number)
@@ -477,92 +484,27 @@ export default function ExpensesPage() {
     <PageContainer>
       <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportCSV} />
       <PageHeader title={t('expenses.title')} description={t('expenses.pageDescription').replace('{workspace}', currentCompany.name)}>
-        <div className="flex flex-wrap gap-2 lg:hidden">
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
-            {importing ? t('transactions.importing') : t('common.importCsv')}
-          </Button>
-          {expenses.length > 0 && (
-            <AppSelect
-              value={groupReportsByMonth ? 'month' : 'default'}
-              onChange={(value) => setGroupReportsByMonth(value === 'month')}
-              options={[
-                { value: 'default', label: t('common.noMonthGrouping') },
-                { value: 'month', label: t('common.groupByMonth') },
-              ]}
-                ariaLabel={t('common.groupByMonth')}
-              className="w-48"
-            />
-          )}
-          {expenses.length > 0 && (
-            <>
-              <input
-                type="date"
-                value={filterFromDate}
-                onChange={(event) => setFilterFromDate(event.target.value)}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                aria-label={t('dashboard.filterFrom')}
-              />
-              <input
-                type="date"
-                value={filterToDate}
-                onChange={(event) => setFilterToDate(event.target.value)}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                aria-label={t('dashboard.filterTo')}
-              />
-            </>
-          )}
-          {expenses.length > 0 && (
-            <>
-              <AppSelect
-                value={sortBy}
-                onChange={(value) => setSortBy(value as 'date' | 'amount')}
-                options={[
-                  { value: 'date', label: t('common.sortDate') },
-                  { value: 'amount', label: t('common.sortAmount') },
-                ]}
-                ariaLabel={t('common.sortBy')}
-                className="w-36"
-              />
-              <AppSelect
-                value={sortDirection}
-                onChange={(value) => setSortDirection(value as 'asc' | 'desc')}
-                options={[
-                  { value: 'desc', label: t('common.descending') },
-                  { value: 'asc', label: t('common.ascending') },
-                ]}
-                ariaLabel={t('common.sortDirection')}
-                className="w-40"
-              />
-            </>
-          )}
-          {expenses.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
-          {expenses.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
-          <Button onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
-            {showForm ? t('common.cancel') : t('expenses.add')}
-          </Button>
-        </div>
-        <Button className="hidden lg:inline-flex" onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
+        <Button onClick={() => { setShowForm(!showForm); setEditingEntry(null) }}>
           {showForm ? t('common.cancel') : t('expenses.add')}
         </Button>
       </PageHeader>
-
-      <DesktopPageUtilities title={t('pageUtilities.title')}>
-        <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>
-          {importing ? t('transactions.importing') : t('common.importCsv')}
-        </Button>
-        {expenses.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
-        {expenses.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
-      </DesktopPageUtilities>
-
-      {expenses.length > 0 && (
-        <div className="mb-5 hidden flex-wrap items-center gap-2 lg:flex">
-          <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-48" />
-          <input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" aria-label={t('dashboard.filterFrom')} />
-          <input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" aria-label={t('dashboard.filterTo')} />
-          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-36" />
-          <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-40" />
-        </div>
-      )}
+      <FinanceToolbar
+        filtersLabel={t('finance.filters')}
+        utilitiesLabel={t('finance.utilities')}
+        filters={expenses.length > 0 ? <>
+          <FinanceSearchInput value={searchQuery} onChange={setSearchQuery} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
+          <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
+          <input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterFrom')} />
+          <input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterTo')} />
+          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-full lg:w-36" />
+          <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-full lg:w-40" />
+        </> : undefined}
+        utilities={<>
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>{importing ? t('transactions.importing') : t('common.importCsv')}</Button>
+          {expenses.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
+          {expenses.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
+        </>}
+      />
 
       <div className="print-area print-compact print-report hidden">
         <div className="mb-2 flex items-start gap-3">
@@ -685,51 +627,25 @@ export default function ExpensesPage() {
         </Card>
       )}
 
-      {expenses.length === 0 ? (
-        <EmptyState title={t('expenses.noEntries')} description={t('expenses.emptyDescription')} />
+      {sortedExpenses.length === 0 ? (
+        <FinanceEmptyState filtered={expenses.length > 0} emptyTitle={t('expenses.noEntries')} emptyDescription={t('expenses.emptyDescription')} filteredTitle={t('finance.filteredEmptyTitle')} filteredDescription={t('finance.filteredEmptyDescription')} action={{ label: t('expenses.add'), onClick: () => { setShowForm(true); setEditingEntry(null) } }} />
       ) : (
         <div className="space-y-4">
           {displayGroups.map(([groupKey, groupItems]) => (
             <div key={groupKey} className="space-y-4">
               {groupReportsByMonth && <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{formatMonthLabel(groupKey)}</h2>}
+              <FinanceListShell titleLabel={t('transactions.titleLabel')} categoryLabel={t('common.category')} dateLabel={t('common.date')} amountLabel={t('common.amount')} actionsLabel={t('finance.actions')}>
               {groupItems.map((expense) => (
-            <div key={expense.id} className="space-y-2">
-            <Card>
-              <CardContent className="flex items-center justify-between pt-6">
-                <div>
-                  <p className="font-medium">{expense.title || expense.description}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {expense.title && expense.description ? `${expense.description} · ` : ''}{formatCategoryLabel(expense.category, t)} · {expense.date}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="font-normal">
-                      {formatCurrency(
-                        convertToCurrency(
-                          Number(expense.amount),
-                          expense.currency,
-                          normalizeCurrencyCode(currentCompany.currency ?? 'USD')
-                        ),
-                        normalizeCurrencyCode(currentCompany.currency ?? 'USD')
-                      )}
-                    </p>
-                    {normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && (
-                      <p className="text-sm text-slate-500">
-                        {formatCurrency(Number(expense.amount), expense.currency)}
-                      </p>
-                    )}
-                  </div>
-                  <Link href="/app/transactions">
-                    <Button variant="outline" size="sm">{t('nav.transactions')}</Button>
-                  </Link>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => handleEdit(expense)} aria-label={`${t('common.edit')} ${expense.title || expense.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button>
-                    <Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)} aria-label={`${t('common.delete')} ${expense.title || expense.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div key={expense.id}>
+              <FinanceListRow
+                title={expense.title || expense.description}
+                description={expense.title ? expense.description : undefined}
+                category={formatCategoryLabel(expense.category, t)}
+                date={expense.date}
+                amount={formatCurrency(convertToCurrency(Number(expense.amount), expense.currency, normalizeCurrencyCode(currentCompany.currency ?? 'USD')), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
+                amountDetail={normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') ? formatCurrency(Number(expense.amount), expense.currency) : undefined}
+                actions={<><Button asChild variant="outline" size="icon"><Link href="/app/transactions" aria-label={t('nav.transactions')} title={t('nav.transactions')}><ArrowRightLeft className="h-4 w-4" /></Link></Button><Button variant="outline" size="icon" onClick={() => handleEdit(expense)} aria-label={`${t('common.edit')} ${expense.title || expense.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)} aria-label={`${t('common.delete')} ${expense.title || expense.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button></>}
+              />
             {editingEntry?.id === expense.id && (
               <Card className="border-primary/30 bg-slate-50">
                 <CardContent className="p-4">
@@ -749,8 +665,10 @@ export default function ExpensesPage() {
             )}
             </div>
               ))}
+              </FinanceListShell>
             </div>
           ))}
+          <FinancePagination page={page} totalPages={totalPages} totalItems={sortedExpenses.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} />
         </div>
       )}
       <ConfirmDialog

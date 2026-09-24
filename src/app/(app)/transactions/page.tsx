@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDownCircle, ArrowUpCircle, Building2, Copy, Printer, Plus } from 'lucide-react'
-import { DesktopPageUtilities, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
@@ -15,6 +15,7 @@ import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrency
 import { parseCsv } from '@/lib/csv'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
+import { matchesFinanceSearch } from '@/lib/finance-ui'
 import { buildKassenbuch, getKassenbuchText, isFullCalendarMonthSelected } from '@/lib/kassenbuch'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
@@ -91,6 +92,8 @@ export default function TransactionsPage() {
   const [showBulkRename, setShowBulkRename] = useState(false)
   const [importing, setImporting] = useState(false)
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
   const [bulkEdit, setBulkEdit] = useState({
     category: { enabled: false, value: '' },
     date: { enabled: false, value: '' },
@@ -625,12 +628,27 @@ export default function TransactionsPage() {
   }
 
   const sortedTransactions = useMemo(() => {
-    return [...transactions].sort((left, right) => {
+    return transactions.filter((transaction) => matchesFinanceSearch(searchQuery, [transaction.title, transaction.description, transaction.category, transaction.reference]))
+      .sort((left, right) => {
       const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : left.amount
       const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : right.amount
       return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
     })
-  }, [transactions, sortBy, sortDirection])
+  }, [transactions, searchQuery, sortBy, sortDirection])
+  const totalPages = Math.max(1, Math.ceil(sortedTransactions.length / FINANCE_PAGE_SIZE))
+  const paginatedTransactions = useMemo(() => sortedTransactions.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedTransactions])
+  useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
+  useEffect(() => setPage(1), [searchQuery, sortBy, sortDirection])
+  const visibleTransactionKeys = useMemo(() => paginatedTransactions.map(getSelectionKey), [paginatedTransactions])
+  const selectedTransactionSet = useMemo(() => new Set(selectedTransactions), [selectedTransactions])
+  const allVisibleTransactionsSelected = visibleTransactionKeys.length > 0 && visibleTransactionKeys.every((key) => selectedTransactionSet.has(key))
+  const toggleVisibleTransactions = (checked: boolean) => {
+    setSelectedTransactions((current) => {
+      const next = new Set(current)
+      visibleTransactionKeys.forEach((key) => checked ? next.add(key) : next.delete(key))
+      return [...next]
+    })
+  }
 
   const bulkRenameMatches = useMemo(() => {
     const fromValue = bulkRename.from.trim()
@@ -789,103 +807,29 @@ export default function TransactionsPage() {
     <PageContainer>
       <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportCSV} />
       <PageHeader title={t('transactions.title')} description={`${t('transactions.description')} · ${currentCompany.name}`}>
-        <div className="flex flex-wrap gap-2 lg:hidden">
-          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-            {importing ? t('transactions.importing') : t('common.importCsv')}
-          </Button>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <span>{t('transactions.printFrom')}</span>
-            <input
-              type="date"
-              value={printFromDate}
-              onChange={(event) => setPrintFromDate(event.target.value)}
-              className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <span>{t('transactions.printTo')}</span>
-            <input
-              type="date"
-              value={printToDate}
-              onChange={(event) => setPrintToDate(event.target.value)}
-              className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={includeOpeningBalance}
-              onChange={(event) => handleOpeningBalanceChange(event.target.checked)}
-              className="h-4 w-4"
-            />
-            {t('transactions.includeOpeningBalance')}
-          </label>
-          <AppSelect
-            value={sortBy}
-            onChange={(value) => setSortBy(value as 'date' | 'amount')}
-            options={[
-              { value: 'date', label: t('common.sortDate') },
-              { value: 'amount', label: t('common.sortAmount') },
-            ]}
-            ariaLabel={t('common.sortBy')}
-            className="w-36"
-          />
-          <AppSelect
-            value={sortDirection}
-            onChange={(value) => setSortDirection(value as 'asc' | 'desc')}
-            options={[
-              { value: 'desc', label: t('common.descending') },
-              { value: 'asc', label: t('common.ascending') },
-            ]}
-            ariaLabel={t('common.sortDirection')}
-            className="w-40"
-          />
-          <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(true)} disabled={printableTransactions.length === 0}>
-            <Printer className="h-4 w-4" />
-            {t('common.print')}
-          </Button>
-          <Button type="button" variant="outline" onClick={handleEksExport} disabled={printableTransactions.length === 0}>
-            {t('transactions.exportEks')}
-          </Button>
-          <Button type="button" variant="outline" onClick={() => setShowBulkRename((value) => !value)}>
-            {showBulkRename ? t('common.cancel') : t('transactions.bulkRename')}
-          </Button>
-          <Button type="button" onClick={() => setShowForm((value) => !value)}>
-            <Plus className="h-4 w-4" />
-            {showForm ? t('common.cancel') : t('transactions.add')}
-          </Button>
-        </div>
-        <Button className="hidden lg:inline-flex" type="button" onClick={() => setShowForm((value) => !value)}>
+        <Button type="button" onClick={() => setShowForm((value) => !value)}>
           <Plus className="h-4 w-4" />
           {showForm ? t('common.cancel') : t('transactions.add')}
         </Button>
       </PageHeader>
-
-      <DesktopPageUtilities title={t('pageUtilities.title')}>
-        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-          {importing ? t('transactions.importing') : t('common.importCsv')}
-        </Button>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <span>{t('transactions.printFrom')}</span>
-          <input type="date" value={printFromDate} onChange={(event) => setPrintFromDate(event.target.value)} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm" />
-        </label>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <span>{t('transactions.printTo')}</span>
-          <input type="date" value={printToDate} onChange={(event) => setPrintToDate(event.target.value)} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm" />
-        </label>
-        <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-          <input type="checkbox" checked={includeOpeningBalance} onChange={(event) => handleOpeningBalanceChange(event.target.checked)} className="h-4 w-4" />
-          {t('transactions.includeOpeningBalance')}
-        </label>
-        <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(true)} disabled={printableTransactions.length === 0}><Printer className="h-4 w-4" />{t('common.print')}</Button>
-        <Button type="button" variant="outline" onClick={handleEksExport} disabled={printableTransactions.length === 0}>{t('transactions.exportEks')}</Button>
-      </DesktopPageUtilities>
-
-      <div className="mb-5 hidden flex-wrap items-center gap-2 lg:flex">
-        <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-36" />
-        <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-40" />
-        <Button type="button" variant="outline" onClick={() => setShowBulkRename((value) => !value)}>{showBulkRename ? t('common.cancel') : t('transactions.bulkRename')}</Button>
-      </div>
+      <FinanceToolbar
+        filtersLabel={t('finance.filters')}
+        utilitiesLabel={t('finance.utilities')}
+        filters={<>
+          <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setSelectedTransactions([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
+          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-full lg:w-36" />
+          <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-full lg:w-40" />
+          <Button type="button" variant="outline" onClick={() => setShowBulkRename((value) => !value)}>{showBulkRename ? t('common.cancel') : t('transactions.bulkRename')}</Button>
+        </>}
+        utilities={<>
+          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>{importing ? t('transactions.importing') : t('common.importCsv')}</Button>
+          <label className="grid gap-1 text-sm text-slate-600 lg:flex lg:items-center lg:gap-2"><span>{t('transactions.printFrom')}</span><input type="date" value={printFromDate} onChange={(event) => setPrintFromDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm lg:w-auto" /></label>
+          <label className="grid gap-1 text-sm text-slate-600 lg:flex lg:items-center lg:gap-2"><span>{t('transactions.printTo')}</span><input type="date" value={printToDate} onChange={(event) => setPrintToDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm lg:w-auto" /></label>
+          <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"><input type="checkbox" checked={includeOpeningBalance} onChange={(event) => handleOpeningBalanceChange(event.target.checked)} className="h-4 w-4" />{t('transactions.includeOpeningBalance')}</label>
+          <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(true)} disabled={printableTransactions.length === 0}><Printer className="h-4 w-4" />{t('common.print')}</Button>
+          <Button type="button" variant="outline" onClick={handleEksExport} disabled={printableTransactions.length === 0}>{t('transactions.exportEks')}</Button>
+        </>}
+      />
 
       {printFormatDialogOpen && (
         <div
@@ -1159,6 +1103,10 @@ export default function TransactionsPage() {
         <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>
       )}
 
+      {sortedTransactions.length > 0 && (
+        <FinanceSelectionBar checked={allVisibleTransactionsSelected} onCheckedChange={toggleVisibleTransactions} selectVisibleLabel={t('finance.selectVisible')} selectedLabel={t('finance.selectedCount').replace('{count}', String(selectedTransactions.length))} />
+      )}
+
       {selectedTransactions.length > 0 && (
         <Card className="mb-6">
           <CardHeader><CardTitle>{t('transactions.bulkEditTitle').replace('{count}', String(selectedTransactions.length))}</CardTitle></CardHeader>
@@ -1361,63 +1309,31 @@ export default function TransactionsPage() {
         </Card>
       )}
 
-      {transactions.length === 0 ? (
-        <EmptyState title={t('common.noTransactions')} description={t('transactions.emptyDescription')} />
+      {sortedTransactions.length === 0 ? (
+        <FinanceEmptyState filtered={transactions.length > 0} emptyTitle={t('common.noTransactions')} emptyDescription={t('transactions.emptyDescription')} filteredTitle={t('finance.filteredEmptyTitle')} filteredDescription={t('finance.filteredEmptyDescription')} action={{ label: t('transactions.add'), onClick: () => setShowForm(true) }} />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <div className="hidden gap-3 border-b bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto] lg:grid-cols-[auto_minmax(0,1fr)_160px_160px_48px_auto]">
-            <span className="lg:col-start-5 lg:row-start-1 lg:text-center">{t('transactions.select')}</span>
-            <span className="lg:col-start-1 lg:row-start-1">{t('transactions.type')}</span>
-            <span className="lg:col-start-2 lg:row-start-1">{t('transactions.titleLabel')}</span>
-            <span className="hidden md:block lg:col-start-3 lg:row-start-1">{t('common.category')}</span>
-            <span className="text-right lg:col-start-4 lg:row-start-1">{t('common.amount')}</span>
-            <span className="sr-only lg:col-start-6 lg:row-start-1">{t('common.copy')}</span>
-          </div>
-          {sortedTransactions.map((transaction) => {
+        <FinanceListShell titleLabel={t('transactions.titleLabel')} categoryLabel={t('common.category')} dateLabel={t('common.date')} amountLabel={t('common.amount')} selectionLabel={t('transactions.select')} actionsLabel={t('finance.actions')}>
+          {paginatedTransactions.map((transaction) => {
             const isIncome = transaction.type === 'income'
             const Icon = isIncome ? ArrowUpCircle : ArrowDownCircle
 
             return (
-              <div
+              <FinanceListRow
                 key={`${transaction.type}-${transaction.id}`}
-                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[auto_auto_minmax(0,1fr)_160px_160px_auto] lg:grid-cols-[auto_minmax(0,1fr)_160px_160px_48px_auto]"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedTransactions.includes(getSelectionKey(transaction))}
-                  onChange={(event) => {
-                    const key = getSelectionKey(transaction)
-                    setSelectedTransactions((current) => event.target.checked
-                      ? [...current, key]
-                      : current.filter((value) => value !== key))
-                  }}
-                  aria-label={`${t('transactions.select')} ${transaction.title || transaction.description || transaction.date}`}
-                  className="mt-0.5 h-4 w-4 lg:col-start-5 lg:row-start-1 lg:justify-self-center"
-                />
-                <span className={`hidden items-center gap-1 font-medium md:inline-flex lg:col-start-1 lg:row-start-1 ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}>
-                  <Icon className="h-4 w-4" />
-                  {isIncome ? t('income.title') : t('expenses.title')}
-                </span>
-                <span className="min-w-0 lg:col-start-2 lg:row-start-1">
-                  <span className="block font-medium text-slate-900">{transaction.title || transaction.description || '-'}</span>
-                  <span className="block break-words text-xs text-slate-500">
-                    <span className="md:hidden">{isIncome ? t('income.title') : t('expenses.title')} · </span>
-                    {transaction.title && transaction.description ? `${transaction.description} · ` : ''}{transaction.date}
-                  </span>
-                </span>
-                <span className="hidden text-slate-600 md:block lg:col-start-3 lg:row-start-1">{formatCategoryLabel(transaction.category, t)}</span>
-                <span className="text-right font-semibold lg:col-start-4 lg:row-start-1">
-                  {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
-                </span>
-                <Button className="col-start-2 justify-self-start md:col-start-auto md:justify-self-auto lg:col-start-6 lg:row-start-1" size="sm" variant="outline" onClick={() => handleCopyTransaction(transaction)} aria-label={`${t('common.copy')} ${transaction.title || transaction.description || transaction.date}`} title={t('common.copy')}>
-                  <Copy className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('common.copy')}</span>
-                </Button>
-              </div>
+                title={transaction.title || transaction.description || '-'}
+                description={transaction.title ? transaction.description : undefined}
+                badge={<span className={`inline-flex items-center gap-1 text-xs font-medium ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}><Icon className="h-4 w-4" />{isIncome ? t('income.title') : t('expenses.title')}</span>}
+                category={formatCategoryLabel(transaction.category, t)}
+                date={transaction.date}
+                amount={formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
+                selection={<label className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedTransactionSet.has(getSelectionKey(transaction))} onChange={(event) => { const key = getSelectionKey(transaction); setSelectedTransactions((current) => event.target.checked ? [...new Set([...current, key])] : current.filter((value) => value !== key)) }} aria-label={`${t('transactions.select')} ${transaction.title || transaction.description || transaction.date}`} className="h-4 w-4" /></label>}
+                actions={<Button size="icon" variant="outline" onClick={() => handleCopyTransaction(transaction)} aria-label={`${t('common.copy')} ${transaction.title || transaction.description || transaction.date}`} title={t('common.copy')}><Copy className="h-4 w-4" /></Button>}
+              />
             )
           })}
-        </div>
+        </FinanceListShell>
       )}
+      {sortedTransactions.length > 0 && <FinancePagination page={page} totalPages={totalPages} totalItems={sortedTransactions.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} />}
     </PageContainer>
   )
 }

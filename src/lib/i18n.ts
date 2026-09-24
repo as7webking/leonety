@@ -11,6 +11,7 @@ import { productInventoryUxDictionaries } from '@/lib/product-inventory-ux-i18n'
 import { pageUtilitiesDictionaries } from '@/lib/page-utilities-i18n'
 import { systemNotificationDictionaries } from '@/lib/system-notifications-i18n'
 import { appModeDictionaries } from '@/lib/app-mode-i18n'
+import { financeUiDictionaries } from '@/lib/finance-ui-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8865,6 +8866,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], orderNotificationDictionaries[locale])
   Object.assign(dictionaries[locale], systemNotificationDictionaries[locale])
   Object.assign(dictionaries[locale], appModeDictionaries[locale])
+  Object.assign(dictionaries[locale], financeUiDictionaries[locale])
 }
 
 for (const locale of locales) {
