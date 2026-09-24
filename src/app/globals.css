@@ -395,9 +395,11 @@ html {
   }
 
   .print-area.print-kassenbuch {
-    width: 186mm !important;
-    min-width: 186mm !important;
-    max-width: 186mm !important;
+    /* A4 minus 12mm page margins is 186mm. Keep a fractional-mm safety gap so
+       iOS WebKit cannot round the bordered table beyond the page fragment. */
+    width: 185.5mm !important;
+    min-width: 0 !important;
+    max-width: 185.5mm !important;
     box-sizing: border-box !important;
     color: #111 !important;
     font-family: Arial, Helvetica, sans-serif;
@@ -405,12 +407,20 @@ html {
   }
 
   /* WebKit paginates hidden app-shell geometry unless its screen min-heights are reset. */
+  body:has(.print-kassenbuch) > div,
+  body:has(.print-kassenbuch) > div > .flex-1,
   body:has(.print-kassenbuch) .min-h-screen,
   body:has(.print-kassenbuch) main,
   body:has(.print-kassenbuch) .container {
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
+  }
+
+  body:has(.print-kassenbuch) > div,
+  body:has(.print-kassenbuch) > div > .flex-1 {
+    display: block !important;
+    flex: none !important;
   }
 
   body:has(.print-kassenbuch) .overflow-x-clip {
