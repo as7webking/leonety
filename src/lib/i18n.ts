@@ -12,6 +12,7 @@ import { pageUtilitiesDictionaries } from '@/lib/page-utilities-i18n'
 import { systemNotificationDictionaries } from '@/lib/system-notifications-i18n'
 import { appModeDictionaries } from '@/lib/app-mode-i18n'
 import { financeUiDictionaries } from '@/lib/finance-ui-i18n'
+import { authenticatedQaDictionaries, ukrainianAuthenticatedFixes } from '@/lib/authenticated-qa-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8867,13 +8868,23 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], systemNotificationDictionaries[locale])
   Object.assign(dictionaries[locale], appModeDictionaries[locale])
   Object.assign(dictionaries[locale], financeUiDictionaries[locale])
+  Object.assign(dictionaries[locale], authenticatedQaDictionaries[locale])
 }
+
+Object.assign(dictionaries.uk, ukrainianAuthenticatedFixes)
+
+export const missingTranslationKeys = Object.fromEntries(
+  locales.map((locale) => [
+    locale,
+    Object.keys(dictionaries[defaultLocale]).filter((key) => !dictionaries[locale][key]?.trim()),
+  ])
+) as Record<Locale, string[]>
 
 for (const locale of locales) {
   if (locale === defaultLocale) continue
 
-  for (const [key, englishValue] of Object.entries(dictionaries[defaultLocale])) {
-    dictionaries[locale][key] ??= englishValue
+  for (const key of missingTranslationKeys[locale]) {
+    dictionaries[locale][key] = dictionaries[defaultLocale][key]
   }
 }
 

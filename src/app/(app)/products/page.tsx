@@ -436,7 +436,7 @@ export default function ProductsPage() {
     ])
     const { data, error: loadError } = productResult
     if (loadError) {
-      setError(loadError.code === '42P01' ? 'Products database table is required.' : loadError.message)
+      setError(loadError.code === '42P01' ? t('products.databaseRequired') : loadError.message)
       setProducts([])
     } else {
       setProducts(((data ?? []) as Product[]).map((product) => ({
@@ -455,7 +455,7 @@ export default function ProductsPage() {
       setSyncs(grouped)
     } else if (['42P01', 'PGRST205'].includes(syncResult.error.code ?? '')) {
       setSyncs({})
-      setError('Product sync database table is required.')
+      setError(t('products.syncDatabaseRequired'))
     } else {
       setError(syncResult.error.message)
     }
@@ -479,7 +479,7 @@ export default function ProductsPage() {
       setError(categoryResult.error.message)
     }
     setLoading(false)
-  }, [currentCompany, supabase])
+  }, [currentCompany, supabase, t])
 
   useEffect(() => { void loadProducts() }, [loadProducts])
 

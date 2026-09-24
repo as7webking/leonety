@@ -209,7 +209,7 @@ export default function TimePage() {
       } = await supabase.auth.getUser()
 
       if (userError) throw userError
-      if (!user) throw new Error('Not authenticated')
+      if (!user) throw new Error(t('time.notAuthenticated'))
 
       const [entriesRes, timersRes] = await Promise.all([
         supabase
@@ -254,11 +254,11 @@ export default function TimePage() {
       setActiveTimers(((fallbackTimersRes?.data ?? timersRes.data ?? []) as ActiveTimer[]))
     } catch (error) {
       console.error('Failed to load time data:', formatSupabaseError(error))
-      setTimerError('Failed to load time tracking data')
+      setTimerError(t('time.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [currentCompany, supabase])
+  }, [currentCompany, supabase, t])
 
   useEffect(() => {
     void loadTimePageData()
@@ -275,12 +275,12 @@ export default function TimePage() {
     }
 
     if (!currentCompany) {
-      setTimerError('Create a workspace first')
+      setTimerError(t('time.createWorkspaceFirst'))
       return
     }
 
     if (activeTimers.length >= MAX_ACTIVE_TIMERS) {
-      setTimerError(`You can run up to ${MAX_ACTIVE_TIMERS} active timers at the same time. Complete one before starting another.`)
+      setTimerError(t('time.activeTimerLimitReached').replace('{count}', String(MAX_ACTIVE_TIMERS)))
       return
     }
 
@@ -296,7 +296,7 @@ export default function TimePage() {
 
       if (userError) throw userError
       if (!user) {
-        throw new Error('Not authenticated')
+        throw new Error(t('time.notAuthenticated'))
       }
 
       const { data: existingTimers, error: existingTimerError } = await supabase
@@ -307,7 +307,7 @@ export default function TimePage() {
 
       if (existingTimerError) throw existingTimerError
       if ((existingTimers?.length ?? 0) >= MAX_ACTIVE_TIMERS) {
-        setTimerError(`You can run up to ${MAX_ACTIVE_TIMERS} active timers at the same time. Complete one before starting another.`)
+        setTimerError(t('time.activeTimerLimitReached').replace('{count}', String(MAX_ACTIVE_TIMERS)))
         return
       }
 
@@ -315,7 +315,7 @@ export default function TimePage() {
       const payload = {
         company_id: currentCompany.id,
         user_id: user.id,
-        description: newTimerDescription.trim() || 'Timed session',
+        description: newTimerDescription.trim() || t('time.timedSession'),
         started_at: startedAt,
       }
 
@@ -327,22 +327,22 @@ export default function TimePage() {
 
       if (error) throw error
       if (!data) {
-        throw new Error('Active timer start returned no row')
+        throw new Error(t('time.timerStartFailed'))
       }
 
       setActiveTimers((prev) => [...prev, data as ActiveTimer])
       setNewTimerDescription('')
-      setTimerInfo('Timer started')
+      setTimerInfo(t('time.timerStarted'))
     } catch (error) {
       const formatted = formatSupabaseError(error)
       console.error('Active timer start payload:', {
         company_id: currentCompany.id,
         user_id: 'resolved at runtime',
-        description: newTimerDescription.trim() || 'Timed session',
+        description: newTimerDescription.trim() || t('time.timedSession'),
       })
       console.error('Failed to start timer:', formatted)
       if (formatted.code === '23505' && formatted.message.includes('uq_active_timers_user_id')) {
-        setTimerError('The database still allows only one active timer. The timer page is ready for up to 7, but the database constraint must also allow it.')
+        setTimerError(t('time.singleTimerConstraint'))
         return
       }
       setTimerError(
@@ -367,7 +367,7 @@ export default function TimePage() {
         )
       }
 
-      setTimerInfo('Timer paused.')
+      setTimerInfo(t('time.timerPaused'))
       setTimerError('')
     } catch (error) {
       const formatted = formatSupabaseError(error)
@@ -392,7 +392,7 @@ export default function TimePage() {
         )
       }
 
-      setTimerInfo('Timer resumed.')
+      setTimerInfo(t('time.timerResumed'))
       setTimerError('')
     } catch (error) {
       const formatted = formatSupabaseError(error)
@@ -418,7 +418,7 @@ export default function TimePage() {
         )
       }
 
-      setTimerInfo('Timer completed and saved.')
+      setTimerInfo(t('time.timerCompleted'))
       setTimerError('')
     } catch (error) {
       const formatted = formatSupabaseError(error)
@@ -447,7 +447,7 @@ export default function TimePage() {
         .filter(Boolean)
 
       if (lines.length < 2) {
-        throw new Error('CSV must contain a header row and at least one data row')
+        throw new Error(t('time.importEmpty'))
       }
 
       const header = lines[0].split(',').map((value) => value.trim().toLowerCase().replace(/^"|"$/g, ''))
@@ -456,7 +456,7 @@ export default function TimePage() {
       const hoursIndex = header.indexOf('hours')
 
       if (dateIndex === -1 || descriptionIndex === -1 || hoursIndex === -1) {
-        throw new Error('CSV must include Date, Description, and Hours columns')
+        throw new Error(t('time.importMissingColumns'))
       }
 
       const rows = lines.slice(1)
@@ -467,15 +467,15 @@ export default function TimePage() {
         const hours = Number(columns[hoursIndex])
 
         if (!date || Number.isNaN(new Date(date).getTime())) {
-          throw new Error(`Row ${index + 2}: invalid date`)
+          throw new Error(t('time.importInvalidDate').replace('{row}', String(index + 2)))
         }
 
         if (!description) {
-          throw new Error(`Row ${index + 2}: description is required`)
+          throw new Error(t('time.importDescriptionRequired').replace('{row}', String(index + 2)))
         }
 
         if (!Number.isFinite(hours) || hours <= 0) {
-          throw new Error(`Row ${index + 2}: hours must be greater than 0`)
+          throw new Error(t('time.importHoursRequired').replace('{row}', String(index + 2)))
         }
 
         return {
@@ -489,7 +489,7 @@ export default function TimePage() {
       const { error } = await supabase.from('time_entries').insert(payload)
       if (error) throw error
 
-      setTimerInfo(`Imported ${payload.length} time entr${payload.length === 1 ? 'y' : 'ies'}`)
+      setTimerInfo(t('time.importSucceeded').replace('{count}', String(payload.length)))
       await loadTimePageData()
     } catch (error) {
       const formatted = formatSupabaseError(error)

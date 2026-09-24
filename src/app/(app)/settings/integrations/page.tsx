@@ -194,6 +194,7 @@ const copy: Record<Locale, Record<string, string>> = {
     previews: 'Saved credentials',
     oauthConnect: 'Connect with OAuth',
     testOpenCart: 'Test OpenCart',
+    testSucceeded: 'OpenCart responded successfully.',
     exportProducts: 'Export products CSV',
     importProducts: 'Import products',
     syncProducts: 'Sync products',
@@ -254,6 +255,7 @@ const copy: Record<Locale, Record<string, string>> = {
     previews: 'Gespeicherte Zugangsdaten',
     oauthConnect: 'Mit OAuth verbinden',
     testOpenCart: 'OpenCart testen',
+    testSucceeded: 'OpenCart hat erfolgreich geantwortet.',
     exportProducts: 'Produkte als CSV exportieren',
     importProducts: 'Produkte importieren',
     syncProducts: 'Produkte synchronisieren',
@@ -314,6 +316,7 @@ const copy: Record<Locale, Record<string, string>> = {
     previews: 'Kayıtlı bilgiler',
     oauthConnect: 'OAuth ile bağlan',
     testOpenCart: 'OpenCart test et',
+    testSucceeded: 'OpenCart başarıyla yanıt verdi.',
     exportProducts: 'Ürünleri CSV dışa aktar',
     importProducts: 'Ürünleri içe aktar',
     syncProducts: 'Ürünleri senkronize et',
@@ -374,6 +377,7 @@ const copy: Record<Locale, Record<string, string>> = {
     previews: 'Сохраненные данные',
     oauthConnect: 'Подключить через OAuth',
     testOpenCart: 'Проверить OpenCart',
+    testSucceeded: 'OpenCart успешно ответил.',
     exportProducts: 'Экспорт товаров CSV',
     importProducts: 'Импорт товаров',
     syncProducts: 'Синхронизировать товары',
@@ -434,6 +438,7 @@ const copy: Record<Locale, Record<string, string>> = {
     previews: 'Збережені дані',
     oauthConnect: 'Підключити через OAuth',
     testOpenCart: 'Перевірити OpenCart',
+    testSucceeded: 'OpenCart успішно відповів.',
     exportProducts: 'Експорт товарів CSV',
     importProducts: 'Імпорт товарів',
     syncProducts: 'Синхронізувати товари',
@@ -494,6 +499,7 @@ const copy: Record<Locale, Record<string, string>> = {
     previews: 'Zapisane dane',
     oauthConnect: 'Połącz przez OAuth',
     testOpenCart: 'Testuj OpenCart',
+    testSucceeded: 'OpenCart odpowiedział prawidłowo.',
     exportProducts: 'Eksport produktów CSV',
     importProducts: 'Importuj produkty',
     syncProducts: 'Synchronizuj produkty',
@@ -554,6 +560,7 @@ const copy: Record<Locale, Record<string, string>> = {
     previews: 'Identifiants enregistrés',
     oauthConnect: 'Connecter avec OAuth',
     testOpenCart: 'Tester OpenCart',
+    testSucceeded: 'OpenCart a répondu correctement.',
     exportProducts: 'Exporter les produits CSV',
     importProducts: 'Importer les produits',
     syncProducts: 'Synchroniser les produits',
@@ -845,7 +852,7 @@ export default function StoreIntegrationsPage() {
     if (!response.ok) {
       setError(localizedApiError(payload, labels))
     } else {
-      setMessage(payload.message ?? 'OpenCart API responded.')
+      setMessage(payload.message ?? labels.testSucceeded)
     }
 
     setTesting(false)

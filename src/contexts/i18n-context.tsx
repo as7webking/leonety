@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { LOCALE_COOKIE, defaultLocale, dictionaries, normalizeLocale, type Locale } from '@/lib/i18n'
+import { LOCALE_COOKIE, defaultLocale, dictionaries, missingTranslationKeys, normalizeLocale, type Locale } from '@/lib/i18n'
 
 interface I18nContextValue {
   locale: Locale
@@ -48,7 +48,7 @@ export function I18nProvider({
       const translatedValue = dictionaries[locale][key]
       const fallbackValue = dictionaries.en[key]
 
-      if (!translatedValue && process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== 'production' && missingTranslationKeys[locale].includes(key)) {
         const warningKey = `${locale}:${key}`
         if (!warnedMissingKeys.has(warningKey)) {
           warnedMissingKeys.add(warningKey)
@@ -56,7 +56,7 @@ export function I18nProvider({
         }
       }
 
-      return translatedValue ?? fallbackValue ?? humanizeMissingKey(key)
+      return translatedValue || fallbackValue || humanizeMissingKey(key)
     },
   }), [locale])
 

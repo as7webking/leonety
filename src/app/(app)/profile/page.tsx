@@ -278,14 +278,14 @@ export default function ProfilePage() {
         setCurrency(normalizeCurrencyCode(data.currency))
         setPhone(typeof user.user_metadata?.phone === 'string' ? user.user_metadata.phone : '')
       } catch {
-        setMessage('Error loading profile')
+        setMessage(t('profile.loadFailed'))
       } finally {
         setLoading(false)
       }
     }
 
     loadProfile()
-  }, [supabase, router])
+  }, [supabase, router, t])
 
   useEffect(() => {
     if (currentCompany) {
@@ -308,7 +308,7 @@ export default function ProfilePage() {
         const response = await fetch('/api/admin/access', { cache: 'no-store' })
         const data = await response.json()
         if (!response.ok) {
-          throw new Error(data.error || 'Failed to load managed profiles')
+          throw new Error(data.error || t('profile.adminLoadFailed'))
         }
         if (active) {
           setManagedProfiles(data.profiles ?? [])
@@ -316,7 +316,7 @@ export default function ProfilePage() {
         }
       } catch (error) {
         if (active) {
-          setAdminError(error instanceof Error ? error.message : 'Failed to load admin controls')
+          setAdminError(error instanceof Error ? error.message : t('profile.adminLoadFailed'))
         }
       } finally {
         if (active) {
@@ -330,7 +330,7 @@ export default function ProfilePage() {
     return () => {
       active = false
     }
-  }, [accountAccess.isAdmin])
+  }, [accountAccess.isAdmin, t])
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -349,7 +349,7 @@ export default function ProfilePage() {
       }
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!user) throw new Error(t('profile.notAuthenticated'))
 
       const { error } = await supabase
         .from('profiles')
@@ -367,7 +367,7 @@ export default function ProfilePage() {
       })
       if (authUpdateError) throw authUpdateError
 
-      setMessage('Profile updated successfully!')
+      setMessage(t('profile.updateSucceeded'))
       setProfile(prev => prev ? {
         ...prev,
         full_name: fullName,
@@ -377,9 +377,9 @@ export default function ProfilePage() {
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
       if (error instanceof Error) {
-        setMessage('Error: ' + error.message)
+        setMessage(error.message)
       } else {
-        setMessage('Error updating profile')
+        setMessage(t('profile.updateFailed'))
       }
     } finally {
       setIsSaving(false)
@@ -391,7 +391,7 @@ export default function ProfilePage() {
       await supabase.auth.signOut()
       router.push('/login')
     } catch {
-      setMessage('Error logging out')
+      setMessage(t('profile.logoutFailed'))
     }
   }
 
@@ -429,15 +429,15 @@ export default function ProfilePage() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update access')
+        throw new Error(data.error || t('profile.accessUpdateFailed'))
       }
 
       setManagedProfiles(data.profiles ?? [])
       setUpgradeRequests(data.upgradeRequests ?? [])
-      setMessage('Access updated successfully!')
+      setMessage(t('profile.accessUpdateSucceeded'))
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
-      setMessage(error instanceof Error ? `Error: ${error.message}` : 'Error updating access')
+      setMessage(error instanceof Error ? error.message : t('profile.accessUpdateFailed'))
     } finally {
       setAdminLoading(false)
     }
@@ -463,15 +463,15 @@ export default function ProfilePage() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update upgrade request')
+        throw new Error(data.error || t('profile.upgradeRequestFailed'))
       }
 
       setManagedProfiles(data.profiles ?? [])
       setUpgradeRequests(data.upgradeRequests ?? [])
-      setMessage(status === 'approved' ? 'Pro request approved.' : 'Pro request rejected.')
+      setMessage(status === 'approved' ? t('profile.upgradeRequestApproved') : t('profile.upgradeRequestRejected'))
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
-      setAdminError(error instanceof Error ? error.message : 'Failed to update upgrade request')
+      setAdminError(error instanceof Error ? error.message : t('profile.upgradeRequestFailed'))
     } finally {
       setAdminLoading(false)
     }
@@ -548,10 +548,10 @@ export default function ProfilePage() {
   const handleCopy = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value)
-      setMessage(`${label} copied.`)
+      setMessage(t('profile.copySucceeded').replace('{label}', label))
       setTimeout(() => setMessage(''), 2000)
     } catch {
-      setMessage(`Error: failed to copy ${label.toLowerCase()}`)
+      setMessage(t('profile.copyFailed').replace('{label}', label.toLowerCase()))
     }
   }
 
@@ -652,7 +652,7 @@ export default function ProfilePage() {
 
   const handlePrintTransactions = async () => {
     if (!currentCompany) {
-      setMessage('No workspace selected')
+      setMessage(t('profile.noWorkspaceSelected'))
       return
     }
 
@@ -661,13 +661,13 @@ export default function ProfilePage() {
 
     try {
       if (!reportFromDate && !reportToDate) {
-        setMessage('Select at least one report date.')
+        setMessage(t('profile.selectReportDate'))
         setIsPreparingPrint(false)
         return
       }
 
       if (reportFromDate && reportToDate && reportFromDate > reportToDate) {
-        setMessage('Report start date must be before the end date.')
+        setMessage(t('profile.invalidReportPeriod'))
         setIsPreparingPrint(false)
         return
       }
@@ -713,7 +713,7 @@ export default function ProfilePage() {
       ].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime())
 
       if (transactions.length === 0) {
-        setMessage('No transactions found for the selected period.')
+        setMessage(t('profile.noReportTransactions'))
         setIsPreparingPrint(false)
         return
       }
@@ -729,7 +729,7 @@ export default function ProfilePage() {
       }, 50)
     } catch (error) {
       setIsPreparingPrint(false)
-      setMessage(error instanceof Error ? `Error: ${error.message}` : 'Error preparing print report')
+      setMessage(error instanceof Error ? error.message : t('profile.reportPreparationFailed'))
     }
   }
 
@@ -781,7 +781,7 @@ export default function ProfilePage() {
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>Leonety report</title>
+          <title>${escapeHtml(t('profile.reportDocumentTitle'))}</title>
         </head>
         <body style="font-family:Arial,sans-serif;color:#0f172a;">
           <h1 style="font-size:22px;margin:0 0 16px;text-transform:capitalize;">${escapeHtml(getReportTitle())}</h1>
@@ -793,7 +793,7 @@ export default function ProfilePage() {
 
   const handleDownloadTransactionsWord = () => {
     if (printTransactions.length === 0) {
-      setMessage('Prepare a report before downloading Word.')
+      setMessage(t('profile.prepareReportFirst'))
       return
     }
 
