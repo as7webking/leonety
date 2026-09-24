@@ -17,7 +17,7 @@ export function AppSidebar() {
   const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white md:flex md:flex-col" aria-labelledby="app-sidebar-label">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white xl:flex xl:flex-col" aria-labelledby="app-sidebar-label">
       <span id="app-sidebar-label" className="sr-only"><T k="nav.appNavigation" /></span>
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-5">
         <Link href="/app/dashboard" className="flex items-center gap-3">

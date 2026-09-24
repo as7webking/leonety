@@ -14,7 +14,6 @@ export function useBodyScrollLock(locked: boolean) {
       position: body.style.position,
       top: body.style.top,
       width: body.style.width,
-      touchAction: body.style.touchAction,
       paddingRight: body.style.paddingRight,
     }
 
@@ -22,7 +21,6 @@ export function useBodyScrollLock(locked: boolean) {
     body.style.position = 'fixed'
     body.style.top = `-${scrollY}px`
     body.style.width = '100%'
-    body.style.touchAction = 'none'
     if (scrollbarWidth > 0) {
       body.style.paddingRight = `${scrollbarWidth}px`
     }
@@ -32,7 +30,6 @@ export function useBodyScrollLock(locked: boolean) {
       body.style.position = previous.position
       body.style.top = previous.top
       body.style.width = previous.width
-      body.style.touchAction = previous.touchAction
       body.style.paddingRight = previous.paddingRight
       window.scrollTo(0, scrollY)
     }

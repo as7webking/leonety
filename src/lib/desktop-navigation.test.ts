@@ -4,6 +4,8 @@ import test from 'node:test'
 import { isNavigationItemActive } from '../components/app-shell/navigation-items.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { calculateAppSelectPosition } from './app-select-position.ts'
+// @ts-expect-error Node's native TypeScript runner requires explicit extensions.
+import { shouldCloseNavigationDrawer, shouldOpenNavigationDrawer } from './mobile-navigation-gesture.ts'
 
 test('keeps parent navigation active for nested routes only', () => {
   assert.equal(isNavigationItemActive('/app/employees', '/app/employees'), true)
@@ -70,4 +72,17 @@ test('honors an upward preference while falling back when the top cannot fit', (
   })
   assert.equal(nearBottom.openAbove, true)
   assert.equal(nearBottom.bottom, 86)
+})
+
+test('opens navigation only for a deliberate swipe starting at the left edge', () => {
+  assert.equal(shouldOpenNavigationDrawer({ startX: 12, startY: 300, endX: 100, endY: 310 }), true)
+  assert.equal(shouldOpenNavigationDrawer({ startX: 80, startY: 300, endX: 180, endY: 305 }), false)
+  assert.equal(shouldOpenNavigationDrawer({ startX: 12, startY: 300, endX: 55, endY: 302 }), false)
+  assert.equal(shouldOpenNavigationDrawer({ startX: 12, startY: 300, endX: 100, endY: 390 }), false)
+})
+
+test('closes navigation for a deliberate reverse swipe without reacting to vertical scrolling', () => {
+  assert.equal(shouldCloseNavigationDrawer({ startX: 250, startY: 300, endX: 170, endY: 306 }), true)
+  assert.equal(shouldCloseNavigationDrawer({ startX: 250, startY: 300, endX: 220, endY: 302 }), false)
+  assert.equal(shouldCloseNavigationDrawer({ startX: 250, startY: 300, endX: 170, endY: 390 }), false)
 })

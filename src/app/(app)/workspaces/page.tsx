@@ -11,7 +11,7 @@ import { useCompany } from '@/contexts/company-context'
 import type { AccountAccess } from '@/lib/account-access'
 import { paidAppPlans, planDefinitions } from '@/lib/billing/plans'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
-import { Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Plus, Trash2 } from 'lucide-react'
 import { AppSelect } from '@/components/app-select'
 import { useI18n } from '@/contexts/i18n-context'
 import { getIntlLocale } from '@/lib/i18n'
@@ -244,28 +244,28 @@ export default function WorkspacesPage() {
       />
 
       {companies.length > 0 && !showCreatePanel && (
-        <div className="flex justify-end">
-          <Button type="button" onClick={() => void handleAddWorkspace()} disabled={entitlementLoading}>
+        <div className="flex w-full justify-stretch sm:justify-end">
+          <Button type="button" className="min-h-11 w-full sm:min-h-10 sm:w-auto" onClick={() => void handleAddWorkspace()} disabled={entitlementLoading}>
             <Plus className="mr-2 h-4 w-4" />
             {t('nav.addWorkspace')}
           </Button>
         </div>
       )}
 
-      <div className={`grid gap-6 ${showCreatePanel ? 'lg:grid-cols-[1.4fr_0.9fr]' : ''}`}>
-        <div className="space-y-4">
+      <div className={`grid min-w-0 gap-4 sm:gap-6 ${showCreatePanel ? 'xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.9fr)]' : ''}`}>
+        <div className="min-w-0 space-y-4">
           {message && (
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="break-words rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 sm:px-4">
               {message}
             </div>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('workspaces.yourWorkspaces')}</CardTitle>
+          <Card className="min-w-0 overflow-hidden">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-xl sm:text-2xl">{t('workspaces.yourWorkspaces')}</CardTitle>
               <CardDescription>{t('workspaces.description')}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
               {loading ? (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                   {t('workspaces.loading')}
@@ -280,46 +280,53 @@ export default function WorkspacesPage() {
                   const isConfirming = confirmDeleteId === company.id
 
                   return (
-                    <div key={company.id} className="rounded-lg border border-slate-200 p-4">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="font-semibold text-slate-900">{company.name}</h2>
+                    <div key={company.id} className="min-w-0 overflow-hidden rounded-lg border border-slate-200 p-3 sm:p-4">
+                      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <h2 className="min-w-0 max-w-full [overflow-wrap:anywhere] font-semibold leading-5 text-slate-900">{company.name}</h2>
                             {isCurrent && (
-                              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs text-white">{t('workspaces.current')}</span>
+                              <span className="max-w-full shrink-0 rounded-full bg-slate-900 px-2 py-1 text-xs leading-4 text-white">{t('workspaces.current')}</span>
                             )}
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs capitalize text-slate-600">
+                            <span className="max-w-full rounded-full bg-slate-100 px-2 py-1 text-xs leading-4 text-slate-600 [overflow-wrap:anywhere]">
                               {company.type === 'business' ? t('workspaces.businessWorkspace') : t('workspaces.personalWorkspace')}
                             </span>
                           </div>
-                          <p className="text-sm text-slate-500">
+                          <p className="flex flex-wrap gap-x-1 text-xs leading-5 text-slate-500 sm:text-sm">
                             {t('workspaces.createdAt')} {new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(company.created_at))} · {company.currency ?? 'USD'}
                           </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-center">
                           <Button
                             type="button"
                             variant="outline"
+                            size="icon"
+                            className="h-11 w-11 sm:h-9 sm:w-auto sm:px-3"
                             disabled={isCurrent}
+                            aria-label={t('workspaces.switchWorkspace')}
+                            title={t('workspaces.switchWorkspace')}
                             onClick={() => {
                               setCurrentCompanyId(company.id)
                               setMessage(t('workspaces.switched'))
                             }}
                           >
-                            {t('workspaces.switchWorkspace')}
+                            <ArrowLeftRight className="h-4 w-4" />
+                            <span className="hidden sm:inline">{t('workspaces.switchWorkspace')}</span>
                           </Button>
                           {isConfirming ? (
                             <>
                               <Button
                                 type="button"
                                 variant="outline"
+                                size="sm"
+                                className="h-auto min-h-9 whitespace-normal px-2 py-2 text-xs sm:px-3 sm:text-sm"
                                 disabled={deletingId === company.id}
                                 onClick={() => handleDeleteWorkspace(company.id)}
                               >
                                 {t('workspaces.confirmDelete')}
                               </Button>
-                              <Button type="button" variant="outline" onClick={() => setConfirmDeleteId(null)}>
+                              <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal px-2 py-2 text-xs sm:px-3 sm:text-sm" onClick={() => setConfirmDeleteId(null)}>
                                 {t('common.cancel')}
                               </Button>
                             </>
@@ -327,11 +334,15 @@ export default function WorkspacesPage() {
                             <Button
                               type="button"
                               variant="outline"
+                              size="icon"
+                              className="h-11 w-11 sm:h-9 sm:w-auto sm:px-3"
                               disabled={companies.length <= 1 || deletingId === company.id}
+                              aria-label={t('common.delete')}
+                              title={t('common.delete')}
                               onClick={() => setConfirmDeleteId(company.id)}
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              {t('common.delete')}
+                              <Trash2 className="h-4 w-4" />
+                              <span className="hidden sm:inline">{t('common.delete')}</span>
                             </Button>
                           )}
                         </div>
@@ -344,22 +355,22 @@ export default function WorkspacesPage() {
           </Card>
         </div>
 
-        {showCreatePanel && <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <CardTitle>{t('workspaces.createWorkspace')}</CardTitle>
+        {showCreatePanel && <div className="min-w-0 space-y-4">
+          <Card className="min-w-0 overflow-hidden">
+            <CardHeader className="p-4 sm:p-6">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle className="break-words text-xl sm:text-2xl">{t('workspaces.createWorkspace')}</CardTitle>
                   <CardDescription>{t('workspaces.createDescription')}</CardDescription>
                 </div>
                 {companies.length > 0 && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => setShowCreatePanel(false)}>
+                  <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setShowCreatePanel(false)}>
                     {t('common.cancel')}
                   </Button>
                 )}
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
               {entitlementLoading || !entitlement ? (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                   {t('workspaces.checkingEntitlement')}
@@ -394,9 +405,9 @@ export default function WorkspacesPage() {
                     {paidAppPlans.map((plan) => {
                       const definition = planDefinitions[plan]
                       return (
-                        <div key={plan} className="flex flex-col gap-1 rounded-md border border-slate-200 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                        <div key={plan} className="flex min-w-0 flex-col gap-1 rounded-md border border-slate-200 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                           <span className="font-medium">{t(`billing.plan.${plan}`)}</span>
-                          <span className="text-slate-600">
+                          <span className="break-words text-slate-600 sm:text-right">
                             {definition.workspaceLimit === null
                               ? t('workspaces.unlimited')
                               : t('workspaces.workspaceLimitValue').replace('{count}', String(definition.workspaceLimit))} · {definition.monthlyPriceEur.toLocaleString(getIntlLocale(locale), { style: 'currency', currency: 'EUR' })}
@@ -452,7 +463,7 @@ export default function WorkspacesPage() {
                     />
                   </div>
 
-                  <Button type="submit" disabled={submitting}>
+                  <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
                     <Plus className="mr-2 h-4 w-4" />
                     {submitting ? t('workspaces.creating') : t('workspaces.createWorkspace')}
                   </Button>
