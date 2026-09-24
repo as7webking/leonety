@@ -353,9 +353,23 @@ html {
     width: 186mm !important;
     min-width: 186mm !important;
     max-width: 186mm !important;
+    box-sizing: border-box !important;
     color: #111 !important;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 9.5pt;
+  }
+
+  /* WebKit paginates hidden app-shell geometry unless its screen min-heights are reset. */
+  body:has(.print-kassenbuch) .min-h-screen,
+  body:has(.print-kassenbuch) main,
+  body:has(.print-kassenbuch) .container {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  body:has(.print-kassenbuch) .overflow-x-clip {
+    overflow: visible !important;
   }
 
   .print-kassenbuch .kassenbuch-header {
@@ -548,8 +562,12 @@ html {
   .print-kassenbuch .kassenbuch-notes {
     display: block !important;
     margin-top: 3mm;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
     font-size: 7.5pt;
     line-height: 1.35;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .print-kassenbuch .kassenbuch-period-summary {

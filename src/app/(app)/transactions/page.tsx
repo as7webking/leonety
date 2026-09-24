@@ -1026,7 +1026,6 @@ export default function TransactionsPage() {
           {showKassenbuchPageNumbers && (
             <style media="print">{`
               @page {
-                margin-bottom: 16mm;
                 @bottom-center {
                   content: ${JSON.stringify(`${t('kassenbuch.page')} `)} counter(page);
                   color: #4b5563;
@@ -1135,17 +1134,21 @@ export default function TransactionsPage() {
             </dl>
           </section>
 
-          <footer className="kassenbuch-notes">
-            {kassenbuch.unclassifiedPaymentCount > 0 && (
-              <p>{t('kassenbuch.unclassifiedNotice').replace('{count}', String(kassenbuch.unclassifiedPaymentCount))}</p>
-            )}
-            {kassenbuch.excludedNonCashCount > 0 && (
-              <p>{t('kassenbuch.nonCashNotice').replace('{count}', String(kassenbuch.excludedNonCashCount))}</p>
-            )}
-            {kassenbuch.excludedCurrencyCount > 0 && (
-              <p>{t('kassenbuch.currencyNotice').replace('{count}', String(kassenbuch.excludedCurrencyCount))}</p>
-            )}
-          </footer>
+          {(kassenbuch.unclassifiedPaymentCount > 0 ||
+            kassenbuch.excludedNonCashCount > 0 ||
+            kassenbuch.excludedCurrencyCount > 0) && (
+            <footer className="kassenbuch-notes">
+              {kassenbuch.unclassifiedPaymentCount > 0 && (
+                <p>{t('kassenbuch.unclassifiedNotice').replace('{count}', String(kassenbuch.unclassifiedPaymentCount))}</p>
+              )}
+              {kassenbuch.excludedNonCashCount > 0 && (
+                <p>{t('kassenbuch.nonCashNotice').replace('{count}', String(kassenbuch.excludedNonCashCount))}</p>
+              )}
+              {kassenbuch.excludedCurrencyCount > 0 && (
+                <p>{t('kassenbuch.currencyNotice').replace('{count}', String(kassenbuch.excludedCurrencyCount))}</p>
+              )}
+            </footer>
+          )}
         </div>
       )}
 
