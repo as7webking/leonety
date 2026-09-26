@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { decryptSecret } from '@/lib/credential-encryption'
-import { deliverIncomingOrderAlert } from '@/lib/order-notifications-server'
+import { processVerifiedOrderCreatedEvent } from '@/lib/order-notifications-server'
+import { createOrderCreatedEvent } from '@/lib/order-events'
 import { getWooOrderIdentity, isWooNewOrderTopic, verifyWooWebhookSignature } from '@/lib/order-webhook'
 
 export const runtime = 'nodejs'
@@ -32,26 +33,20 @@ export async function POST(request: Request, context: { params: Promise<{ connec
   const order = getWooOrderIdentity(payload)
   if (!order) return NextResponse.json({ received: false }, { status: 400 })
 
-  const { data: event, error: insertError } = await admin.from('incoming_order_alert_events').insert({
-    company_id: connection.company_id,
-    provider: 'woocommerce',
-    external_order_id: order.id,
-    event_type: 'order.created',
-    provider_delivery_id: request.headers.get('x-wc-webhook-delivery-id'),
-    order_number: order.number,
-    amount: order.total,
-    currency: order.currency,
-  }).select('id').single()
-
-  if (insertError?.code === '23505') return NextResponse.json({ received: true, duplicate: true })
-  if (insertError || !event) return NextResponse.json({ received: false }, { status: 500 })
-
-  // Push delivery is deliberately outside order-event acceptance. A failed push is
-  // recorded, but the verified webhook still succeeds and will not be retried/ring twice.
   try {
-    await deliverIncomingOrderAlert({ admin, eventId: event.id, companyId: connection.company_id, orderId: order.id, orderNumber: order.number, amount: order.total, currency: order.currency })
+    const result = await processVerifiedOrderCreatedEvent({
+      admin,
+      event: createOrderCreatedEvent({
+        workspaceId: connection.company_id,
+        provider: 'woocommerce',
+        externalOrderId: order.id,
+        providerDeliveryId: request.headers.get('x-wc-webhook-delivery-id'),
+        display: { orderNumber: order.number, amount: order.total, currency: order.currency },
+      }),
+    })
+    if (result.status === 'duplicate') return NextResponse.json({ received: true, duplicate: true })
   } catch {
-    await admin.from('incoming_order_alert_events').update({ notification_status: 'failed', notification_error_code: 'push_pipeline_failed' }).eq('id', event.id)
+    return NextResponse.json({ received: false }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })

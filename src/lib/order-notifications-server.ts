@@ -2,6 +2,7 @@ import 'server-only'
 import webPush, { type PushSubscription } from 'web-push'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createIncomingOrderPushPayload, isPermanentPushFailure, type IncomingOrderPushPayload } from '@/lib/order-notifications'
+import { isDuplicateOrderEventError, type OrderCreatedEvent } from '@/lib/order-events'
 import type { Locale } from '@/lib/i18n'
 
 export interface WebPushDeviceRow {
@@ -122,6 +123,53 @@ export async function deliverIncomingOrderAlert(input: {
       notification_error_code: permanent ? 'subscription_invalid' : 'push_delivery_failed',
     }).eq('id', input.eventId)
     return { status: 'failed' as const, permanent }
+  }
+}
+
+export async function processVerifiedOrderCreatedEvent(input: {
+  admin: SupabaseClient
+  event: OrderCreatedEvent
+}) {
+  const { event } = input
+  const { data: storedEvent, error: insertError } = await input.admin
+    .from('incoming_order_alert_events')
+    .insert({
+      company_id: event.workspaceId,
+      provider: event.provider,
+      external_order_id: event.externalOrderId,
+      event_type: event.type,
+      provider_delivery_id: event.providerDeliveryId,
+      order_number: event.display.orderNumber,
+      amount: event.display.amount,
+      currency: event.display.currency,
+      created_at: event.createdAt,
+    })
+    .select('id')
+    .single()
+
+  if (isDuplicateOrderEventError(insertError)) return { status: 'duplicate' as const }
+  if (insertError || !storedEvent) throw insertError ?? new Error('order_event_not_persisted')
+
+  // Event acceptance and push delivery are intentionally independent. A push failure
+  // is recorded but never asks the provider to retry an already accepted order event.
+  try {
+    const delivery = await deliverIncomingOrderAlert({
+      admin: input.admin,
+      eventId: storedEvent.id,
+      companyId: event.workspaceId,
+      orderId: event.externalOrderId,
+      orderNumber: event.display.orderNumber,
+      amount: event.display.amount,
+      currency: event.display.currency,
+    })
+    return { status: 'accepted' as const, delivery }
+  } catch {
+    await input.admin
+      .from('incoming_order_alert_events')
+      .update({ notification_status: 'failed', notification_error_code: 'push_pipeline_failed' })
+      .eq('id', storedEvent.id)
+      .eq('company_id', event.workspaceId)
+    return { status: 'accepted' as const, delivery: { status: 'failed' as const, permanent: false } }
   }
 }
 
