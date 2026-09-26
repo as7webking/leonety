@@ -14,6 +14,7 @@ import { Boxes, Building2, CalendarDays, Filter, Package, Users, X } from 'lucid
 import { getIntlLocale } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
+import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 
 interface Income {
   id: string
@@ -47,6 +48,21 @@ interface TimeEntry {
   company_id: string
 }
 
+interface DashboardMemory {
+  incomes: Income[]
+  expenses: Expense[]
+  timeEntries: TimeEntry[]
+}
+
+interface DashboardViewMemory {
+  periodPreset: PeriodPreset
+  filterFromDate: string
+  filterToDate: string
+  groupByMonth: boolean
+  sortBy: 'date' | 'amount'
+  sortDirection: 'asc' | 'desc'
+}
+
 type PeriodPreset = 'all' | 'this_month' | 'last_month' | 'this_year' | 'custom'
 
 function toDateInputValue(date: Date) {
@@ -75,17 +91,23 @@ export default function DashboardPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const [incomes, setIncomes] = useState<Income[]>([])
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [accountEmail, setAccountEmail] = useState<string | null>(null)
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('this_month')
-  const [filterFromDate, setFilterFromDate] = useState(() => getPeriodRange('this_month')?.from ?? '')
-  const [filterToDate, setFilterToDate] = useState(() => getPeriodRange('this_month')?.to ?? '')
-  const [groupByMonth, setGroupByMonth] = useState(false)
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const dataMemoryKey = currentCompany ? `dashboard:${currentCompany.id}` : ''
+  const viewMemoryKey = currentCompany ? `dashboard-view:${currentCompany.id}` : ''
+  const initialDataMemory = dataMemoryKey ? getAppDataMemory<DashboardMemory>(dataMemoryKey) : undefined
+  const initialViewMemory = viewMemoryKey ? getAppViewMemory<DashboardViewMemory>(viewMemoryKey) : undefined
+  const [incomes, setIncomes] = useState<Income[]>(() => initialDataMemory?.value.incomes ?? [])
+  const [expenses, setExpenses] = useState<Expense[]>(() => initialDataMemory?.value.expenses ?? [])
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(() => initialDataMemory?.value.timeEntries ?? [])
+  const [loading, setLoading] = useState(() => !initialDataMemory)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshFailed, setRefreshFailed] = useState(false)
+  const [accountEmail, setAccountEmail] = useState<string | null | undefined>(undefined)
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>(() => initialViewMemory?.periodPreset ?? 'this_month')
+  const [filterFromDate, setFilterFromDate] = useState(() => initialViewMemory?.filterFromDate ?? getPeriodRange('this_month')?.from ?? '')
+  const [filterToDate, setFilterToDate] = useState(() => initialViewMemory?.filterToDate ?? getPeriodRange('this_month')?.to ?? '')
+  const [groupByMonth, setGroupByMonth] = useState(() => initialViewMemory?.groupByMonth ?? false)
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>(() => initialViewMemory?.sortBy ?? 'date')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => initialViewMemory?.sortDirection ?? 'desc')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const { accountAccess } = useAccountAccess(accountEmail)
   const { locale, t } = useI18n()
@@ -97,7 +119,18 @@ export default function DashboardPage() {
       return
     }
 
-    setLoading(true)
+    const memoryKey = `dashboard:${currentCompany.id}`
+    const cached = getAppDataMemory<DashboardMemory>(memoryKey)
+    setRefreshFailed(false)
+    if (cached) {
+      setIncomes(cached.value.incomes)
+      setExpenses(cached.value.expenses)
+      setTimeEntries(cached.value.timeEntries)
+      setLoading(false)
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
 
     try {
       const [incomeRes, expenseRes, timeRes] = await Promise.all([
@@ -110,16 +143,26 @@ export default function DashboardPage() {
       if (expenseRes.error) throw expenseRes.error
       if (timeRes.error) throw timeRes.error
 
-      setIncomes((incomeRes.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
-      setExpenses((expenseRes.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
-      setTimeEntries((timeRes.data ?? []).map((item) => ({ ...item, hours: Number(item.hours) })))
+      const nextMemory: DashboardMemory = {
+        incomes: (incomeRes.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })),
+        expenses: (expenseRes.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })),
+        timeEntries: (timeRes.data ?? []).map((item) => ({ ...item, hours: Number(item.hours) })),
+      }
+      setAppDataMemory(memoryKey, nextMemory)
+      setIncomes(nextMemory.incomes)
+      setExpenses(nextMemory.expenses)
+      setTimeEntries(nextMemory.timeEntries)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
-      setIncomes([])
-      setExpenses([])
-      setTimeEntries([])
+      setRefreshFailed(Boolean(cached))
+      if (!cached) {
+        setIncomes([])
+        setExpenses([])
+        setTimeEntries([])
+      }
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [currentCompany, supabase])
 
@@ -135,6 +178,18 @@ export default function DashboardPage() {
 
     void loadAccountEmail()
   }, [supabase])
+
+  useEffect(() => {
+    if (!currentCompany) return
+    setAppViewMemory<DashboardViewMemory>(`dashboard-view:${currentCompany.id}`, {
+      periodPreset,
+      filterFromDate,
+      filterToDate,
+      groupByMonth,
+      sortBy,
+      sortDirection,
+    })
+  }, [currentCompany, filterFromDate, filterToDate, groupByMonth, periodPreset, sortBy, sortDirection])
 
   if (companyLoading || loading) {
     return (
@@ -264,6 +319,8 @@ export default function DashboardPage() {
           {t('billing.planSuffix').replace('{plan}', planLabel)}
         </span>
       </PageHeader>
+      {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
+      {refreshFailed && <p role="status" className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{t('app.refreshFailed')}</p>}
       <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 md:hidden">
         <label className="min-w-0 space-y-1 text-sm">
           <span className="text-slate-600">{t('dashboard.periodPreset')}</span>

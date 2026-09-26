@@ -19,6 +19,7 @@ import { matchesFinanceSearch } from '@/lib/finance-ui'
 import { buildKassenbuch, getKassenbuchText, isFullCalendarMonthSelected } from '@/lib/kassenbuch'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
+import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 
 interface TransactionRow {
   id: string
@@ -68,6 +69,19 @@ type TransactionQueryResult = {
   error: { code?: string; message?: string } | null
 }
 
+interface TransactionsMemory {
+  transactions: TransactionRow[]
+}
+
+interface TransactionsViewMemory {
+  searchQuery: string
+  page: number
+  sortBy: 'date' | 'amount'
+  sortDirection: 'asc' | 'desc'
+  printFromDate: string
+  printToDate: string
+}
+
 function isMissingOptionalColumn(error: { code?: string; message?: string } | null | undefined) {
   return Boolean(error && ['42703', 'PGRST204', 'PGRST205'].includes(error.code ?? ''))
 }
@@ -84,30 +98,36 @@ export default function TransactionsPage() {
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
-  const [transactions, setTransactions] = useState<TransactionRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const dataMemoryKey = currentCompany ? `transactions:${currentCompany.id}` : ''
+  const viewMemoryKey = currentCompany ? `transactions-view:${currentCompany.id}` : ''
+  const initialDataMemory = dataMemoryKey ? getAppDataMemory<TransactionsMemory>(dataMemoryKey) : undefined
+  const initialViewMemory = viewMemoryKey ? getAppViewMemory<TransactionsViewMemory>(viewMemoryKey) : undefined
+  const [transactions, setTransactions] = useState<TransactionRow[]>(() => initialDataMemory?.value.transactions ?? [])
+  const [loading, setLoading] = useState(() => !initialDataMemory)
+  const [refreshing, setRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [message, setMessage] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showBulkRename, setShowBulkRename] = useState(false)
   const [importing, setImporting] = useState(false)
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [page, setPage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState(() => initialViewMemory?.searchQuery ?? '')
+  const [page, setPage] = useState(() => initialViewMemory?.page ?? 1)
   const [bulkEdit, setBulkEdit] = useState({
     category: { enabled: false, value: '' },
     date: { enabled: false, value: '' },
     payment_method: { enabled: false, value: '' },
     note: { enabled: false, value: '' },
   })
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>(() => initialViewMemory?.sortBy ?? 'date')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => initialViewMemory?.sortDirection ?? 'desc')
   const [printFromDate, setPrintFromDate] = useState(() => {
+    if (initialViewMemory?.printFromDate) return initialViewMemory.printFromDate
     const date = new Date()
     date.setDate(1)
     return date.toISOString().split('T')[0]
   })
-  const [printToDate, setPrintToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [printToDate, setPrintToDate] = useState(() => initialViewMemory?.printToDate ?? new Date().toISOString().split('T')[0])
   const [includeOpeningBalance, setIncludeOpeningBalance] = useState(false)
   const [printFormatDialogOpen, setPrintFormatDialogOpen] = useState(false)
   const [selectedPrintFormat, setSelectedPrintFormat] = useState<PrintFormat>('standard')
@@ -141,8 +161,16 @@ export default function TransactionsPage() {
       return
     }
 
+    const memoryKey = `transactions:${currentCompany.id}`
+    const cached = getAppDataMemory<TransactionsMemory>(memoryKey)
     try {
-      setLoading(true)
+      if (cached) {
+        setTransactions(cached.value.transactions)
+        setLoading(false)
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+      }
       setErrorMessage('')
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
@@ -234,17 +262,31 @@ export default function TransactionsPage() {
         }
       }
 
+      setAppDataMemory<TransactionsMemory>(memoryKey, { transactions: nextTransactions })
       setTransactions(nextTransactions)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load transactions')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [currentCompany, supabase])
 
   useEffect(() => {
     void loadTransactions()
   }, [loadTransactions])
+
+  useEffect(() => {
+    if (!currentCompany) return
+    setAppViewMemory<TransactionsViewMemory>(`transactions-view:${currentCompany.id}`, {
+      searchQuery,
+      page,
+      sortBy,
+      sortDirection,
+      printFromDate,
+      printToDate,
+    })
+  }, [currentCompany, page, printFromDate, printToDate, searchQuery, sortBy, sortDirection])
 
   useEffect(() => {
     if (!currentCompany) return
@@ -812,6 +854,7 @@ export default function TransactionsPage() {
           {showForm ? t('common.cancel') : t('transactions.add')}
         </Button>
       </PageHeader>
+      {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
       <FinanceToolbar
         filtersLabel={t('finance.filters')}
         utilitiesLabel={t('finance.utilities')}

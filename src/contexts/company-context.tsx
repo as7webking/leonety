@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-client'
+import { clearAppNavigationMemory } from '@/lib/app-navigation-memory'
 
 export interface Company {
   id: string
@@ -34,6 +35,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [currentCompanyId, setCurrentCompanyIdState] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const resolvedUserIdRef = useRef<string | null>(null)
+  const inFlightRef = useRef<{ userId: string; promise: Promise<void> } | null>(null)
+  const requestVersionRef = useRef(0)
 
   const setCurrentCompanyId = useCallback((companyId: string) => {
     setCurrentCompanyIdState(companyId)
@@ -42,72 +46,111 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     }
   }, [userId])
 
-  const refreshCompanies = useCallback(async (preferredCompanyId?: string | null) => {
-    setLoading(true)
-
-    const { data: authData } = await supabase.auth.getUser()
-    const user = authData.user
-
-    if (!user) {
-      setUserId(null)
-      setCompanies([])
-      setCurrentCompanyIdState(null)
-      setLoading(false)
-      return
-    }
-
-    setUserId(user.id)
-
-    const { data, error } = await supabase
-      .from('companies')
-      .select('id, owner_id, name, type, currency, created_at, updated_at')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: true })
-
-    if (error) {
-      console.error('Failed to load companies:', error)
-      setCompanies([])
-      setCurrentCompanyIdState(null)
-      setLoading(false)
-      return
-    }
-
-    const nextCompanies = (data ?? []) as Company[]
-    setCompanies(nextCompanies)
-
-    const storedCompanyId = window.localStorage.getItem(getStorageKey(user.id))
-    const selectedCompanyId =
-      preferredCompanyId && nextCompanies.some((company) => company.id === preferredCompanyId)
-        ? preferredCompanyId
-        : storedCompanyId && nextCompanies.some((company) => company.id === storedCompanyId)
-          ? storedCompanyId
-          : nextCompanies[0]?.id ?? null
-
-    setCurrentCompanyIdState(selectedCompanyId)
-
-    if (selectedCompanyId) {
-      window.localStorage.setItem(getStorageKey(user.id), selectedCompanyId)
-    } else {
-      window.localStorage.removeItem(getStorageKey(user.id))
-    }
-
+  const clearCompanyState = useCallback(() => {
+    requestVersionRef.current += 1
+    resolvedUserIdRef.current = null
+    inFlightRef.current = null
+    clearAppNavigationMemory()
+    setUserId(null)
+    setCompanies([])
+    setCurrentCompanyIdState(null)
     setLoading(false)
+  }, [])
+
+  const loadCompaniesForUser = useCallback((nextUserId: string, preferredCompanyId?: string | null) => {
+    if (!preferredCompanyId && inFlightRef.current?.userId === nextUserId) {
+      return inFlightRef.current.promise
+    }
+
+    const userChanged = resolvedUserIdRef.current !== null && resolvedUserIdRef.current !== nextUserId
+    const isInitialLoad = resolvedUserIdRef.current === null
+    if (userChanged) {
+      clearAppNavigationMemory()
+      setCompanies([])
+      setCurrentCompanyIdState(null)
+    }
+    if (isInitialLoad || userChanged) setLoading(true)
+    const requestVersion = requestVersionRef.current + 1
+    requestVersionRef.current = requestVersion
+
+    const request = (async () => {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('id, owner_id, name, type, currency, created_at, updated_at')
+        .eq('owner_id', nextUserId)
+        .order('created_at', { ascending: true })
+
+      if (error) {
+        if (requestVersion !== requestVersionRef.current) return
+        console.error('Failed to load companies:', error)
+        if (isInitialLoad || userChanged) {
+          setCompanies([])
+          setCurrentCompanyIdState(null)
+        }
+        return
+      }
+
+      if (requestVersion !== requestVersionRef.current) return
+
+      const nextCompanies = (data ?? []) as Company[]
+      const storedCompanyId = window.localStorage.getItem(getStorageKey(nextUserId))
+      const selectedCompanyId =
+        preferredCompanyId && nextCompanies.some((company) => company.id === preferredCompanyId)
+          ? preferredCompanyId
+          : storedCompanyId && nextCompanies.some((company) => company.id === storedCompanyId)
+            ? storedCompanyId
+            : nextCompanies[0]?.id ?? null
+
+      resolvedUserIdRef.current = nextUserId
+      setUserId(nextUserId)
+      setCompanies(nextCompanies)
+      setCurrentCompanyIdState(selectedCompanyId)
+
+      if (selectedCompanyId) {
+        window.localStorage.setItem(getStorageKey(nextUserId), selectedCompanyId)
+      } else {
+        window.localStorage.removeItem(getStorageKey(nextUserId))
+      }
+    })().finally(() => {
+      if (requestVersion === requestVersionRef.current) {
+        if (inFlightRef.current?.promise === request) inFlightRef.current = null
+        setLoading(false)
+      }
+    })
+
+    if (!preferredCompanyId) inFlightRef.current = { userId: nextUserId, promise: request }
+    return request
   }, [supabase])
 
-  useEffect(() => {
-    const initialLoad = window.setTimeout(() => {
-      void refreshCompanies()
-    }, 0)
+  const refreshCompanies = useCallback(async (preferredCompanyId?: string | null) => {
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData.user) {
+      clearCompanyState()
+      return
+    }
+    await loadCompaniesForUser(authData.user.id, preferredCompanyId)
+  }, [clearCompanyState, loadCompaniesForUser, supabase])
 
-    const { data } = supabase.auth.onAuthStateChange(() => {
+  useEffect(() => {
+    const initialLoad = window.requestAnimationFrame(() => {
       void refreshCompanies()
     })
 
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        clearCompanyState()
+        return
+      }
+      if (event === 'SIGNED_IN' && session?.user.id && session.user.id !== resolvedUserIdRef.current) {
+        void loadCompaniesForUser(session.user.id)
+      }
+    })
+
     return () => {
-      window.clearTimeout(initialLoad)
+      window.cancelAnimationFrame(initialLoad)
       data.subscription.unsubscribe()
     }
-  }, [refreshCompanies, supabase])
+  }, [clearCompanyState, loadCompaniesForUser, refreshCompanies, supabase])
 
   const currentCompany =
     companies.find((company) => company.id === currentCompanyId) ?? null

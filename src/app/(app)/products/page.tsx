@@ -14,6 +14,7 @@ import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { buildProductEditorHref, rememberProductReturnScroll, restoreProductReturnScroll } from '@/lib/product-editor-navigation'
 import { createClient } from '@/lib/supabase-client'
+import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -135,6 +136,24 @@ type ProductEditorSection = 'general' | 'pricing' | 'inventory' | 'image' | 'int
 type ProductStockFilter = 'all' | 'low'
 type ProductProviderFilter = 'all' | ProductChannel | 'none'
 type ProductImageFilter = 'all' | 'has_image' | 'missing_image'
+
+interface ProductsMemory {
+  products: Product[]
+  categories: ProductCategory[]
+  syncs: Record<string, ProductSync[]>
+  storeConnections: Record<ProductChannel, StoreConnectionStatus>
+  categoriesAvailable: boolean
+}
+
+interface ProductsViewMemory {
+  query: string
+  statusFilter: 'all' | ProductStatus
+  categoryFilter: string
+  stockFilter: ProductStockFilter
+  providerFilter: ProductProviderFilter
+  imageFilter: ProductImageFilter
+  sortBy: ProductSort
+}
 
 const productEditorSections: ProductEditorSection[] = ['general', 'pricing', 'inventory', 'image', 'integration', 'advanced']
 
@@ -371,10 +390,14 @@ export default function ProductsPage() {
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { t } = useI18n()
-  const [products, setProducts] = useState<Product[]>([])
-  const [categories, setCategories] = useState<ProductCategory[]>([])
-  const [syncs, setSyncs] = useState<Record<string, ProductSync[]>>({})
-  const [storeConnections, setStoreConnections] = useState<Record<ProductChannel, StoreConnectionStatus>>({} as Record<ProductChannel, StoreConnectionStatus>)
+  const dataMemoryKey = currentCompany ? `products:${currentCompany.id}` : ''
+  const viewMemoryKey = currentCompany ? `products-view:${currentCompany.id}` : ''
+  const initialDataMemory = dataMemoryKey ? getAppDataMemory<ProductsMemory>(dataMemoryKey) : undefined
+  const initialViewMemory = viewMemoryKey ? getAppViewMemory<ProductsViewMemory>(viewMemoryKey) : undefined
+  const [products, setProducts] = useState<Product[]>(() => initialDataMemory?.value.products ?? [])
+  const [categories, setCategories] = useState<ProductCategory[]>(() => initialDataMemory?.value.categories ?? [])
+  const [syncs, setSyncs] = useState<Record<string, ProductSync[]>>(() => initialDataMemory?.value.syncs ?? {})
+  const [storeConnections, setStoreConnections] = useState<Record<ProductChannel, StoreConnectionStatus>>(() => initialDataMemory?.value.storeConnections ?? {} as Record<ProductChannel, StoreConnectionStatus>)
   const [syncingProductId, setSyncingProductId] = useState<string | null>(null)
   const [syncingAll, setSyncingAll] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
@@ -382,28 +405,29 @@ export default function ProductsPage() {
   const [compressingImage, setCompressingImage] = useState(false)
   const [cropProductImage, setCropProductImage] = useState(false)
   const [imageCrop, setImageCrop] = useState({ zoom: 1, offsetX: 0, offsetY: 0 })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !initialDataMemory)
+  const [refreshing, setRefreshing] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
   const [editorSection, setEditorSection] = useState<ProductEditorSection>('general')
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductForm>(makeEmptyForm())
   const [newCategoryName, setNewCategoryName] = useState('')
-  const [categoriesAvailable, setCategoriesAvailable] = useState(true)
+  const [categoriesAvailable, setCategoriesAvailable] = useState(() => initialDataMemory?.value.categoriesAvailable ?? true)
   const initialQuery = searchParams.get('q') ?? ''
   const initialStatus = searchParams.get('status')
   const initialStock = searchParams.get('stock')
   const initialProvider = searchParams.get('provider')
   const initialImage = searchParams.get('image')
   const initialSort = searchParams.get('sort')
-  const [query, setQuery] = useState(initialQuery)
-  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery)
-  const [statusFilter, setStatusFilter] = useState<'all' | ProductStatus>(productStatuses.includes(initialStatus as ProductStatus) ? initialStatus as ProductStatus : 'all')
-  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') ?? 'all')
-  const [stockFilter, setStockFilter] = useState<ProductStockFilter>(initialStock === 'low' ? 'low' : 'all')
-  const [providerFilter, setProviderFilter] = useState<ProductProviderFilter>(productChannels.some((item) => item.channel === initialProvider) || initialProvider === 'none' ? initialProvider as ProductProviderFilter : 'all')
-  const [imageFilter, setImageFilter] = useState<ProductImageFilter>(initialImage === 'has_image' || initialImage === 'missing_image' ? initialImage : 'all')
-  const [sortBy, setSortBy] = useState<ProductSort>(productSortOptions.includes(initialSort as ProductSort) ? initialSort as ProductSort : 'name_asc')
+  const [query, setQuery] = useState(initialQuery || initialViewMemory?.query || '')
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery || initialViewMemory?.query || '')
+  const [statusFilter, setStatusFilter] = useState<'all' | ProductStatus>(productStatuses.includes(initialStatus as ProductStatus) ? initialStatus as ProductStatus : initialViewMemory?.statusFilter ?? 'all')
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') ?? initialViewMemory?.categoryFilter ?? 'all')
+  const [stockFilter, setStockFilter] = useState<ProductStockFilter>(initialStock === 'low' ? 'low' : initialViewMemory?.stockFilter ?? 'all')
+  const [providerFilter, setProviderFilter] = useState<ProductProviderFilter>(productChannels.some((item) => item.channel === initialProvider) || initialProvider === 'none' ? initialProvider as ProductProviderFilter : initialViewMemory?.providerFilter ?? 'all')
+  const [imageFilter, setImageFilter] = useState<ProductImageFilter>(initialImage === 'has_image' || initialImage === 'missing_image' ? initialImage : initialViewMemory?.imageFilter ?? 'all')
+  const [sortBy, setSortBy] = useState<ProductSort>(productSortOptions.includes(initialSort as ProductSort) ? initialSort as ProductSort : initialViewMemory?.sortBy ?? 'name_asc')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const editorRef = useRef<HTMLDivElement | null>(null)
@@ -418,67 +442,96 @@ export default function ProductsPage() {
       setLoading(false)
       return
     }
-    setLoading(true)
-    const [productResult, syncResult, categoryResult, integrationResult] = await Promise.all([
-      supabase.from('products').select('*').eq('company_id', currentCompany.id).order('name'),
-      supabase
-        .from('product_syncs')
-        .select('product_id, channel, external_product_id, sync_status, last_synced_at, error_message')
-        .eq('company_id', currentCompany.id),
-      supabase
-        .from('product_categories')
-        .select('id, company_id, name')
-        .eq('company_id', currentCompany.id)
-        .order('name'),
-      fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
-        .then((response) => response.ok ? response.json() : { integrations: [] })
-        .catch(() => ({ integrations: [] })),
-    ])
-    const { data, error: loadError } = productResult
-    if (loadError) {
-      setError(loadError.code === '42P01' ? t('products.databaseRequired') : loadError.message)
-      setProducts([])
+    const memoryKey = `products:${currentCompany.id}`
+    const cached = getAppDataMemory<ProductsMemory>(memoryKey)
+    if (cached) {
+      setProducts(cached.value.products)
+      setCategories(cached.value.categories)
+      setSyncs(cached.value.syncs)
+      setStoreConnections(cached.value.storeConnections)
+      setCategoriesAvailable(cached.value.categoriesAvailable)
+      setLoading(false)
+      setRefreshing(true)
     } else {
-      setProducts(((data ?? []) as Product[]).map((product) => ({
+      setLoading(true)
+    }
+
+    try {
+      const [productResult, syncResult, categoryResult, integrationResult] = await Promise.all([
+        supabase.from('products').select('*').eq('company_id', currentCompany.id).order('name'),
+        supabase
+          .from('product_syncs')
+          .select('product_id, channel, external_product_id, sync_status, last_synced_at, error_message')
+          .eq('company_id', currentCompany.id),
+        supabase
+          .from('product_categories')
+          .select('id, company_id, name')
+          .eq('company_id', currentCompany.id)
+          .order('name'),
+        fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
+          .then((response) => response.ok ? response.json() : { integrations: [] })
+          .catch(() => ({ integrations: [] })),
+      ])
+      const { data, error: loadError } = productResult
+      if (loadError) {
+        setError(loadError.code === '42P01' ? t('products.databaseRequired') : loadError.message)
+        if (!cached) setProducts([])
+        return
+      }
+      const nextProducts = ((data ?? []) as Product[]).map((product) => ({
         ...product,
         purchase_price: product.purchase_price === null ? null : Number(product.purchase_price),
         selling_price: product.selling_price === null ? null : Number(product.selling_price),
         current_stock: Number(product.current_stock),
         low_stock_threshold: Number(product.low_stock_threshold),
-      })))
-    }
-    if (!syncResult.error) {
+      }))
+      const nextSyncs: Record<string, ProductSync[]> = {}
+      if (!syncResult.error) {
       const grouped: Record<string, ProductSync[]> = {}
       for (const sync of (syncResult.data ?? []) as ProductSync[]) {
         grouped[sync.product_id] = [...(grouped[sync.product_id] ?? []), sync]
       }
-      setSyncs(grouped)
-    } else if (['42P01', 'PGRST205'].includes(syncResult.error.code ?? '')) {
-      setSyncs({})
-      setError(t('products.syncDatabaseRequired'))
-    } else {
-      setError(syncResult.error.message)
-    }
-    const connectionMap = {} as Record<ProductChannel, StoreConnectionStatus>
-    for (const integration of (integrationResult.integrations ?? []) as Array<{ provider?: ProductChannel; status?: StoreConnectionStatus['status']; lastSyncAt?: string | null }>) {
-      if (!integration.provider) continue
-      connectionMap[integration.provider] = {
-        provider: integration.provider,
-        status: integration.status ?? 'not_connected',
-        lastSyncAt: integration.lastSyncAt ?? null,
+        Object.assign(nextSyncs, grouped)
+      } else if (['42P01', 'PGRST205'].includes(syncResult.error.code ?? '')) {
+        setError(t('products.syncDatabaseRequired'))
+      } else {
+        setError(syncResult.error.message)
       }
+      const nextConnections = {} as Record<ProductChannel, StoreConnectionStatus>
+      for (const integration of (integrationResult.integrations ?? []) as Array<{ provider?: ProductChannel; status?: StoreConnectionStatus['status']; lastSyncAt?: string | null }>) {
+        if (!integration.provider) continue
+        nextConnections[integration.provider] = {
+          provider: integration.provider,
+          status: integration.status ?? 'not_connected',
+          lastSyncAt: integration.lastSyncAt ?? null,
+        }
+      }
+      let nextCategories: ProductCategory[] = []
+      let nextCategoriesAvailable = true
+      if (!categoryResult.error) {
+        nextCategories = (categoryResult.data ?? []) as ProductCategory[]
+      } else if (['42P01', '42703', 'PGRST200', 'PGRST205'].includes(categoryResult.error.code ?? '')) {
+        nextCategoriesAvailable = false
+      } else {
+        setError(categoryResult.error.message)
+      }
+      const nextMemory: ProductsMemory = {
+        products: nextProducts,
+        categories: nextCategories,
+        syncs: nextSyncs,
+        storeConnections: nextConnections,
+        categoriesAvailable: nextCategoriesAvailable,
+      }
+      setAppDataMemory(memoryKey, nextMemory)
+      setProducts(nextMemory.products)
+      setCategories(nextMemory.categories)
+      setSyncs(nextMemory.syncs)
+      setStoreConnections(nextMemory.storeConnections)
+      setCategoriesAvailable(nextMemory.categoriesAvailable)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-    setStoreConnections(connectionMap)
-    if (!categoryResult.error) {
-      setCategories((categoryResult.data ?? []) as ProductCategory[])
-      setCategoriesAvailable(true)
-    } else if (['42P01', '42703', 'PGRST200', 'PGRST205'].includes(categoryResult.error.code ?? '')) {
-      setCategories([])
-      setCategoriesAvailable(false)
-    } else {
-      setError(categoryResult.error.message)
-    }
-    setLoading(false)
   }, [currentCompany, supabase, t])
 
   useEffect(() => { void loadProducts() }, [loadProducts])
@@ -487,6 +540,19 @@ export default function ProductsPage() {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 180)
     return () => window.clearTimeout(timer)
   }, [query])
+
+  useEffect(() => {
+    if (!currentCompany) return
+    setAppViewMemory<ProductsViewMemory>(`products-view:${currentCompany.id}`, {
+      query,
+      statusFilter,
+      categoryFilter,
+      stockFilter,
+      providerFilter,
+      imageFilter,
+      sortBy,
+    })
+  }, [categoryFilter, currentCompany, imageFilter, providerFilter, query, sortBy, statusFilter, stockFilter])
 
   useEffect(() => {
     if (currentCompany && !editing) {
@@ -1081,6 +1147,7 @@ export default function ProductsPage() {
         </div>
         <Button className="hidden lg:inline-flex" onClick={() => showForm ? resetForm() : setShowForm(true)}><PackagePlus className="h-4 w-4" />{showForm ? t('common.cancel') : t('products.add')}</Button>
       </PageHeader>
+      {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
 
       <DesktopPageUtilities title={t('pageUtilities.title')}>
         <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
