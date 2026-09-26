@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-26T18:56:39.026Z",
+  "generatedAt": "2026-09-26T19:21:56.437Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -33,30 +33,30 @@
   ],
   "coverage": {
     "en": {
-      "translated": 2122,
-      "total": 2122,
+      "translated": 2129,
+      "total": 2129,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2122,
-      "total": 2122,
+      "translated": 2129,
+      "total": 2129,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2122,
-      "total": 2122,
+      "translated": 2129,
+      "total": 2129,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 1879,
-      "total": 2122,
-      "percent": 88.55,
+      "translated": 1886,
+      "total": 2129,
+      "percent": 88.59,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -430,9 +430,9 @@
       ]
     },
     "uk": {
-      "translated": 1825,
-      "total": 2122,
-      "percent": 86,
+      "translated": 1832,
+      "total": 2129,
+      "percent": 86.05,
       "missing": [
         "support.button",
         "support.title",
@@ -894,9 +894,9 @@
       ]
     },
     "pl": {
-      "translated": 1825,
-      "total": 2122,
-      "percent": 86,
+      "translated": 1832,
+      "total": 2129,
+      "percent": 86.05,
       "missing": [
         "support.button",
         "support.title",
@@ -1358,9 +1358,9 @@
       ]
     },
     "fr": {
-      "translated": 1825,
-      "total": 2122,
-      "percent": 86,
+      "translated": 1832,
+      "total": 2129,
+      "percent": 86.05,
       "missing": [
         "support.button",
         "support.title",
@@ -1916,7 +1916,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2122,
+    "englishKeyCount": 2129,
     "authenticatedSourceFileCount": 73,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 15

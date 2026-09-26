@@ -18,6 +18,7 @@ import {
 
 interface CurrentDevice {
   id: string
+  installationId: string
   label: string
   platform: string
   status: 'enabled' | 'invalid' | 'disabled'
@@ -28,6 +29,7 @@ interface NotificationSettingsResponse {
   configured: boolean
   vapidPublicKey: string
   device: CurrentDevice | null
+  devices: CurrentDevice[]
 }
 
 export default function NotificationSettingsPage() {
@@ -42,12 +44,14 @@ export default function NotificationSettingsPage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const companyId = currentCompany?.id ?? ''
 
   const load = useCallback(async (id: string) => {
     if (!companyId) return
     setError('')
+    setLoadFailed(false)
 
     const [response, subscription] = await Promise.all([
       fetch(`/api/notifications?companyId=${encodeURIComponent(companyId)}&installationId=${encodeURIComponent(id)}`, { cache: 'no-store' }),
@@ -56,6 +60,7 @@ export default function NotificationSettingsPage() {
     const payload = await response.json().catch(() => ({})) as NotificationSettingsResponse & { error?: string }
 
     if (!response.ok) {
+      setLoadFailed(true)
       setError(payload.error === 'migration_required'
         ? t('systemNotifications.migrationRequired')
         : t('systemNotifications.enableFailed'))
@@ -98,6 +103,7 @@ export default function NotificationSettingsPage() {
     permission,
     browserSubscribed,
     serverStatus: settings?.device?.status,
+    loadFailed,
   })
   const enabled = viewStatus === 'enabled'
 
@@ -153,8 +159,6 @@ export default function NotificationSettingsPage() {
       })
       if (!response.ok) throw new Error('disable_failed')
 
-      const subscription = await getCurrentPushSubscription()
-      if (subscription) await subscription.unsubscribe()
       setMessage(t('systemNotifications.disabledSuccess'))
       await load(installationId)
     } catch {
@@ -222,6 +226,27 @@ export default function NotificationSettingsPage() {
             <p className="font-medium text-slate-900">{t('systemNotifications.systemSound')}</p>
             <p className="mt-1 text-sm leading-6 text-slate-600">{t('systemNotifications.systemSoundHint')}</p>
           </div>
+
+          {settings?.devices?.length ? (
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">{t('systemNotifications.registeredDevices')}</h2>
+              <div className="mt-2 divide-y rounded-md border border-slate-200">
+                {settings.devices.map((device) => (
+                  <div key={device.id} className="flex items-center justify-between gap-3 p-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900">{device.label}</p>
+                      <p className="text-xs text-slate-500">
+                        {device.platform} · {t(`systemNotifications.deviceStatus.${device.status}`)}
+                      </p>
+                    </div>
+                    {device.installationId === installationId && (
+                      <span className="shrink-0 text-xs font-medium text-blue-700">{t('systemNotifications.thisDevice')}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {!enabled && <p className="text-sm leading-6 text-slate-600">{t('systemNotifications.consent')}</p>}
 

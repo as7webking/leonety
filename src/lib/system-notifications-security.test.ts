@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const settingsRoute = readFileSync(new URL('../app/api/notifications/route.ts', import.meta.url), 'utf8')
 const testRoute = readFileSync(new URL('../app/api/notifications/test/route.ts', import.meta.url), 'utf8')
+const pushServer = readFileSync(new URL('./order-notifications-server.ts', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../../supabase/migrations/20260920153440_incoming_order_notifications.sql', import.meta.url), 'utf8')
 
 test('authorizes every notification operation against the authenticated workspace owner', () => {
@@ -27,4 +28,14 @@ test('reuses private server-only push storage rather than adding public subscrip
   assert.match(migration, /push_p256dh text not null/)
   assert.match(migration, /push_auth text not null/)
   assert.doesNotMatch(settingsRoute, /NEXT_PUBLIC_.*PRIVATE|push_endpoint.*NextResponse/)
+})
+
+test('requires complete server VAPID configuration and never returns subscription secrets', () => {
+  assert.match(pushServer, /WEB_PUSH_VAPID_PUBLIC_KEY/)
+  assert.match(pushServer, /WEB_PUSH_VAPID_PRIVATE_KEY/)
+  assert.match(pushServer, /WEB_PUSH_SUBJECT/)
+  assert.match(settingsRoute, /configured: isWebPushConfigured\(\)/)
+  assert.doesNotMatch(settingsRoute, /select\([^\n]*push_endpoint/)
+  assert.doesNotMatch(settingsRoute, /select\([^\n]*push_p256dh/)
+  assert.doesNotMatch(settingsRoute, /select\([^\n]*push_auth/)
 })

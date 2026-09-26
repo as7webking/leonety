@@ -7,23 +7,27 @@ export interface WebPushCapability {
   secureContextRequired: boolean
 }
 
-export type WebPushViewStatus = 'notEnabled' | 'permissionRequired' | 'enabled' | 'blocked' | 'unsupported'
+export type WebPushViewStatus = 'notEnabled' | 'permissionRequired' | 'subscriptionMissing' | 'enabled' | 'blocked' | 'unsupported' | 'error'
 
 export function resolveWebPushViewStatus({
   capability,
   permission,
   browserSubscribed,
   serverStatus,
+  loadFailed = false,
 }: {
   capability: WebPushCapability | null
   permission: NotificationPermission
   browserSubscribed: boolean
   serverStatus?: 'enabled' | 'invalid' | 'disabled'
+  loadFailed?: boolean
 }): WebPushViewStatus {
   if (!capability?.supported || capability.iosInstallRequired) return 'unsupported'
   if (permission === 'denied') return 'blocked'
+  if (loadFailed || serverStatus === 'invalid') return 'error'
   if (permission === 'granted' && browserSubscribed && serverStatus === 'enabled') return 'enabled'
   if (permission === 'default') return 'permissionRequired'
+  if (permission === 'granted' && !browserSubscribed) return 'subscriptionMissing'
   return 'notEnabled'
 }
 
@@ -94,8 +98,8 @@ export async function getCurrentPushSubscription() {
 
 export async function createCurrentPushSubscription(vapidPublicKey: string) {
   const expectedKey = base64UrlToBytes(vapidPublicKey)
-  const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
-  await navigator.serviceWorker.ready
+  await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+  const registration = await navigator.serviceWorker.ready
 
   const existing = await registration.pushManager.getSubscription()
   if (existing && keysMatch(existing.options.applicationServerKey, expectedKey)) return existing

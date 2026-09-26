@@ -8,10 +8,15 @@ const supported = { supported: true, iosInstallRequired: false, secureContextReq
 test('reports actual permission and current-device subscription states', () => {
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'default', browserSubscribed: false }), 'permissionRequired')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'denied', browserSubscribed: false }), 'blocked')
-  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: false, serverStatus: 'enabled' }), 'notEnabled')
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: false, serverStatus: 'enabled' }), 'subscriptionMissing')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'disabled' }), 'notEnabled')
-  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'invalid' }), 'notEnabled')
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'invalid' }), 'error')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'enabled' }), 'enabled')
+})
+
+test('reports invalid server registrations and failed state loading as errors', () => {
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'invalid' }), 'error')
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'enabled', loadFailed: true }), 'error')
 })
 
 test('does not claim Web Push support for unsupported browsers or non-installed iOS web apps', () => {

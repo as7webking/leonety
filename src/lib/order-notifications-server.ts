@@ -29,6 +29,14 @@ function getVapidConfiguration() {
   return { publicKey, privateKey, subject }
 }
 
+export function isWebPushConfigured() {
+  return Boolean(
+    process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim()
+    && process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim()
+    && process.env.WEB_PUSH_SUBJECT?.trim()
+  )
+}
+
 export function getWebPushPublicKey() {
   return process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() || ''
 }

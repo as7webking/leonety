@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { isOrderNotificationMigrationError, registerOrderDeviceSchema } from '@/lib/order-notifications'
-import { getWebPushPublicKey } from '@/lib/order-notifications-server'
+import { getWebPushPublicKey, isWebPushConfigured } from '@/lib/order-notifications-server'
 
 export const runtime = 'nodejs'
 
@@ -24,26 +24,40 @@ export async function GET(request: Request) {
   const auth = await requireOwnedCompany(parsed.data.companyId)
   if ('error' in auth) return auth.error
 
-  const { data, error } = await auth.adminSupabase
-    .from('order_notification_devices')
-    .select('id, device_label, platform, status, last_seen_at')
-    .eq('company_id', parsed.data.companyId)
-    .eq('user_id', auth.user.id)
-    .eq('installation_id', parsed.data.installationId)
-    .maybeSingle()
+  const [currentDeviceResult, devicesResult] = await Promise.all([
+    auth.adminSupabase
+      .from('order_notification_devices')
+      .select('id, installation_id, device_label, platform, status, last_seen_at')
+      .eq('company_id', parsed.data.companyId)
+      .eq('user_id', auth.user.id)
+      .eq('installation_id', parsed.data.installationId)
+      .maybeSingle(),
+    auth.adminSupabase
+      .from('order_notification_devices')
+      .select('id, installation_id, device_label, platform, status, last_seen_at')
+      .eq('company_id', parsed.data.companyId)
+      .eq('user_id', auth.user.id)
+      .order('last_seen_at', { ascending: false })
+      .limit(20),
+  ])
 
-  if (error) return settingsError(error)
+  if (currentDeviceResult.error) return settingsError(currentDeviceResult.error)
+  if (devicesResult.error) return settingsError(devicesResult.error)
+
+  const serializeDevice = (device: NonNullable<typeof currentDeviceResult.data>) => ({
+    id: device.id,
+    installationId: device.installation_id,
+    label: device.device_label,
+    platform: device.platform,
+    status: device.status,
+    lastSeenAt: device.last_seen_at,
+  })
 
   return NextResponse.json({
-    configured: Boolean(getWebPushPublicKey()),
+    configured: isWebPushConfigured(),
     vapidPublicKey: getWebPushPublicKey(),
-    device: data ? {
-      id: data.id,
-      label: data.device_label,
-      platform: data.platform,
-      status: data.status,
-      lastSeenAt: data.last_seen_at,
-    } : null,
+    device: currentDeviceResult.data ? serializeDevice(currentDeviceResult.data) : null,
+    devices: (devicesResult.data ?? []).map(serializeDevice),
   })
 }
 
