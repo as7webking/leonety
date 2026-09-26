@@ -14,7 +14,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   return (
     <CompanyProvider>
       <OfflineModeProvider>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen min-w-0 max-w-full bg-background">
           <AppNavigationShell><OfflineStatusBar />{children}</AppNavigationShell>
           <IncomingOrderAlert />
           <AiAssistantWidget />

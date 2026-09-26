@@ -136,7 +136,8 @@ export default function LoginPage() {
 
         if (data.session) {
           const nextPath = getSafeAppRedirectPath(new URLSearchParams(window.location.search).get('next'))
-          router.push(nextPath)
+          router.replace(nextPath)
+          router.refresh()
         }
       }
     } catch (error: unknown) {
@@ -195,15 +196,19 @@ export default function LoginPage() {
     setSuccess('')
 
     try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: getAuthCallbackUrl(getSafeAppRedirectPath(new URLSearchParams(window.location.search).get('next'))),
           queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
+          skipBrowserRedirect: true,
         },
       })
 
       if (oauthError) throw oauthError
+      if (!data.url) throw new Error('OAuth redirect URL was not returned')
+
+      window.location.replace(data.url)
     } catch {
       const providerName = provider === 'google' ? 'Google' : 'Facebook'
       setError(t('auth.oauthFailed').replace('{provider}', providerName))

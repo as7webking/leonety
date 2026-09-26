@@ -265,7 +265,7 @@ export function AiAssistantWidget() {
           role="dialog"
           aria-modal="true"
           aria-label={t('assistant.title')}
-          className="absolute inset-0 flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-white shadow-2xl sm:pointer-events-auto sm:inset-auto sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:right-5 sm:h-[min(38rem,calc(100dvh-6rem))] sm:w-[min(calc(100vw-2.5rem),44rem)] sm:rounded-xl sm:border sm:border-slate-200"
+          className="absolute inset-0 flex h-dvh min-h-0 w-full max-w-full flex-col overflow-hidden bg-white shadow-2xl sm:pointer-events-auto sm:inset-auto sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:right-[max(1.25rem,env(safe-area-inset-right))] sm:h-[min(38rem,calc(100dvh-6rem))] sm:w-[calc(100%-2.5rem)] sm:max-w-[44rem] sm:rounded-xl sm:border sm:border-slate-200"
         >
           <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:p-4">
             <div className="min-w-0">
@@ -424,7 +424,7 @@ export function AiAssistantWidget() {
       <Button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[60] h-12 rounded-xl px-4 shadow-lg print:hidden ${open ? 'hidden sm:inline-flex' : ''}`}
+        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[60] h-12 max-w-[calc(100%-2rem)] rounded-xl px-4 shadow-lg print:hidden ${open ? 'hidden sm:inline-flex' : ''}`}
         aria-label={t('assistant.button')}
         title={t('assistant.button')}
       >

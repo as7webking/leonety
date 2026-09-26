@@ -70,7 +70,7 @@ export function IncomingOrderAlert() {
   const acknowledge = () => { stopRef.current?.(); stopRef.current = null; setAlert(null) }
 
   return (
-    <aside className="no-print fixed right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[75] w-[calc(100vw-2rem)] max-w-sm rounded-lg border border-amber-300 bg-white p-4 shadow-xl" role="alert" aria-live="assertive">
+    <aside className="no-print fixed left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] top-[calc(1rem+env(safe-area-inset-top))] z-[75] ml-auto max-w-sm rounded-lg border border-amber-300 bg-white p-4 shadow-xl" role="alert" aria-live="assertive">
       <div className="flex items-start gap-3">
         <span className="rounded-md bg-amber-100 p-2 text-amber-700"><BellRing className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">

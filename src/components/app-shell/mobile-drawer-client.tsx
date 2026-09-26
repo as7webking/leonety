@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Menu, Search, X } from 'lucide-react'
 import { AppSearch } from '@/components/app-search'
@@ -15,13 +16,13 @@ import { normalizeAppMode } from '@/lib/app-mode'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import {
   shouldCloseNavigationDrawer,
-  shouldOpenNavigationDrawer,
   type NavigationSwipe,
 } from '@/lib/mobile-navigation-gesture'
 
 export function MobileDrawerClient() {
   const [open, setOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const pathname = usePathname()
   const { t } = useI18n()
   const { currentCompany } = useCompany()
   const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
@@ -45,16 +46,33 @@ export function MobileDrawerClient() {
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
-  const finishGesture = (event: React.PointerEvent<HTMLElement>, action: 'open' | 'close') => {
+  const finishCloseGesture = (event: React.PointerEvent<HTMLElement>) => {
     const start = gestureRef.current
     gestureRef.current = null
     if (!start) return
     const swipe = { ...start, endX: event.clientX, endY: event.clientY }
-    if (action === 'open' ? shouldOpenNavigationDrawer(swipe) : shouldCloseNavigationDrawer(swipe)) {
-      if (action === 'open') openDrawer()
-      else closeDrawer()
-    }
+    if (shouldCloseNavigationDrawer(swipe)) closeDrawer()
   }
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setOpen(false)
+      setSearchOpen(false)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [pathname])
+
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1280px)')
+    const handleDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setOpen(false)
+        setSearchOpen(false)
+      }
+    }
+    desktop.addEventListener('change', handleDesktop)
+    return () => desktop.removeEventListener('change', handleDesktop)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -79,7 +97,6 @@ export function MobileDrawerClient() {
         </Link>
         <div className="flex items-center gap-2">
           <button
-            ref={menuButtonRef}
             type="button"
             className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
             onClick={() => setSearchOpen((value) => !value)}
@@ -88,6 +105,7 @@ export function MobileDrawerClient() {
             <Search className="h-5 w-5" />
           </button>
           <button
+            ref={menuButtonRef}
             type="button"
             className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
             onClick={openDrawer}
@@ -99,34 +117,23 @@ export function MobileDrawerClient() {
       </header>
 
       {searchOpen && (
-        <div className="fixed inset-x-0 top-[calc(4rem+env(safe-area-inset-top))] z-40 border-b border-slate-200 bg-white px-4 py-3 xl:hidden">
+        <div className="fixed inset-x-0 top-[calc(4rem+env(safe-area-inset-top))] z-40 max-w-full border-b border-slate-200 bg-white py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] xl:hidden">
           <AppSearch />
         </div>
       )}
 
-      {!open && (
+      {open && <div className="fixed inset-0 z-[70] max-w-full overflow-hidden xl:hidden">
         <div
-          className="fixed bottom-0 left-0 top-[calc(4rem+env(safe-area-inset-top))] z-30 w-6 touch-pan-y xl:hidden"
-          aria-hidden="true"
-          onPointerDown={beginGesture}
-          onPointerUp={(event) => finishGesture(event, 'open')}
-          onPointerCancel={() => { gestureRef.current = null }}
-        />
-      )}
-
-      <div className={`fixed inset-0 z-[70] xl:hidden ${open ? 'pointer-events-auto' : 'pointer-events-none'}`} aria-hidden={!open}>
-        <div
-          className={`absolute inset-0 bg-slate-950/40 transition-opacity ${open ? 'opacity-100' : 'opacity-0'}`}
+          className="absolute inset-0 bg-slate-950/40"
           onClick={closeDrawer}
         />
         <aside
-          className={`absolute left-0 top-0 h-dvh w-[min(20rem,calc(100vw-0.75rem))] touch-pan-y overflow-y-auto overscroll-contain bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl transition-transform duration-200 ease-out ${open ? 'translate-x-0' : '-translate-x-full'}`}
+          className="absolute left-0 top-0 h-dvh w-[calc(100%-0.75rem)] max-w-80 touch-pan-y overflow-y-auto overscroll-contain bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
           aria-labelledby="mobile-app-navigation-label"
           aria-modal="true"
           role="dialog"
-          inert={!open}
           onPointerDown={beginGesture}
-          onPointerUp={(event) => finishGesture(event, 'close')}
+          onPointerUp={finishCloseGesture}
           onPointerCancel={() => { gestureRef.current = null }}
         >
           <span id="mobile-app-navigation-label" className="sr-only">{t('nav.mobileAppNavigation')}</span>
@@ -140,7 +147,7 @@ export function MobileDrawerClient() {
             </button>
           </div>
 
-          <div className="space-y-5 p-4">
+          <div className="space-y-5 pb-4 pl-[max(1rem,env(safe-area-inset-left))] pr-4 pt-4">
             <WorkspaceSelectorClient />
             <nav className="space-y-1" aria-labelledby="mobile-primary-navigation-label">
               <span id="mobile-primary-navigation-label" className="sr-only">{t('nav.primaryNavigation')}</span>
@@ -176,7 +183,7 @@ export function MobileDrawerClient() {
             </div>
           </div>
         </aside>
-      </div>
+      </div>}
     </>
   )
 }

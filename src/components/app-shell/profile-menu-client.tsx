@@ -71,7 +71,8 @@ export function ProfileMenuClient() {
               if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
               await supabase.auth.signOut()
               setOpen(false)
-              router.push('/login')
+              router.replace('/login')
+              router.refresh()
             }}
           >
             <LogOut className="h-4 w-4" />
