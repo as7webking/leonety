@@ -89,17 +89,18 @@ function secretForStorage(nextValue: string, existingValue?: string | null) {
 }
 
 function publicIntegration(row: StoreIntegrationRow) {
+  const exposesManualCredentialState = row.provider === 'opencart'
   return {
     id: row.id,
     provider: row.provider,
     storeName: row.store_name ?? '',
     storeUrl: row.store_url ?? '',
     externalAccountId: row.external_account_id ?? '',
-    apiKeyPreview: maskStoredSecret(row.api_key),
-    apiSecretPreview: maskStoredSecret(row.api_secret),
+    apiKeyPreview: exposesManualCredentialState ? maskStoredSecret(row.api_key) : '',
+    apiSecretPreview: '',
     merchantId: row.merchant_id ?? '',
-    accessTokenPreview: maskStoredSecret(row.access_token),
-    refreshTokenPreview: maskStoredSecret(row.refresh_token),
+    accessTokenPreview: '',
+    refreshTokenPreview: '',
     status: row.status,
     lastSyncAt: row.last_sync_at,
     connectedAt: row.connected_at ?? null,
@@ -227,35 +228,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Integration provider is required.' }, { status: 400 })
     }
 
+    if (provider !== 'opencart') {
+      return NextResponse.json({ error: 'Use the provider-specific connection flow.' }, { status: 400 })
+    }
+
     const { data: existing, error: existingError } = await auth.adminSupabase
       .from('store_integrations')
-      .select('id, api_key, api_secret, access_token, refresh_token')
+      .select('id, api_key')
       .eq('company_id', companyId)
       .eq('provider', provider)
       .maybeSingle()
 
     if (existingError) throw existingError
 
-    const existingSecrets = existing as Pick<StoreIntegrationRow, 'api_key' | 'api_secret' | 'access_token' | 'refresh_token'> | null
+    const existingSecrets = existing as Pick<StoreIntegrationRow, 'api_key'> | null
     const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
-    const apiSecret = typeof body.apiSecret === 'string' ? body.apiSecret.trim() : ''
-    const accessToken = typeof body.accessToken === 'string' ? body.accessToken.trim() : ''
-    const refreshToken = typeof body.refreshToken === 'string' ? body.refreshToken.trim() : ''
-    const merchantId = typeof body.merchantId === 'string' ? body.merchantId.trim() : ''
-    const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata as Record<string, unknown> : null
 
     const payload = {
       company_id: companyId,
       provider,
       store_name: typeof body.storeName === 'string' ? body.storeName.trim() : '',
       store_url: typeof body.storeUrl === 'string' && body.storeUrl.trim() ? normalizeStoreUrl(body.storeUrl) : '',
-      external_account_id: typeof body.externalAccountId === 'string' ? body.externalAccountId.trim() : '',
+      external_account_id: '',
       api_key: secretForStorage(apiKey, existingSecrets?.api_key),
-      api_secret: secretForStorage(apiSecret, existingSecrets?.api_secret),
-      access_token: secretForStorage(accessToken, existingSecrets?.access_token),
-      refresh_token: secretForStorage(refreshToken, existingSecrets?.refresh_token),
-      merchant_id: merchantId,
-      metadata,
+      api_secret: '',
+      access_token: '',
+      refresh_token: '',
+      merchant_id: '',
+      metadata: null,
       status: 'not_connected',
       error_message: null,
       updated_at: new Date().toISOString(),

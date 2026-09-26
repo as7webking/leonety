@@ -12,21 +12,12 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import type { Locale } from '@/lib/i18n'
+import {
+  getIntegrationOnboardingDescriptionKey,
+  integrationCatalog,
+  type StoreProvider as Provider,
+} from '@/lib/integration-catalog'
 
-type Provider =
-  | 'woocommerce'
-  | 'shopify'
-  | 'opencart'
-  | 'google_merchant'
-  | 'whatsapp_business'
-  | 'iss_pos'
-  | 'ebay'
-  | 'amazon_marketplace'
-  | 'kleinanzeigen'
-  | 'olx'
-  | 'uber_eats'
-  | 'just_eat_takeaway'
-  | 'glovo'
 type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
 type WhatsAppClientCreationMode = 'ask' | 'auto_create_lead' | 'never'
 
@@ -50,10 +41,7 @@ interface StoreIntegration {
   storeUrl: string
   externalAccountId: string
   apiKeyPreview: string
-  apiSecretPreview: string
   merchantId: string
-  accessTokenPreview: string
-  refreshTokenPreview: string
   status: IntegrationStatus
   lastSyncAt: string | null
   connectedAt: string | null
@@ -66,101 +54,18 @@ interface StoreIntegration {
 interface IntegrationForm {
   storeName: string
   storeUrl: string
-  externalAccountId: string
   apiKey: string
-  apiSecret: string
   merchantId: string
-  accessToken: string
-  refreshToken: string
   clientCreationMode: WhatsAppClientCreationMode
 }
 
-const providerOptions: Array<{ value: Provider; label: string; fields: Array<keyof IntegrationForm>; directSettings?: string; requiresApproval?: boolean }> = [
-  {
-    value: 'woocommerce',
-    label: 'WooCommerce',
-    fields: ['storeName', 'storeUrl', 'apiKey', 'apiSecret'],
-    directSettings: '/app/settings/integrations/woocommerce',
-  },
-  {
-    value: 'shopify',
-    label: 'Shopify',
-    fields: ['storeName', 'storeUrl', 'externalAccountId', 'accessToken', 'refreshToken'],
-  },
-  {
-    value: 'opencart',
-    label: 'OpenCart',
-    fields: ['storeName', 'storeUrl', 'apiKey', 'apiSecret'],
-  },
-  {
-    value: 'google_merchant',
-    label: 'Google Merchant / Maps',
-    fields: ['storeName', 'externalAccountId', 'merchantId', 'accessToken', 'refreshToken'],
-  },
-  {
-    value: 'whatsapp_business',
-    label: 'WhatsApp Business',
-    fields: [],
-  },
-  {
-    value: 'iss_pos',
-    label: 'ISS POS',
-    fields: ['storeName', 'storeUrl', 'externalAccountId'],
-    requiresApproval: true,
-  },
-  {
-    value: 'ebay',
-    label: 'eBay',
-    fields: ['storeName', 'externalAccountId', 'accessToken', 'refreshToken'],
-    requiresApproval: true,
-  },
-  {
-    value: 'amazon_marketplace',
-    label: 'Amazon Marketplace',
-    fields: ['storeName', 'externalAccountId', 'merchantId', 'accessToken', 'refreshToken'],
-    requiresApproval: true,
-  },
-  {
-    value: 'kleinanzeigen',
-    label: 'Kleinanzeigen',
-    fields: ['storeName', 'storeUrl', 'externalAccountId', 'apiKey'],
-    requiresApproval: true,
-  },
-  {
-    value: 'olx',
-    label: 'OLX',
-    fields: ['storeName', 'storeUrl', 'externalAccountId', 'apiKey', 'accessToken', 'refreshToken'],
-    requiresApproval: true,
-  },
-  {
-    value: 'uber_eats',
-    label: 'Uber Eats',
-    fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
-    requiresApproval: true,
-  },
-  {
-    value: 'just_eat_takeaway',
-    label: 'Just Eat / Takeaway / Lieferando',
-    fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
-    requiresApproval: true,
-  },
-  {
-    value: 'glovo',
-    label: 'Glovo',
-    fields: ['storeName', 'storeUrl', 'externalAccountId', 'merchantId', 'apiKey', 'apiSecret'],
-    requiresApproval: true,
-  },
-]
+const providerOptions = integrationCatalog
 
 const emptyForm: IntegrationForm = {
   storeName: '',
   storeUrl: '',
-  externalAccountId: '',
   apiKey: '',
-  apiSecret: '',
   merchantId: '',
-  accessToken: '',
-  refreshToken: '',
   clientCreationMode: 'ask',
 }
 
@@ -624,7 +529,6 @@ export default function StoreIntegrationsPage() {
   const [loadingIntegrations, setLoadingIntegrations] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [whatsAppConnecting, setWhatsAppConnecting] = useState(false)
@@ -635,6 +539,8 @@ export default function StoreIntegrationsPage() {
   const whatsAppSignupDataRef = useRef<Record<string, unknown>>({})
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
+  const hasSetupGuide = provider === 'woocommerce' || provider === 'whatsapp_business' || provider === 'iss_pos' ||
+    provider === 'google_merchant' || selectedProvider.mode === 'partner_required'
   useBodyScrollLock(guideOpen)
   const guideStepKeys = useMemo(() => {
     if (provider === 'woocommerce') return [
@@ -737,12 +643,8 @@ export default function StoreIntegrationsPage() {
     setForm({
       storeName: currentIntegration.storeName,
       storeUrl: currentIntegration.storeUrl,
-      externalAccountId: currentIntegration.externalAccountId,
       apiKey: '',
-      apiSecret: '',
       merchantId: currentIntegration.merchantId,
-      accessToken: '',
-      refreshToken: '',
       clientCreationMode: (currentIntegration.metadata?.clientCreationMode === 'auto_create_lead' ||
         currentIntegration.metadata?.clientCreationMode === 'never'
         ? currentIntegration.metadata.clientCreationMode
@@ -762,14 +664,8 @@ export default function StoreIntegrationsPage() {
     setMessage('')
     setError('')
 
-    if (provider === 'iss_pos') {
-      setError(labels.issSetup)
-      setSaving(false)
-      return
-    }
-
-    if (provider === 'whatsapp_business') {
-      setError(labels.whatsappSetupRequired)
+    if (selectedProvider.mode !== 'manual') {
+      setError(t(getIntegrationOnboardingDescriptionKey(provider, selectedProvider.mode)))
       setSaving(false)
       return
     }
@@ -844,7 +740,7 @@ export default function StoreIntegrationsPage() {
       body: JSON.stringify({
         companyId: currentCompany.id,
         storeUrl: form.storeUrl,
-        apiKey: form.apiKey || currentIntegration?.apiKeyPreview,
+        apiKey: form.apiKey,
       }),
     })
     const payload = await response.json().catch(() => ({}))
@@ -856,35 +752,6 @@ export default function StoreIntegrationsPage() {
     }
 
     setTesting(false)
-  }
-
-  const handleExportProducts = async () => {
-    if (!currentCompany) return
-
-    setExporting(true)
-    setError('')
-
-    const response = await fetch('/api/store-integrations/products/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId: currentCompany.id, provider }),
-    })
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}))
-      setError(localizedApiError(payload, labels))
-      setExporting(false)
-      return
-    }
-
-    const blob = await response.blob()
-    const href = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = href
-    link.download = `leonety-${provider}-products.csv`
-    link.click()
-    URL.revokeObjectURL(href)
-    setExporting(false)
   }
 
   const handleImportProducts = async () => {
@@ -1104,12 +971,14 @@ export default function StoreIntegrationsPage() {
 
               <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p>{selectedProvider.requiresApproval ? labels.setupRequired : labels.credentialsNeverExposed}</p>
+                  <p>{t(getIntegrationOnboardingDescriptionKey(provider, selectedProvider.mode))}</p>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="shrink-0 bg-white">
-                  <BookOpen className="h-4 w-4" />
-                  {t('integrations.setupGuide')}
-                </Button>
+                {hasSetupGuide && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="shrink-0 bg-white">
+                    <BookOpen className="h-4 w-4" />
+                    {t('integrations.setupGuide')}
+                  </Button>
+                )}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -1139,12 +1008,6 @@ export default function StoreIntegrationsPage() {
                     <input value={form.storeUrl} onChange={(event) => updateForm('storeUrl', event.target.value)} placeholder="https://example.com" className="w-full rounded-md border px-3 py-2" />
                   </label>
                 )}
-                {selectedProvider.fields.includes('externalAccountId') && (
-                  <label className="block space-y-1">
-                    <span className="text-sm font-medium">{labels.externalAccountId}</span>
-                    <input value={form.externalAccountId} onChange={(event) => updateForm('externalAccountId', event.target.value)} className="w-full rounded-md border px-3 py-2" />
-                  </label>
-                )}
                 {selectedProvider.fields.includes('merchantId') && (
                   <label className="block space-y-1">
                     <span className="text-sm font-medium">{labels.merchantId}</span>
@@ -1155,24 +1018,6 @@ export default function StoreIntegrationsPage() {
                   <label className="block space-y-1">
                     <span className="text-sm font-medium">{labels.apiKey}</span>
                     <input value={form.apiKey} onChange={(event) => updateForm('apiKey', event.target.value)} placeholder={currentIntegration ? labels.secretHint : ''} className="w-full rounded-md border px-3 py-2" autoComplete="off" />
-                  </label>
-                )}
-                {selectedProvider.fields.includes('apiSecret') && (
-                  <label className="block space-y-1">
-                    <span className="text-sm font-medium">{labels.apiSecret}</span>
-                    <input type="password" value={form.apiSecret} onChange={(event) => updateForm('apiSecret', event.target.value)} placeholder={currentIntegration ? labels.secretHint : ''} className="w-full rounded-md border px-3 py-2" autoComplete="new-password" />
-                  </label>
-                )}
-                {selectedProvider.fields.includes('accessToken') && (
-                  <label className="block space-y-1">
-                    <span className="text-sm font-medium">{labels.accessToken}</span>
-                    <input type="password" value={form.accessToken} onChange={(event) => updateForm('accessToken', event.target.value)} placeholder={currentIntegration ? labels.secretHint : ''} className="w-full rounded-md border px-3 py-2" autoComplete="new-password" />
-                  </label>
-                )}
-                {selectedProvider.fields.includes('refreshToken') && (
-                  <label className="block space-y-1">
-                    <span className="text-sm font-medium">{labels.refreshToken}</span>
-                    <input type="password" value={form.refreshToken} onChange={(event) => updateForm('refreshToken', event.target.value)} placeholder={currentIntegration ? labels.secretHint : ''} className="w-full rounded-md border px-3 py-2" autoComplete="new-password" />
                   </label>
                 )}
               </div>
@@ -1190,35 +1035,24 @@ export default function StoreIntegrationsPage() {
                       </>
                     )}
                     {currentIntegration.apiKeyPreview && <p><KeyRound className="mr-1 inline h-3.5 w-3.5" />{labels.apiKey}: {currentIntegration.apiKeyPreview}</p>}
-                    {currentIntegration.apiSecretPreview && <p><KeyRound className="mr-1 inline h-3.5 w-3.5" />{labels.apiSecret}: {currentIntegration.apiSecretPreview}</p>}
-                    {currentIntegration.accessTokenPreview && <p><KeyRound className="mr-1 inline h-3.5 w-3.5" />{labels.accessToken}: {currentIntegration.accessTokenPreview}</p>}
-                    {currentIntegration.refreshTokenPreview && <p><KeyRound className="mr-1 inline h-3.5 w-3.5" />{labels.refreshToken}: {currentIntegration.refreshTokenPreview}</p>}
                   </div>
                 </div>
               )}
 
               <div className="flex flex-wrap gap-2">
-                {provider !== 'whatsapp_business' && (
+                {selectedProvider.mode === 'manual' && (
                   <Button type="submit" disabled={saving}>{saving ? t('common.loading') : labels.save}</Button>
                 )}
-                {provider === 'whatsapp_business' && (
+                {selectedProvider.mode === 'embedded' && (
                   <Button type="button" disabled={whatsAppConnecting || saving} onClick={startWhatsAppSignup}>
-                    {whatsAppConnecting ? t('common.loading') : labels.connectWhatsapp}
+                    {whatsAppConnecting ? t('common.loading') : t('integrationOnboarding.connect')}
                   </Button>
                 )}
-                {provider === 'shopify' || provider === 'google_merchant' ? (
-                  <Button type="button" variant="outline" disabled={saving} onClick={handleOAuthConnect}>{labels.oauthConnect}</Button>
+                {selectedProvider.mode === 'oauth' ? (
+                  <Button type="button" disabled={saving} onClick={handleOAuthConnect}>{t('integrationOnboarding.connect')}</Button>
                 ) : null}
                 {provider === 'opencart' && (
                   <Button type="button" variant="outline" disabled={testing || saving} onClick={handleOpenCartTest}>{testing ? t('common.loading') : labels.testOpenCart}</Button>
-                )}
-                {provider === 'iss_pos' && (
-                  <Button type="button" variant="outline" disabled>{labels.issSetup}</Button>
-                )}
-                {provider !== 'whatsapp_business' && provider !== 'iss_pos' && (
-                  <Button type="button" variant="outline" disabled={exporting} onClick={handleExportProducts}>
-                    {exporting ? t('common.loading') : labels.exportProducts}
-                  </Button>
                 )}
                 {provider === 'shopify' && (
                   <Button type="button" variant="outline" disabled={importing || !currentIntegration} onClick={handleImportProducts}>
@@ -1230,7 +1064,7 @@ export default function StoreIntegrationsPage() {
                     {syncing ? t('common.loading') : labels.syncProducts}
                   </Button>
                 )}
-                {currentIntegration && (
+                {currentIntegration && selectedProvider.mode !== 'coming_soon' && (
                   <Button type="button" variant="outline" disabled={saving} onClick={handleDisconnect}>{labels.disconnect}</Button>
                 )}
                 {selectedProvider.directSettings && (
@@ -1323,7 +1157,11 @@ export default function StoreIntegrationsPage() {
                           : 'bg-slate-100 text-slate-600'
                     }`}>
                       {status === 'connected' ? <Plug className="h-3.5 w-3.5" /> : <Unplug className="h-3.5 w-3.5" />}
-                      {status === 'not_connected' && item.requiresApproval ? labels.setupRequired : statusLabel(status, labels)}
+                      {status === 'not_connected' && item.mode === 'partner_required'
+                        ? t('integrationOnboarding.partnerRequired')
+                        : status === 'not_connected' && item.mode === 'coming_soon'
+                          ? t('integrationOnboarding.comingSoon')
+                          : statusLabel(status, labels)}
                     </span>
                   </div>
                 </CardContent>

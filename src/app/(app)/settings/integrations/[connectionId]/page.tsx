@@ -10,21 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import type { Locale } from '@/lib/i18n'
-
-type Provider =
-  | 'woocommerce'
-  | 'shopify'
-  | 'opencart'
-  | 'google_merchant'
-  | 'whatsapp_business'
-  | 'iss_pos'
-  | 'ebay'
-  | 'amazon_marketplace'
-  | 'kleinanzeigen'
-  | 'olx'
-  | 'uber_eats'
-  | 'just_eat_takeaway'
-  | 'glovo'
+import {
+  getIntegrationCatalogItem,
+  getIntegrationOnboardingDescriptionKey,
+  type StoreProvider as Provider,
+} from '@/lib/integration-catalog'
 type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
 
 interface StoreIntegration {
@@ -582,13 +572,14 @@ export default function StoreIntegrationDetailPage() {
     )
   }
 
-  const previews = [
-    [labels.apiKey, connection.apiKeyPreview],
-    [labels.apiSecret, connection.apiSecretPreview],
-    [labels.accessToken, connection.accessTokenPreview],
-    [labels.refreshToken, connection.refreshTokenPreview],
-    [labels.merchantId, connection.merchantId],
-  ].filter(([, value]) => Boolean(value))
+  const catalogItem = getIntegrationCatalogItem(connection.provider)
+  const previews = connection.provider === 'opencart' && connection.apiKeyPreview
+    ? [[labels.apiKey, connection.apiKeyPreview]]
+    : []
+  const canTest = connection.provider === 'woocommerce'
+  const canImport = connection.provider === 'woocommerce' || connection.provider === 'shopify'
+  const canExport = connection.provider === 'woocommerce' || connection.provider === 'shopify' || connection.provider === 'google_merchant'
+  const canSync = connection.provider === 'shopify' || connection.provider === 'google_merchant'
 
   return (
     <PageContainer>
@@ -634,18 +625,26 @@ export default function StoreIntegrationDetailPage() {
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={testConnection}>
-                {busyAction === 'test' ? t('common.loading') : labels.test}
-              </Button>
-              <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={importProducts}>
-                {busyAction === 'import' ? t('common.loading') : labels.importProducts}
-              </Button>
-              <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={exportProducts}>
-                {busyAction === 'export' ? t('common.loading') : labels.exportProducts}
-              </Button>
-              <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={syncProducts}>
-                {busyAction === 'sync' ? t('common.loading') : labels.syncProducts}
-              </Button>
+              {canTest && (
+                <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={testConnection}>
+                  {busyAction === 'test' ? t('common.loading') : labels.test}
+                </Button>
+              )}
+              {canImport && (
+                <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={importProducts}>
+                  {busyAction === 'import' ? t('common.loading') : labels.importProducts}
+                </Button>
+              )}
+              {canExport && (
+                <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={exportProducts}>
+                  {busyAction === 'export' ? t('common.loading') : labels.exportProducts}
+                </Button>
+              )}
+              {canSync && (
+                <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={syncProducts}>
+                  {busyAction === 'sync' ? t('common.loading') : labels.syncProducts}
+                </Button>
+              )}
               {connection.provider === 'woocommerce' && (
                 <Link href="/app/settings/integrations/woocommerce">
                   <Button type="button" variant="outline">{labels.openLegacyWoo}</Button>
@@ -660,7 +659,7 @@ export default function StoreIntegrationDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{labels.savedCredentials}</CardTitle>
+            <CardTitle>{t('integrationOnboarding.connectionSecurity')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
@@ -682,9 +681,7 @@ export default function StoreIntegrationDetailPage() {
                 <p className="text-xs font-medium text-slate-500">{label}</p>
                 <p className="mt-1 break-all font-mono text-sm text-slate-900">{value}</p>
               </div>
-            )) : (
-              <p className="text-slate-500">{labels.notConnected}</p>
-            )}
+            )) : <p className="text-slate-500">{t(getIntegrationOnboardingDescriptionKey(connection.provider, catalogItem.mode))}</p>}
           </CardContent>
         </Card>
       </div>

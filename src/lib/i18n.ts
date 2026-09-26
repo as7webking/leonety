@@ -10,6 +10,7 @@ import { countrySelectorDictionaries } from '@/lib/country-selector-i18n'
 import { productInventoryUxDictionaries } from '@/lib/product-inventory-ux-i18n'
 import { pageUtilitiesDictionaries } from '@/lib/page-utilities-i18n'
 import { systemNotificationDictionaries } from '@/lib/system-notifications-i18n'
+import { integrationOnboardingDictionaries } from '@/lib/integration-onboarding-i18n'
 import { appModeDictionaries } from '@/lib/app-mode-i18n'
 import { financeUiDictionaries } from '@/lib/finance-ui-i18n'
 import { authenticatedQaDictionaries, ukrainianAuthenticatedFixes } from '@/lib/authenticated-qa-i18n'
@@ -8876,6 +8877,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], employeeDocumentDictionaries[locale])
   Object.assign(dictionaries[locale], orderNotificationDictionaries[locale])
   Object.assign(dictionaries[locale], systemNotificationDictionaries[locale])
+  Object.assign(dictionaries[locale], integrationOnboardingDictionaries[locale])
   Object.assign(dictionaries[locale], appModeDictionaries[locale])
   Object.assign(dictionaries[locale], financeUiDictionaries[locale])
   Object.assign(dictionaries[locale], authenticatedQaDictionaries[locale])

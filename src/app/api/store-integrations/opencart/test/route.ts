@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { decryptSecret } from '@/lib/credential-encryption'
 import { normalizeStoreUrl } from '@/lib/store-integrations'
 
 export const runtime = 'nodejs'
@@ -8,10 +9,23 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
     const companyId = typeof body.companyId === 'string' ? body.companyId : ''
-    const storeUrl = typeof body.storeUrl === 'string' ? body.storeUrl : ''
-    const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
+    let storeUrl = typeof body.storeUrl === 'string' ? body.storeUrl.trim() : ''
+    let apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
     const auth = await requireOwnedCompany(companyId)
     if ('error' in auth) return auth.error
+
+    if (!storeUrl || !apiKey) {
+      const { data: saved, error: savedError } = await auth.adminSupabase
+        .from('store_integrations')
+        .select('store_url, api_key')
+        .eq('company_id', companyId)
+        .eq('provider', 'opencart')
+        .maybeSingle()
+
+      if (savedError) throw savedError
+      storeUrl ||= saved?.store_url ?? ''
+      apiKey ||= decryptSecret(saved?.api_key)
+    }
 
     if (!storeUrl || !apiKey) {
       return NextResponse.json({ error: 'OpenCart store URL and API key are required.' }, { status: 400 })

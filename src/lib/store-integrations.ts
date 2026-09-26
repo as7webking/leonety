@@ -1,23 +1,8 @@
 import 'server-only'
 import { getSiteUrl } from '@/lib/site-url'
+import { storeProviders, type StoreProvider } from '@/lib/integration-catalog'
 
-export const storeProviders = [
-  'woocommerce',
-  'shopify',
-  'opencart',
-  'google_merchant',
-  'whatsapp_business',
-  'iss_pos',
-  'ebay',
-  'amazon_marketplace',
-  'kleinanzeigen',
-  'olx',
-  'uber_eats',
-  'just_eat_takeaway',
-  'glovo',
-] as const
-
-export type StoreProvider = typeof storeProviders[number]
+export { storeProviders, type StoreProvider } from '@/lib/integration-catalog'
 
 export function isStoreProvider(value: unknown): value is StoreProvider {
   return typeof value === 'string' && storeProviders.includes(value as StoreProvider)
