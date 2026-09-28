@@ -417,25 +417,59 @@ html {
     font-size: 9.5pt;
   }
 
-  /* WebKit paginates hidden app-shell geometry unless its screen min-heights are reset. */
+  /* WebKit paginates the mobile app-shell geometry even when its visible chrome is
+     hidden. Flatten the ancestor chain so only the fixed A4 document participates. */
   body:has(.print-kassenbuch) > div,
   body:has(.print-kassenbuch) > div > .flex-1,
+  body:has(.print-kassenbuch) [data-app-shell],
   body:has(.print-kassenbuch) .min-h-screen,
   body:has(.print-kassenbuch) main,
   body:has(.print-kassenbuch) .container {
+    position: static !important;
+    inset: auto !important;
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
+    transform: none !important;
+    translate: none !important;
+    contain: none !important;
+    overflow: visible !important;
   }
 
   body:has(.print-kassenbuch) > div,
-  body:has(.print-kassenbuch) > div > .flex-1 {
+  body:has(.print-kassenbuch) > div > .flex-1,
+  body:has(.print-kassenbuch) [data-app-shell] {
     display: block !important;
     flex: none !important;
+    gap: 0 !important;
   }
 
-  body:has(.print-kassenbuch) .overflow-x-clip {
+  body:has(.print-kassenbuch) [data-app-shell] > :not(main) {
+    display: none !important;
+  }
+
+  body:has(.print-kassenbuch) main,
+  body:has(.print-kassenbuch) .container {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .print-area.print-kassenbuch {
+    position: static !important;
+    inset: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
     overflow: visible !important;
+    transform: none !important;
+    translate: none !important;
+    contain: none !important;
+    break-after: auto !important;
+    page-break-after: auto !important;
+    orphans: 1;
+    widows: 1;
   }
 
   .print-kassenbuch .kassenbuch-header {
@@ -446,6 +480,8 @@ html {
     margin-bottom: 5mm;
     border-bottom: 2px solid #111;
     padding-bottom: 3mm;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .print-kassenbuch .kassenbuch-identity {
@@ -514,6 +550,8 @@ html {
     margin-bottom: 3mm;
     border: 1px solid #111;
     padding: 2mm 3mm;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .print-kassenbuch .kassenbuch-month {
@@ -525,6 +563,11 @@ html {
   .print-kassenbuch .kassenbuch-month + .kassenbuch-month {
     break-before: page;
     page-break-before: always;
+  }
+
+  .print-kassenbuch .kassenbuch-month:last-of-type {
+    break-after: auto !important;
+    page-break-after: auto !important;
   }
 
   .print-kassenbuch .kassenbuch-month h2 {
