@@ -34,6 +34,24 @@ test('selectable finance modules place selection through the shared row slot', (
   }
 })
 
+test('shared mobile rows keep controls left and date below actions without changing desktop columns', () => {
+  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
+
+  assert.match(component, /finance-list-actions-without-selection/)
+  assert.match(component, /justify-start gap-1 lg:justify-end/)
+  assert.match(styles, /> :nth-child\(3\)[\s\S]*grid-row: 4/)
+  assert.match(styles, /> :nth-child\(5\)[\s\S]*grid-row: 3/)
+  assert.match(styles, /> :nth-child\(6\)[\s\S]*grid-row: 3/)
+  assert.match(styles, /@media \(min-width: 1024px\)[\s\S]*grid-template-columns: minmax\(0, 1\.5fr\)/)
+})
+
+test('transactions use the dedicated localized empty-state title', () => {
+  const source = readFileSync(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
+  assert.match(source, /emptyTitle=\{t\('finance\.noTransactionsYet'\)\}/)
+  assert.equal(financeUiDictionaries.en['finance.noTransactionsYet'], 'No transactions yet')
+})
+
 test('finance search is case-insensitive and ignores empty optional fields', () => {
   assert.equal(matchesFinanceSearch('  CHAT  ', ['ChatGPT Plus', null, undefined]), true)
   assert.equal(matchesFinanceSearch('software', ['ChatGPT Plus', 'Subscription', 'Software']), true)

@@ -1353,7 +1353,7 @@ export default function TransactionsPage() {
       )}
 
       {sortedTransactions.length === 0 ? (
-        <FinanceEmptyState filtered={transactions.length > 0} emptyTitle={t('common.noTransactions')} emptyDescription={t('transactions.emptyDescription')} filteredTitle={t('finance.filteredEmptyTitle')} filteredDescription={t('finance.filteredEmptyDescription')} action={{ label: t('transactions.add'), onClick: () => setShowForm(true) }} />
+        <FinanceEmptyState filtered={transactions.length > 0} emptyTitle={t('finance.noTransactionsYet')} emptyDescription={t('transactions.emptyDescription')} filteredTitle={t('finance.filteredEmptyTitle')} filteredDescription={t('finance.filteredEmptyDescription')} action={{ label: t('transactions.add'), onClick: () => setShowForm(true) }} />
       ) : (
         <FinanceListShell titleLabel={t('transactions.titleLabel')} categoryLabel={t('common.category')} dateLabel={t('common.date')} amountLabel={t('common.amount')} selectionLabel={t('transactions.select')} actionsLabel={t('finance.actions')}>
           {paginatedTransactions.map((transaction) => {

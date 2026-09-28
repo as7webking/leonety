@@ -115,14 +115,17 @@ export function FinanceListRow({ title, description, category, date, amount, amo
   return (
     <article className={cn('finance-list-grid min-w-0 gap-y-3 px-4 py-4', className)}>
       <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">{badge}<p className="min-w-0 break-words font-medium text-slate-950">{title}</p></div>
-        {description && <p className="mt-1 break-words text-sm text-slate-500">{description}</p>}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">{badge}<p className="min-w-0 break-words font-medium text-slate-950">{title}</p></div>
+        {description && <p className="mt-1 hidden break-words text-sm text-slate-500 lg:block">{description}</p>}
       </div>
-      <div className="min-w-0 text-sm text-slate-600">{category}</div>
-      <div className="text-sm text-slate-500">{date}</div>
-      <div className="text-right"><div className="whitespace-nowrap font-semibold tabular-nums text-slate-950">{amount}</div>{amountDetail && <div className="mt-1 whitespace-nowrap text-xs tabular-nums text-slate-500">{amountDetail}</div>}</div>
-      <div className="flex min-h-10 items-center justify-end lg:justify-center">{selection}</div>
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">{actions}</div>
+      <div className="min-w-0 text-sm text-slate-600">
+        {category}
+        {description && <p className="mt-1 break-words text-slate-500 lg:hidden">{description}</p>}
+      </div>
+      <div className="border-t border-slate-100 pt-2 text-sm text-slate-500 lg:border-0 lg:pt-0">{date}</div>
+      <div className="min-w-0 text-right"><div className="whitespace-nowrap font-semibold tabular-nums text-slate-950">{amount}</div>{amountDetail && <div className="mt-1 whitespace-nowrap text-xs tabular-nums text-slate-500">{amountDetail}</div>}</div>
+      <div className={cn('min-h-10 items-center justify-start lg:flex lg:justify-center', selection ? 'flex' : 'hidden')}>{selection}</div>
+      <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-1 lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
     </article>
   )
 }
