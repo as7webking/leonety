@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { isRetryingLastUserMessage, parseAssistantChatCache, serializeAssistantChatCache } from './assistant-chat-storage.ts'
+
+const widgetSource = readFileSync(new URL('../components/ai-assistant-widget.tsx', import.meta.url), 'utf8')
 
 const validChat = {
   id: 'chat-1',
@@ -37,4 +40,9 @@ test('retry reuses the failed user message instead of duplicating it', () => {
   assert.equal(isRetryingLastUserMessage(validChat.messages, 'How do I create an invoice?'), true)
   assert.equal(isRetryingLastUserMessage(validChat.messages, 'Where are invoices?'), false)
   assert.equal(isRetryingLastUserMessage([], 'Hello'), false)
+})
+
+test('migrates and removes the legacy workspace-only chat cache', () => {
+  assert.match(widgetSource, /const stored = scopedStored \?\? legacyStored/)
+  assert.match(widgetSource, /localStorage\.removeItem\(legacyWorkspaceStorageKey\)/)
 })

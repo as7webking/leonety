@@ -54,7 +54,7 @@ export function AiAssistantWidget() {
   const [failedRequest, setFailedRequest] = useState<{ chatId: string; text: string; errorKey: string } | null>(null)
   const [renamingChatId, setRenamingChatId] = useState('')
   const [renameValue, setRenameValue] = useState('')
-  const activeRequestRef = useRef<{ chatId: string; controller: AbortController } | null>(null)
+  const activeRequestRef = useRef<{ chatId: string; controller: AbortController; timedOut: boolean } | null>(null)
   const storageKey = useMemo(
     () => buildAssistantChatStorageKey(authenticatedUserId, currentCompany?.id ?? null),
     [authenticatedUserId, currentCompany?.id]
@@ -97,9 +97,15 @@ export function AiAssistantWidget() {
       return
     }
     try {
-      const stored = window.localStorage.getItem(storageKey)
-        ?? (legacyWorkspaceStorageKey ? window.localStorage.getItem(legacyWorkspaceStorageKey) : null)
+      const scopedStored = window.localStorage.getItem(storageKey)
+      const legacyStored = legacyWorkspaceStorageKey
+        ? window.localStorage.getItem(legacyWorkspaceStorageKey)
+        : null
+      const stored = scopedStored ?? legacyStored
       const parsed = parseAssistantChatCache(stored)
+      if (legacyWorkspaceStorageKey && legacyStored !== null) {
+        window.localStorage.removeItem(legacyWorkspaceStorageKey)
+      }
       if (parsed.length > 0) {
         setChats(parsed)
         setActiveChatId(parsed[0].id)
@@ -192,8 +198,12 @@ export function AiAssistantWidget() {
     setInput('')
     setFailedRequest(null)
     setLoading(true)
-    const requestState = { chatId: requestChatId, controller: new AbortController() }
+    const requestState = { chatId: requestChatId, controller: new AbortController(), timedOut: false }
     activeRequestRef.current = requestState
+    const requestTimeout = window.setTimeout(() => {
+      requestState.timedOut = true
+      requestState.controller.abort()
+    }, 30_000)
 
     try {
       const response = await fetch('/api/assistant', {
@@ -219,12 +229,18 @@ export function AiAssistantWidget() {
         [...nextMessages, makeMessage('assistant', payload.answer.trim())].slice(-ASSISTANT_MAX_CONTEXT_MESSAGES)
       )
     } catch (requestError) {
-      if (requestError instanceof Error && requestError.name === 'AbortError') return
+      if (requestError instanceof Error && requestError.name === 'AbortError') {
+        if (requestState.timedOut) {
+          setFailedRequest({ chatId: requestChatId, text: trimmed, errorKey: 'assistant.error.timeout' })
+        }
+        return
+      }
       const key = requestError instanceof Error && requestError.message.startsWith('assistant.error.')
         ? requestError.message
         : 'assistant.error.generic'
       setFailedRequest({ chatId: requestChatId, text: trimmed, errorKey: key })
     } finally {
+      window.clearTimeout(requestTimeout)
       if (activeRequestRef.current === requestState) {
         activeRequestRef.current = null
         setLoading(false)

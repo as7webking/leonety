@@ -1,6 +1,10 @@
 import 'server-only'
 
-import { classifyAiProviderStatus, extractAiResponseText } from '@/lib/ai-provider-response'
+import {
+  classifyAiProviderStatus,
+  extractAiResponseText,
+  shouldRetryAiProviderError,
+} from '@/lib/ai-provider-response'
 
 export type AiProviderName = 'openai'
 
@@ -18,13 +22,14 @@ export interface AiProviderCapabilities {
 }
 
 export type AiProviderErrorCode =
-  | 'provider_not_configured'
+  | 'configuration_missing'
   | 'provider_auth_failed'
-  | 'provider_rate_limited'
-  | 'provider_quota_exhausted'
-  | 'provider_timeout'
+  | 'rate_limited'
+  | 'quota_exhausted'
   | 'provider_unavailable'
-  | 'provider_invalid_response'
+  | 'invalid_model'
+  | 'request_timeout'
+  | 'invalid_response'
 
 export class AiProviderError extends Error {
   constructor(public readonly code: AiProviderErrorCode) {
@@ -41,7 +46,7 @@ interface AiProviderAdapter {
 export function getAiProviderName(): AiProviderName {
   const provider = process.env.AI_PROVIDER?.trim().toLowerCase()
   if (!provider || provider === 'openai') return 'openai'
-  throw new AiProviderError('provider_not_configured')
+  throw new AiProviderError('configuration_missing')
 }
 
 export function getAiModelName() {
@@ -51,7 +56,7 @@ export function getAiModelName() {
 function getAiApiKey() {
   const key = process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim()
   if (!key) {
-    throw new AiProviderError('provider_not_configured')
+    throw new AiProviderError('configuration_missing')
   }
   return key
 }
@@ -70,37 +75,58 @@ const openAiProvider: AiProviderAdapter = {
     responseFormat = 'text',
   }) {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 20_000)
+    const timeout = setTimeout(() => controller.abort(), 25_000)
 
     try {
-      const response = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${getAiApiKey()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: getAiModelName(),
-          instructions,
-          input,
-          max_output_tokens: maxOutputTokens,
-          ...(responseFormat === 'json_object' ? { text: { format: { type: 'json_object' } } } : {}),
-        }),
-      })
-      const payload = await response.json().catch(() => ({}))
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${getAiApiKey()}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: getAiModelName(),
+              instructions,
+              input,
+              max_output_tokens: maxOutputTokens,
+              ...(responseFormat === 'json_object' ? { text: { format: { type: 'json_object' } } } : {}),
+            }),
+          })
+          const payload = await response.json().catch(() => ({}))
 
-      if (!response.ok) {
-        throw new AiProviderError(classifyAiProviderStatus(response.status, payload))
+          if (!response.ok) {
+            const code = classifyAiProviderStatus(response.status, payload)
+            if (shouldRetryAiProviderError(code, attempt)) {
+              await new Promise((resolve) => setTimeout(resolve, 250))
+              continue
+            }
+            throw new AiProviderError(code)
+          }
+
+          const text = extractAiResponseText(payload)
+          if (!text) throw new AiProviderError('invalid_response')
+          return text
+        } catch (error) {
+          if (error instanceof AiProviderError) throw error
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new AiProviderError('request_timeout')
+          }
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 250))
+            continue
+          }
+          throw new AiProviderError('provider_unavailable')
+        }
       }
 
-      const text = extractAiResponseText(payload)
-      if (!text) throw new AiProviderError('provider_invalid_response')
-      return text
+      throw new AiProviderError('provider_unavailable')
     } catch (error) {
       if (error instanceof AiProviderError) throw error
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new AiProviderError('provider_timeout')
+        throw new AiProviderError('request_timeout')
       }
       throw new AiProviderError('provider_unavailable')
     } finally {
@@ -112,7 +138,7 @@ const openAiProvider: AiProviderAdapter = {
 function getAiProviderAdapter(): AiProviderAdapter {
   const provider = getAiProviderName()
   if (provider === 'openai') return openAiProvider
-  throw new AiProviderError('provider_not_configured')
+  throw new AiProviderError('configuration_missing')
 }
 
 export function getAiProviderCapabilities() {

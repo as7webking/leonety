@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
     const aiStatus = getAiConfigurationStatus()
     if (!aiStatus.configured) {
-      return NextResponse.json({ error: 'provider_not_configured' }, { status: 503 })
+      return NextResponse.json({ error: 'configuration_missing' }, { status: 503 })
     }
 
     const pathname = normalizeAssistantRoute(parsed.data.pathname)
@@ -88,13 +88,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.code, requestId }, { status })
     }
     if (error instanceof AiProviderError) {
-      const status = error.code === 'provider_rate_limited'
+      const status = error.code === 'rate_limited'
         ? 429
-        : error.code === 'provider_quota_exhausted'
+        : error.code === 'quota_exhausted'
           ? 503
-        : error.code === 'provider_timeout'
+        : error.code === 'request_timeout'
           ? 504
-          : error.code === 'provider_invalid_response'
+          : error.code === 'invalid_response'
             ? 502
             : 503
       console.warn('[assistant]', { requestId, code: error.code, status })
@@ -102,11 +102,11 @@ export async function POST(request: Request) {
     }
     console.error('[assistant]', {
       requestId,
-      code: 'assistant_failed',
+      code: 'internal_error',
       errorType: error instanceof Error ? error.name : typeof error,
       status: 500,
     })
 
-    return NextResponse.json({ error: 'assistant_failed', requestId }, { status: 500 })
+    return NextResponse.json({ error: 'internal_error', requestId }, { status: 500 })
   }
 }

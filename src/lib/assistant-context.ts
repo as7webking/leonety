@@ -178,11 +178,14 @@ export function getAssistantErrorKey(status: number, code?: string) {
   if (status === 401) return 'assistant.error.auth'
   if (status === 403 || code === 'workspace_check_failed') return 'assistant.error.workspace'
   if (status === 429 || code === 'rate_limited' || code === 'provider_rate_limited') return 'assistant.error.rateLimit'
-  if (code === 'provider_quota_exhausted') return 'assistant.error.quota'
-  if (code === 'provider_not_configured' || code === 'provider_auth_failed') return 'assistant.error.provider'
-  if (status === 504 || code === 'provider_timeout') return 'assistant.error.timeout'
-  if (status === 502 || code === 'provider_invalid_response') return 'assistant.error.invalidResponse'
+  if (code === 'quota_exhausted' || code === 'provider_quota_exhausted') return 'assistant.error.quota'
+  if (code === 'configuration_missing' || code === 'provider_not_configured') return 'assistant.error.configuration'
+  if (code === 'provider_auth_failed') return 'assistant.error.providerAuth'
+  if (code === 'invalid_model') return 'assistant.error.invalidModel'
+  if (status === 504 || code === 'request_timeout' || code === 'provider_timeout') return 'assistant.error.timeout'
+  if (status === 502 || code === 'invalid_response' || code === 'provider_invalid_response') return 'assistant.error.invalidResponse'
   if (status === 503 || code === 'provider_unavailable') return 'assistant.error.unavailable'
+  if (code === 'internal_error') return 'assistant.error.internal'
   return 'assistant.error.generic'
 }
 
