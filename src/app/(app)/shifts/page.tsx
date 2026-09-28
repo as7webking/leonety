@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { createClient } from '@/lib/supabase-client'
+import { enumerateDateOnlyRange, formatDateOnly, formatDateOnlyInput } from '@/lib/date-only'
+import { getIntlLocale } from '@/lib/i18n'
 
 const shiftStatuses = ['scheduled', 'completed', 'cancelled', 'missed'] as const
 type ShiftStatus = typeof shiftStatuses[number]
@@ -55,26 +57,15 @@ interface GeneratorForm {
   break_minutes: string
 }
 
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => formatDateOnlyInput()
 const emptyShift: ShiftForm = { employee_id: '', location_id: '', date: today(), start_time: '09:00', end_time: '17:00', break_minutes: '30', status: 'scheduled', notes: '' }
 const emptyGenerator: GeneratorForm = { employee_id: '', location_id: '', from: today(), to: today(), weekdays: [1, 2, 3, 4, 5], start_time: '09:00', end_time: '17:00', break_minutes: '30' }
-
-function enumerateDates(from: string, to: string, weekdays: number[]) {
-  const dates: string[] = []
-  const cursor = new Date(`${from}T12:00:00`)
-  const end = new Date(`${to}T12:00:00`)
-  while (cursor <= end) {
-    if (weekdays.includes(cursor.getDay())) dates.push(cursor.toISOString().split('T')[0])
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return dates
-}
 
 export default function ShiftsPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
@@ -88,13 +79,13 @@ export default function ShiftsPage() {
     const date = new Date()
     const day = date.getDay() || 7
     date.setDate(date.getDate() - day + 1)
-    return date.toISOString().split('T')[0]
+    return formatDateOnlyInput(date)
   })
   const [toDate, setToDate] = useState(() => {
     const date = new Date()
     const day = date.getDay() || 7
     date.setDate(date.getDate() - day + 7)
-    return date.toISOString().split('T')[0]
+    return formatDateOnlyInput(date)
   })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -201,7 +192,7 @@ export default function ShiftsPage() {
       setError(t('shifts.generatorRequired'))
       return
     }
-    setPendingGeneratedDates(enumerateDates(generator.from, generator.to, generator.weekdays))
+    setPendingGeneratedDates(enumerateDateOnlyRange(generator.from, generator.to, generator.weekdays))
   }
 
   const confirmGeneration = async () => {
@@ -305,10 +296,10 @@ export default function ShiftsPage() {
         <div className="space-y-5">
           {Object.entries(groupedShifts).map(([date, dayShifts]) => (
             <section key={date}>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: '2-digit', month: 'long' })}</h2>
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{formatDateOnly(date, getIntlLocale(locale), { weekday: 'long', day: '2-digit', month: 'long' })}</h2>
               <div className="space-y-2">
                 {dayShifts.map((shift) => (
-                  <Card key={shift.id}><CardContent className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="break-words font-medium">{shift.employees?.name ?? t('shifts.employee')}</p><p className="break-words text-sm text-slate-500">{shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)} · {shift.locations?.name ?? t('shifts.noLocation')} · {t(`shifts.status.${shift.status}`)}</p></div><div className="flex shrink-0 gap-2"><Button size="icon" variant="outline" onClick={() => handleEdit(shift)}><Edit className="h-4 w-4" /></Button><Button size="icon" variant="outline" onClick={() => setDeleteTarget(shift)}><Trash2 className="h-4 w-4" /></Button></div></CardContent></Card>
+                  <Card key={shift.id}><CardContent className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="break-words font-medium">{shift.employees?.name ?? t('shifts.employee')}</p><p className="break-words text-sm text-slate-500">{shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)} · {shift.locations?.name ?? t('shifts.noLocation')} · {t(`shifts.status.${shift.status}`)}</p></div><div className="flex shrink-0 gap-2"><Button size="icon" variant="outline" aria-label={t('common.edit')} title={t('common.edit')} onClick={() => handleEdit(shift)}><Edit className="h-4 w-4" /></Button><Button size="icon" variant="outline" aria-label={t('common.delete')} title={t('common.delete')} onClick={() => setDeleteTarget(shift)}><Trash2 className="h-4 w-4" /></Button></div></CardContent></Card>
                 ))}
               </div>
             </section>

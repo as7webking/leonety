@@ -11,6 +11,7 @@ import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { getIntlLocale } from '@/lib/i18n'
+import { addDaysToDateOnly, formatDateOnlyInput } from '@/lib/date-only'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AppSelect } from '@/components/app-select'
 import { useI18n } from '@/contexts/i18n-context'
@@ -91,9 +92,9 @@ export default function ProfilePage() {
   const [reportFromDate, setReportFromDate] = useState(() => {
     const date = new Date()
     date.setDate(1)
-    return date.toISOString().split('T')[0]
+    return formatDateOnlyInput(date)
   })
-  const [reportToDate, setReportToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [reportToDate, setReportToDate] = useState(() => formatDateOnlyInput())
   const [printTransactions, setPrintTransactions] = useState<PrintableTransaction[]>([])
   const [includeCategoryInPrint, setIncludeCategoryInPrint] = useState(true)
   const [invoiceNumberFormat, setInvoiceNumberFormat] = useState<'yy-seq' | 'yyyy-seq'>('yy-seq')
@@ -108,7 +109,7 @@ export default function ProfilePage() {
   const { currentCompany } = useCompany()
   const { accountAccess, refreshAccountAccess } = useAccountAccess(profile?.email)
   const { locale, t } = useI18n()
-  const planLabel = t(`billing.plan.${accountAccess.plan}`)
+  const planLabel = t(`billing.status.${accountAccess.plan}`)
   const billingStatusLabel = accountAccess.status ? t(`billing.status.${accountAccess.status}`) : t('billing.status.free')
   const billingSourceLabel = t(`billing.source.${accountAccess.overrideSource}`)
   const formatBillingDate = (value: string | null | undefined) => value
@@ -804,7 +805,7 @@ export default function ProfilePage() {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `leonety-transactions-${new Date().toISOString().split('T')[0]}.doc`
+    anchor.download = `leonety-transactions-${formatDateOnlyInput()}.doc`
     anchor.click()
     URL.revokeObjectURL(url)
   }
@@ -1027,7 +1028,7 @@ export default function ProfilePage() {
                     value={invoiceNumberPrefix}
                     onChange={(event) => handleInvoiceNumberPrefixChange(event.target.value)}
                     className="w-full rounded-md border px-3 py-2 text-sm"
-                    placeholder="INV / RE"
+                    placeholder={t('profile.invoiceNumberPrefixPlaceholder')}
                   />
                 </label>
                 <label className="min-w-0 space-y-1">
@@ -1200,7 +1201,7 @@ export default function ProfilePage() {
             <div className="flex min-w-0 flex-col gap-1 border-b py-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm text-gray-600">{t('profile.accountCreated')}</span>
               <span className="text-sm font-medium">
-                {new Date(profile.created_at).toLocaleDateString()}
+                {formatBillingDate(profile.created_at)}
               </span>
             </div>
             <div className="flex min-w-0 flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1243,7 +1244,7 @@ export default function ProfilePage() {
                         <div className="min-w-0 space-y-1">
                           <p className="break-all font-medium text-slate-900">{request.user_email || request.user_id}</p>
                           <p className="text-sm text-slate-500">
-                            {request.company_name || request.company_id} · {t('billing.status.pro')} · {new Date(request.created_at).toLocaleDateString()}
+                            {request.company_name || request.company_id} · {t('billing.status.pro')} · {formatBillingDate(request.created_at)}
                           </p>
                           {request.message && <p className="text-sm text-slate-600">{request.message}</p>}
                         </div>
@@ -1281,10 +1282,10 @@ export default function ProfilePage() {
                           </p>
                           <p className="break-all text-sm text-slate-500">{managedProfile.email}</p>
                           <p className="text-sm text-slate-500">
-                            {t('billing.subscription')}: {managedProfile.plan.toUpperCase()}
+                            {t('billing.subscription')}: {t(`billing.status.${managedProfile.plan}`)}
                             {managedProfile.isPro
                               ? managedProfile.subscriptionEndsAt
-                                ? ` · ${t('common.until')} ${new Date(managedProfile.subscriptionEndsAt).toLocaleDateString()}`
+                                ? ` · ${t('common.until')} ${formatBillingDate(managedProfile.subscriptionEndsAt)}`
                                 : ` · ${t('common.noExpiry')}`
                               : ''}
                           </p>
@@ -1294,12 +1295,12 @@ export default function ProfilePage() {
                             </p>
                           )}
                           <p className="text-sm text-slate-500">
-                            {t('billing.source')}: {managedProfile.subscriptionSource} · {t('billing.status')}: {managedProfile.subscriptionStatus}
+                            {t('billing.source')}: {t(`billing.source.${managedProfile.subscriptionSource}`)} · {t('billing.status')}: {t(`billing.status.${managedProfile.subscriptionStatus}`)}
                           </p>
                           <p className="text-sm text-slate-500">
                             {t('billing.account')}: {managedProfile.isDeactivated ? t('common.deactivated') : t('common.active')}
                             {managedProfile.lastSignInAt
-                              ? ` · last sign-in ${new Date(managedProfile.lastSignInAt).toLocaleDateString()}`
+                              ? ` · ${t('profile.lastSignIn')} ${formatBillingDate(managedProfile.lastSignInAt)}`
                               : ''}
                           </p>
                           <p className="text-sm text-slate-500">
@@ -1311,7 +1312,7 @@ export default function ProfilePage() {
                               {managedProfile.isAdmin ? t('profile.admin') : t('profile.user')}
                             </span>
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                              {managedProfile.isPro ? 'Pro' : 'Free'}
+                              {managedProfile.isPro ? t('billing.status.pro') : t('billing.status.free')}
                             </span>
                             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
                               {managedProfile.subscriptionSource === 'payment' ? t('billing.paidAutomatically') : t('billing.manualAccess')}
@@ -1338,7 +1339,7 @@ export default function ProfilePage() {
                             type="button"
                             variant="outline"
                             disabled={adminLoading}
-                            onClick={() => handleCopy(managedProfile.email, 'Email')}
+                            onClick={() => handleCopy(managedProfile.email, t('profile.emailAddress'))}
                           >
                             {t('profile.copyEmail')}
                           </Button>
@@ -1346,13 +1347,13 @@ export default function ProfilePage() {
                             type="button"
                             variant="outline"
                             disabled={adminLoading}
-                            onClick={() => handleCopy(managedProfile.id, 'User ID')}
+                            onClick={() => handleCopy(managedProfile.id, t('profile.accountId'))}
                           >
                             {t('profile.copyId')}
                           </Button>
                           <div
                             className="inline-flex max-w-full items-center overflow-hidden rounded-md border border-gray-300 bg-white text-sm"
-                            aria-label={`Months for ${managedProfile.email}`}
+                            aria-label={t('profile.monthsForUser').replace('{email}', managedProfile.email)}
                           >
                             <button
                               type="button"
@@ -1398,7 +1399,7 @@ export default function ProfilePage() {
                                 <input
                                   id={`trial-end-${managedProfile.id}`}
                                   type="date"
-                                  min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)}
+                                  min={addDaysToDateOnly(formatDateOnlyInput(), 1)}
                                   value={trialEndByProfile[managedProfile.id] ?? managedProfile.trialEndsAt?.slice(0, 10) ?? ''}
                                   onChange={(event) => setTrialEndByProfile((current) => ({
                                     ...current,

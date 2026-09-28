@@ -15,6 +15,7 @@ import { employeeProfileColumns, getEmployeeCustomCountry, isGermanyEmployeeProf
 import { formatCountryValue } from '@/lib/countries'
 import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
+import { formatDateOnly } from '@/lib/date-only'
 
 function Value({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === '') return null
@@ -46,7 +47,7 @@ export default function EmployeeDetailPage() {
   if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} /></PageContainer>
   if (error || !employee) return <PageContainer><EmptyState title={t('employees.profile.notFound')} description={error} /></PageContainer>
 
-  const date = (value: string | null) => value ? new Date(`${value}T00:00:00`).toLocaleDateString(getIntlLocale(locale)) : null
+  const date = (value: string | null) => value ? formatDateOnly(value, getIntlLocale(locale)) : null
   const money = (value: number | null) => value === null ? null : formatCurrency(value, employee.compensation_currency ?? currentCompany.currency ?? 'EUR', getIntlLocale(locale))
   const countryName = employee.country_code
     ? formatCountryValue(employee.country_code, locale)

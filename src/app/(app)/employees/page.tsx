@@ -12,6 +12,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { employeeStatuses, type EmployeeStatus, type EmploymentType } from '@/lib/employee-profile'
+import { formatDateOnly } from '@/lib/date-only'
+import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 
 interface EmployeeListItem {
@@ -29,7 +31,7 @@ export default function EmployeesPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [employees, setEmployees] = useState<EmployeeListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -99,7 +101,7 @@ export default function EmployeesPage() {
           {filteredEmployees.map((employee) => (
             <Card key={employee.id}><CardContent className="p-5">
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-semibold">{employee.name}</h2><p className="truncate text-sm text-slate-500">{employee.job_title}</p></div><span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs">{t(`employees.status.${employee.status}`)}</span></div>
-              <div className="mt-3 space-y-1 text-sm text-slate-600"><p>{t(`employees.type.${employee.employment_type}`)}</p>{employee.employment_start_date && <p>{t('employees.profile.startDate')}: {employee.employment_start_date}</p>}<p>{currentCompany.name}</p></div>
+              <div className="mt-3 space-y-1 text-sm text-slate-600"><p>{t(`employees.type.${employee.employment_type}`)}</p>{employee.employment_start_date && <p>{t('employees.profile.startDate')}: {formatDateOnly(employee.employment_start_date, getIntlLocale(locale))}</p>}<p>{currentCompany.name}</p></div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild size="sm" variant="outline"><Link href={`/app/employees/${employee.id}`}><Eye />{t('employees.profile.open')}</Link></Button>
                 <Button asChild size="sm" variant="outline"><Link href={`/app/employees/${employee.id}/edit`}><Edit />{t('common.edit')}</Link></Button>
