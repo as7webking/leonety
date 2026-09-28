@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, Eye, PackagePlus, RefreshCw, RotateCcw, Search, Trash2, UploadCloud, X } from 'lucide-react'
+import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, Eye, PackagePlus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from 'lucide-react'
 import { DesktopPageUtilities, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
@@ -1133,21 +1133,77 @@ export default function ProductsPage() {
   return (
     <PageContainer>
       <PageHeader title={t('products.title')} description={`${t('products.description')} · ${currentCompany.name}`}>
-        <div className="flex flex-wrap gap-2 lg:hidden">
-          <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
-          <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
-          <Button variant="outline" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
-          <Button variant="outline" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
-          <Button variant="outline" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
-          <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
-            {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-            {t('woocommerce.exportAll')}
-          </Button>
-          <Button onClick={() => showForm ? resetForm() : setShowForm(true)}><PackagePlus className="h-4 w-4" />{showForm ? t('common.cancel') : t('products.add')}</Button>
-        </div>
         <Button className="hidden lg:inline-flex" onClick={() => showForm ? resetForm() : setShowForm(true)}><PackagePlus className="h-4 w-4" />{showForm ? t('common.cancel') : t('products.add')}</Button>
       </PageHeader>
       {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
+
+      <div className="mb-4 lg:hidden">
+        <Button className="w-full sm:w-auto" onClick={() => showForm ? resetForm() : setShowForm(true)}>
+          {showForm ? <X className="h-4 w-4" /> : <PackagePlus className="h-4 w-4" />}
+          {showForm ? t('common.cancel') : t('products.add')}
+        </Button>
+      </div>
+
+      <div className="relative mb-3 lg:hidden">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} aria-label={t('products.search')} />
+      </div>
+
+      <div className="mb-5 grid min-w-0 grid-cols-2 gap-2 lg:hidden">
+        <details className="group min-w-0 rounded-md border border-slate-200 bg-white open:col-span-2">
+          <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 break-words">{t('common.filters')}</span>
+          </summary>
+          <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full">
+            <AppSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | ProductStatus)} ariaLabel={t('products.status')} options={[{ value: 'all', label: t('common.all') }, ...productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))]} />
+            <AppSelect value={sortBy} onChange={(value) => setSortBy(value as ProductSort)} ariaLabel={t('common.sortBy')} options={productSortOptions.map((option) => ({ value: option, label: t(`products.sort.${option}`) }))} />
+            <AppSelect value={categoryFilter} onChange={setCategoryFilter} ariaLabel={t('products.category')} options={[{ value: 'all', label: t('products.allCategories') }, ...categories.map((category) => ({ value: category.name, label: category.name }))]} />
+            <AppSelect value={stockFilter} onChange={(value) => setStockFilter(value as ProductStockFilter)} ariaLabel={t('products.stockFilter')} options={[{ value: 'all', label: t('products.allStock') }, { value: 'low', label: t('products.lowStockOnly') }]} />
+            <AppSelect
+              value={providerFilter}
+              onChange={(value) => setProviderFilter(value as ProductProviderFilter)}
+              ariaLabel={t('products.providerFilter')}
+              options={[
+                { value: 'all', label: t('products.allProviders') },
+                { value: 'woocommerce', label: 'WooCommerce' },
+                { value: 'shopify', label: 'Shopify' },
+                { value: 'opencart', label: 'OpenCart' },
+                { value: 'google_merchant', label: 'Google Merchant' },
+                { value: 'facebook_instagram', label: 'Facebook / Instagram' },
+                { value: 'tiktok_shop', label: 'TikTok Shop' },
+                { value: 'ebay', label: 'eBay' },
+                { value: 'amazon_marketplace', label: 'Amazon Marketplace' },
+                { value: 'kleinanzeigen', label: 'Kleinanzeigen' },
+                { value: 'olx', label: 'OLX' },
+                { value: 'uber_eats', label: 'Uber Eats' },
+                { value: 'just_eat_takeaway', label: 'Just Eat / Takeaway / Lieferando' },
+                { value: 'glovo', label: 'Glovo' },
+                { value: 'iss_pos', label: 'ISS POS' },
+                { value: 'none', label: t('products.noProvider') },
+              ]}
+            />
+            <AppSelect value={imageFilter} onChange={(value) => setImageFilter(value as ProductImageFilter)} ariaLabel={t('products.imageFilter')} options={[{ value: 'all', label: t('products.allImages') }, { value: 'has_image', label: t('products.hasImage') }, { value: 'missing_image', label: t('products.missingImage') }]} />
+          </div>
+        </details>
+
+        <details className="group min-w-0 rounded-md border border-slate-200 bg-white open:col-span-2">
+          <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
+            <Download className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 break-words">{t('products.importExport')}</span>
+          </summary>
+          <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3">
+            <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
+            <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
+            <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
+            <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
+              {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+              {t('woocommerce.exportAll')}
+            </Button>
+            <Button asChild variant="ghost" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left"><Link href="/app/settings/integrations/woocommerce">{t('products.importToLeonety')} · WooCommerce</Link></Button>
+          </div>
+        </details>
+      </div>
 
       <DesktopPageUtilities title={t('pageUtilities.title')}>
         <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
@@ -1168,7 +1224,7 @@ export default function ProductsPage() {
         </Button>
       </DesktopPageUtilities>
 
-      <div className="mb-5 grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_220px_180px_180px_190px_170px]">
+      <div className="mb-5 hidden gap-3 lg:grid lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_180px_220px_180px_180px_190px_170px]">
         <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-md border py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} /></div>
         <AppSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | ProductStatus)} options={[{ value: 'all', label: t('common.all') }, ...productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))]} />
         <AppSelect

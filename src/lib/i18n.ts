@@ -3215,6 +3215,7 @@ for (const locale of locales) {
 
 const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   en: {
+    'products.importExport': 'Import / Export',
     'products.editorDescription': 'Edit the product without losing your current filters or selection.',
     'products.editor.general': 'General',
     'products.editor.pricing': 'Pricing',
@@ -3266,6 +3267,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
     'clients.importSourceNote': 'Imported from file.',
   },
   de: {
+    'products.importExport': 'Import / Export',
     'products.editorDescription': 'Bearbeite das Produkt, ohne aktuelle Filter oder Auswahl zu verlieren.',
     'products.editor.general': 'Allgemein',
     'products.editor.pricing': 'Preise',
@@ -3317,6 +3319,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
     'clients.importSourceNote': 'Aus Datei importiert.',
   },
   ru: {
+    'products.importExport': 'Импорт / Экспорт',
     'products.editorDescription': 'Редактируйте товар, не теряя текущие фильтры и выбор.',
     'products.editor.general': 'Основное',
     'products.editor.pricing': 'Цены',
@@ -3368,6 +3371,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
     'clients.importSourceNote': 'Импортировано из файла.',
   },
   tr: {
+    'products.importExport': 'İçe / Dışa Aktar',
     'products.editorDescription': 'Mevcut filtreleri veya seçimi kaybetmeden ürünü düzenleyin.',
     'products.editor.general': 'Genel',
     'products.editor.pricing': 'Fiyatlandırma',
@@ -3419,6 +3423,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
     'clients.importSourceNote': 'Dosyadan içe aktarıldı.',
   },
   uk: {
+    'products.importExport': 'Імпорт / Експорт',
     'products.editorDescription': 'Редагуйте товар, не втрачаючи поточні фільтри або вибір.',
     'products.editor.general': 'Основне',
     'products.editor.pricing': 'Ціни',
@@ -3470,6 +3475,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
     'clients.importSourceNote': 'Імпортовано з файлу.',
   },
   pl: {
+    'products.importExport': 'Import / Eksport',
     'products.editorDescription': 'Edytuj produkt bez utraty bieżących filtrów lub zaznaczenia.',
     'products.editor.general': 'Ogólne',
     'products.editor.pricing': 'Ceny',
@@ -3521,6 +3527,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
     'clients.importSourceNote': 'Zaimportowano z pliku.',
   },
   fr: {
+    'products.importExport': 'Import / Export',
     'products.editorDescription': 'Modifiez le produit sans perdre vos filtres ou votre sélection.',
     'products.editor.general': 'Général',
     'products.editor.pricing': 'Prix',
