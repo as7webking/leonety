@@ -882,9 +882,9 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div className="grid w-full gap-6 lg:grid-cols-2">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Profile Information Card */}
-        <Card className="h-full">
+        <Card className="h-full overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
@@ -969,7 +969,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="h-full">
+        <Card className="h-full overflow-hidden">
           <CardHeader>
             <CardTitle>{t('settings.workspaceTitle')}</CardTitle>
             <CardDescription>{t('settings.workspaceDescription')}</CardDescription>
@@ -982,17 +982,17 @@ export default function ProfilePage() {
         </Card>
 
         {/* Account Details */}
-        <Card className="lg:col-span-2">
+        <Card className="overflow-hidden lg:col-span-2">
           <CardHeader>
             <CardTitle>{t('profile.accountDetails')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between items-center py-2 border-b">
+            <div className="flex min-w-0 flex-col gap-2 border-b py-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm text-gray-600">{t('profile.language')}</span>
               <LanguageSwitcher />
             </div>
-            <div className="flex items-center justify-between gap-4 border-b py-2">
-              <div>
+            <div className="flex min-w-0 items-start justify-between gap-4 border-b py-2">
+              <div className="min-w-0">
                 <span className="text-sm text-gray-600">{t('profile.reportSettings')}</span>
                 <p className="text-xs text-gray-500">{t('profile.groupReportsByMonth')}</p>
               </div>
@@ -1009,8 +1009,8 @@ export default function ProfilePage() {
                 <span className="text-sm text-gray-600">{t('profile.invoiceNumberSettings')}</span>
                 <p className="text-xs text-gray-500">{t('profile.invoiceNumberSettingsDescription')}</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <label className="space-y-1">
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 [&>label]:min-w-0">
+                <label className="min-w-0 space-y-1">
                   <span className="text-xs text-slate-500">{t('profile.invoiceNumberFormat')}</span>
                   <AppSelect
                     value={invoiceNumberFormat}
@@ -1021,7 +1021,7 @@ export default function ProfilePage() {
                     ]}
                   />
                 </label>
-                <label className="space-y-1">
+                <label className="min-w-0 space-y-1">
                   <span className="text-xs text-slate-500">{t('profile.invoiceNumberPrefix')}</span>
                   <input
                     value={invoiceNumberPrefix}
@@ -1030,7 +1030,7 @@ export default function ProfilePage() {
                     placeholder="INV / RE"
                   />
                 </label>
-                <label className="space-y-1">
+                <label className="min-w-0 space-y-1">
                   <span className="text-xs text-slate-500">{t('profile.invoiceNumberSeparator')}</span>
                   <AppSelect
                     value={invoiceNumberSeparator}
@@ -1042,7 +1042,7 @@ export default function ProfilePage() {
                     ]}
                   />
                 </label>
-                <label className="space-y-1">
+                <label className="min-w-0 space-y-1">
                   <span className="text-xs text-slate-500">{t('profile.invoiceNumberDigits')}</span>
                   <AppSelect
                     value={invoiceNumberDigits}
@@ -1054,7 +1054,7 @@ export default function ProfilePage() {
                     ]}
                   />
                 </label>
-                <label className="space-y-1">
+                <label className="min-w-0 space-y-1">
                   <span className="text-xs text-slate-500">{t('profile.invoiceNumberNext')}</span>
                   <input
                     type="number"
@@ -1085,19 +1085,19 @@ export default function ProfilePage() {
                 <span className="text-sm text-gray-600">{t('profile.printTransactions')}</span>
                 <p className="text-xs text-gray-500">{t('profile.printTransactionsDescription')}</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] [&>*]:max-w-full">
                 <input
                   type="date"
                   value={reportFromDate}
                   onChange={(event) => setReportFromDate(event.target.value)}
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 max-w-full rounded-md border px-3 py-2 text-sm"
                   aria-label={t('common.from')}
                 />
                 <input
                   type="date"
                   value={reportToDate}
                   onChange={(event) => setReportToDate(event.target.value)}
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 max-w-full rounded-md border px-3 py-2 text-sm"
                   aria-label={t('common.to')}
                 />
                 <Button type="button" variant="outline" onClick={handlePrintTransactions}>
@@ -1117,7 +1117,7 @@ export default function ProfilePage() {
                 {t('profile.includeCategoryInPrint')}
               </label>
             </div>
-            <div className="flex justify-between items-center py-2 border-b">
+            <div className="flex min-w-0 flex-col gap-1 border-b py-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm text-gray-600">{t('profile.currentPlan')}</span>
               <span className="text-sm font-medium">{planLabel}</span>
             </div>
@@ -1169,43 +1169,43 @@ export default function ProfilePage() {
                 )}
               </div>
             </div>
-            <div className="flex items-start justify-between gap-4 border-b py-2">
-              <div className="w-full space-y-3">
+            <div className="flex min-w-0 flex-col gap-4 border-b py-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 w-full space-y-3">
                 <span className="text-sm text-gray-600">{t('profile.whatsappTitle')}</span>
                 <p className="text-xs text-gray-500">{t('profile.whatsappDescription')}</p>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <label className="space-y-1 text-xs text-slate-500">
+                <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-3">
+                  <label className="min-w-0 space-y-1 text-xs text-slate-500">
                     <span>{t('profile.whatsappBusinessNumber')}</span>
-                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder="+49 ..." />
+                    <input disabled className="w-full min-w-0 max-w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder="+49 ..." />
                   </label>
-                  <label className="space-y-1 text-xs text-slate-500">
+                  <label className="min-w-0 space-y-1 text-xs text-slate-500">
                     <span>{t('profile.whatsappPhoneNumberId')}</span>
-                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder={t('profile.whatsappPhoneNumberId')} />
+                    <input disabled className="w-full min-w-0 max-w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" placeholder={t('profile.whatsappPhoneNumberId')} />
                   </label>
-                  <label className="space-y-1 text-xs text-slate-500">
+                  <label className="min-w-0 space-y-1 text-xs text-slate-500">
                     <span>{t('profile.whatsappWebhook')}</span>
-                    <input disabled className="w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" value="/api/whatsapp/webhook" readOnly />
+                    <input disabled className="w-full min-w-0 max-w-full rounded-md border bg-slate-50 px-3 py-2 text-sm" value="/api/whatsapp/webhook" readOnly />
                   </label>
                 </div>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-2">
+              <div className="flex max-w-full flex-col items-start gap-2 sm:shrink-0 sm:items-end">
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                   {t('profile.whatsappStatus')}
                 </span>
-                <Button type="button" variant="outline" size="sm" disabled>
+                <Button type="button" variant="outline" size="sm" className="max-w-full whitespace-normal" disabled>
                   {t('profile.whatsappComingSoon')}
                 </Button>
               </div>
             </div>
-            <div className="flex justify-between items-center py-2 border-b">
+            <div className="flex min-w-0 flex-col gap-1 border-b py-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm text-gray-600">{t('profile.accountCreated')}</span>
               <span className="text-sm font-medium">
                 {new Date(profile.created_at).toLocaleDateString()}
               </span>
             </div>
-            <div className="flex justify-between items-center py-2">
+            <div className="flex min-w-0 flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm text-gray-600">{t('profile.accountId')}</span>
-              <span className="text-xs font-mono text-gray-500 truncate max-w-xs">
+              <span className="max-w-full break-all font-mono text-xs text-gray-500 sm:max-w-xs sm:truncate">
                 {profile.profile_number ?? profile.id}
               </span>
             </div>
@@ -1213,7 +1213,7 @@ export default function ProfilePage() {
         </Card>
 
         {accountAccess.isAdmin && (
-          <Card className="lg:col-span-2">
+          <Card className="overflow-hidden lg:col-span-2">
             <CardHeader>
               <CardTitle>{t('profile.adminAccessManagement')}</CardTitle>
               <CardDescription>{t('profile.adminAccessDescription')}</CardDescription>
@@ -1239,9 +1239,9 @@ export default function ProfilePage() {
                 ) : (
                   <div className="space-y-3">
                     {upgradeRequests.map((request) => (
-                      <div key={request.id} className="flex flex-col gap-3 rounded-md border border-slate-200 p-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="space-y-1">
-                          <p className="font-medium text-slate-900">{request.user_email || request.user_id}</p>
+                      <div key={request.id} className="flex min-w-0 flex-col gap-3 rounded-md border border-slate-200 p-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0 space-y-1">
+                          <p className="break-all font-medium text-slate-900">{request.user_email || request.user_id}</p>
                           <p className="text-sm text-slate-500">
                             {request.company_name || request.company_id} · {t('billing.status.pro')} · {new Date(request.created_at).toLocaleDateString()}
                           </p>
@@ -1273,13 +1273,13 @@ export default function ProfilePage() {
                   const isCurrentUser = managedProfile.id === profile.id
 
                   return (
-                    <div key={managedProfile.id} className="rounded-lg border border-slate-200 p-4">
+                    <div key={managedProfile.id} className="min-w-0 overflow-hidden rounded-lg border border-slate-200 p-3 sm:p-4">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="space-y-1">
-                          <p className="font-medium text-slate-900">
+                        <div className="min-w-0 space-y-1">
+                          <p className="break-words font-medium text-slate-900">
                             {managedProfile.full_name || managedProfile.email}
                           </p>
-                          <p className="text-sm text-slate-500">{managedProfile.email}</p>
+                          <p className="break-all text-sm text-slate-500">{managedProfile.email}</p>
                           <p className="text-sm text-slate-500">
                             {t('billing.subscription')}: {managedProfile.plan.toUpperCase()}
                             {managedProfile.isPro
@@ -1333,7 +1333,7 @@ export default function ProfilePage() {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex min-w-0 max-w-full flex-wrap gap-2 [&>button]:max-w-full [&>button]:whitespace-normal">
                           <Button
                             type="button"
                             variant="outline"
@@ -1351,7 +1351,7 @@ export default function ProfilePage() {
                             {t('profile.copyId')}
                           </Button>
                           <div
-                            className="inline-flex items-center overflow-hidden rounded-md border border-gray-300 bg-white text-sm"
+                            className="inline-flex max-w-full items-center overflow-hidden rounded-md border border-gray-300 bg-white text-sm"
                             aria-label={`Months for ${managedProfile.email}`}
                           >
                             <button
@@ -1362,7 +1362,7 @@ export default function ProfilePage() {
                             >
                               -
                             </button>
-                            <span className="min-w-20 border-x border-gray-300 px-3 py-2 text-center text-slate-700">
+                            <span className="min-w-0 border-x border-gray-300 px-2 py-2 text-center text-slate-700 sm:min-w-20 sm:px-3">
                               {getMonthsForProfile(managedProfile.id)} {getMonthsForProfile(managedProfile.id) === 1 ? t('common.month') : t('common.months')}
                             </span>
                             <button
@@ -1478,7 +1478,7 @@ export default function ProfilePage() {
         )}
 
         {/* Logout */}
-        <Card className="border-red-200 bg-red-50 lg:col-span-2">
+        <Card className="overflow-hidden border-red-200 bg-red-50 lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-red-700">{t('profile.signOut')}</CardTitle>
             <CardDescription className="text-red-600">

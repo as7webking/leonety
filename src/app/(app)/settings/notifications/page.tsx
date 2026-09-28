@@ -191,13 +191,13 @@ export default function NotificationSettingsPage() {
   if (!currentCompany) return null
 
   return (
-    <main className="mx-auto w-full max-w-4xl p-4 sm:p-6 lg:p-8">
+    <main className="mx-auto w-full min-w-0 max-w-4xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-slate-950">{t('systemNotifications.title')}</h1>
         <p className="mt-1 text-sm text-slate-600">{t('systemNotifications.description')}</p>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-blue-600" />
@@ -205,14 +205,14 @@ export default function NotificationSettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-slate-200 p-3">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="min-w-0 rounded-md border border-slate-200 p-3">
               <p className="text-xs text-slate-500">{t('systemNotifications.status')}</p>
               <p className="mt-1 font-medium text-slate-950">{t(`systemNotifications.${viewStatus}`)}</p>
             </div>
-            <div className="rounded-md border border-slate-200 p-3">
+            <div className="min-w-0 rounded-md border border-slate-200 p-3">
               <p className="text-xs text-slate-500">{t('systemNotifications.currentDevice')}</p>
-              <p className="mt-1 font-medium text-slate-950">{settings?.device?.label ?? (platform || '-')}</p>
+              <p className="mt-1 break-words font-medium text-slate-950">{settings?.device?.label ?? (platform || '-')}</p>
             </div>
           </div>
 
@@ -232,7 +232,7 @@ export default function NotificationSettingsPage() {
               <h2 className="text-sm font-semibold text-slate-900">{t('systemNotifications.registeredDevices')}</h2>
               <div className="mt-2 divide-y rounded-md border border-slate-200">
                 {settings.devices.map((device) => (
-                  <div key={device.id} className="flex items-center justify-between gap-3 p-3 text-sm">
+                  <div key={device.id} className="flex min-w-0 flex-col gap-2 p-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-slate-900">{device.label}</p>
                       <p className="text-xs text-slate-500">

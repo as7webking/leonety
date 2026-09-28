@@ -953,8 +953,8 @@ export default function StoreIntegrationsPage() {
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}
       {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
-        <Card>
+      <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>{t('integrations.addIntegration')}</CardTitle>
           </CardHeader>
@@ -981,7 +981,7 @@ export default function StoreIntegrationsPage() {
                 )}
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 [&>label]:min-w-0 [&_input]:min-w-0 [&_input]:max-w-full">
                 {provider === 'whatsapp_business' && (
                   <label className="block space-y-1 md:col-span-2">
                     <span className="text-sm font-medium">{labels.whatsappClientMode}</span>
@@ -1092,7 +1092,7 @@ export default function StoreIntegrationsPage() {
               return (
                 <Card key={integration.id}>
                   <CardContent className="p-5">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <Store className="mb-3 h-5 w-5 text-slate-500" />
                         <h3 className="font-semibold text-slate-950">{option?.label ?? integration.provider}</h3>
@@ -1131,11 +1131,11 @@ export default function StoreIntegrationsPage() {
             return (
               <Card key={item.value}>
                 <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
                       <Store className="mb-3 h-5 w-5 text-slate-500" />
                       <h2 className="font-semibold text-slate-950">{item.label}</h2>
-                      <p className="mt-1 text-sm text-slate-500">{integration?.storeName || integration?.storeUrl || integration?.merchantId || '-'}</p>
+                      <p className="mt-1 break-all text-sm text-slate-500">{integration?.storeName || integration?.storeUrl || integration?.merchantId || '-'}</p>
                       <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
                         <Clock3 className="h-3.5 w-3.5" />
                         {labels.lastSync}: {formatDate(integration?.lastSyncAt ?? null, locale) || labels.neverSynced}
@@ -1149,7 +1149,7 @@ export default function StoreIntegrationsPage() {
                         {t('integrations.configure')}
                       </button>
                     </div>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
+                    <span className={`inline-flex w-fit max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
                       status === 'connected'
                         ? 'bg-green-100 text-green-700'
                         : status === 'error'

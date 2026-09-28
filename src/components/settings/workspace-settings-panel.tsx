@@ -123,8 +123,8 @@ export function WorkspaceSettingsPanel() {
   }
 
   return (
-    <form onSubmit={handleSave}>
-      <Card>
+    <form onSubmit={handleSave} className="min-w-0 max-w-full">
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>{t('settings.workspaceTitle')}</CardTitle>
           <CardDescription>{t('settings.workspaceDescription')}</CardDescription>
@@ -139,14 +139,14 @@ export function WorkspaceSettingsPanel() {
           <fieldset className="space-y-3">
             <legend className="text-sm font-semibold text-slate-950">{t('settings.modeTitle')}</legend>
             <p className="text-sm text-slate-600">{t('settings.modeDescription')}</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               {(['personal', 'business'] as const).map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setMode(value)}
                   aria-pressed={mode === value}
-                  className={`rounded-md border p-4 text-left transition ${mode === value ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-slate-200 hover:border-slate-300'}`}
+                  className={`min-w-0 max-w-full rounded-md border p-4 text-left transition ${mode === value ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-slate-200 hover:border-slate-300'}`}
                 >
                   <span className="block font-semibold text-slate-950">{t(`settings.${value}Mode`)}</span>
                   <span className="mt-1 block text-sm text-slate-600">{t(`settings.${value}ModeDescription`)}</span>
@@ -156,12 +156,12 @@ export function WorkspaceSettingsPanel() {
             <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">{t('settings.modeVisibilityNotice')}</p>
           </fieldset>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="min-w-0 space-y-1">
               <span className="text-sm font-medium">{t('profile.workspaceName')}</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} required className="w-full rounded-md border border-slate-300 px-3 py-2" />
+              <input value={name} onChange={(event) => setName(event.target.value)} required className="w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 py-2" />
             </label>
-            <label className="space-y-1">
+            <label className="min-w-0 space-y-1">
               <span className="text-sm font-medium">{t('profile.workspaceCurrency')}</span>
               <AppSelect
                 value={currency}
@@ -203,7 +203,7 @@ export function WorkspaceSettingsPanel() {
                 <textarea value={address} onChange={(event) => setAddress(event.target.value)} className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder={t('profile.companyAddressPlaceholder')} />
               </label>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>label]:min-w-0 [&_input]:min-w-0 [&_input]:max-w-full">
                 <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyEmail')}</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyIban')}</span><input value={iban} onChange={(event) => setIban(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyBic')}</span><input value={bic} onChange={(event) => setBic(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>

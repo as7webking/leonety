@@ -106,7 +106,7 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
             onChange(option.value)
             setOpen(false)
           }}
-          className={`block w-full px-3 py-2 text-left text-sm transition ${
+          className={`block w-full min-w-0 max-w-full px-3 py-2 text-left text-sm transition ${
             option.value === value
               ? 'bg-slate-100 text-slate-950'
               : 'text-slate-700 hover:bg-slate-50 hover:text-slate-950'
@@ -120,7 +120,7 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
   ) : null
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative min-w-0 max-w-full ${className}`}>
       <button
         ref={buttonRef}
         type="button"
@@ -129,7 +129,7 @@ export function AppSelect({ value, options, onChange, disabled, ariaLabel, class
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span className="truncate">{selected?.label ?? options[0]?.label ?? ''}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition ${open ? 'rotate-180' : ''}`} />

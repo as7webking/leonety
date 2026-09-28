@@ -33,7 +33,7 @@ interface Props {
   employee?: EmployeeProfile
 }
 
-const inputClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm'
+const inputClass = 'w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm'
 export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   const router = useRouter()
   const { t } = useI18n()
@@ -101,14 +101,14 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   }
 
   const section = (title: string, children: React.ReactNode) => (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
-      <CardContent className="grid gap-4 sm:grid-cols-2">{children}</CardContent>
+      <CardContent className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>label]:min-w-0 [&>fieldset]:min-w-0">{children}</CardContent>
     </Card>
   )
 
   const field = (key: keyof FormState, label: string, options?: { type?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; required?: boolean }) => (
-    <label className="space-y-1">
+    <label className="min-w-0 space-y-1">
       <span className="text-sm font-medium">{label}</span>
       <input
         type={options?.type ?? 'text'}
@@ -122,7 +122,7 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   )
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="min-w-0 max-w-full space-y-5">
       {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
       {section(t('employees.profile.personal'), <>

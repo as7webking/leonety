@@ -440,12 +440,12 @@ export function AiAssistantWidget() {
       <Button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[60] h-12 max-w-[calc(100%-2rem)] rounded-xl px-4 shadow-lg print:hidden ${open ? 'hidden sm:inline-flex' : ''}`}
+        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[60] h-12 min-w-0 max-w-[calc(100%-2rem)] rounded-xl px-4 shadow-lg print:hidden ${open ? 'hidden sm:inline-flex' : ''}`}
         aria-label={t('assistant.button')}
         title={t('assistant.button')}
       >
         <LifeBuoy className="h-4 w-4" />
-        <span>{t('assistant.button')}</span>
+        <span className="min-w-0 truncate">{t('assistant.button')}</span>
       </Button>
     </>
   )

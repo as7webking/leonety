@@ -251,11 +251,11 @@ export default function ShiftsPage() {
         </div>
       </PageHeader>
 
-      <div className="mb-5 flex flex-wrap items-end gap-3 rounded-lg border bg-white p-3">
-        <label className="space-y-1 text-sm"><span>{t('common.from')}</span><input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded-md border px-3 py-2" /></label>
-        <label className="space-y-1 text-sm"><span>{t('common.to')}</span><input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded-md border px-3 py-2" /></label>
-        <Link href="/app/employees"><Button variant="outline">{t('employees.title')}</Button></Link>
-        <Link href="/app/locations"><Button variant="outline">{t('locations.title')}</Button></Link>
+      <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 rounded-lg border bg-white p-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
+        <label className="min-w-0 space-y-1 text-sm"><span>{t('common.from')}</span><input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full min-w-0 max-w-full rounded-md border px-3 py-2" /></label>
+        <label className="min-w-0 space-y-1 text-sm"><span>{t('common.to')}</span><input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full min-w-0 max-w-full rounded-md border px-3 py-2" /></label>
+        <Link href="/app/employees" className="min-w-0"><Button variant="outline" className="w-full max-w-full whitespace-normal lg:w-auto">{t('employees.title')}</Button></Link>
+        <Link href="/app/locations" className="min-w-0"><Button variant="outline" className="w-full max-w-full whitespace-normal lg:w-auto">{t('locations.title')}</Button></Link>
       </div>
 
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}
@@ -308,7 +308,7 @@ export default function ShiftsPage() {
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: '2-digit', month: 'long' })}</h2>
               <div className="space-y-2">
                 {dayShifts.map((shift) => (
-                  <Card key={shift.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{shift.employees?.name ?? t('shifts.employee')}</p><p className="text-sm text-slate-500">{shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)} · {shift.locations?.name ?? t('shifts.noLocation')} · {t(`shifts.status.${shift.status}`)}</p></div><div className="flex gap-2"><Button size="icon" variant="outline" onClick={() => handleEdit(shift)}><Edit className="h-4 w-4" /></Button><Button size="icon" variant="outline" onClick={() => setDeleteTarget(shift)}><Trash2 className="h-4 w-4" /></Button></div></CardContent></Card>
+                  <Card key={shift.id}><CardContent className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="break-words font-medium">{shift.employees?.name ?? t('shifts.employee')}</p><p className="break-words text-sm text-slate-500">{shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)} · {shift.locations?.name ?? t('shifts.noLocation')} · {t(`shifts.status.${shift.status}`)}</p></div><div className="flex shrink-0 gap-2"><Button size="icon" variant="outline" onClick={() => handleEdit(shift)}><Edit className="h-4 w-4" /></Button><Button size="icon" variant="outline" onClick={() => setDeleteTarget(shift)}><Trash2 className="h-4 w-4" /></Button></div></CardContent></Card>
                 ))}
               </div>
             </section>
