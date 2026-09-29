@@ -8,18 +8,19 @@ export const runtime = 'nodejs'
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX = 4
+const RATE_LIMIT_MAX = 10
 const rateLimits = new Map<string, { count: number; resetAt: number }>()
 
 const confirmSchema = z.object({
   companyId: z.string().uuid(),
   products: z.array(z.object({
-    position: z.string().trim().max(120),
+    sku: z.string().trim().max(120),
+    barcode: z.string().trim().max(120),
     name: z.string().trim().min(1).max(240),
     description: z.string().trim().max(2000),
     price: z.union([z.string(), z.number()]).transform((value) => value === '' ? null : Number(value)).refine((value) => value === null || (Number.isFinite(value) && value >= 0)),
     category: z.string().trim().max(240),
-  })).min(1).max(100),
+  })).min(1).max(600),
 })
 
 function isRateLimited(userId: string) {
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData()
     const companyId = String(formData.get('companyId') ?? '')
+    const sourceName = String(formData.get('sourceName') ?? 'photo').slice(0, 160)
     const image = formData.get('image')
     const auth = await requireOwnedCompany(companyId)
     if ('error' in auth) return auth.error
@@ -72,14 +74,14 @@ export async function POST(request: Request) {
       instructions: [
         'Extract product or menu rows only from information visibly present in the supplied image.',
         'Never infer hidden products, prices, descriptions, categories, taxes, currency conversions, or identifiers.',
-        'Return JSON only as {"products":[{"position":string|null,"name":string|null,"description":string|null,"price":number|string|null,"category":string|null}]}.',
+        'Return JSON only as {"products":[{"sku":string|null,"barcode":string|null,"name":string|null,"description":string|null,"price":number|string|null,"category":string|null}]}.',
         'Keep visible wording in its original language. Use null when a field is not credible or not visible.',
-        'A position is a printed item/article number, not the row index you create.',
+        'SKU is only a visibly printed item, position, or article number. Barcode is only a visibly readable barcode number. Never invent either identifier.',
       ].join(' '),
       prompt: 'Read this menu or product photo and return only credible visible product rows for human review. Do not save anything.',
       imageDataUrl,
     })
-    const drafts = parseProductExtraction(JSON.parse(response))
+    const drafts = parseProductExtraction(JSON.parse(response), sourceName)
     return NextResponse.json({ drafts })
   } catch (error) {
     if (error instanceof AiProviderError) {
@@ -96,29 +98,33 @@ export async function PUT(request: Request) {
     const auth = await requireOwnedCompany(parsed.data.companyId)
     if ('error' in auth) return auth.error
 
-    const normalizedSkus = parsed.data.products
-      .map((product) => product.position.trim().toLocaleLowerCase())
-      .filter(Boolean)
+    const normalizedSkus = parsed.data.products.map((product) => product.sku.trim().toLocaleLowerCase()).filter(Boolean)
+    const normalizedBarcodes = parsed.data.products.map((product) => product.barcode.trim().toLocaleLowerCase()).filter(Boolean)
     if (new Set(normalizedSkus).size !== normalizedSkus.length) {
       return NextResponse.json({ error: 'duplicate_sku' }, { status: 409 })
+    }
+    if (new Set(normalizedBarcodes).size !== normalizedBarcodes.length) {
+      return NextResponse.json({ error: 'duplicate_barcode' }, { status: 409 })
     }
 
     const [{ data: company, error: companyError }, { data: existingProducts, error: existingError }] = await Promise.all([
       auth.adminSupabase.from('companies').select('currency').eq('id', parsed.data.companyId).single(),
-      auth.adminSupabase.from('products').select('sku').eq('company_id', parsed.data.companyId).not('sku', 'is', null),
+      auth.adminSupabase.from('products').select('id, sku, barcode').eq('company_id', parsed.data.companyId),
     ])
     if (companyError || existingError || !company) {
       return NextResponse.json({ error: 'workspace_check_failed' }, { status: 500 })
     }
     const existingSkus = new Set((existingProducts ?? []).map((product) => product.sku?.trim().toLocaleLowerCase()).filter(Boolean))
-    if (normalizedSkus.some((sku) => existingSkus.has(sku))) {
-      return NextResponse.json({ error: 'duplicate_sku' }, { status: 409 })
+    const existingBarcodes = new Set((existingProducts ?? []).map((product) => product.barcode?.trim().toLocaleLowerCase()).filter(Boolean))
+    if (normalizedSkus.some((sku) => existingSkus.has(sku)) || normalizedBarcodes.some((barcode) => existingBarcodes.has(barcode))) {
+      return NextResponse.json({ error: 'existing_product' }, { status: 409 })
     }
 
     const rows = parsed.data.products.map((product) => ({
       company_id: parsed.data.companyId,
       name: product.name,
-      sku: product.position || null,
+      sku: product.sku || null,
+      barcode: product.barcode || null,
       description: product.description || null,
       selling_price: product.price,
       category: product.category || null,
