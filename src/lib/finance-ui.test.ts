@@ -52,6 +52,23 @@ test('transactions use the dedicated localized empty-state title', () => {
   assert.equal(financeUiDictionaries.en['finance.noTransactionsYet'], 'No transactions yet')
 })
 
+test('income and expenses expose the same edit, duplicate and delete action order', () => {
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    const actions = source.match(/actions=\{<>[\s\S]*?<\/>\}/)?.[0] ?? ''
+    assert.ok(actions.indexOf('handleEdit') >= 0, `${route}: edit action missing`)
+    assert.ok(actions.indexOf('handleDuplicate') > actions.indexOf('handleEdit'), `${route}: duplicate must follow edit`)
+    assert.ok(actions.indexOf('setDeleteId') > actions.indexOf('handleDuplicate'), `${route}: delete must follow duplicate`)
+  }
+})
+
+test('expense title is required while description remains optional', () => {
+  const source = readFileSync(new URL('../app/(app)/expenses/page.tsx', import.meta.url), 'utf8')
+  assert.match(source, /t\('expenses\.titleRequired'\)/)
+  assert.match(source, /aria-label=\{t\('expenses\.titleName'\)\}[\s\S]*?required/)
+  assert.match(source, /aria-label=\{t\('expenses\.descriptionOptional'\)\}[\s\S]*?maxLength=\{255\} \/>/)
+})
+
 test('finance search is case-insensitive and ignores empty optional fields', () => {
   assert.equal(matchesFinanceSearch('  CHAT  ', ['ChatGPT Plus', null, undefined]), true)
   assert.equal(matchesFinanceSearch('software', ['ChatGPT Plus', 'Subscription', 'Software']), true)

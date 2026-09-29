@@ -16,7 +16,7 @@ export const incomeSchema = z.object({
 
 export const expenseSchema = z.object({
   amount: nonZeroAmount,
-  description: nonEmptyString,
+  description: z.string().max(255, 'Text is too long').trim(),
   category: nonEmptyString,
   date: dateString,
   currency: currencyCode,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
-import { Building2, Edit, Trash2 } from "lucide-react"
+import { Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { formatValidationError, incomeSchema, type IncomeForm } from '@/lib/validations'
 import { useCompany } from '@/contexts/company-context'
@@ -397,6 +397,43 @@ export default function IncomePage() {
       currency: normalizeCurrencyCode(entry.currency),
     })
     setShowForm(true)
+  }
+
+  const handleDuplicate = async (entry: Income) => {
+    if (!currentCompany) return
+    if (!isOnline) {
+      setErrorMessage(t('offline.requiresConnection'))
+      return
+    }
+
+    const payload = {
+      title: entry.title ?? null,
+      description: entry.description,
+      date: entry.date,
+      category: entry.category,
+      amount: Number(entry.amount),
+      currency: normalizeCurrencyCode(entry.currency),
+      company_id: currentCompany.id,
+      note: entry.note ?? null,
+      client_id: entry.client_id ?? null,
+      payment_method: entry.payment_method ?? null,
+    }
+
+    try {
+      let { error } = await supabase.from('incomes').insert(payload)
+      if (isMissingOptionalColumn(error)) {
+        const fallback = await supabase.from('incomes').insert(stripTitle(stripAccountingFields(payload)))
+        error = fallback.error
+      }
+      if (error) throw error
+      await loadIncomes()
+      setSuccessMessage(t('income.duplicated'))
+      window.setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (error) {
+      console.error('Income duplicate error:', error)
+      setErrorMessage(t('income.duplicateFailed'))
+      window.setTimeout(() => setErrorMessage(''), 5000)
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -938,7 +975,7 @@ export default function IncomePage() {
                 amount={formatCurrency(convertToCurrency(Number(income.amount), income.currency, normalizeCurrencyCode(currentCompany.currency ?? 'USD')), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
                 amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') ? formatCurrency(Number(income.amount), income.currency) : undefined}
                 selection={<label className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedIncomeIdSet.has(income.id)} onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)} className="h-4 w-4" /><span className="sr-only">{t('income.bulkSelectRow').replace('{title}', income.title || income.description)}</span></label>}
-                actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(income)} aria-label={`${t('common.edit')} ${income.title || income.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)} aria-label={`${t('common.delete')} ${income.title || income.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button></>}
+                actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(income)} aria-label={`${t('common.edit')} ${income.title || income.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => void handleDuplicate(income)} aria-label={`${t('finance.duplicate')} ${income.title || income.description}`} title={t('finance.duplicate')}><Copy className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)} aria-label={`${t('common.delete')} ${income.title || income.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button></>}
               />
             {editingEntry?.id === income.id && (
               <Card className="border-primary/30 bg-slate-50">

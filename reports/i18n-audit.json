@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T21:08:05.223Z",
+  "generatedAt": "2026-09-29T00:03:17.173Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -37,30 +37,30 @@
   ],
   "coverage": {
     "en": {
-      "translated": 2149,
-      "total": 2149,
+      "translated": 2157,
+      "total": 2157,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2149,
-      "total": 2149,
+      "translated": 2157,
+      "total": 2157,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2149,
-      "total": 2149,
+      "translated": 2157,
+      "total": 2157,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 1947,
-      "total": 2149,
-      "percent": 90.6,
+      "translated": 1955,
+      "total": 2157,
+      "percent": 90.64,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -352,9 +352,9 @@
       ]
     },
     "uk": {
-      "translated": 1902,
-      "total": 2149,
-      "percent": 88.51,
+      "translated": 1910,
+      "total": 2157,
+      "percent": 88.55,
       "missing": [
         "support.button",
         "support.title",
@@ -716,9 +716,9 @@
       ]
     },
     "pl": {
-      "translated": 1902,
-      "total": 2149,
-      "percent": 88.51,
+      "translated": 1910,
+      "total": 2157,
+      "percent": 88.55,
       "missing": [
         "support.button",
         "support.title",
@@ -1080,9 +1080,9 @@
       ]
     },
     "fr": {
-      "translated": 1902,
-      "total": 2149,
-      "percent": 88.51,
+      "translated": 1910,
+      "total": 2157,
+      "percent": 88.55,
       "missing": [
         "support.button",
         "support.title",
@@ -1538,7 +1538,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2149,
+    "englishKeyCount": 2157,
     "authenticatedSourceFileCount": 73,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 15
