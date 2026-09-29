@@ -5,6 +5,15 @@
 -- Dependency assumptions: the pre-2026 core schema already provides companies,
 -- clients, invoices, invoice_payments, incomes, expenses, time_entries and app_access.
 -- This migration contains no production row data and does not alter auth.users.
+--
+-- Edit log (append future schema additions as a new dated Edit section before
+-- the final COMMIT; never rewrite an earlier Edit without reviewing migration history):
+-- Edit 1 (2026-09-19): consolidated 2026 application schema.
+-- Edit 2 (2026-09-20): incoming-order notification devices, settings and events.
+-- Edit 3 (2026-09-28): employee weekly schedules and location operating hours.
+-- Important: this log documents the repository baseline. Supabase does not rerun an
+-- already-applied timestamp after this file changes; production additions still need
+-- an explicitly reviewed manual application and deployment record.
 
 begin;
 
@@ -2373,10 +2382,243 @@ end $$;
 -- Rollback: deploy code that no longer reads these tables first, export metadata/files, then remove policies,
 -- bucket objects, bucket and tables manually. Never drop these objects after production uploads without an export.
 
+-- ============================================================================
+-- Edit 2 (2026-09-20): Incoming order notifications
+-- ============================================================================
+
+-- One explicitly selected Web Push device per workspace.
+-- Additive and idempotent. Review manually; do not apply through the application.
+
+alter table public.woocommerce_connections
+  add column if not exists order_webhook_secret text,
+  add column if not exists order_webhook_configured_at timestamptz;
+
+create table if not exists public.order_notification_devices (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  installation_id uuid not null,
+  device_label text not null check (char_length(device_label) between 1 and 80),
+  platform text not null check (char_length(platform) between 1 and 40),
+  locale text not null default 'en' check (locale in ('en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr')),
+  push_endpoint text not null,
+  push_p256dh text not null,
+  push_auth text not null,
+  status text not null default 'enabled' check (status in ('enabled', 'invalid', 'disabled')),
+  last_seen_at timestamptz not null default now(),
+  invalidated_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint order_notification_devices_company_installation_unique unique (company_id, installation_id),
+  constraint order_notification_devices_company_id_id_unique unique (company_id, id)
+);
+
+create table if not exists public.order_notification_settings (
+  company_id uuid primary key references public.companies(id) on delete cascade,
+  active_device_id uuid,
+  enabled boolean not null default false,
+  foreground_sound_enabled boolean not null default true,
+  foreground_sound_path text,
+  foreground_sound_name text,
+  foreground_sound_mime text,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint order_notification_settings_active_device_fkey
+    foreign key (company_id, active_device_id)
+    references public.order_notification_devices(company_id, id)
+    on delete set null (active_device_id)
+);
+
+create table if not exists public.incoming_order_alert_events (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  provider text not null,
+  external_order_id text not null,
+  event_type text not null default 'order.created',
+  provider_delivery_id text,
+  order_number text,
+  amount text,
+  currency text,
+  notification_status text not null default 'pending'
+    check (notification_status in ('pending', 'sent', 'skipped', 'failed')),
+  notification_error_code text,
+  notified_device_id uuid references public.order_notification_devices(id) on delete set null,
+  created_at timestamptz not null default now(),
+  notified_at timestamptz,
+  constraint incoming_order_alert_events_dedup_unique
+    unique (company_id, provider, external_order_id, event_type)
+);
+
+create index if not exists order_notification_devices_company_status_idx
+  on public.order_notification_devices(company_id, status);
+create index if not exists incoming_order_alert_events_company_created_idx
+  on public.incoming_order_alert_events(company_id, created_at desc);
+
+alter table public.order_notification_devices enable row level security;
+alter table public.order_notification_settings enable row level security;
+alter table public.incoming_order_alert_events enable row level security;
+
+-- Push endpoints and key material are intentionally server-only. Authenticated users
+-- configure them through routes that first verify companies.owner_id.
+revoke all on public.order_notification_devices from anon, authenticated;
+revoke all on public.order_notification_settings from anon, authenticated;
+revoke all on public.incoming_order_alert_events from anon, authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('order-alert-sounds', 'order-alert-sounds', false, 2097152, array['audio/mpeg', 'audio/wav', 'audio/x-wav'])
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+-- No storage.objects policies are added: upload/read/delete use server routes after
+-- workspace-owner authorization and signed URLs are short-lived.
+
+-- ============================================================================
+-- Edit 3 (2026-09-28): Employee and location schedules
+-- ============================================================================
+
+-- Regular employee schedules and location operating hours. These are templates
+-- and suggestions only; they do not create or modify shifts automatically.
+
+create table if not exists public.employee_weekly_schedules (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  employee_id uuid not null,
+  weekday smallint not null check (weekday between 0 and 6),
+  is_working boolean not null default false,
+  start_time time,
+  end_time time,
+  break_minutes integer not null default 0,
+  location_id uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint employee_weekly_schedules_employee_company_fkey
+    foreign key (company_id, employee_id)
+    references public.employees(company_id, id)
+    on delete cascade,
+  constraint employee_weekly_schedules_location_company_fkey
+    foreign key (company_id, location_id)
+    references public.locations(company_id, id)
+    on delete restrict,
+  constraint employee_weekly_schedules_company_employee_weekday_key
+    unique (company_id, employee_id, weekday),
+  constraint employee_weekly_schedules_state_check check (
+    (
+      not is_working
+      and start_time is null
+      and end_time is null
+      and break_minutes = 0
+      and location_id is null
+    )
+    or
+    (
+      is_working
+      and start_time is not null
+      and end_time is not null
+      and end_time > start_time
+      and break_minutes >= 0
+      and break_minutes < extract(epoch from (end_time - start_time)) / 60
+    )
+  )
+);
+
+create table if not exists public.location_operating_hours (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  location_id uuid not null,
+  weekday smallint not null check (weekday between 0 and 6),
+  is_open boolean not null default false,
+  opens_at time,
+  closes_at time,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint location_operating_hours_location_company_fkey
+    foreign key (company_id, location_id)
+    references public.locations(company_id, id)
+    on delete cascade,
+  constraint location_operating_hours_company_location_weekday_key
+    unique (company_id, location_id, weekday),
+  constraint location_operating_hours_state_check check (
+    (
+      not is_open
+      and opens_at is null
+      and closes_at is null
+    )
+    or
+    (
+      is_open
+      and opens_at is not null
+      and closes_at is not null
+      and closes_at > opens_at
+    )
+  )
+);
+
+create index if not exists employee_weekly_schedules_company_location_idx
+  on public.employee_weekly_schedules(company_id, location_id)
+  where location_id is not null;
+
+alter table public.employee_weekly_schedules enable row level security;
+alter table public.location_operating_hours enable row level security;
+
+drop policy if exists "Owners manage employee weekly schedules"
+  on public.employee_weekly_schedules;
+create policy "Owners manage employee weekly schedules"
+  on public.employee_weekly_schedules
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = employee_weekly_schedules.company_id
+        and c.owner_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = employee_weekly_schedules.company_id
+        and c.owner_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Owners manage location operating hours"
+  on public.location_operating_hours;
+create policy "Owners manage location operating hours"
+  on public.location_operating_hours
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = location_operating_hours.company_id
+        and c.owner_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = location_operating_hours.company_id
+        and c.owner_id = auth.uid()
+    )
+  );
+
+comment on column public.employee_weekly_schedules.weekday is
+  'Day of week using JavaScript numbering: Sunday=0 through Saturday=6.';
+comment on table public.employee_weekly_schedules is
+  'Reusable employee schedule templates only; rows do not create or modify shifts automatically.';
+comment on table public.location_operating_hours is
+  'Location opening-hour suggestions only; changes do not modify employee schedules or shifts.';
+
 -- The final stock movement implementation is defined by the accounting-link
 -- section above. Restore the grants that originally preceded that replacement.
 revoke all on function public.record_stock_movement(uuid, uuid, text, numeric, text, text, text) from public;
 grant execute on function public.record_stock_movement(uuid, uuid, text, numeric, text, text, text) to authenticated;
 
 commit;
-
