@@ -5,6 +5,7 @@ import test from 'node:test'
 const productsPage = readFileSync(new URL('../app/(app)/products/page.tsx', import.meta.url), 'utf8')
 const i18nSource = readFileSync(new URL('./i18n.ts', import.meta.url), 'utf8')
 const productUxSource = readFileSync(new URL('./product-inventory-ux-i18n.ts', import.meta.url), 'utf8')
+const productCsvDialog = readFileSync(new URL('../components/products/product-csv-dialog.tsx', import.meta.url), 'utf8')
 
 test('mobile products prioritize add, search and two compact disclosure panels', () => {
   assert.match(productsPage, /mb-4 lg:hidden[\s\S]*products\.add/)
@@ -19,9 +20,8 @@ test('collapsed product controls keep every existing filter and export action mo
     assert.match(productsPage, new RegExp(`value=\\{${field}\\}`))
   }
 
-  for (const format of ['generic', 'shopify', 'google']) {
-    assert.match(productsPage, new RegExp(`exportProducts\\('${format}', visibleProducts\\)`))
-  }
+  assert.match(productsPage, /ProductCsvDialog/)
+  for (const format of ['leonety', 'woocommerce', 'shopify', 'google_basic']) assert.match(productCsvDialog, new RegExp(`value:'${format}'`))
   assert.match(productsPage, /handleWooExportAll/)
   assert.match(productsPage, /\/app\/settings\/integrations\/woocommerce/)
   assert.match(productsPage, /\/app\/stock-movements/)

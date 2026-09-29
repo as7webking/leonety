@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase-client'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 import { ProductPhotoImportDialog } from '@/components/products/product-photo-import-dialog'
 import { ProductMenuBuilderDialog } from '@/components/products/product-menu-builder-dialog'
+import { ProductCsvDialog } from '@/components/products/product-csv-dialog'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -217,24 +218,6 @@ function parseJsonArray(value: string, label: string) {
   return parsed
 }
 
-function escapeCsv(value: unknown) {
-  const text = String(value ?? '')
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-}
-
-function downloadCsv(filename: string, rows: unknown[][]) {
-  const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
-
 function decodeHtmlText(value: string) {
   if (!value) return ''
   const withoutTags = value.replace(/<[^>]*>/g, ' ')
@@ -288,23 +271,6 @@ function sortProducts(products: Product[], sort: ProductSort) {
 
 function handleFromName(name: string) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product'
-}
-
-function getAttributes(value: unknown): Array<{ name: string; options: string[] }> {
-  if (!Array.isArray(value)) return []
-  return value
-    .map((attribute) => {
-      const record = attribute as { name?: unknown; options?: unknown }
-      return {
-        name: typeof record.name === 'string' ? record.name : '',
-        options: Array.isArray(record.options) ? record.options.map(String) : [],
-      }
-    })
-    .filter((attribute) => attribute.name && attribute.options.length > 0)
-}
-
-function getVariants(value: unknown): Array<{ sku?: string; price?: string | number; stock_quantity?: string | number; attributes?: Record<string, string> }> {
-  return Array.isArray(value) ? value as Array<{ sku?: string; price?: string | number; stock_quantity?: string | number; attributes?: Record<string, string> }> : []
 }
 
 async function compressImageToJpeg(
@@ -617,6 +583,12 @@ export default function ProductsPage() {
 
   const handlePhotoProductsImported = async (created: number) => {
     setMessage(t('productMenu.imported').replace('{count}', String(created)))
+    await loadProducts()
+  }
+
+  const handleCsvProductsImported = async (created: number, updated: number) => {
+    setMessage(t('productCsv.importSuccess').replace('{created}', String(created)).replace('{updated}', String(updated)))
+    setSelectedProductIds(new Set())
     await loadProducts()
   }
 
@@ -957,126 +929,6 @@ export default function ProductsPage() {
     })
   }
 
-  const exportProducts = (format: 'generic' | 'woocommerce' | 'shopify' | 'google', list: Product[]) => {
-    const productsToExport = list.length > 0 ? list : visibleProducts
-
-    if (productsToExport.length === 0) return
-
-    if (format === 'woocommerce') {
-      downloadCsv('leonety-woocommerce-products.csv', [
-        ['Type', 'SKU', 'Name', 'Published', 'Visibility in catalog', 'Short description', 'Description', 'Regular price', 'Categories', 'Images', 'Stock', 'Meta: barcode', 'Attribute 1 name', 'Attribute 1 value(s)'],
-        ...productsToExport.map((product) => {
-          const firstAttribute = getAttributes(product.woo_attributes)[0]
-          return [
-            product.woo_product_type === 'variable' ? 'variable' : 'simple',
-            product.sku,
-            product.name,
-            1,
-            'visible',
-            product.category,
-            decodeHtmlText(product.description ?? ''),
-            product.selling_price ?? '',
-            product.category,
-            product.image_url,
-            product.current_stock,
-            product.barcode,
-            firstAttribute?.name ?? '',
-            firstAttribute?.options.join('|') ?? '',
-          ]
-        }),
-      ])
-      return
-    }
-
-    if (format === 'shopify') {
-      downloadCsv('leonety-shopify-products.csv', [
-        ['Handle', 'Title', 'Body (HTML)', 'Vendor', 'Product Category', 'Type', 'Tags', 'Published', 'Option1 Name', 'Option1 Value', 'Variant SKU', 'Variant Inventory Qty', 'Variant Price', 'Image Src', 'Status'],
-        ...productsToExport.flatMap((product) => {
-          const attributes = getAttributes(product.woo_attributes)
-          const variants = getVariants(product.woo_variants)
-          const option = attributes[0]
-
-          if (variants.length > 0) {
-            return variants.map((variant) => [
-              handleFromName(product.name),
-              product.name,
-              decodeHtmlText(product.description ?? ''),
-              '',
-              product.category,
-              product.category,
-              product.barcode,
-              'TRUE',
-              option?.name ?? 'Title',
-              option?.name ? variant.attributes?.[option.name] ?? option.options[0] ?? 'Default Title' : 'Default Title',
-              variant.sku ?? product.sku,
-              variant.stock_quantity ?? product.current_stock,
-              variant.price ?? product.selling_price ?? '',
-              product.image_url,
-              product.status === 'archived' ? 'archived' : 'active',
-            ])
-          }
-
-          return [[
-            handleFromName(product.name),
-            product.name,
-            decodeHtmlText(product.description ?? ''),
-            '',
-            product.category,
-            product.category,
-            product.barcode,
-            'TRUE',
-            'Title',
-            'Default Title',
-            product.sku,
-            product.current_stock,
-            product.selling_price ?? '',
-            product.image_url,
-            product.status === 'archived' ? 'archived' : 'active',
-          ]]
-        }),
-      ])
-      return
-    }
-
-    if (format === 'google') {
-      downloadCsv('leonety-google-products.csv', [
-        ['store_code', 'item_id', 'title', 'description', 'price', 'currency', 'quantity', 'availability', 'category', 'link', 'image_link'],
-        ...productsToExport.map((product) => [
-          currentCompany?.name ?? '',
-          product.sku ?? product.id,
-          product.name,
-          decodeHtmlText(product.description ?? ''),
-          product.selling_price ?? '',
-          product.currency,
-          product.current_stock,
-          product.current_stock > 0 ? 'in stock' : 'out of stock',
-          product.category,
-          '',
-          product.image_url,
-        ]),
-      ])
-      return
-    }
-
-    downloadCsv('leonety-products.csv', [
-      ['name', 'description', 'sku', 'barcode', 'category', 'price', 'currency', 'stock', 'image_url', 'product_type', 'attributes', 'variants'],
-      ...productsToExport.map((product) => [
-        product.name,
-        decodeHtmlText(product.description ?? ''),
-        product.sku,
-        product.barcode,
-        product.category,
-        product.selling_price ?? '',
-        product.currency,
-        product.current_stock,
-        product.image_url,
-        product.woo_product_type ?? 'simple',
-        JSON.stringify(product.woo_attributes ?? []),
-        JSON.stringify(product.woo_variants ?? []),
-      ]),
-    ])
-  }
-
   const handleBulkWooSync = async () => {
     if (!currentCompany || selectedProducts.length === 0) return
     setSyncingAll(true)
@@ -1253,10 +1105,8 @@ export default function ProductsPage() {
             <span className="min-w-0 break-words">{t('products.importExport')}</span>
           </summary>
           <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3">
+            <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
             <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
-            <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
-            <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
-            <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
             <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
               {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
               {t('woocommerce.exportAll')}
@@ -1267,19 +1117,10 @@ export default function ProductsPage() {
       </div>
 
       <DesktopPageUtilities title={t('pageUtilities.title')}>
+        <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
         <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
         <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
         <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
-        <details className="relative">
-          <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50">
-            <Download className="h-4 w-4" />{t('productUx.exportMenu')}
-          </summary>
-          <div className="absolute left-0 top-full z-40 mt-2 grid min-w-56 gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-lg">
-            <button type="button" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGeneric')}</button>
-            <button type="button" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportShopify')}</button>
-            <button type="button" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0} className="rounded px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50">{t('products.exportGoogle')}</button>
-          </div>
-        </details>
         <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
           {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
           {t('woocommerce.exportAll')}
@@ -1360,10 +1201,7 @@ export default function ProductsPage() {
               <div className="space-y-4 border-t pt-4">
                 <div className="flex flex-wrap gap-2">
                   <ProductMenuBuilderDialog companyName={currentCompany.name} products={selectedMenuProducts} />
-                  <Button variant="outline" onClick={() => exportProducts('generic', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
-                  <Button variant="outline" onClick={() => exportProducts('woocommerce', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportWooCsv')}</Button>
-                  <Button variant="outline" onClick={() => exportProducts('shopify', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
-                  <Button variant="outline" onClick={() => exportProducts('google', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
+                  <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
                   <Button variant="outline" onClick={() => void handleBulkWooSync()} disabled={syncingAll}><UploadCloud className="h-4 w-4" />{t('products.bulkSyncWoo')}</Button>
                 </div>
 

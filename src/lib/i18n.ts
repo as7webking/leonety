@@ -21,6 +21,7 @@ import { appNavigationStateDictionaries } from '@/lib/app-navigation-i18n'
 import { employeeUiDictionaries } from '@/lib/employee-ui-i18n'
 import { profileLocalizationDictionaries } from '@/lib/profile-localization-i18n'
 import { productMenuDictionaries } from '@/lib/product-menu-i18n'
+import { productCsvDictionaries } from '@/lib/product-csv-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -47,6 +48,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...businessModuleDictionaries.en,
     ...countrySelectorDictionaries.en,
     ...productInventoryUxDictionaries.en,
+    ...productCsvDictionaries.en,
     ...pageUtilitiesDictionaries.en,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Income',
@@ -130,6 +132,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'common.period': 'Period',
     'common.filters': 'Filters',
     'common.apply': 'Apply',
+    'common.next': 'Next',
     'common.workspaceType': 'Workspace type',
     'common.active': 'Active',
     'common.none': 'None',
@@ -532,6 +535,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   de: {
     ...countrySelectorDictionaries.de,
     ...productInventoryUxDictionaries.de,
+    ...productCsvDictionaries.de,
     ...pageUtilitiesDictionaries.de,
     ...businessModuleDictionaries.de,
     'nav.dashboard': 'Dashboard',
@@ -615,6 +619,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'common.period': 'Zeitraum',
     'common.filters': 'Filter',
     'common.apply': 'Anwenden',
+    'common.next': 'Weiter',
     'common.workspaceType': 'Arbeitsbereichstyp',
     'common.active': 'Aktiv',
     'common.none': 'Keine',
@@ -1017,6 +1022,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   ru: {
     ...countrySelectorDictionaries.ru,
     ...productInventoryUxDictionaries.ru,
+    ...productCsvDictionaries.ru,
     ...pageUtilitiesDictionaries.ru,
     ...businessModuleDictionaries.ru,
     'nav.dashboard': 'Панель',
@@ -1100,6 +1106,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'common.period': 'Период',
     'common.filters': 'Фильтры',
     'common.apply': 'Применить',
+    'common.next': 'Далее',
     'common.workspaceType': 'Тип рабочего пространства',
     'common.active': 'Активно',
     'common.none': 'Нет',
@@ -1502,6 +1509,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   tr: {
     ...countrySelectorDictionaries.tr,
     ...productInventoryUxDictionaries.tr,
+    ...productCsvDictionaries.tr,
     ...pageUtilitiesDictionaries.tr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
@@ -1580,6 +1588,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'common.period': 'Dönem',
     'common.filters': 'Filtreler',
     'common.apply': 'Uygula',
+    'common.next': 'İleri',
     'common.workspaceType': 'Çalışma alanı türü',
     'common.active': 'Aktif',
     'common.none': 'Yok',
@@ -1794,6 +1803,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   uk: {
     ...countrySelectorDictionaries.uk,
     ...productInventoryUxDictionaries.uk,
+    ...productCsvDictionaries.uk,
     ...pageUtilitiesDictionaries.uk,
     ...businessModuleDictionaries.en,
     ...businessModuleDictionaries.ru,
@@ -1820,6 +1830,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'common.period': 'Період',
     'common.filters': 'Фільтри',
     'common.apply': 'Застосувати',
+    'common.next': 'Далі',
     'common.workspaceType': 'Тип робочого простору',
     'common.active': 'Активно',
     'common.none': 'Немає',
@@ -1912,6 +1923,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   pl: {
     ...countrySelectorDictionaries.pl,
     ...productInventoryUxDictionaries.pl,
+    ...productCsvDictionaries.pl,
     ...pageUtilitiesDictionaries.pl,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
@@ -1937,6 +1949,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'common.period': 'Okres',
     'common.filters': 'Filtry',
     'common.apply': 'Zastosuj',
+    'common.next': 'Dalej',
     'common.workspaceType': 'Typ obszaru roboczego',
     'common.active': 'Aktywne',
     'common.none': 'Brak',
@@ -2029,6 +2042,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   fr: {
     ...countrySelectorDictionaries.fr,
     ...productInventoryUxDictionaries.fr,
+    ...productCsvDictionaries.fr,
     ...pageUtilitiesDictionaries.fr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Tableau de bord',
@@ -2054,6 +2068,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'common.period': 'Période',
     'common.filters': 'Filtres',
     'common.apply': 'Appliquer',
+    'common.next': 'Suivant',
     'common.workspaceType': 'Type d’espace',
     'common.active': 'Actif',
     'common.none': 'Aucun',
