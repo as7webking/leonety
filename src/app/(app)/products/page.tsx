@@ -15,6 +15,8 @@ import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/cu
 import { buildProductEditorHref, rememberProductReturnScroll, restoreProductReturnScroll } from '@/lib/product-editor-navigation'
 import { createClient } from '@/lib/supabase-client'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
+import { ProductPhotoImportDialog } from '@/components/products/product-photo-import-dialog'
+import { ProductMenuBuilderDialog } from '@/components/products/product-menu-builder-dialog'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -601,6 +603,21 @@ export default function ProductsPage() {
     () => visibleProducts.filter((product) => selectedProductIds.has(product.id)),
     [visibleProducts, selectedProductIds]
   )
+  const selectedMenuProducts = useMemo(() => selectedProducts.map((product) => ({
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    category: product.category,
+    sku: product.sku,
+    sellingPrice: product.selling_price,
+    currency: product.currency,
+    imageUrl: product.image_url ?? null,
+  })), [selectedProducts])
+
+  const handlePhotoProductsImported = async (created: number) => {
+    setMessage(t('productMenu.imported').replace('{count}', String(created)))
+    await loadProducts()
+  }
 
   const resetForm = useCallback(() => {
     setEditing(null)
@@ -1193,6 +1210,7 @@ export default function ProductsPage() {
             <span className="min-w-0 break-words">{t('products.importExport')}</span>
           </summary>
           <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3">
+            <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
             <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('generic', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
             <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('shopify', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>
             <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => exportProducts('google', visibleProducts)} disabled={visibleProducts.length === 0}><Download className="h-4 w-4" />{t('products.exportGoogle')}</Button>
@@ -1206,6 +1224,7 @@ export default function ProductsPage() {
       </div>
 
       <DesktopPageUtilities title={t('pageUtilities.title')}>
+        <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
         <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
         <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
         <details className="relative">
@@ -1297,6 +1316,7 @@ export default function ProductsPage() {
             {selectedProducts.length > 0 && (
               <div className="space-y-4 border-t pt-4">
                 <div className="flex flex-wrap gap-2">
+                  <ProductMenuBuilderDialog companyName={currentCompany.name} products={selectedMenuProducts} />
                   <Button variant="outline" onClick={() => exportProducts('generic', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportGeneric')}</Button>
                   <Button variant="outline" onClick={() => exportProducts('woocommerce', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportWooCsv')}</Button>
                   <Button variant="outline" onClick={() => exportProducts('shopify', selectedProducts)}><Download className="h-4 w-4" />{t('products.exportShopify')}</Button>

@@ -15,10 +15,18 @@ export interface GenerateAiTextInput {
   responseFormat?: 'text' | 'json_object'
 }
 
+export interface GenerateAiVisionJsonInput {
+  instructions: string
+  prompt: string
+  imageDataUrl: string
+  maxOutputTokens?: number
+}
+
 export interface AiProviderCapabilities {
   text: boolean
   json: boolean
   streaming: boolean
+  vision: boolean
 }
 
 export type AiProviderErrorCode =
@@ -41,6 +49,7 @@ interface AiProviderAdapter {
   name: AiProviderName
   capabilities: AiProviderCapabilities
   generate: (input: GenerateAiTextInput) => Promise<string>
+  generateVisionJson: (input: GenerateAiVisionJsonInput) => Promise<string>
 }
 
 export function getAiProviderName(): AiProviderName {
@@ -67,6 +76,7 @@ const openAiProvider: AiProviderAdapter = {
     text: true,
     json: true,
     streaming: false,
+    vision: true,
   },
   async generate({
     instructions,
@@ -133,6 +143,56 @@ const openAiProvider: AiProviderAdapter = {
       clearTimeout(timeout)
     }
   },
+  async generateVisionJson({
+    instructions,
+    prompt,
+    imageDataUrl,
+    maxOutputTokens = 1800,
+  }) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 35_000)
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${getAiApiKey()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: getAiModelName(),
+          instructions,
+          input: [{
+            role: 'user',
+            content: [
+              { type: 'input_text', text: prompt },
+              { type: 'input_image', image_url: imageDataUrl, detail: 'high' },
+            ],
+          }],
+          max_output_tokens: maxOutputTokens,
+          text: { format: { type: 'json_object' } },
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new AiProviderError(classifyAiProviderStatus(response.status, payload))
+      }
+
+      const text = extractAiResponseText(payload)
+      if (!text) throw new AiProviderError('invalid_response')
+      return text
+    } catch (error) {
+      if (error instanceof AiProviderError) throw error
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new AiProviderError('request_timeout')
+      }
+      throw new AiProviderError('provider_unavailable')
+    } finally {
+      clearTimeout(timeout)
+    }
+  },
 }
 
 function getAiProviderAdapter(): AiProviderAdapter {
@@ -171,4 +231,10 @@ export async function generateAiText({
   responseFormat = 'text',
 }: GenerateAiTextInput) {
   return getAiProviderAdapter().generate({ instructions, input, maxOutputTokens, responseFormat })
+}
+
+export async function generateAiVisionJson(input: GenerateAiVisionJsonInput) {
+  const provider = getAiProviderAdapter()
+  if (!provider.capabilities.vision) throw new AiProviderError('configuration_missing')
+  return provider.generateVisionJson(input)
 }

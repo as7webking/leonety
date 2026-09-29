@@ -20,6 +20,7 @@ import { clientStatusDictionaries } from '@/lib/client-status-i18n'
 import { appNavigationStateDictionaries } from '@/lib/app-navigation-i18n'
 import { employeeUiDictionaries } from '@/lib/employee-ui-i18n'
 import { profileLocalizationDictionaries } from '@/lib/profile-localization-i18n'
+import { productMenuDictionaries } from '@/lib/product-menu-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8897,6 +8898,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], appNavigationStateDictionaries[locale])
   Object.assign(dictionaries[locale], employeeUiDictionaries[locale])
   Object.assign(dictionaries[locale], profileLocalizationDictionaries[locale])
+  Object.assign(dictionaries[locale], productMenuDictionaries[locale])
 }
 
 Object.assign(dictionaries.uk, ukrainianAuthenticatedFixes)
