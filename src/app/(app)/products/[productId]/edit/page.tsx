@@ -230,6 +230,7 @@ export default function ProductEditPage() {
   const [channelPreferencesAvailable, setChannelPreferencesAvailable] = useState(true)
   const [categoriesAvailable, setCategoriesAvailable] = useState(true)
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [renamedCategoryName, setRenamedCategoryName] = useState('')
   const [editorSection, setEditorSection] = useState<ProductEditorSection>('general')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -520,6 +521,46 @@ export default function ProductEditPage() {
     setMessage(t('products.categoryCreated'))
   }
 
+  const handleRenameCategory = async () => {
+    if (!currentCompany || !form) return
+    const category = categories.find((item) => item.name === form.category)
+    const nextName = renamedCategoryName.trim()
+    if (!category || !nextName || nextName === category.name) return
+
+    setMessage('')
+    setError('')
+    const previousName = category.name
+    const { error: categoryError } = await supabase
+      .from('product_categories')
+      .update({ name: nextName, slug: handleFromName(nextName), updated_at: new Date().toISOString() })
+      .eq('id', category.id)
+      .eq('company_id', currentCompany.id)
+
+    if (categoryError) {
+      setError(categoryError.code === '23505' ? t('products.categoryExists') : t('productUx.categoryRenameFailed'))
+      return
+    }
+
+    const { error: productsError } = await supabase
+      .from('products')
+      .update({ category: nextName, updated_at: new Date().toISOString() })
+      .eq('company_id', currentCompany.id)
+      .eq('category_id', category.id)
+
+    if (productsError) {
+      await supabase.from('product_categories').update({ name: previousName, slug: handleFromName(previousName) }).eq('id', category.id).eq('company_id', currentCompany.id)
+      setError(t('productUx.categoryRenameFailed'))
+      return
+    }
+
+    setCategories((current) => current.map((item) => item.id === category.id ? { ...item, name: nextName } : item).sort((left, right) => left.name.localeCompare(right.name)))
+    setProduct((current) => current && current.category_id === category.id ? { ...current, category: nextName } : current)
+    setForm((current) => current ? { ...current, category: nextName } : current)
+    setRenamedCategoryName('')
+    setMessage(t('productUx.categoryRenamed'))
+    await loadProduct()
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!currentCompany || !form || !product) return
@@ -682,7 +723,7 @@ export default function ProductEditPage() {
                 {categoriesAvailable && categories.length > 0 ? (
                   <AppSelect
                     value={form.category}
-                    onChange={(value) => setForm({ ...form, category: value })}
+                    onChange={(value) => { setForm({ ...form, category: value }); setRenamedCategoryName('') }}
                     options={[{ value: '', label: t('products.noCategory') }, ...categories.map((category) => ({ value: category.name, label: category.name }))]}
                   />
                 ) : (
@@ -696,6 +737,15 @@ export default function ProductEditPage() {
                       {t('products.createCategory')}
                     </Button>
                   </div>
+                )}
+                {categoriesAvailable && categories.some((category) => category.name === form.category) && (
+                  <details className="rounded-md border border-slate-200 bg-slate-50">
+                    <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-slate-700">{t('productUx.renameCategory')}</summary>
+                    <div className="flex min-w-0 flex-col gap-2 border-t p-3 sm:flex-row">
+                      <input value={renamedCategoryName} onChange={(event) => setRenamedCategoryName(event.target.value)} className="min-w-0 flex-1 rounded-md border px-3 py-2 text-sm" placeholder={t('productUx.categoryName')} />
+                      <Button type="button" variant="outline" onClick={() => void handleRenameCategory()} disabled={!renamedCategoryName.trim() || renamedCategoryName.trim() === form.category}>{t('productUx.renameCategory')}</Button>
+                    </div>
+                  </details>
                 )}
               </div>
               <label className="space-y-1 md:col-span-2">

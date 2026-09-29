@@ -415,6 +415,7 @@ export default function ProductsPage() {
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductForm>(makeEmptyForm())
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [renamedCategoryName, setRenamedCategoryName] = useState('')
   const [categoriesAvailable, setCategoriesAvailable] = useState(() => initialDataMemory?.value.categoriesAvailable ?? true)
   const initialQuery = searchParams.get('q') ?? ''
   const initialStatus = searchParams.get('status')
@@ -624,6 +625,7 @@ export default function ProductsPage() {
     setForm(makeEmptyForm(normalizeCurrencyCode(currentCompany?.currency ?? 'EUR')))
     setShowForm(false)
     setNewCategoryName('')
+    setRenamedCategoryName('')
     setEditorSection('general')
     setImageCrop({ zoom: 1, offsetX: 0, offsetY: 0 })
   }, [currentCompany?.currency])
@@ -789,6 +791,47 @@ export default function ProductsPage() {
     setForm((current) => ({ ...current, category: category.name }))
     setNewCategoryName('')
     setMessage(t('products.categoryCreated'))
+  }
+
+  const handleRenameCategory = async () => {
+    if (!currentCompany) return
+    const category = categories.find((item) => item.name === form.category)
+    const nextName = renamedCategoryName.trim()
+    if (!category || !nextName || nextName === category.name) return
+
+    setMessage('')
+    setError('')
+    const previousName = category.name
+    const { error: categoryError } = await supabase
+      .from('product_categories')
+      .update({ name: nextName, slug: handleFromName(nextName), updated_at: new Date().toISOString() })
+      .eq('id', category.id)
+      .eq('company_id', currentCompany.id)
+
+    if (categoryError) {
+      setError(categoryError.code === '23505' ? t('products.categoryExists') : t('productUx.categoryRenameFailed'))
+      return
+    }
+
+    const { error: productsError } = await supabase
+      .from('products')
+      .update({ category: nextName, updated_at: new Date().toISOString() })
+      .eq('company_id', currentCompany.id)
+      .eq('category_id', category.id)
+
+    if (productsError) {
+      await supabase.from('product_categories').update({ name: previousName, slug: handleFromName(previousName) }).eq('id', category.id).eq('company_id', currentCompany.id)
+      setError(t('productUx.categoryRenameFailed'))
+      return
+    }
+
+    setCategories((current) => current.map((item) => item.id === category.id ? { ...item, name: nextName } : item).sort((left, right) => left.name.localeCompare(right.name)))
+    setProducts((current) => current.map((item) => item.category_id === category.id ? { ...item, category: nextName } : item))
+    setForm((current) => ({ ...current, category: nextName }))
+    setCategoryFilter((current) => current === previousName ? nextName : current)
+    setRenamedCategoryName('')
+    setMessage(t('productUx.categoryRenamed'))
+    await loadProducts()
   }
 
   const handleCopyProduct = (product: Product) => {
@@ -1243,7 +1286,7 @@ export default function ProductsPage() {
         </Button>
       </DesktopPageUtilities>
 
-      <div className="mb-5 hidden gap-3 lg:grid lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_180px_220px_180px_180px_190px_170px]">
+      <div className="mb-5 hidden min-w-0 gap-3 lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(240px,1fr)_minmax(140px,0.7fr)_minmax(170px,0.8fr)_minmax(150px,0.7fr)_minmax(160px,0.8fr)_minmax(170px,0.8fr)_minmax(150px,0.7fr)]">
         <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-md border py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} /></div>
         <AppSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | ProductStatus)} options={[{ value: 'all', label: t('common.all') }, ...productStatuses.map((status) => ({ value: status, label: t(`products.status.${status}`) }))]} />
         <AppSelect
@@ -1382,9 +1425,9 @@ export default function ProductsPage() {
               <div className="space-y-1">
                 <span className="text-sm font-medium">{t('products.category')}</span>
                 {categoriesAvailable && categories.length > 0 ? (
-                  <AppSelect
-                    value={form.category}
-                    onChange={(value) => setForm({ ...form, category: value })}
+                    <AppSelect
+                      value={form.category}
+                      onChange={(value) => { setForm({ ...form, category: value }); setRenamedCategoryName('') }}
                     options={[{ value: '', label: t('products.noCategory') }, ...categories.map((category) => ({ value: category.name, label: category.name }))]}
                   />
                 ) : (
@@ -1402,6 +1445,15 @@ export default function ProductsPage() {
                       {t('products.createCategory')}
                     </Button>
                   </div>
+                )}
+                {categoriesAvailable && categories.some((category) => category.name === form.category) && (
+                  <details className="rounded-md border border-slate-200 bg-slate-50">
+                    <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-slate-700">{t('productUx.renameCategory')}</summary>
+                    <div className="flex min-w-0 flex-col gap-2 border-t p-3 sm:flex-row">
+                      <input value={renamedCategoryName} onChange={(event) => setRenamedCategoryName(event.target.value)} className="min-w-0 flex-1 rounded-md border px-3 py-2 text-sm" placeholder={t('productUx.categoryName')} />
+                      <Button type="button" variant="outline" onClick={() => void handleRenameCategory()} disabled={!renamedCategoryName.trim() || renamedCategoryName.trim() === form.category}>{t('productUx.renameCategory')}</Button>
+                    </div>
+                  </details>
                 )}
               </div>
                     <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">{t('products.descriptionField')}</span><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-28 w-full rounded-md border px-3 py-2" /></label>
@@ -1603,18 +1655,18 @@ export default function ProductsPage() {
           </div>
           <Card className="hidden lg:block">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="min-w-[1120px] w-full table-fixed text-sm">
+            <div className="min-w-0 overflow-hidden">
+              <table className="w-full table-fixed text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
                   <tr>
                     <th className="w-10 p-3"><span className="sr-only">{t('transactions.select')}</span></th>
-                    <th className="w-[27%] p-3">{t('products.name')}</th>
+                    <th className="w-[24%] p-3">{t('products.name')}</th>
                     <th className="w-[13%] p-3">{t('products.sku')}</th>
                     <th className="w-[12%] p-3 text-right">{t('products.sellingPrice')}</th>
-                    <th className="w-[9%] p-3 text-right">{t('products.currentStock')}</th>
-                    <th className="w-[11%] p-3">{t('products.status')}</th>
-                    <th className="w-[16%] p-3">{t('productUx.channelsColumn')}</th>
-                    <th className="w-[300px] p-3">{t('productUx.actions')}</th>
+                    <th className="w-[8%] p-3 text-right">{t('products.currentStock')}</th>
+                    <th className="w-[12%] p-3">{t('products.status')}</th>
+                    <th className="w-[15%] p-3">{t('productUx.channelsColumn')}</th>
+                    <th className="w-44 p-3 text-right">{t('productUx.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1648,16 +1700,15 @@ export default function ProductsPage() {
                           </div>
                         </td>
                         <td className="p-3">
-                          <div className="flex flex-wrap gap-1.5">
-                            <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}><Eye className="h-4 w-4" />{t('products.view')}</Button>
-                            <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleCopyProduct(product)} title={t('productUx.duplicate')}><Copy className="h-4 w-4" /><span className="sr-only">{t('productUx.duplicate')}</span></Button>
-                            <Link href="/app/stock-movements" title={t('products.adjustStock')}><Button size="sm" variant="ghost"><Barcode className="h-4 w-4" /><span className="sr-only">{t('products.adjustStock')}</span></Button></Link>
-                            <Button size="sm" variant="ghost" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)} title={getWooActionLabel(product)}>
+                          <div className="flex flex-wrap justify-end gap-1">
+                            <Button size="icon" variant="outline" onClick={() => setViewingProduct(product)} title={t('products.view')} aria-label={t('products.view')}><Eye className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="outline" onClick={() => handleEdit(product)} title={t('common.edit')} aria-label={t('common.edit')}><Edit className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="ghost" onClick={() => handleCopyProduct(product)} title={t('productUx.duplicate')} aria-label={t('productUx.duplicate')}><Copy className="h-4 w-4" /></Button>
+                            <Link href="/app/stock-movements" title={t('products.adjustStock')}><Button size="icon" variant="ghost" aria-label={t('products.adjustStock')}><Barcode className="h-4 w-4" /></Button></Link>
+                            <Button size="icon" variant="ghost" disabled={syncingProductId === product.id} onClick={() => void handleWooExport(product)} title={getWooActionLabel(product)} aria-label={getWooActionLabel(product)}>
                               {syncingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                              <span className="sr-only">{getWooActionLabel(product)}</span>
                             </Button>
-                            {product.status !== 'archived' && <Button size="sm" variant="ghost" onClick={() => void handleArchive(product)} title={t('products.archive')}><Archive className="h-4 w-4" /><span className="sr-only">{t('products.archive')}</span></Button>}
+                            {product.status !== 'archived' && <Button size="icon" variant="ghost" onClick={() => void handleArchive(product)} title={t('products.archive')} aria-label={t('products.archive')}><Archive className="h-4 w-4" /></Button>}
                           </div>
                         </td>
                       </tr>
