@@ -23,6 +23,7 @@ import { profileLocalizationDictionaries } from '@/lib/profile-localization-i18n
 import { productMenuDictionaries } from '@/lib/product-menu-i18n'
 import { productCsvDictionaries } from '@/lib/product-csv-i18n'
 import { productPhotoSessionDictionaries } from '@/lib/product-photo-session-i18n'
+import { productChannelComparisonDictionaries } from '@/lib/product-channel-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -51,6 +52,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...productInventoryUxDictionaries.en,
     ...productCsvDictionaries.en,
     ...productPhotoSessionDictionaries.en,
+    ...productChannelComparisonDictionaries.en,
     ...pageUtilitiesDictionaries.en,
     'nav.dashboard': 'Dashboard',
     'nav.income': 'Income',
@@ -539,6 +541,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...productInventoryUxDictionaries.de,
     ...productCsvDictionaries.de,
     ...productPhotoSessionDictionaries.de,
+    ...productChannelComparisonDictionaries.de,
     ...pageUtilitiesDictionaries.de,
     ...businessModuleDictionaries.de,
     'nav.dashboard': 'Dashboard',
@@ -1027,6 +1030,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...productInventoryUxDictionaries.ru,
     ...productCsvDictionaries.ru,
     ...productPhotoSessionDictionaries.ru,
+    ...productChannelComparisonDictionaries.ru,
     ...pageUtilitiesDictionaries.ru,
     ...businessModuleDictionaries.ru,
     'nav.dashboard': 'Панель',
@@ -1515,6 +1519,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...productInventoryUxDictionaries.tr,
     ...productCsvDictionaries.tr,
     ...productPhotoSessionDictionaries.tr,
+    ...productChannelComparisonDictionaries.tr,
     ...pageUtilitiesDictionaries.tr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
@@ -1810,6 +1815,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...productInventoryUxDictionaries.uk,
     ...productCsvDictionaries.uk,
     ...productPhotoSessionDictionaries.uk,
+    ...productChannelComparisonDictionaries.uk,
     ...pageUtilitiesDictionaries.uk,
     ...businessModuleDictionaries.en,
     ...businessModuleDictionaries.ru,
@@ -1931,6 +1937,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...productInventoryUxDictionaries.pl,
     ...productCsvDictionaries.pl,
     ...productPhotoSessionDictionaries.pl,
+    ...productChannelComparisonDictionaries.pl,
     ...pageUtilitiesDictionaries.pl,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Panel',
@@ -2051,6 +2058,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     ...productInventoryUxDictionaries.fr,
     ...productCsvDictionaries.fr,
     ...productPhotoSessionDictionaries.fr,
+    ...productChannelComparisonDictionaries.fr,
     ...pageUtilitiesDictionaries.fr,
     ...businessModuleDictionaries.en,
     'nav.dashboard': 'Tableau de bord',

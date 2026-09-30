@@ -18,6 +18,8 @@ import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory 
 import { ProductPhotoImportDialog } from '@/components/products/product-photo-import-dialog'
 import { ProductMenuBuilderDialog } from '@/components/products/product-menu-builder-dialog'
 import { ProductCsvDialog } from '@/components/products/product-csv-dialog'
+import { ProductChannelComparisonDialog } from '@/components/products/product-channel-comparison-dialog'
+import type { SupportedComparisonProvider } from '@/lib/product-channel-comparison'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -570,6 +572,10 @@ export default function ProductsPage() {
     () => visibleProducts.filter((product) => selectedProductIds.has(product.id)),
     [visibleProducts, selectedProductIds]
   )
+  const connectedComparisonProviders = useMemo(
+    () => (['woocommerce', 'shopify'] as const).filter((provider) => storeConnections[provider]?.status === 'connected') as SupportedComparisonProvider[],
+    [storeConnections]
+  )
   const selectedMenuProducts = useMemo(() => selectedProducts.map((product) => ({
     id: product.id,
     name: product.name,
@@ -1107,6 +1113,7 @@ export default function ProductsPage() {
           <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3">
             <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
             <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
+            <ProductChannelComparisonDialog companyId={currentCompany.id} connectedProviders={connectedComparisonProviders} onChanged={loadProducts} />
             <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
               {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
               {t('woocommerce.exportAll')}
@@ -1119,6 +1126,7 @@ export default function ProductsPage() {
       <DesktopPageUtilities title={t('pageUtilities.title')}>
         <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
         <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
+        <ProductChannelComparisonDialog companyId={currentCompany.id} connectedProviders={connectedComparisonProviders} onChanged={loadProducts} />
         <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
         <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
         <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
