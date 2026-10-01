@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { analyzeAssistantRequest, buildAssistantChatStorageKey, buildAssistantRequestEnvelope, getAssistantErrorKey, getAssistantPeriodRange } from './assistant-context.ts'
+import { analyzeAssistantRequest, buildAssistantChatStorageKey, buildAssistantRequestEnvelope, classifyAssistantScope, getAssistantErrorKey, getAssistantPeriodRange, getAssistantScopeResponse } from './assistant-context.ts'
 
 test('selects only the minimum read-only tool needed for supported user questions', () => {
   assert.deepEqual(analyzeAssistantRequest('What is my current workspace?').tools, ['current_workspace'])
@@ -24,6 +24,47 @@ test('recognizes aggregate income questions in all supported UI languages', () =
     'Quel est le revenu total ce mois-ci ?',
   ]) {
     assert.deepEqual(analyzeAssistantRequest(question).tools, ['income_summary'])
+  }
+})
+
+test('keeps Leonety questions in scope and rejects unrelated questions without a provider call', () => {
+  for (const question of [
+    'How do I enable notifications?',
+    'Where do I create an invoice?',
+    'How do I add a product?',
+    'What workspace am I using?',
+    'Was ist Kassenbuch?',
+    'Как включить уведомления?',
+    'Fatura nerede oluşturulur?',
+    'Як додати товар?',
+    'Gdzie utworzyć fakturę?',
+    'Comment activer les notifications ?',
+  ]) {
+    assert.equal(classifyAssistantScope([{ role: 'user', content: question }]), 'leonety')
+  }
+
+  assert.equal(classifyAssistantScope([{ role: 'user', content: 'Write a poem about the ocean.' }]), 'out_of_scope')
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'Write a poem about the ocean.' },
+    { role: 'assistant', content: getAssistantScopeResponse('en', 'out_of_scope') },
+    { role: 'user', content: 'Write a poem about the ocean.' },
+  ]), 'out_of_scope')
+})
+
+test('allows a short follow-up only after an earlier Leonety question', () => {
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'Where do I create an invoice?' },
+    { role: 'assistant', content: 'Open Invoices.' },
+    { role: 'user', content: 'And then?' },
+  ]), 'leonety')
+  assert.equal(classifyAssistantScope([{ role: 'user', content: 'And then?' }]), 'out_of_scope')
+})
+
+test('handles greetings locally in every supported locale', () => {
+  assert.equal(classifyAssistantScope([{ role: 'user', content: 'Hello!' }]), 'greeting')
+  for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
+    assert.ok(getAssistantScopeResponse(locale, 'greeting').length > 0)
+    assert.ok(getAssistantScopeResponse(locale, 'out_of_scope').length > 0)
   }
 })
 

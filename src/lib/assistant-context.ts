@@ -11,6 +11,7 @@ export const assistantToolNames = [
 export type AssistantToolName = typeof assistantToolNames[number]
 export type AssistantBlockedReason = 'secrets' | 'arbitrary_sql' | 'sensitive_personal_data'
 export type AssistantPeriod = 'current_month' | 'current_year'
+export type AssistantRequestScope = 'leonety' | 'greeting' | 'out_of_scope'
 
 export interface AssistantRequestAnalysis {
   tools: AssistantToolName[]
@@ -91,6 +92,27 @@ const sensitivePersonalPatterns = [
   /(zeige|покажи|дай|göster|pokaż|affiche).{0,60}(steuer-id|sozialversicherung|паспорт|социальн|kimlik|pasaport|dowód|passeport|sécurité sociale)/iu,
 ]
 
+const leonetyScopePatterns = [
+  /\bleonety\b/i,
+  /\b(dashboard|workspace|company|income|expense|transaction|invoice|client|contract|product|inventory|stock|employee|shift|time tracking|kassenbuch|cashbook|notification|integration|settings|profile|woocommerce)\b/i,
+  /\b(dashboard|arbeitsbereich|unternehmen|einnahmen|ausgaben|transaktion|rechnung|kunde|vertrag|produkt|inventar|lager|mitarbeiter|schicht|zeiterfassung|kassenbuch|benachrichtigung|integration|einstellungen|profil)\b/iu,
+  /(рабоч(ая|ее)|компан|доход|расход|транзакц|сч[её]т|клиент|договор|товар|продукт|склад|сотрудник|смен|уч[её]т времени|кассов|уведомлен|интеграц|настройк|профил)/iu,
+  /(çalışma alan|şirket|gelir|gider|işlem|fatura|müşteri|sözleşme|ürün|envanter|stok|çalışan|vardiya|zaman takibi|kasa defteri|bildirim|entegrasyon|ayarlar|profil)/iu,
+  /(робоч(а|ий)|компан|дохід|витрат|транзакц|рахунок|клієнт|договір|товар|продукт|склад|працівник|змін|облік часу|касов|сповіщенн|інтеграц|налаштуван|профіл)/iu,
+  /(obszar roboczy|firma|przychód|wydatek|transakcj|faktur|klient|umow|produkt|magazyn|pracownik|zmian|ewidencj[aę] czasu|księga kasowa|powiadomien|integracj|ustawien|profil)/iu,
+  /(espace de travail|entreprise|revenu|dépense|transaction|facture|client|contrat|produit|inventaire|stock|employé|équipe|suivi du temps|livre de caisse|notification|intégration|paramètres|profil)/iu,
+]
+
+const greetingPatterns = [
+  /^(hi|hello|hey|good (morning|afternoon|evening))[!.\s]*$/i,
+  /^(hallo|guten (morgen|tag|abend)|привет|здравствуйте|merhaba|selam|привіт|добрий день|cześć|dzień dobry|bonjour|salut)[!.\s]*$/iu,
+]
+
+const followUpPatterns = [
+  /^(and|then|next|how|where|why|what about|can i|show me)\b/i,
+  /^(und|dann|weiter|wie|wo|warum|а|и|тогда|дальше|как|где|почему|peki|sonra|nasıl|nerede|neden|тоді|далі|як|де|чому|a|następnie|dalej|jak|gdzie|dlaczego|et|ensuite|comment|où|pourquoi)\b/iu,
+]
+
 function matchesAny(message: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(message))
 }
@@ -119,6 +141,25 @@ export function analyzeAssistantRequest(message: string): AssistantRequestAnalys
     period: matchesAny(text, yearPatterns) ? 'current_year' : 'current_month',
     blockedReason,
   }
+}
+
+function isLeonetyScopedMessage(message: string) {
+  const analysis = analyzeAssistantRequest(message)
+  return analysis.tools.length > 0 || matchesAny(message, leonetyScopePatterns)
+}
+
+export function classifyAssistantScope(messages: Array<{ role: 'user' | 'assistant'; content: string }>): AssistantRequestScope {
+  const userMessages = messages.filter((message) => message.role === 'user')
+  const current = userMessages.at(-1)?.content.trim().slice(0, 1800) ?? ''
+  if (isLeonetyScopedMessage(current)) return 'leonety'
+  if (matchesAny(current, greetingPatterns)) return 'greeting'
+
+  const isShortFollowUp = current.length <= 160 && matchesAny(current, followUpPatterns)
+  if (isShortFollowUp && userMessages.slice(0, -1).some((message) => isLeonetyScopedMessage(message.content))) {
+    return 'leonety'
+  }
+
+  return 'out_of_scope'
 }
 
 export function getAssistantPeriodRange(period: AssistantPeriod, now = new Date(), timeZone = 'UTC') {
@@ -229,4 +270,39 @@ const blockedResponses: Record<Locale, Record<AssistantBlockedReason, string>> =
 
 export function getBlockedAssistantResponse(locale: Locale, reason: AssistantBlockedReason) {
   return blockedResponses[locale][reason]
+}
+
+const scopeResponses: Record<Locale, Record<Exclude<AssistantRequestScope, 'leonety'>, string>> = {
+  en: {
+    greeting: 'Hello! Ask me a question about Leonety or your authorized workspace data.',
+    out_of_scope: "I didn't understand the question. Please ask another question about Leonety.",
+  },
+  de: {
+    greeting: 'Hallo! Stelle mir eine Frage zu Leonety oder zu deinen freigegebenen Workspace-Daten.',
+    out_of_scope: 'Ich habe die Frage nicht verstanden. Bitte stelle eine andere Frage zu Leonety.',
+  },
+  ru: {
+    greeting: 'Здравствуйте! Задайте вопрос о Leonety или доступных вам данных рабочего пространства.',
+    out_of_scope: 'Я не понял вопрос. Пожалуйста, задайте другой вопрос о Leonety.',
+  },
+  tr: {
+    greeting: 'Merhaba! Leonety veya erişiminiz olan çalışma alanı verileri hakkında bir soru sorun.',
+    out_of_scope: 'Soruyu anlamadım. Lütfen Leonety hakkında başka bir soru sorun.',
+  },
+  uk: {
+    greeting: 'Вітаю! Поставте запитання про Leonety або доступні вам дані робочого простору.',
+    out_of_scope: 'Я не зрозумів запитання. Будь ласка, поставте інше запитання про Leonety.',
+  },
+  pl: {
+    greeting: 'Dzień dobry! Zapytaj o Leonety lub dane obszaru roboczego, do których masz dostęp.',
+    out_of_scope: 'Nie rozumiem pytania. Zadaj inne pytanie dotyczące Leonety.',
+  },
+  fr: {
+    greeting: 'Bonjour ! Posez une question sur Leonety ou sur les données autorisées de votre espace de travail.',
+    out_of_scope: "Je n'ai pas compris la question. Posez une autre question concernant Leonety.",
+  },
+}
+
+export function getAssistantScopeResponse(locale: Locale, scope: Exclude<AssistantRequestScope, 'leonety'>) {
+  return scopeResponses[locale][scope]
 }

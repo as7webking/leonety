@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { AiProviderError, generateAiText, getAiConfigurationStatus } from '@/lib/ai-provider'
-import { analyzeAssistantRequest, buildAssistantRequestEnvelope, getBlockedAssistantResponse } from '@/lib/assistant-context'
+import {
+  analyzeAssistantRequest,
+  buildAssistantRequestEnvelope,
+  classifyAssistantScope,
+  getAssistantScopeResponse,
+  getBlockedAssistantResponse,
+} from '@/lib/assistant-context'
 import { AssistantWorkspaceAccessError, loadAuthorizedAssistantData } from '@/lib/assistant-data-server'
 import { createAssistantRateLimiter } from '@/lib/assistant-rate-limit'
 import { assistantRequestSchema } from '@/lib/assistant-request'
@@ -42,6 +48,11 @@ export async function POST(request: Request) {
     const requestAnalysis = analyzeAssistantRequest(lastUserMessage)
     if (requestAnalysis.blockedReason) {
       return NextResponse.json({ answer: getBlockedAssistantResponse(locale, requestAnalysis.blockedReason) })
+    }
+
+    const scope = classifyAssistantScope(parsed.data.messages)
+    if (scope !== 'leonety') {
+      return NextResponse.json({ answer: getAssistantScopeResponse(locale, scope) })
     }
 
     const aiStatus = getAiConfigurationStatus()
