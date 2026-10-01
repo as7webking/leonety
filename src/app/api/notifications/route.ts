@@ -67,6 +67,9 @@ export async function POST(request: Request) {
 
   const auth = await requireOwnedCompany(parsed.data.companyId)
   if ('error' in auth) return auth.error
+  if (!isWebPushConfigured()) {
+    return NextResponse.json({ error: 'configuration_missing' }, { status: 503 })
+  }
 
   const now = new Date().toISOString()
   const { data, error } = await auth.adminSupabase

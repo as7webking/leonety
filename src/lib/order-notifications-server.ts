@@ -22,24 +22,56 @@ export interface SystemNotificationPayload {
   url: string
 }
 
+function normalizeVapidSubject(value: string) {
+  const subject = value.trim()
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(subject) ? `mailto:${subject}` : subject
+}
+
+function hasValidVapidKey(value: string, expectedBytes: number) {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) return false
+  try {
+    return Buffer.from(value, 'base64url').length === expectedBytes
+  } catch {
+    return false
+  }
+}
+
+function hasValidVapidSubject(value: string) {
+  try {
+    const protocol = new URL(value).protocol
+    return protocol === 'mailto:' || protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function getVapidConfiguration() {
   const publicKey = process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim()
   const privateKey = process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim()
-  const subject = process.env.WEB_PUSH_SUBJECT?.trim()
-  if (!publicKey || !privateKey || !subject) throw new Error('web_push_not_configured')
+  const subject = normalizeVapidSubject(process.env.WEB_PUSH_SUBJECT?.trim() || '')
+  if (
+    !publicKey
+    || !privateKey
+    || !hasValidVapidKey(publicKey, 65)
+    || !hasValidVapidKey(privateKey, 32)
+    || !hasValidVapidSubject(subject)
+  ) {
+    throw new Error('web_push_not_configured')
+  }
   return { publicKey, privateKey, subject }
 }
 
 export function isWebPushConfigured() {
-  return Boolean(
-    process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim()
-    && process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim()
-    && process.env.WEB_PUSH_SUBJECT?.trim()
-  )
+  try {
+    getVapidConfiguration()
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function getWebPushPublicKey() {
-  return process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() || ''
+  return isWebPushConfigured() ? process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() || '' : ''
 }
 
 export async function sendWebPushNotification(device: WebPushDeviceRow, payload: IncomingOrderPushPayload | SystemNotificationPayload) {

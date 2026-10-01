@@ -5,7 +5,7 @@ import test from 'node:test'
 const settingsRoute = readFileSync(new URL('../app/api/notifications/route.ts', import.meta.url), 'utf8')
 const testRoute = readFileSync(new URL('../app/api/notifications/test/route.ts', import.meta.url), 'utf8')
 const pushServer = readFileSync(new URL('./order-notifications-server.ts', import.meta.url), 'utf8')
-const migration = readFileSync(new URL('../../supabase/migrations/20260920153440_incoming_order_notifications.sql', import.meta.url), 'utf8')
+const migration = readFileSync(new URL('../../supabase/migrations/leonety_consolidated_schema.sql', import.meta.url), 'utf8')
 
 test('authorizes every notification operation against the authenticated workspace owner', () => {
   assert.match(settingsRoute, /requireOwnedCompany\(parsed\.data\.companyId\)/)
@@ -38,4 +38,6 @@ test('requires complete server VAPID configuration and never returns subscriptio
   assert.doesNotMatch(settingsRoute, /select\([^\n]*push_endpoint/)
   assert.doesNotMatch(settingsRoute, /select\([^\n]*push_p256dh/)
   assert.doesNotMatch(settingsRoute, /select\([^\n]*push_auth/)
+  assert.match(pushServer, /mailto:/)
+  assert.match(pushServer, /hasValidVapidKey/)
 })

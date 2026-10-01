@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { isPermanentPushFailure } from '@/lib/order-notifications'
-import { sendSystemNotificationTest } from '@/lib/order-notifications-server'
+import { isWebPushConfigured, sendSystemNotificationTest } from '@/lib/order-notifications-server'
 
 export const runtime = 'nodejs'
 
@@ -17,6 +17,9 @@ export async function POST(request: Request) {
 
   const auth = await requireOwnedCompany(parsed.data.companyId)
   if ('error' in auth) return auth.error
+  if (!isWebPushConfigured()) {
+    return NextResponse.json({ error: 'configuration_missing' }, { status: 503 })
+  }
 
   const { data: device, error } = await auth.adminSupabase
     .from('order_notification_devices')

@@ -12,6 +12,8 @@ test('reports actual permission and current-device subscription states', () => {
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'disabled' }), 'notEnabled')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'invalid' }), 'error')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'enabled' }), 'enabled')
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'default', browserSubscribed: false, serverConfigured: false }), 'serverConfigurationMissing')
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'denied', browserSubscribed: false, serverConfigured: false }), 'blocked')
 })
 
 test('reports invalid server registrations and failed state loading as errors', () => {
@@ -30,5 +32,5 @@ test('does not claim Web Push support for unsupported browsers or non-installed 
     permission: 'granted',
     browserSubscribed: true,
     serverStatus: 'enabled',
-  }), 'unsupported')
+  }), 'installationRequired')
 })

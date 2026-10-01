@@ -53,22 +53,27 @@ export default function NotificationSettingsPage() {
     setError('')
     setLoadFailed(false)
 
-    const [response, subscription] = await Promise.all([
-      fetch(`/api/notifications?companyId=${encodeURIComponent(companyId)}&installationId=${encodeURIComponent(id)}`, { cache: 'no-store' }),
-      getCurrentPushSubscription().catch(() => null),
-    ])
-    const payload = await response.json().catch(() => ({})) as NotificationSettingsResponse & { error?: string }
+    try {
+      const [response, subscription] = await Promise.all([
+        fetch(`/api/notifications?companyId=${encodeURIComponent(companyId)}&installationId=${encodeURIComponent(id)}`, { cache: 'no-store' }),
+        getCurrentPushSubscription().catch(() => null),
+      ])
+      const payload = await response.json().catch(() => ({})) as NotificationSettingsResponse & { error?: string }
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setLoadFailed(true)
+        setError(payload.error === 'migration_required'
+          ? t('systemNotifications.migrationRequired')
+          : t('systemNotifications.enableFailed'))
+        return
+      }
+
+      setSettings(payload)
+      setBrowserSubscribed(Boolean(subscription))
+    } catch {
       setLoadFailed(true)
-      setError(payload.error === 'migration_required'
-        ? t('systemNotifications.migrationRequired')
-        : t('systemNotifications.enableFailed'))
-      return
+      setError(t('systemNotifications.enableFailed'))
     }
-
-    setSettings(payload)
-    setBrowserSubscribed(Boolean(subscription))
   }, [companyId, t])
 
   useEffect(() => {
@@ -103,6 +108,7 @@ export default function NotificationSettingsPage() {
     permission,
     browserSubscribed,
     serverStatus: settings?.device?.status,
+    serverConfigured: settings?.configured,
     loadFailed,
   })
   const enabled = viewStatus === 'enabled'
@@ -121,7 +127,10 @@ export default function NotificationSettingsPage() {
         return
       }
 
-      const subscription = await createCurrentPushSubscription(settings.vapidPublicKey)
+      const subscription = await createCurrentPushSubscription(
+        settings.vapidPublicKey,
+        settings.device?.status === 'invalid'
+      )
       const response = await fetch('/api/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -134,7 +143,14 @@ export default function NotificationSettingsPage() {
           subscription: subscription.toJSON(),
         }),
       })
-      if (!response.ok) throw new Error('registration_failed')
+      const payload = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) {
+        if (payload.error === 'configuration_missing') {
+          setError(t('systemNotifications.configurationRequired'))
+          return
+        }
+        throw new Error('registration_failed')
+      }
 
       setMessage(t('systemNotifications.enabledSuccess'))
       await load(installationId)
@@ -174,18 +190,26 @@ export default function NotificationSettingsPage() {
     setError('')
     setMessage('')
 
-    const response = await fetch('/api/notifications/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId, installationId }),
-    })
+    try {
+      const response = await fetch('/api/notifications/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, installationId }),
+      })
+      const payload = await response.json().catch(() => ({})) as { error?: string }
 
-    if (response.ok) setMessage(t('systemNotifications.testSent'))
-    else {
+      if (response.ok) setMessage(t('systemNotifications.testSent'))
+      else {
+        setError(payload.error === 'configuration_missing'
+          ? t('systemNotifications.configurationRequired')
+          : t('systemNotifications.testFailed'))
+        await load(installationId)
+      }
+    } catch {
       setError(t('systemNotifications.testFailed'))
-      await load(installationId)
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
   }
 
   if (!currentCompany) return null
@@ -219,7 +243,7 @@ export default function NotificationSettingsPage() {
           {message && <p className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</p>}
           {error && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
           {capability?.iosInstallRequired && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('systemNotifications.iosInstall')}</p>}
-          {capability && !capability.supported && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('systemNotifications.unsupported')}</p>}
+          {capability && !capability.supported && !capability.iosInstallRequired && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('systemNotifications.unsupported')}</p>}
           {settings && !settings.configured && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('systemNotifications.configurationRequired')}</p>}
 
           <div className="rounded-md bg-slate-50 p-4">

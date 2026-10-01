@@ -7,23 +7,36 @@ export interface WebPushCapability {
   secureContextRequired: boolean
 }
 
-export type WebPushViewStatus = 'notEnabled' | 'permissionRequired' | 'subscriptionMissing' | 'enabled' | 'blocked' | 'unsupported' | 'error'
+export type WebPushViewStatus =
+  | 'notEnabled'
+  | 'permissionRequired'
+  | 'subscriptionMissing'
+  | 'enabled'
+  | 'blocked'
+  | 'unsupported'
+  | 'installationRequired'
+  | 'serverConfigurationMissing'
+  | 'error'
 
 export function resolveWebPushViewStatus({
   capability,
   permission,
   browserSubscribed,
   serverStatus,
+  serverConfigured = true,
   loadFailed = false,
 }: {
   capability: WebPushCapability | null
   permission: NotificationPermission
   browserSubscribed: boolean
   serverStatus?: 'enabled' | 'invalid' | 'disabled'
+  serverConfigured?: boolean
   loadFailed?: boolean
 }): WebPushViewStatus {
-  if (!capability?.supported || capability.iosInstallRequired) return 'unsupported'
+  if (capability?.iosInstallRequired) return 'installationRequired'
+  if (!capability?.supported) return 'unsupported'
   if (permission === 'denied') return 'blocked'
+  if (!serverConfigured) return 'serverConfigurationMissing'
   if (loadFailed || serverStatus === 'invalid') return 'error'
   if (permission === 'granted' && browserSubscribed && serverStatus === 'enabled') return 'enabled'
   if (permission === 'default') return 'permissionRequired'
@@ -33,6 +46,7 @@ export function resolveWebPushViewStatus({
 
 function isIosDevice() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
+    || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)
 }
 
 function isStandalone() {
@@ -42,7 +56,9 @@ function isStandalone() {
 
 export function getWebPushCapability(): WebPushCapability {
   const secureContextRequired = !window.isSecureContext
-  const supported = !secureContextRequired
+  const iosInstallRequired = !secureContextRequired && isIosDevice() && !isStandalone()
+  const supported = !iosInstallRequired
+    && !secureContextRequired
     && 'serviceWorker' in navigator
     && 'PushManager' in window
     && 'Notification' in window
@@ -50,21 +66,26 @@ export function getWebPushCapability(): WebPushCapability {
   return {
     supported,
     secureContextRequired,
-    iosInstallRequired: supported && isIosDevice() && !isStandalone(),
+    iosInstallRequired,
   }
 }
 
 export function getPushInstallationId() {
-  const saved = window.localStorage.getItem(INSTALLATION_KEY)
-    ?? window.localStorage.getItem(LEGACY_ORDER_INSTALLATION_KEY)
+  let saved: string | null = null
+  try {
+    saved = window.localStorage.getItem(INSTALLATION_KEY)
+      ?? window.localStorage.getItem(LEGACY_ORDER_INSTALLATION_KEY)
+  } catch {
+    // A device can still use the page when browser storage is unavailable.
+  }
 
   if (saved && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(saved)) {
-    window.localStorage.setItem(INSTALLATION_KEY, saved)
+    try { window.localStorage.setItem(INSTALLATION_KEY, saved) } catch { /* Keep the existing id in memory. */ }
     return saved
   }
 
   const installationId = crypto.randomUUID()
-  window.localStorage.setItem(INSTALLATION_KEY, installationId)
+  try { window.localStorage.setItem(INSTALLATION_KEY, installationId) } catch { /* Registration remains usable for this page session. */ }
   return installationId
 }
 
@@ -96,13 +117,13 @@ export async function getCurrentPushSubscription() {
   return registration?.pushManager.getSubscription() ?? null
 }
 
-export async function createCurrentPushSubscription(vapidPublicKey: string) {
+export async function createCurrentPushSubscription(vapidPublicKey: string, forceNew = false) {
   const expectedKey = base64UrlToBytes(vapidPublicKey)
   await navigator.serviceWorker.register('/sw.js', { scope: '/' })
   const registration = await navigator.serviceWorker.ready
 
   const existing = await registration.pushManager.getSubscription()
-  if (existing && keysMatch(existing.options.applicationServerKey, expectedKey)) return existing
+  if (existing && !forceNew && keysMatch(existing.options.applicationServerKey, expectedKey)) return existing
   if (existing) await existing.unsubscribe()
 
   return registration.pushManager.subscribe({

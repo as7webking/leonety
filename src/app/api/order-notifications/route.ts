@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireOwnedCompany } from '@/app/api/woocommerce/_utils'
-import { getWebPushPublicKey } from '@/lib/order-notifications-server'
+import { getWebPushPublicKey, isWebPushConfigured } from '@/lib/order-notifications-server'
 import { isOrderNotificationMigrationError, registerOrderDeviceSchema, updateOrderNotificationSchema } from '@/lib/order-notifications'
 
 export const runtime = 'nodejs'
@@ -60,6 +60,9 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
   const auth = await requireOwnedCompany(parsed.data.companyId)
   if ('error' in auth) return auth.error
+  if (!isWebPushConfigured()) {
+    return NextResponse.json({ error: 'configuration_missing' }, { status: 503 })
+  }
 
   const now = new Date().toISOString()
   const { data: device, error: deviceError } = await auth.adminSupabase.from('order_notification_devices').upsert({
