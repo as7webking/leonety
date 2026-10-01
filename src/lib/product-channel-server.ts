@@ -63,18 +63,28 @@ async function fetchWooProducts(adminSupabase: AdminClient, companyId: string) {
   return products.map((product): ExternalChannelProduct => {
     const barcodeMeta = product.meta_data?.find((entry) => entry.key === 'barcode')
     const barcode = typeof barcodeMeta?.value === 'string' ? barcodeMeta.value.trim() : ''
+    const price = finiteNumber(product.regular_price || product.price)
+    const stock = finiteNumber(product.stock_quantity)
     return {
       id: String(product.id),
       name: product.name?.trim() || `WooCommerce #${product.id}`,
       sku: product.sku?.trim() || null,
       barcode: barcode || null,
-      price: finiteNumber(product.regular_price || product.price),
-      stock: finiteNumber(product.stock_quantity),
+      price,
+      stock,
       category: product.categories?.[0]?.name?.trim() || null,
       image: product.images?.[0]?.src?.trim() || null,
       description: htmlToText(product.description || product.short_description) || null,
       status: product.status === 'draft' || product.status === 'private' ? 'inactive' : 'active',
-      supportedFields: ['name', 'sku', ...(barcodeMeta ? ['barcode' as const] : []), 'price', 'stock', 'category', 'image'],
+      supportedFields: [
+        'name',
+        'sku',
+        ...(barcodeMeta ? ['barcode' as const] : []),
+        ...(price !== null ? ['price' as const] : []),
+        ...(stock !== null ? ['stock' as const] : []),
+        'category',
+        'image',
+      ],
     }
   })
 }
@@ -84,18 +94,29 @@ async function fetchShopifyProducts(adminSupabase: AdminClient, companyId: strin
   const products = await importShopifyProducts(connection)
   return products.map((product): ExternalChannelProduct => {
     const mapped = mapShopifyProductToLeonety(companyId, product)
+    const variants = Array.isArray(product.variants) ? product.variants : []
+    const scalarVariant = variants.length === 1 ? variants[0] : null
+    const price = scalarVariant ? finiteNumber(scalarVariant.price) : null
+    const stock = scalarVariant ? finiteNumber(scalarVariant.inventory_quantity) : null
     return {
       id: String(product.id),
       name: mapped.name,
-      sku: mapped.sku,
-      barcode: mapped.barcode,
-      price: finiteNumber(mapped.selling_price),
-      stock: finiteNumber(mapped.current_stock),
+      sku: scalarVariant?.sku?.trim() || null,
+      barcode: scalarVariant?.barcode?.trim() || null,
+      price,
+      stock,
       category: mapped.category,
       image: mapped.image_url,
       description: mapped.description,
       status: mapped.status === 'inactive' ? 'inactive' : 'active',
-      supportedFields: ['name', 'sku', 'barcode', 'price', 'stock', 'category', 'image'],
+      supportedFields: [
+        'name',
+        ...(scalarVariant ? ['sku' as const, 'barcode' as const] : []),
+        ...(price !== null ? ['price' as const] : []),
+        ...(stock !== null ? ['stock' as const] : []),
+        'category',
+        'image',
+      ],
     }
   })
 }

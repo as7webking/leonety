@@ -220,6 +220,7 @@ export async function POST(request: Request) {
           const mapping = data.mappings.find((entry) => entry.productId === local.id && entry.externalProductId === external.id)
           if (!mapping) throw new Error('link_required_before_pull')
           const fields = item.fields.filter((field) => external.supportedFields.includes(field))
+          if (fields.length === 0) throw new Error('product_fields_required')
           const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
           if (fields.includes('name')) update.name = external.name
           if (fields.includes('sku')) update.sku = external.sku

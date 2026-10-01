@@ -52,6 +52,14 @@ test('treats duplicate SKU candidates as conflict and name similarity only as a 
   assert.equal(suggestionRows[0].matchReason, 'name_suggestion')
 })
 
+test('treats SKU and barcode pointing at different provider listings as a conflict', () => {
+  const skuMatch = { ...externalBase, id:'101',barcode:'other-barcode' }
+  const barcodeMatch = { ...externalBase, id:'102',sku:'other-sku' }
+  const rows = buildProductChannelComparison([localBase], [skuMatch, barcodeMatch], [])
+  assert.equal(rows[0].status, 'conflict')
+  assert.deepEqual(rows[0].candidateExternalIds, ['101', '102'])
+})
+
 test('surfaces provider sync failures without losing the existing mapping', () => {
   const rows = buildProductChannelComparison([localBase], [externalBase], [{ productId:localBase.id,externalProductId:externalBase.id,syncStatus:'failed',errorMessage:'timeout' }])
   assert.equal(rows[0].status, 'sync_error')
@@ -67,11 +75,24 @@ test('classifies provider timeout and rate-limit failures for retryable UI state
 test('channel API authorizes workspace, keeps credentials server-only and unlink deletes only mapping', () => {
   const route = readFileSync(new URL('../app/api/products/channel-comparison/route.ts', import.meta.url), 'utf8')
   const server = readFileSync(new URL('./product-channel-server.ts', import.meta.url), 'utf8')
+  const dialog = readFileSync(new URL('../components/products/product-channel-comparison-dialog.tsx', import.meta.url), 'utf8')
   assert.match(route, /requireOwnedCompany\(companyId\)/)
   assert.match(server, /decryptSecret/)
   assert.doesNotMatch(route, /consumer_key|consumer_secret|access_token/)
   assert.match(route, /\.from\('product_syncs'\)[\s\S]*?\.delete\(\)/)
   assert.doesNotMatch(route, /\.from\('products'\)\s*\.delete\(\)[\s\S]*?action === 'unlink'/)
+  assert.match(route, /if \(fields\.length === 0\) throw new Error\('product_fields_required'\)/)
+  assert.match(server, /stock !== null \? \['stock' as const\] : \[\]/)
+  assert.match(server, /variants\.length === 1 \? variants\[0\] : null/)
+  assert.match(dialog, /pullAvailableFields\.map/)
+})
+
+test('push adapters update mapped external ids instead of creating an automatic sync loop', () => {
+  const wooRoute = readFileSync(new URL('../app/api/woocommerce/products/sync/route.ts', import.meta.url), 'utf8')
+  const storeProducts = readFileSync(new URL('./store-products.ts', import.meta.url), 'utf8')
+  assert.match(wooRoute, /existingWooId[\s\S]*?method: 'PUT'/)
+  assert.match(storeProducts, /externalProductId[\s\S]*?method: externalProductId \? 'PUT' : 'POST'/)
+  assert.match(wooRoute, /external_product_id/)
 })
 
 test('channel UI labels cover all seven locales', () => {

@@ -56,6 +56,7 @@ export function ProductChannelComparisonDialog({ companyId, connectedProviders, 
   const [candidateSelections, setCandidateSelections] = useState<Record<string, string>>({})
   const [pullRows, setPullRows] = useState<ProductChannelComparisonRow[]>([])
   const [pullFields, setPullFields] = useState<Set<ComparableProductField>>(new Set())
+  const [pullAvailableFields, setPullAvailableFields] = useState<ComparableProductField[]>([])
   const [ownershipDrafts, setOwnershipDrafts] = useState<Record<string, Partial<Record<ComparableProductField, ProductFieldOwner>>>>({})
   useBodyScrollLock(open)
 
@@ -162,9 +163,12 @@ export function ProductChannelComparisonDialog({ companyId, connectedProviders, 
       return
     }
     setPullRows(eligible)
-    const fields = new Set<ComparableProductField>()
-    for (const row of eligible) for (const field of row.differences) fields.add(field)
-    setPullFields(fields.size > 0 ? fields : new Set(['name', 'price', 'stock']))
+    const availableFields = comparableProductFields.filter((field) => eligible.every((row) => row.external?.supportedFields.includes(field)))
+    const differentFields = new Set<ComparableProductField>()
+    for (const row of eligible) for (const field of row.differences) if (availableFields.includes(field)) differentFields.add(field)
+    const suggestedFields = availableFields.filter((field) => ['name', 'price', 'stock'].includes(field))
+    setPullAvailableFields(availableFields)
+    setPullFields(differentFields.size > 0 ? differentFields : new Set(suggestedFields))
   }
 
   const confirmPull = async () => {
@@ -173,6 +177,7 @@ export function ProductChannelComparisonDialog({ companyId, connectedProviders, 
     if (pullRows.length > 1 && !window.confirm(interpolate(t('productChannel.confirmAction'), { count: pullRows.length }))) return
     await postAction('pull', pullRows.map((row) => ({ productId: row.local!.id, externalProductId: row.external!.id, fields })))
     setPullRows([])
+    setPullAvailableFields([])
   }
 
   const linkRow = async (row: ProductChannelComparisonRow) => {
@@ -263,7 +268,7 @@ export function ProductChannelComparisonDialog({ companyId, connectedProviders, 
               </>}
             </>}
           </div>
-          {pullRows.length > 0 && <div className="border-t bg-slate-50 p-4 sm:p-5"><p className="font-medium">{t('productChannel.selectFields')}</p><div className="mt-2 flex flex-wrap gap-3">{comparableProductFields.map((field) => <label key={field} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={pullFields.has(field)} onChange={(event) => setPullFields((current) => { const next = new Set(current); if (event.target.checked) next.add(field); else next.delete(field); return next })} />{fieldLabel(field)}</label>)}</div><div className="mt-3 flex flex-wrap gap-2"><Button onClick={() => void confirmPull()} disabled={pullFields.size === 0 || busy}>{busy && <Loader2 className="animate-spin" />}{t('productChannel.confirmPull')}</Button><Button variant="outline" onClick={() => setPullRows([])} disabled={busy}>{t('productChannel.cancel')}</Button></div></div>}
+          {pullRows.length > 0 && <div className="border-t bg-slate-50 p-4 sm:p-5"><p className="font-medium">{t('productChannel.selectFields')}</p><div className="mt-2 flex flex-wrap gap-3">{pullAvailableFields.map((field) => <label key={field} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={pullFields.has(field)} onChange={(event) => setPullFields((current) => { const next = new Set(current); if (event.target.checked) next.add(field); else next.delete(field); return next })} />{fieldLabel(field)}</label>)}</div><div className="mt-3 flex flex-wrap gap-2"><Button onClick={() => void confirmPull()} disabled={pullFields.size === 0 || busy}>{busy && <Loader2 className="animate-spin" />}{t('productChannel.confirmPull')}</Button><Button variant="outline" onClick={() => { setPullRows([]); setPullAvailableFields([]) }} disabled={busy}>{t('productChannel.cancel')}</Button></div></div>}
           <footer className="flex justify-end border-t p-4 sm:p-5"><Button type="button" variant="outline" onClick={close} disabled={busy}>{t('productChannel.close')}</Button></footer>
         </div>
       </div>}

@@ -149,17 +149,21 @@ export function buildProductChannelComparison(
     const barcode = normalizedIdentifier(local.barcode)
     const skuMatches = sku ? availableExternal.filter((product) => normalizedIdentifier(product.sku) === sku) : []
     const barcodeMatches = barcode ? availableExternal.filter((product) => normalizedIdentifier(product.barcode) === barcode) : []
-    const strongMatches = skuMatches.length > 0 ? skuMatches : barcodeMatches
+    const skuMatchIds = new Set(skuMatches.map((product) => product.id))
+    const barcodeMatchIds = new Set(barcodeMatches.map((product) => product.id))
+    const strongMatches = [...new Map([...skuMatches, ...barcodeMatches].map((product) => [product.id, product])).values()]
+    const identifiersDisagree = skuMatches.length > 0 && barcodeMatches.length > 0 &&
+      (strongMatches.length !== 1 || !skuMatchIds.has(strongMatches[0].id) || !barcodeMatchIds.has(strongMatches[0].id))
     const reason = skuMatches.length > 0 ? 'sku' as const : barcodeMatches.length > 0 ? 'barcode' as const : null
     const localIdentifierConflict = (sku && (localSkuCounts.get(sku) ?? 0) > 1) || (barcode && (localBarcodeCounts.get(barcode) ?? 0) > 1)
 
-    if (strongMatches.length === 1 && !localIdentifierConflict) {
+    if (strongMatches.length === 1 && !localIdentifierConflict && !identifiersDisagree) {
       const external = strongMatches[0]
       usedExternalIds.add(external.id)
       rows.push({ id: rowId(local.id, external.id), status: 'not_linked', local, external, differences: getProductChannelDifferences(local, external), matchReason: reason, candidateExternalIds: [external.id], syncError: null, ownership })
       continue
     }
-    if (strongMatches.length > 1 || (strongMatches.length > 0 && localIdentifierConflict)) {
+    if (strongMatches.length > 1 || identifiersDisagree || (strongMatches.length > 0 && localIdentifierConflict)) {
       rows.push({ id: rowId(local.id, null), status: 'conflict', local, external: null, differences: [], matchReason: reason, candidateExternalIds: strongMatches.map((product) => product.id), syncError: null, ownership })
       continue
     }
