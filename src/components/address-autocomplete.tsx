@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Search } from 'lucide-react'
@@ -14,7 +14,9 @@ export interface AddressSuggestion {
   postalCode: string
   city: string
   country: string
+  countryCode: string
   state: string
+  requiresDetails: boolean
 }
 
 interface AddressAutocompleteProps {
@@ -23,11 +25,12 @@ interface AddressAutocompleteProps {
 }
 
 export function AddressAutocomplete({ country, onSelect }: AddressAutocompleteProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [provider, setProvider] = useState<'google_maps' | 'nominatim' | ''>('')
   const [activeIndex, setActiveIndex] = useState(-1)
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -35,10 +38,17 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
   const inputRef = useRef<HTMLInputElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const tRef = useRef(t)
+  const sessionTokenRef = useRef('')
+  const menuId = useId()
 
   useEffect(() => {
     tRef.current = t
   }, [t])
+
+  const getSessionToken = () => {
+    if (!sessionTokenRef.current) sessionTokenRef.current = crypto.randomUUID()
+    return sessionTokenRef.current
+  }
 
   const updateMenuPosition = useCallback(() => {
     const input = inputRef.current
@@ -89,19 +99,27 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
       setError('')
 
       try {
-        const params = new URLSearchParams({ q: normalizedQuery })
+        const params = new URLSearchParams({
+          q: normalizedQuery,
+          locale,
+          sessionToken: getSessionToken(),
+        })
         if (country?.trim()) params.set('country', country.trim())
         const response = await fetch(`/api/address/search?${params.toString()}`, {
           cache: 'no-store',
           signal: controller.signal,
         })
-        const payload = await response.json().catch(() => ({}))
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? tRef.current('address.searchFailed'))
+        const payload = await response.json().catch(() => ({})) as {
+          suggestions?: AddressSuggestion[]
+          provider?: 'google_maps' | 'nominatim'
         }
 
-        setSuggestions((payload.suggestions ?? []) as AddressSuggestion[])
+        if (!response.ok) {
+          throw new Error(tRef.current('address.searchFailed'))
+        }
+
+        setProvider(payload.provider ?? '')
+        setSuggestions(payload.suggestions ?? [])
       } catch (searchError) {
         if (searchError instanceof Error && searchError.name === 'AbortError') return
         setSuggestions([])
@@ -115,7 +133,7 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [country, query])
+  }, [country, locale, query])
 
   useLayoutEffect(() => {
     if (suggestions.length === 0) return
@@ -143,25 +161,55 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
     }
   }, [suggestions.length, updateMenuPosition])
 
-  const chooseSuggestion = (suggestion: AddressSuggestion) => {
-    onSelect(suggestion)
-    setQuery(suggestion.label)
+  const chooseSuggestion = async (suggestion: AddressSuggestion) => {
     setSuggestions([])
     setActiveIndex(-1)
+    if (!suggestion.requiresDetails) {
+      onSelect(suggestion)
+      setQuery(suggestion.label)
+      sessionTokenRef.current = ''
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    try {
+      const params = new URLSearchParams({
+        placeId: suggestion.id,
+        locale,
+        sessionToken: getSessionToken(),
+      })
+      const response = await fetch(`/api/address/search?${params.toString()}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({})) as { suggestion?: AddressSuggestion }
+      if (!response.ok || !payload.suggestion) throw new Error(tRef.current('address.searchFailed'))
+      onSelect(payload.suggestion)
+      setQuery(payload.suggestion.label || suggestion.label)
+      sessionTokenRef.current = ''
+    } catch {
+      setQuery(suggestion.label)
+      setError(tRef.current('address.searchFailed'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const suggestionsMenu = suggestions.length > 0 && menuStyle && typeof document !== 'undefined' ? createPortal(
-    <div ref={menuRef} style={menuStyle} className="overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+    <div id={menuId} ref={menuRef} style={menuStyle} role="listbox" className="overscroll-contain overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
       {suggestions.map((suggestion, index) => (
         <button
           key={suggestion.id}
           type="button"
-          onClick={() => chooseSuggestion(suggestion)}
-          className={`block w-full px-3 py-2 text-left text-sm ${index === activeIndex ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'}`}
+          role="option"
+          aria-selected={index === activeIndex}
+          onClick={() => void chooseSuggestion(suggestion)}
+          className={`block min-h-11 w-full break-words px-3 py-2 text-left text-sm ${index === activeIndex ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'}`}
         >
           {suggestion.label}
         </button>
       ))}
+      {provider === 'google_maps' && (
+        <div className="border-t border-slate-100 px-3 py-1.5 text-right text-xs font-medium text-slate-500">Google Maps</div>
+      )}
     </div>,
     document.body
   ) : null
@@ -190,12 +238,15 @@ export function AddressAutocomplete({ country, onSelect }: AddressAutocompletePr
             }
             if (event.key === 'Enter' && activeIndex >= 0 && suggestions[activeIndex]) {
               event.preventDefault()
-              chooseSuggestion(suggestions[activeIndex])
+              void chooseSuggestion(suggestions[activeIndex])
             }
           }}
           className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           placeholder={t('address.searchPlaceholder')}
+          role="combobox"
           aria-autocomplete="list"
+          aria-expanded={suggestions.length > 0}
+          aria-controls={suggestions.length > 0 ? menuId : undefined}
         />
       </div>
       <p className="text-xs text-slate-500">{t('address.manualFallback')}</p>

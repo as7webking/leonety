@@ -187,7 +187,7 @@ export function WorkspaceSettingsPanel() {
                 {logo && <Button type="button" variant="outline" size="sm" onClick={() => { setLogo(''); persistBranding({ logo: '' }) }}>{t('common.delete')}</Button>}
               </div>
 
-              <label className="block space-y-1">
+              <div className="block space-y-1">
                 <span className="text-sm font-medium">{t('profile.companyAddress')}</span>
                 <AddressAutocomplete
                   onSelect={(suggestion) => {
@@ -201,7 +201,7 @@ export function WorkspaceSettingsPanel() {
                   }}
                 />
                 <textarea value={address} onChange={(event) => setAddress(event.target.value)} className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder={t('profile.companyAddressPlaceholder')} />
-              </label>
+              </div>
 
               <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>label]:min-w-0 [&_input]:min-w-0 [&_input]:max-w-full">
                 <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyEmail')}</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>

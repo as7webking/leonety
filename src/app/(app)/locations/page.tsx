@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BriefcaseBusiness, Building2, Edit, MapPin, Plus, Trash2 } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { AddressAutocomplete } from '@/components/address-autocomplete'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CountrySelector } from '@/components/country-selector'
 import { Button } from '@/components/ui/button'
@@ -145,6 +146,20 @@ export default function LocationsPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1"><span className="text-sm font-medium">{t('locations.name')}</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
+              <div className="min-w-0 md:col-span-2">
+                <AddressAutocomplete
+                  country={form.country}
+                  onSelect={(suggestion) => setForm((current) => ({
+                    ...current,
+                    address: [
+                      [suggestion.street, suggestion.houseNumber].filter(Boolean).join(' '),
+                      suggestion.postalCode,
+                    ].filter(Boolean).join(', ') || current.address,
+                    city: suggestion.city || current.city,
+                    country: suggestion.countryCode || suggestion.country || current.country,
+                  }))}
+                />
+              </div>
               <label className="space-y-1"><span className="text-sm font-medium">{t('locations.address')}</span><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full rounded-md border px-3 py-2" /></label>
               <label className="space-y-1"><span className="text-sm font-medium">{t('locations.city')}</span><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="w-full rounded-md border px-3 py-2" required /></label>
               <CountrySelector label={t('locations.country')} value={form.country} onChange={(country) => setForm({ ...form, country })} required />

@@ -10,7 +10,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { clientToForm, emptyClientForm, type ClientFormValues, type ClientRecord } from '@/lib/client-crm'
-import { formatCountryValue, resolveCountryCode } from '@/lib/countries'
+import { resolveCountryCode } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 
 interface ClientFormProps {
@@ -24,7 +24,7 @@ const FREE_CLIENT_LIMIT = 25
 export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
   const router = useRouter()
   const { currentCompany } = useCompany()
-  const { locale, t } = useI18n()
+  const { t } = useI18n()
   const [supabase] = useState(() => createClient())
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const { accountAccess } = useAccountAccess(accountEmail)
@@ -168,14 +168,14 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
         </label>
         <div className="md:col-span-2">
           <AddressAutocomplete
-            country={formatCountryValue(form.country, locale)}
+            country={form.country}
             onSelect={(address) => setForm((current) => ({
               ...current,
               street: address.street || current.street,
               house_number: address.houseNumber || current.house_number,
               postal_code: address.postalCode || current.postal_code,
               city: address.city || current.city,
-              country: resolveCountryCode(address.country) || address.country || current.country,
+              country: address.countryCode || resolveCountryCode(address.country) || address.country || current.country,
             }))}
           />
         </div>

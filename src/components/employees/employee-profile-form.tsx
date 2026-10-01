@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { AddressAutocomplete } from '@/components/address-autocomplete'
 import { AppSelect } from '@/components/app-select'
 import { CountrySelector } from '@/components/country-selector'
 import { Button } from '@/components/ui/button'
@@ -140,6 +141,19 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
       </>)}
 
       {section(t('employees.profile.address'), <>
+        <div className="min-w-0 sm:col-span-2">
+          <AddressAutocomplete
+            country={normalizedCountryCode}
+            onSelect={(address) => setForm((current) => ({
+              ...current,
+              street: address.street || current.street,
+              house_number: address.houseNumber || current.house_number,
+              postal_code: address.postalCode || current.postal_code,
+              city: address.city || current.city,
+              country_code: address.countryCode || current.country_code,
+            }))}
+          />
+        </div>
         {field('street', t('employees.profile.street'))}
         {field('house_number', t('employees.profile.houseNumber'))}
         {field('postal_code', t('employees.profile.postalCode'), { inputMode: 'text' })}
