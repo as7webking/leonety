@@ -6,12 +6,15 @@ import { resolveWebPushViewStatus } from './web-push-client.ts'
 const supported = { supported: true, iosInstallRequired: false, secureContextRequired: false }
 
 test('reports actual permission and current-device subscription states', () => {
+  assert.equal(resolveWebPushViewStatus({ capability: null, permission: 'default', browserSubscribed: false }), 'checking')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'default', browserSubscribed: false }), 'permissionRequired')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'denied', browserSubscribed: false }), 'blocked')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: false, serverStatus: 'enabled' }), 'subscriptionMissing')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'disabled' }), 'notEnabled')
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true }), 'subscriptionMissing')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'invalid' }), 'error')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'enabled' }), 'enabled')
+  assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'granted', browserSubscribed: true, serverStatus: 'enabled', subscriptionMatches: false }), 'subscriptionMissing')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'default', browserSubscribed: false, serverConfigured: false }), 'serverConfigurationMissing')
   assert.equal(resolveWebPushViewStatus({ capability: supported, permission: 'denied', browserSubscribed: false, serverConfigured: false }), 'blocked')
 })

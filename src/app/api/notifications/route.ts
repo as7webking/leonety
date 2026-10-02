@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { isOrderNotificationMigrationError, registerOrderDeviceSchema } from '@/lib/order-notifications'
@@ -9,6 +10,7 @@ export const runtime = 'nodejs'
 const currentDeviceSchema = z.object({
   companyId: z.string().uuid(),
   installationId: z.string().uuid(),
+  subscriptionFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 })
 
 function settingsError(error: { code?: string } | null | undefined) {
@@ -27,7 +29,7 @@ export async function GET(request: Request) {
   const [currentDeviceResult, devicesResult] = await Promise.all([
     auth.adminSupabase
       .from('order_notification_devices')
-      .select('id, installation_id, device_label, platform, status, last_seen_at')
+      .select('id, installation_id, device_label, platform, status, last_seen_at, push_endpoint')
       .eq('company_id', parsed.data.companyId)
       .eq('user_id', auth.user.id)
       .eq('installation_id', parsed.data.installationId)
@@ -44,7 +46,7 @@ export async function GET(request: Request) {
   if (currentDeviceResult.error) return settingsError(currentDeviceResult.error)
   if (devicesResult.error) return settingsError(devicesResult.error)
 
-  const serializeDevice = (device: NonNullable<typeof currentDeviceResult.data>) => ({
+  const serializeDevice = (device: Omit<NonNullable<typeof currentDeviceResult.data>, 'push_endpoint'>) => ({
     id: device.id,
     installationId: device.installation_id,
     label: device.device_label,
@@ -56,7 +58,12 @@ export async function GET(request: Request) {
   return NextResponse.json({
     configured: isWebPushConfigured(),
     vapidPublicKey: getWebPushPublicKey(),
-    device: currentDeviceResult.data ? serializeDevice(currentDeviceResult.data) : null,
+    device: currentDeviceResult.data ? {
+      ...serializeDevice(currentDeviceResult.data),
+      subscriptionMatches: parsed.data.subscriptionFingerprint
+        ? createHash('sha256').update(currentDeviceResult.data.push_endpoint).digest('hex') === parsed.data.subscriptionFingerprint
+        : false,
+    } : null,
     devices: (devicesResult.data ?? []).map(serializeDevice),
   })
 }

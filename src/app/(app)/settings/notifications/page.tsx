@@ -11,8 +11,10 @@ import {
   detectDevicePlatform,
   getCurrentPushSubscription,
   getPushInstallationId,
+  getPushSubscriptionFingerprint,
   getWebPushCapability,
   resolveWebPushViewStatus,
+  unsubscribeCurrentPushSubscription,
   type WebPushCapability,
 } from '@/lib/web-push-client'
 
@@ -23,6 +25,7 @@ interface CurrentDevice {
   platform: string
   status: 'enabled' | 'invalid' | 'disabled'
   lastSeenAt: string
+  subscriptionMatches?: boolean
 }
 
 interface NotificationSettingsResponse {
@@ -54,10 +57,11 @@ export default function NotificationSettingsPage() {
     setLoadFailed(false)
 
     try {
-      const [response, subscription] = await Promise.all([
-        fetch(`/api/notifications?companyId=${encodeURIComponent(companyId)}&installationId=${encodeURIComponent(id)}`, { cache: 'no-store' }),
-        getCurrentPushSubscription().catch(() => null),
-      ])
+      const subscription = await getCurrentPushSubscription().catch(() => null)
+      const fingerprint = await getPushSubscriptionFingerprint(subscription).catch(() => '')
+      const query = new URLSearchParams({ companyId, installationId: id })
+      if (fingerprint) query.set('subscriptionFingerprint', fingerprint)
+      const response = await fetch(`/api/notifications?${query.toString()}`, { cache: 'no-store' })
       const payload = await response.json().catch(() => ({})) as NotificationSettingsResponse & { error?: string }
 
       if (!response.ok) {
@@ -107,6 +111,7 @@ export default function NotificationSettingsPage() {
     capability,
     permission,
     browserSubscribed,
+    subscriptionMatches: settings?.device?.subscriptionMatches,
     serverStatus: settings?.device?.status,
     serverConfigured: settings?.configured,
     loadFailed,
@@ -175,6 +180,8 @@ export default function NotificationSettingsPage() {
       })
       if (!response.ok) throw new Error('disable_failed')
 
+      const unsubscribed = await unsubscribeCurrentPushSubscription().catch(() => false)
+      if (unsubscribed) setBrowserSubscribed(false)
       setMessage(t('systemNotifications.disabledSuccess'))
       await load(installationId)
     } catch {
@@ -262,6 +269,12 @@ export default function NotificationSettingsPage() {
                       <p className="text-xs text-slate-500">
                         {device.platform} · {t(`systemNotifications.deviceStatus.${device.status}`)}
                       </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {t('systemNotifications.lastUsed')}: {new Intl.DateTimeFormat(locale, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        }).format(new Date(device.lastSeenAt))}
+                      </p>
                     </div>
                     {device.installationId === installationId && (
                       <span className="shrink-0 text-xs font-medium text-blue-700">{t('systemNotifications.thisDevice')}</span>
@@ -279,7 +292,7 @@ export default function NotificationSettingsPage() {
               <Button
                 type="button"
                 onClick={() => void enableNotifications()}
-                disabled={busy || !capability?.supported || capability.iosInstallRequired || !settings?.configured}
+                disabled={busy || viewStatus === 'checking' || !capability?.supported || capability.iosInstallRequired || !settings?.configured}
               >
                 <Smartphone className="h-4 w-4" />
                 {t('systemNotifications.enable')}
