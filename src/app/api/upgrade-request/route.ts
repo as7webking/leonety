@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { getPlanRank } from '@/lib/billing/plans'
+import { getEmailRuntimeConfig } from '@/lib/email/config'
+import { sendEmail } from '@/lib/email/send-email'
+import { buildUpgradeRequestEmail } from '@/lib/email/templates/upgrade-request'
+import { LOCALE_COOKIE, normalizeLocale } from '@/lib/i18n'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
@@ -146,7 +151,7 @@ export async function POST(request: Request) {
     const message = typeof body.message === 'string' ? body.message.slice(0, 500) : null
     const adminSupabase = createSupabaseAdminClient()
 
-    const { error: insertError } = await adminSupabase
+    const { data: createdRequest, error: insertError } = await adminSupabase
       .from('upgrade_requests')
       .insert({
         user_id: authData.user.id,
@@ -155,17 +160,57 @@ export async function POST(request: Request) {
         status: 'pending',
         message,
       })
+      .select('id, created_at')
+      .single<{ id: string; created_at: string }>()
 
     if (insertError) throw insertError
 
-    // TODO: Wire an email provider here later. Keep provider secrets server-side only.
-    // Suggested env var for the recipient: UPGRADE_REQUEST_ADMIN_EMAIL.
-    // Email content should include authData.user.email, context.company.name, requested plan Pro, and created_at.
+    const recipient = process.env.UPGRADE_REQUEST_ADMIN_EMAIL?.trim()
+    const runtime = getEmailRuntimeConfig()
+    let emailNotification: { status: 'sent' } | { status: 'failed'; code: string }
+
+    if (!recipient || !runtime.ok) {
+      emailNotification = { status: 'failed', code: 'configuration_missing' }
+    } else {
+      const cookieStore = await cookies()
+      const locale = normalizeLocale(cookieStore.get(LOCALE_COOKIE)?.value)
+      const template = buildUpgradeRequestEmail({
+        locale,
+        productName: runtime.config.productName,
+        appUrl: runtime.config.appUrl,
+        requesterEmail: authData.user.email ?? 'Unknown',
+        companyName: context.company.name,
+        requestedPlan: 'Pro',
+        createdAt: createdRequest.created_at,
+        message,
+      })
+      const delivery = await sendEmail({
+        to: recipient,
+        subject: template.subject,
+        html: template.html,
+        text: template.text,
+        category: 'upgrade_request',
+        idempotencyKey: `upgrade-request/${createdRequest.id}`,
+      })
+      emailNotification = delivery.ok
+        ? { status: 'sent' }
+        : { status: 'failed', code: delivery.code }
+    }
+
+    if (emailNotification.status === 'failed') {
+      console.warn('[upgrade-request] Request saved but email notification failed', {
+        requestId: createdRequest.id,
+        code: emailNotification.code,
+      })
+    }
 
     const nextContext = await loadUpgradeContext(authData.user.id)
     return NextResponse.json({
       ...nextContext,
-      message: 'Your Pro request has been sent for review.',
+      message: emailNotification.status === 'sent'
+        ? 'Your Pro request has been saved and the review team was notified.'
+        : 'Your Pro request has been saved, but the email notification could not be sent.',
+      emailNotification,
     })
   } catch (error) {
     console.error('Upgrade request POST failed:', error)

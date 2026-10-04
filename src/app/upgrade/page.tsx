@@ -21,6 +21,7 @@ interface UpgradeContext {
   } | null
   isPro: boolean
   message?: string
+  emailNotification?: { status: 'sent' } | { status: 'failed'; code: string }
 }
 
 const planFeatureKeys: Record<AppPlan, string[]> = {
@@ -183,7 +184,9 @@ export default function UpgradePage() {
       }
 
       setContext(data)
-      setSuccess(data.message || t('billing.manualRequestSent'))
+      setSuccess(data.emailNotification?.status === 'failed'
+        ? t('billing.manualRequestSavedEmailFailed')
+        : t('billing.manualRequestSent'))
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : t('billing.manualRequestFailed'))
     } finally {
