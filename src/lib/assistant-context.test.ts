@@ -123,6 +123,7 @@ test('maps provider and authorization failures to localized UI error keys', () =
   assert.equal(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.error.timeout')
   assert.equal(getAssistantErrorKey(502, 'provider_invalid_response'), 'assistant.error.invalidResponse')
   assert.equal(getAssistantErrorKey(503, 'configuration_missing'), 'assistant.error.configuration')
+  assert.equal(getAssistantErrorKey(503, 'provider_unsupported'), 'assistant.error.configuration')
   assert.equal(getAssistantErrorKey(503, 'provider_auth_failed'), 'assistant.error.providerAuth')
   assert.equal(getAssistantErrorKey(503, 'invalid_model'), 'assistant.error.invalidModel')
   assert.equal(getAssistantErrorKey(503, 'provider_unavailable'), 'assistant.error.unavailable')

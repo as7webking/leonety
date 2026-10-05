@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { classifyAiProviderStatus, extractAiResponseText, shouldRetryAiProviderError } from './ai-provider-response.ts'
+import { classifyAiProviderRuntimeError, classifyAiProviderStatus, extractAiResponseText, shouldRetryAiProviderError } from './ai-provider-response.ts'
 
 test('classifies provider authentication, rate-limit and availability failures', () => {
   assert.equal(classifyAiProviderStatus(401), 'provider_auth_failed')
@@ -25,6 +25,13 @@ test('retries only the first transient provider-unavailable failure', () => {
   assert.equal(shouldRetryAiProviderError('quota_exhausted', 0), false)
   assert.equal(shouldRetryAiProviderError('provider_auth_failed', 0), false)
   assert.equal(shouldRetryAiProviderError('invalid_model', 0), false)
+})
+
+test('separates provider timeout from other network failures', () => {
+  const timeout = new Error('aborted')
+  timeout.name = 'AbortError'
+  assert.equal(classifyAiProviderRuntimeError(timeout), 'request_timeout')
+  assert.equal(classifyAiProviderRuntimeError(new TypeError('fetch failed')), 'provider_unavailable')
 })
 
 test('extracts valid Responses API text and rejects malformed output', () => {

@@ -37,6 +37,12 @@ export function shouldRetryAiProviderError(code: AiProviderResponseErrorCode, at
   return code === 'provider_unavailable' && attempt === 0
 }
 
+export function classifyAiProviderRuntimeError(error: unknown): 'request_timeout' | 'provider_unavailable' {
+  return error instanceof Error && error.name === 'AbortError'
+    ? 'request_timeout'
+    : 'provider_unavailable'
+}
+
 export function extractAiResponseText(payload: unknown) {
   if (!payload || typeof payload !== 'object') return ''
   const record = payload as {
