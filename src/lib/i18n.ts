@@ -25,6 +25,7 @@ import { productCsvDictionaries } from '@/lib/product-csv-i18n'
 import { productPhotoSessionDictionaries } from '@/lib/product-photo-session-i18n'
 import { productChannelComparisonDictionaries } from '@/lib/product-channel-i18n'
 import { legalSettingsDictionaries } from '@/lib/legal-settings-i18n'
+import { employeeScheduleDictionaries } from '@/lib/employee-schedule-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8939,6 +8940,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], profileLocalizationDictionaries[locale])
   Object.assign(dictionaries[locale], productMenuDictionaries[locale])
   Object.assign(dictionaries[locale], legalSettingsDictionaries[locale])
+  Object.assign(dictionaries[locale], employeeScheduleDictionaries[locale])
 }
 
 Object.assign(dictionaries.uk, ukrainianAuthenticatedFixes)

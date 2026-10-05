@@ -1,0 +1,103 @@
+.root {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.page {
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10mm;
+  margin-bottom: 7mm;
+  border-bottom: 1px solid #94a3b8;
+  padding-bottom: 4mm;
+}
+
+.header h1 {
+  margin: 1mm 0 0;
+  font-size: 18pt;
+}
+
+.workspace {
+  margin: 0;
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.meta {
+  display: grid;
+  gap: 1mm;
+  text-align: right;
+  font-size: 9pt;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 8.5pt;
+}
+
+.table th,
+.table td {
+  border: 1px solid #94a3b8;
+  padding: 2.2mm 1.5mm;
+  overflow-wrap: anywhere;
+}
+
+.table th {
+  background: #e2e8f0;
+  text-align: left;
+}
+
+.table tfoot td {
+  font-weight: 700;
+}
+
+.table tfoot td:first-child {
+  text-align: right;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  .root.root {
+    width: 185.5mm !important;
+    max-width: 185.5mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+  }
+
+  .page {
+    width: 185.5mm;
+    min-height: 0;
+    height: auto;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .page[data-final-page='true'] {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .table thead {
+    display: table-header-group;
+  }
+
+  .root .table {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
