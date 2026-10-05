@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, BriefcaseBusiness, Building2, UserRound } from 'lucide-react'
+import { Bell, BriefcaseBusiness, Building2, Scale, UserRound } from 'lucide-react'
 import { PageContainer, PageHeader } from '@/components'
 import { WorkspaceSettingsPanel } from '@/components/settings/workspace-settings-panel'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,18 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         <WorkspaceSettingsPanel />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('workspaceLegal.settingsTitle')}</CardTitle>
+            <CardDescription>{t('workspaceLegal.cardDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline" className="h-auto min-h-10 max-w-full whitespace-normal text-left">
+              <Link href="/app/settings/legal"><Scale className="mr-2 h-4 w-4" />{t('workspaceLegal.openSettings')}</Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
