@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { getIntegrationCatalogItem, integrationCatalog } from './integration-catalog.ts'
+import { canStartIntegrationSetup, getIntegrationCatalogItem, getIntegrationProviderState, integrationCatalog } from './integration-catalog.ts'
 
 const integrationsPage = readFileSync(new URL('../app/(app)/settings/integrations/page.tsx', import.meta.url), 'utf8')
 const integrationRoute = readFileSync(new URL('../app/api/store-integrations/route.ts', import.meta.url), 'utf8')
@@ -18,6 +18,35 @@ test('classifies every listed provider with an explicit onboarding mode', () => 
   assert.equal(getIntegrationCatalogItem('whatsapp_business').mode, 'embedded')
   assert.equal(getIntegrationCatalogItem('just_eat_takeaway').mode, 'partner_required')
   assert.equal(getIntegrationCatalogItem('ebay').mode, 'coming_soon')
+})
+
+test('separates provider availability from its setup method', () => {
+  assert.equal(getIntegrationCatalogItem('woocommerce').setupMethod, 'api_credentials')
+  assert.equal(getIntegrationCatalogItem('shopify').setupMethod, 'oauth')
+  assert.equal(getIntegrationCatalogItem('whatsapp_business').setupMethod, 'platform_managed')
+  assert.equal(getIntegrationCatalogItem('opencart').initialState, 'configuration_required')
+  assert.equal(getIntegrationProviderState(getIntegrationCatalogItem('shopify')), 'available')
+  assert.equal(getIntegrationProviderState(getIntegrationCatalogItem('shopify'), 'connected'), 'connected')
+  assert.equal(getIntegrationProviderState(getIntegrationCatalogItem('shopify'), 'error'), 'error')
+})
+
+test('keeps Lieferando partner-gated without a fake connection flow', () => {
+  const provider = getIntegrationCatalogItem('just_eat_takeaway')
+
+  assert.equal(provider.label, 'Lieferando / Takeaway')
+  assert.equal(provider.setupMethod, 'partner_approval')
+  assert.equal(provider.initialState, 'partner_required')
+  assert.deepEqual(provider.fields, [])
+  assert.equal(canStartIntegrationSetup(provider), false)
+  assert.equal(getIntegrationProviderState(provider), 'partner_required')
+})
+
+test('preserves the dedicated WooCommerce onboarding route', () => {
+  const provider = getIntegrationCatalogItem('woocommerce')
+
+  assert.equal(provider.mode, 'dedicated')
+  assert.equal(provider.directSettings, '/app/settings/integrations/woocommerce')
+  assert.equal(canStartIntegrationSetup(provider), true)
 })
 
 test('exposes only provider-specific onboarding fields', () => {
@@ -48,4 +77,17 @@ test('ordinary onboarding UI does not render plaintext token inputs', () => {
   assert.doesNotMatch(connectionPage, /connection\.apiSecretPreview\]/)
   assert.doesNotMatch(integrationsPage, /apiKey: form\.apiKey \|\| currentIntegration\?\.apiKeyPreview/)
   assert.match(openCartTestRoute, /decryptSecret\(saved\?\.api_key\)/)
+})
+
+test('partner-gated cards show requirements instead of a connection action', () => {
+  assert.match(integrationsPage, /canStartIntegrationSetup/)
+  assert.match(integrationsPage, /integrationOnboarding\.viewRequirements/)
+  assert.doesNotMatch(integrationsPage, /selectedProvider\.mode === 'partner_required'[\s\S]*integrationOnboarding\.connect/)
+})
+
+test('onboarding cards and status controls stay shrinkable on narrow screens', () => {
+  assert.match(integrationsPage, /grid min-w-0 grid-cols-1/)
+  assert.match(integrationsPage, /flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0/)
+  assert.match(integrationsPage, /inline-flex w-fit max-w-full items-center/)
+  assert.match(integrationsPage, /flex min-w-0 flex-col gap-3 sm:flex-row/)
 })

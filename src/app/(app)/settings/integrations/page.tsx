@@ -13,8 +13,11 @@ import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import type { Locale } from '@/lib/i18n'
 import {
+  canStartIntegrationSetup,
+  getIntegrationProviderState,
   getIntegrationOnboardingDescriptionKey,
   integrationCatalog,
+  type IntegrationProviderState,
   type StoreProvider as Provider,
 } from '@/lib/integration-catalog'
 
@@ -499,11 +502,19 @@ const copy: Record<Locale, Record<string, string>> = {
   },
 }
 
-function statusLabel(status: IntegrationStatus, labels: Record<string, string>) {
-  if (status === 'connected') return labels.connected
-  if (status === 'error') return labels.error
-  if (status === 'disabled') return labels.notConnected
-  return labels.notConnected
+function providerStateKey(state: IntegrationProviderState) {
+  if (state === 'configuration_required') return 'integrationOnboarding.configurationRequired'
+  if (state === 'partner_required') return 'integrationOnboarding.partnerRequired'
+  if (state === 'coming_soon') return 'integrationOnboarding.comingSoon'
+  return `integrationOnboarding.${state}`
+}
+
+function providerStateClass(state: IntegrationProviderState) {
+  if (state === 'connected') return 'bg-green-100 text-green-700'
+  if (state === 'error') return 'bg-red-100 text-red-700'
+  if (state === 'configuration_required' || state === 'partner_required') return 'bg-amber-100 text-amber-800'
+  if (state === 'available') return 'bg-blue-100 text-blue-700'
+  return 'bg-slate-100 text-slate-600'
 }
 
 function formatDate(value: string | null, locale: Locale) {
@@ -539,8 +550,9 @@ export default function StoreIntegrationsPage() {
   const whatsAppSignupDataRef = useRef<Record<string, unknown>>({})
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
+  const selectedProviderState = getIntegrationProviderState(selectedProvider, currentIntegration?.status)
   const hasSetupGuide = provider === 'woocommerce' || provider === 'whatsapp_business' || provider === 'iss_pos' ||
-    provider === 'google_merchant' || selectedProvider.mode === 'partner_required'
+    provider === 'google_merchant'
   useBodyScrollLock(guideOpen)
   const guideStepKeys = useMemo(() => {
     if (provider === 'woocommerce') return [
@@ -973,12 +985,17 @@ export default function StoreIntegrationsPage() {
                 <div className="min-w-0">
                   <p>{t(getIntegrationOnboardingDescriptionKey(provider, selectedProvider.mode))}</p>
                 </div>
-                {hasSetupGuide && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="shrink-0 bg-white">
-                    <BookOpen className="h-4 w-4" />
-                    {t('integrations.setupGuide')}
-                  </Button>
-                )}
+                <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+                  <span className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-medium ${providerStateClass(selectedProviderState)}`}>
+                    {t(providerStateKey(selectedProviderState))}
+                  </span>
+                  {hasSetupGuide && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="bg-white">
+                      <BookOpen className="h-4 w-4" />
+                      {t('integrations.setupGuide')}
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 [&>label]:min-w-0 [&_input]:min-w-0 [&_input]:max-w-full">
@@ -1127,6 +1144,8 @@ export default function StoreIntegrationsPage() {
           {providerOptions.filter((item) => !integrations.some((row) => row.provider === item.value && row.status === 'connected')).map((item) => {
             const integration = integrations.find((row) => row.provider === item.value)
             const status = integration?.status ?? 'not_connected'
+            const providerState = getIntegrationProviderState(item, status)
+            const canConfigure = canStartIntegrationSetup(item)
 
             return (
               <Card key={item.value}>
@@ -1145,23 +1164,13 @@ export default function StoreIntegrationsPage() {
                           {labels.openConnection}
                         </Link>
                       )}
-                      <button type="button" onClick={() => setProvider(item.value)} className="mt-3 block text-sm font-medium text-blue-600 hover:text-blue-700">
-                        {t('integrations.configure')}
+                      <button type="button" onClick={() => setProvider(item.value)} className="mt-3 block text-left text-sm font-medium text-blue-600 hover:text-blue-700">
+                        {canConfigure ? t('integrations.configure') : t('integrationOnboarding.viewRequirements')}
                       </button>
                     </div>
-                    <span className={`inline-flex w-fit max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
-                      status === 'connected'
-                        ? 'bg-green-100 text-green-700'
-                        : status === 'error'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {status === 'connected' ? <Plug className="h-3.5 w-3.5" /> : <Unplug className="h-3.5 w-3.5" />}
-                      {status === 'not_connected' && item.mode === 'partner_required'
-                        ? t('integrationOnboarding.partnerRequired')
-                        : status === 'not_connected' && item.mode === 'coming_soon'
-                          ? t('integrationOnboarding.comingSoon')
-                          : statusLabel(status, labels)}
+                    <span className={`inline-flex w-fit max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs ${providerStateClass(providerState)}`}>
+                      {providerState === 'connected' ? <Plug className="h-3.5 w-3.5" /> : <Unplug className="h-3.5 w-3.5" />}
+                      {t(providerStateKey(providerState))}
                     </span>
                   </div>
                 </CardContent>
