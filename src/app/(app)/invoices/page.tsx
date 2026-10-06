@@ -7,7 +7,7 @@ import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/compon
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
-import { Logo } from '@/components/logo'
+import { StandardInvoiceRenderer } from '@/components/invoices/standard-invoice-renderer'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
@@ -17,6 +17,7 @@ import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
+import { createInvoiceDocumentModel } from '@/lib/invoice-document'
 
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type InvoiceStatusFilter = 'all' | 'paid' | 'unpaid' | 'overdue' | 'cancelled'
@@ -276,12 +277,6 @@ function toCents(value: number | string) {
   return Number.isFinite(number) ? Math.round(number * 100) : 0
 }
 
-function paymentMethodLabel(method: PaymentMethod, t: (key: string) => string) {
-  if (method === 'cash') return t('invoices.paymentCash')
-  if (method === 'card') return t('invoices.paymentCard')
-  return t('invoices.paymentBankTransfer')
-}
-
 function formatInvoiceStatus(status: InvoiceStatus, t: (key: string) => string) {
   return t(`invoices.status.${status}`)
 }
@@ -471,6 +466,36 @@ export default function InvoicesPage() {
   const allVisibleInvoicesSelected = filteredInvoices.length > 0 && filteredInvoices.every((invoice) => selectedInvoiceIds.has(invoice.id))
   const calculated = useMemo(() => calculateItems(formData.items), [formData.items])
   const vatOptions = useMemo(() => getVatOptions(formData.tax_country, t), [formData.tax_country, t])
+
+  const buildInvoiceDocument = (invoice: InvoiceRecord, repeatBankDetails: boolean) => {
+    const paymentMeta = loadInvoicePaymentMeta(invoice.id)
+    return createInvoiceDocumentModel(invoice, {
+      seller: {
+        name: currentCompany?.name ?? '',
+        logo: companyLogo,
+        address: companyAddress,
+        email: companyEmail,
+        taxNumber: companyTaxNumber,
+        iban: companyIban,
+        bic: companyBic,
+        showDetails: includeCompanyAddress,
+      },
+      buyerAddressLines: getClientAddressLines(invoice.clients, locale),
+      buyerVisibleFields: clientPrintFields,
+      payment: {
+        method: paymentMeta.method,
+        amountPaid: Number(paymentMeta.amountPaid || invoice.total),
+        splitPayment: paymentMeta.splitPayment,
+        allocations: paymentMeta.payments.map((payment) => ({
+          method: payment.method,
+          amount: payment.amount,
+          reference: payment.reference ?? null,
+        })),
+        groupAllocations: repeatBankDetails,
+        repeatBankDetails,
+      },
+    })
+  }
 
   useBodyScrollLock(Boolean(deleteInvoice))
 
@@ -1281,181 +1306,26 @@ export default function InvoicesPage() {
 
       {printingInvoice && (
         <div className="print-area print-invoice hidden">
-          <div className="invoice-print-header">
-            <div className="invoice-print-brand">
-              {companyLogo ? (
-                <Logo src={companyLogo} alt={currentCompany!.name} size="print" className="invoice-print-logo" correctArtworkOffset={false} />
-              ) : (
-                <div className="invoice-print-logo-fallback flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
-                  {currentCompany!.name.slice(0, 1).toUpperCase()}
-                </div>
-              )}
-              <div className="invoice-print-company">
-                <h1 className="text-xl font-semibold">{currentCompany!.name}</h1>
-                <p className="text-sm text-slate-600">{printingInvoice.invoice_number}</p>
-                {includeCompanyAddress && companyAddress && (
-                  <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>
-                )}
-                {includeCompanyAddress && companyEmail && (
-                  <p className="text-xs text-slate-600">{companyEmail}</p>
-                )}
-                {includeCompanyAddress && companyTaxNumber && (
-                  <p className="text-xs text-slate-600">{t('profile.companyTaxNumber')}: {companyTaxNumber}</p>
-                )}
-                {includeCompanyAddress && companyIban && (
-                  <p className="text-xs text-slate-600">IBAN: {companyIban}</p>
-                )}
-                {includeCompanyAddress && companyBic && (
-                  <p className="text-xs text-slate-600">BIC: {companyBic}</p>
-                )}
-              </div>
-            </div>
-            <div className="invoice-print-meta text-right text-sm">
-              <p>{t('invoices.status')}: {formatInvoiceStatus(printingInvoice.status, t)}</p>
-              <p>{t('invoices.issueDate')}: {new Date(`${printingInvoice.issue_date}T00:00:00`).toLocaleDateString(intlLocale)}</p>
-              {printingInvoice.due_date && (
-                <p>{t('invoices.dueDate')}: {new Date(`${printingInvoice.due_date}T00:00:00`).toLocaleDateString(intlLocale)}</p>
-              )}
-            </div>
-          </div>
-          <div className="invoice-print-client mb-3 rounded-md border p-3 text-sm">
-            <p className="font-semibold">{t('invoices.client')}</p>
-            <p>{printingInvoice.clients?.name ?? t('invoices.noClient')}</p>
-            {clientPrintFields.company && printingInvoice.clients?.client_company && <p>{printingInvoice.clients.client_company}</p>}
-            {clientPrintFields.email && printingInvoice.clients?.email && <p>{printingInvoice.clients.email}</p>}
-            {clientPrintFields.phone && printingInvoice.clients?.phone && <p>{printingInvoice.clients.phone}</p>}
-            {clientPrintFields.address && getClientAddressLines(printingInvoice.clients, locale).map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-            {clientPrintFields.taxNumber && printingInvoice.clients?.tax_number && (
-              <p>{t('clients.taxNumber')}: {printingInvoice.clients.tax_number}</p>
-            )}
-            {printingInvoice.notes && <p className="mt-2 whitespace-pre-line text-slate-700">{printingInvoice.notes}</p>}
-          </div>
-          <table className="invoice-print-table w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="border p-2 text-left">{t('common.description')}</th>
-                <th className="border p-2 text-right">{t('invoices.quantity')}</th>
-                <th className="border p-2 text-right">{t('invoices.price')}</th>
-                <th className="border p-2 text-right">{t('invoices.tax')}</th>
-                <th className="border p-2 text-right">{t('invoices.lineTotal')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(printingInvoice.invoice_items ?? []).map((item) => (
-                <tr key={item.id ?? item.description}>
-                  <td className="border p-2">{item.description}</td>
-                  <td className="border p-2 text-right">{item.quantity}</td>
-                  <td className="border p-2 text-right">{formatCurrency(item.unit_price, printingInvoice.currency, intlLocale)}</td>
-                  <td className="border p-2 text-right">{item.tax_rate}%</td>
-                  <td className="border p-2 text-right">{formatCurrency(item.line_total, printingInvoice.currency, intlLocale)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="invoice-print-totals ml-auto mt-4 w-full max-w-xs space-y-2 text-sm">
-            <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(printingInvoice.subtotal, printingInvoice.currency, intlLocale)}</span></div>
-            <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(printingInvoice.tax_amount, printingInvoice.currency, intlLocale)}</span></div>
-            <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(printingInvoice.total, printingInvoice.currency, intlLocale)}</span></div>
-          </div>
-          {printingInvoice.status === 'paid' && (
-            <div className="invoice-print-payment mt-4 rounded-md border p-3 text-sm">
-              <p className="font-semibold">{t('invoices.payment')}</p>
-              {loadInvoicePaymentMeta(printingInvoice.id).splitPayment && loadInvoicePaymentMeta(printingInvoice.id).payments.length > 0 ? (
-                <div className="mt-1 space-y-1">
-                  {loadInvoicePaymentMeta(printingInvoice.id).payments.map((payment, index) => (
-                    <p key={`${payment.method}-${index}`}>
-                      {paymentMethodLabel(payment.method, t)}: {formatCurrency(payment.amount, printingInvoice.currency, intlLocale)}
-                      {payment.reference ? ` · ${payment.reference}` : ''}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <>
-                  <p>{t('invoices.paymentMethod')}: {paymentMethodLabel(loadInvoicePaymentMeta(printingInvoice.id).method, t)}</p>
-                  <p>
-                    {t('invoices.amountPaid')}: {formatCurrency(
-                      Number(loadInvoicePaymentMeta(printingInvoice.id).amountPaid || printingInvoice.total),
-                      printingInvoice.currency,
-                      intlLocale
-                    )}
-                  </p>
-                </>
-              )}
-              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'bank_transfer' && companyIban && <p>IBAN: {companyIban}</p>}
-              {includeCompanyAddress && loadInvoicePaymentMeta(printingInvoice.id).method === 'bank_transfer' && companyBic && <p>BIC: {companyBic}</p>}
-            </div>
-          )}
+          <StandardInvoiceRenderer
+            model={buildInvoiceDocument(printingInvoice, true)}
+            intlLocale={intlLocale}
+            t={t}
+          />
         </div>
       )}
 
       {combinedPrintInvoices.length > 0 && (
         <div className="print-area print-invoice print-invoice-batch hidden">
-          {combinedPrintInvoices.map((invoice) => {
-            const paymentMeta = loadInvoicePaymentMeta(invoice.id)
-            return (
-              <article key={invoice.id} className="invoice-print-document">
-                <div className="invoice-print-header">
-                  <div className="invoice-print-brand">
-                    {companyLogo ? (
-                      <Logo src={companyLogo} alt={currentCompany!.name} size="print" className="invoice-print-logo" correctArtworkOffset={false} />
-                    ) : (
-                      <div className="invoice-print-logo-fallback flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-600">
-                        {currentCompany!.name.slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="invoice-print-company">
-                      <h1 className="text-xl font-semibold">{currentCompany!.name}</h1>
-                      <p className="text-sm text-slate-600">{invoice.invoice_number}</p>
-                      {includeCompanyAddress && companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>}
-                      {includeCompanyAddress && companyEmail && <p className="text-xs text-slate-600">{companyEmail}</p>}
-                      {includeCompanyAddress && companyTaxNumber && <p className="text-xs text-slate-600">{t('profile.companyTaxNumber')}: {companyTaxNumber}</p>}
-                      {includeCompanyAddress && companyIban && <p className="text-xs text-slate-600">IBAN: {companyIban}</p>}
-                      {includeCompanyAddress && companyBic && <p className="text-xs text-slate-600">BIC: {companyBic}</p>}
-                    </div>
-                  </div>
-                  <div className="invoice-print-meta text-right text-sm">
-                    <p>{t('invoices.status')}: {formatInvoiceStatus(invoice.status, t)}</p>
-                    <p>{t('invoices.issueDate')}: {new Date(`${invoice.issue_date}T00:00:00`).toLocaleDateString(intlLocale)}</p>
-                    {invoice.due_date && <p>{t('invoices.dueDate')}: {new Date(`${invoice.due_date}T00:00:00`).toLocaleDateString(intlLocale)}</p>}
-                  </div>
-                </div>
-                <div className="invoice-print-client mb-3 rounded-md border p-3 text-sm">
-                  <p className="font-semibold">{t('invoices.client')}</p>
-                  <p>{invoice.clients?.name ?? t('invoices.noClient')}</p>
-                  {clientPrintFields.company && invoice.clients?.client_company && <p>{invoice.clients.client_company}</p>}
-                  {clientPrintFields.email && invoice.clients?.email && <p>{invoice.clients.email}</p>}
-                  {clientPrintFields.phone && invoice.clients?.phone && <p>{invoice.clients.phone}</p>}
-                  {clientPrintFields.address && getClientAddressLines(invoice.clients, locale).map((line) => <p key={line}>{line}</p>)}
-                  {clientPrintFields.taxNumber && invoice.clients?.tax_number && <p>{t('clients.taxNumber')}: {invoice.clients.tax_number}</p>}
-                  {invoice.notes && <p className="mt-2 whitespace-pre-line text-slate-700">{invoice.notes}</p>}
-                </div>
-                <table className="invoice-print-table w-full border-collapse text-sm">
-                  <thead><tr><th className="border p-2 text-left">{t('common.description')}</th><th className="border p-2 text-right">{t('invoices.quantity')}</th><th className="border p-2 text-right">{t('invoices.price')}</th><th className="border p-2 text-right">{t('invoices.tax')}</th><th className="border p-2 text-right">{t('invoices.lineTotal')}</th></tr></thead>
-                  <tbody>{(invoice.invoice_items ?? []).map((item) => <tr key={item.id ?? item.description}><td className="border p-2">{item.description}</td><td className="border p-2 text-right">{item.quantity}</td><td className="border p-2 text-right">{formatCurrency(item.unit_price, invoice.currency, intlLocale)}</td><td className="border p-2 text-right">{item.tax_rate}%</td><td className="border p-2 text-right">{formatCurrency(item.line_total, invoice.currency, intlLocale)}</td></tr>)}</tbody>
-                </table>
-                <div className="invoice-print-totals ml-auto mt-4 w-full max-w-xs space-y-2 text-sm">
-                  <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(invoice.subtotal, invoice.currency, intlLocale)}</span></div>
-                  <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(invoice.tax_amount, invoice.currency, intlLocale)}</span></div>
-                  <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(invoice.total, invoice.currency, intlLocale)}</span></div>
-                </div>
-                {invoice.status === 'paid' && (
-                  <div className="invoice-print-payment mt-4 rounded-md border p-3 text-sm">
-                    <p className="font-semibold">{t('invoices.payment')}</p>
-                    {paymentMeta.splitPayment && paymentMeta.payments.length > 0 ? paymentMeta.payments.map((payment, index) => (
-                      <p key={`${payment.method}-${index}`}>{paymentMethodLabel(payment.method, t)}: {formatCurrency(payment.amount, invoice.currency, intlLocale)}{payment.reference ? ` · ${payment.reference}` : ''}</p>
-                    )) : (
-                      <><p>{t('invoices.paymentMethod')}: {paymentMethodLabel(paymentMeta.method, t)}</p><p>{t('invoices.amountPaid')}: {formatCurrency(Number(paymentMeta.amountPaid || invoice.total), invoice.currency, intlLocale)}</p></>
-                    )}
-                  </div>
-                )}
-              </article>
-            )
-          })}
+          {combinedPrintInvoices.map((invoice) => (
+            <StandardInvoiceRenderer
+              key={invoice.id}
+              model={buildInvoiceDocument(invoice, false)}
+              intlLocale={intlLocale}
+              t={t}
+            />
+          ))}
         </div>
       )}
-
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>}
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
 
