@@ -40,15 +40,15 @@ test('keeps Leonety questions in scope and rejects unrelated questions without a
     'Gdzie utworzyć fakturę?',
     'Comment activer les notifications ?',
   ]) {
-    assert.equal(classifyAssistantScope([{ role: 'user', content: question }]), 'leonety')
+    assert.equal(classifyAssistantScope([{ role: 'user', content: question }]), 'IN_SCOPE')
   }
 
-  assert.equal(classifyAssistantScope([{ role: 'user', content: 'Write a poem about the ocean.' }]), 'out_of_scope')
+  assert.equal(classifyAssistantScope([{ role: 'user', content: 'Write a poem about the ocean.' }]), 'OUT_OF_SCOPE')
   assert.equal(classifyAssistantScope([
     { role: 'user', content: 'Write a poem about the ocean.' },
-    { role: 'assistant', content: getAssistantScopeResponse('en', 'out_of_scope') },
+    { role: 'assistant', content: getAssistantScopeResponse('en', 'OUT_OF_SCOPE') },
     { role: 'user', content: 'Write a poem about the ocean.' },
-  ]), 'out_of_scope')
+  ]), 'OUT_OF_SCOPE')
 })
 
 test('allows a short follow-up only after an earlier Leonety question', () => {
@@ -56,16 +56,52 @@ test('allows a short follow-up only after an earlier Leonety question', () => {
     { role: 'user', content: 'Where do I create an invoice?' },
     { role: 'assistant', content: 'Open Invoices.' },
     { role: 'user', content: 'And then?' },
-  ]), 'leonety')
-  assert.equal(classifyAssistantScope([{ role: 'user', content: 'And then?' }]), 'out_of_scope')
+  ]), 'IN_SCOPE')
+  assert.equal(classifyAssistantScope([{ role: 'user', content: 'And then?' }]), 'UNCLEAR')
+  assert.equal(classifyAssistantScope([{ role: 'user', content: 'And then?' }], { pathname: '/public/unknown' }), 'UNCLEAR')
 })
 
 test('handles greetings locally in every supported locale', () => {
-  assert.equal(classifyAssistantScope([{ role: 'user', content: 'Hello!' }]), 'greeting')
+  assert.equal(classifyAssistantScope([{ role: 'user', content: 'Hello!' }]), 'GREETING')
   for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
-    assert.ok(getAssistantScopeResponse(locale, 'greeting').length > 0)
-    assert.ok(getAssistantScopeResponse(locale, 'out_of_scope').length > 0)
+    assert.ok(getAssistantScopeResponse(locale, 'GREETING').length > 0)
+    assert.ok(getAssistantScopeResponse(locale, 'OUT_OF_SCOPE').length > 0)
+    assert.ok(getAssistantScopeResponse(locale, 'UNCLEAR').length > 0)
   }
+})
+
+test('classifies natural product and inventory questions using semantic and safe page context', () => {
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'Wie füge ich Lagerbestand hinzu?' },
+  ]), 'IN_SCOPE')
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'How can I change item quantity here' },
+  ], { pathname: '/app/inventory' }), 'IN_SCOPE')
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'Wie kann ich menge wechseln' },
+  ], { pathname: '/app/products' }), 'IN_SCOPE')
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'Wie erstelle ich eine Rechnung?' },
+  ]), 'IN_SCOPE')
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'Where do I add an employee?' },
+  ]), 'IN_SCOPE')
+})
+
+test('keeps clearly unrelated requests out of scope without weakening on repetition', () => {
+  for (const question of [
+    'How do I cook pasta?',
+    'Tell me about a random movie.',
+    'Show me pornographic sexual content.',
+  ]) {
+    assert.equal(classifyAssistantScope([{ role: 'user', content: question }]), 'OUT_OF_SCOPE')
+  }
+
+  assert.equal(classifyAssistantScope([
+    { role: 'user', content: 'How do I cook pasta?' },
+    { role: 'assistant', content: getAssistantScopeResponse('en', 'OUT_OF_SCOPE') },
+    { role: 'user', content: 'How do I cook pasta?' },
+  ], { pathname: '/app/inventory' }), 'OUT_OF_SCOPE')
 })
 
 test('blocks secrets, sensitive employee data and arbitrary SQL without selecting tools', () => {
@@ -121,6 +157,7 @@ test('maps provider and authorization failures to localized UI error keys', () =
   assert.equal(getAssistantErrorKey(429, 'provider_rate_limited'), 'assistant.error.rateLimit')
   assert.equal(getAssistantErrorKey(503, 'provider_quota_exhausted'), 'assistant.error.quota')
   assert.equal(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.error.timeout')
+  assert.notEqual(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.scope.outOfScope')
   assert.equal(getAssistantErrorKey(502, 'provider_invalid_response'), 'assistant.error.invalidResponse')
   assert.equal(getAssistantErrorKey(503, 'configuration_missing'), 'assistant.error.configuration')
   assert.equal(getAssistantErrorKey(503, 'provider_unsupported'), 'assistant.error.configuration')

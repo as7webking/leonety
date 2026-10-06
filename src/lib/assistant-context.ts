@@ -11,7 +11,11 @@ export const assistantToolNames = [
 export type AssistantToolName = typeof assistantToolNames[number]
 export type AssistantBlockedReason = 'secrets' | 'arbitrary_sql' | 'sensitive_personal_data'
 export type AssistantPeriod = 'current_month' | 'current_year'
-export type AssistantRequestScope = 'leonety' | 'greeting' | 'out_of_scope'
+export type AssistantRequestScope = 'IN_SCOPE' | 'OUT_OF_SCOPE' | 'UNCLEAR' | 'GREETING'
+
+export interface AssistantScopeContext {
+  pathname?: string | null
+}
 
 export interface AssistantRequestAnalysis {
   tools: AssistantToolName[]
@@ -92,15 +96,46 @@ const sensitivePersonalPatterns = [
   /(zeige|покажи|дай|göster|pokaż|affiche).{0,60}(steuer-id|sozialversicherung|паспорт|социальн|kimlik|pasaport|dowód|passeport|sécurité sociale)/iu,
 ]
 
-const leonetyScopePatterns = [
+const leonetyDomainPatterns = [
   /\bleonety\b/i,
-  /\b(dashboard|workspace|company|income|expense|transaction|invoice|client|contract|product|inventory|stock|employee|shift|time tracking|kassenbuch|cashbook|notification|integration|settings|profile|woocommerce)\b/i,
-  /\b(dashboard|arbeitsbereich|unternehmen|einnahmen|ausgaben|transaktion|rechnung|kunde|vertrag|produkt|inventar|lager|mitarbeiter|schicht|zeiterfassung|kassenbuch|benachrichtigung|integration|einstellungen|profil)\b/iu,
-  /(рабоч(ая|ее)|компан|доход|расход|транзакц|сч[её]т|клиент|договор|товар|продукт|склад|сотрудник|смен|уч[её]т времени|кассов|уведомлен|интеграц|настройк|профил)/iu,
+  /\b(dashboard|workspace|company|income|expense|transaction|invoice|client|contract|product|inventory|stock|stock movement|employee|shift|time tracking|kassenbuch|cashbook|notification|integration|settings|profile|woocommerce)\b/i,
+  /\b(dashboard|arbeitsbereich|unternehmen|einnahmen|ausgaben|transaktion|rechnung|kunde|vertrag|produkt|inventar|lagerbestand|warenbestand|lagerbewegung|mitarbeiter|schicht|zeiterfassung|kassenbuch|benachrichtigung|integration|einstellungen|profil)\b/iu,
+  /(рабоч(ая|ее)|компан|доход|расход|транзакц|сч[её]т|клиент|договор|товар|продукт|склад|остаток|сотрудник|смен|уч[её]т времени|кассов|уведомлен|интеграц|настройк|профил)/iu,
   /(çalışma alan|şirket|gelir|gider|işlem|fatura|müşteri|sözleşme|ürün|envanter|stok|çalışan|vardiya|zaman takibi|kasa defteri|bildirim|entegrasyon|ayarlar|profil)/iu,
-  /(робоч(а|ий)|компан|дохід|витрат|транзакц|рахунок|клієнт|договір|товар|продукт|склад|працівник|змін|облік часу|касов|сповіщенн|інтеграц|налаштуван|профіл)/iu,
-  /(obszar roboczy|firma|przychód|wydatek|transakcj|faktur|klient|umow|produkt|magazyn|pracownik|zmian|ewidencj[aę] czasu|księga kasowa|powiadomien|integracj|ustawien|profil)/iu,
+  /(робоч(а|ий)|компан|дохід|витрат|транзакц|рахунок|клієнт|договір|товар|продукт|склад|залишок|працівник|змін|облік часу|касов|сповіщенн|інтеграц|налаштуван|профіл)/iu,
+  /(obszar roboczy|firma|przychód|wydatek|transakcj|faktur|klient|umow|produkt|magazyn|stan magazynowy|pracownik|zmian|ewidencj[aę] czasu|księga kasowa|powiadomien|integracj|ustawien|profil)/iu,
   /(espace de travail|entreprise|revenu|dépense|transaction|facture|client|contrat|produit|inventaire|stock|employé|équipe|suivi du temps|livre de caisse|notification|intégration|paramètres|profil)/iu,
+]
+
+const contextualInventoryPatterns = [
+  /\b(item|quantity|amount|count|units?)\b/i,
+  /\b(artikel|menge|anzahl|stückzahl)\b/iu,
+  /\b(товар|количеств|штук)\b/iu,
+  /\b(ürün|miktar|adet)\b/iu,
+  /\b(товар|кількіст|штук)\b/iu,
+  /\b(produkt|ilość|sztuk)\b/iu,
+  /\b(produit|article|quantité|unités?)\b/iu,
+]
+
+const appActionPatterns = [
+  /\b(add|change|edit|update|remove|delete|create|open|find|set|increase|decrease|adjust|how|where)\b/i,
+  /\b(hinzufügen|ändern|wechseln|bearbeiten|löschen|erstellen|öffnen|finden|einstellen|erhöhen|verringern|wie|wo)\b/iu,
+  /\b(добав|измен|редакт|удал|созда|откры|найти|настро|увелич|уменьш|как|где)\b/iu,
+  /\b(ekle|değiştir|düzenle|sil|oluştur|aç|bul|ayarla|artır|azalt|nasıl|nerede)\b/iu,
+  /\b(дод|змін|редаг|видал|створ|відкр|знай|налашт|збільш|зменш|як|де)\b/iu,
+  /\b(dodaj|zmień|edytuj|usuń|utwórz|otwórz|znajdź|ustaw|zwiększ|zmniejsz|jak|gdzie)\b/iu,
+  /\b(ajouter|changer|modifier|supprimer|créer|ouvrir|trouver|régler|augmenter|diminuer|comment|où)\b/iu,
+]
+
+// These are broad, high-confidence topic families, not an exhaustive blacklist.
+const clearlyUnrelatedPatterns = [
+  /\b(cook|recipe|pasta|pizza recipe|bake|random movie|film review|politics|president|election|porn|pornographic|sexual content|write (a )?(poem|song|story))\b/i,
+  /\b(kochen|rezept|nudeln|zufälliger film|politik|präsident|wahl|porno|pornograf|sexuell|gedicht|lied)\b/iu,
+  /\b(приготов|рецепт|макарон|случайн.*фильм|политик|президент|выбор|порно|сексуальн|стих|песн)\b/iu,
+  /\b(yemek pişir|tarif|makarna|rastgele film|siyaset|başkan|seçim|porno|cinsel|şiir|şarkı)\b/iu,
+  /\b(пригот|рецепт|макарон|випадков.*фільм|політик|президент|вибор|порно|сексуальн|вірш|пісн)\b/iu,
+  /\b(gotować|przepis|makaron|losow.*film|polityk|prezydent|wybor|porno|seksual|wiersz|piosenk)\b/iu,
+  /\b(cuisiner|recette|pâtes|film au hasard|politique|président|élection|porno|sexuel|poème|chanson)\b/iu,
 ]
 
 const greetingPatterns = [
@@ -145,21 +180,42 @@ export function analyzeAssistantRequest(message: string): AssistantRequestAnalys
 
 function isLeonetyScopedMessage(message: string) {
   const analysis = analyzeAssistantRequest(message)
-  return analysis.tools.length > 0 || matchesAny(message, leonetyScopePatterns)
+  return analysis.tools.length > 0 || matchesAny(message, leonetyDomainPatterns)
 }
 
-export function classifyAssistantScope(messages: Array<{ role: 'user' | 'assistant'; content: string }>): AssistantRequestScope {
+function hasSafeAppRoute(pathname: string | null | undefined) {
+  return typeof pathname === 'string' && /^\/app(?:\/|$)/.test(pathname)
+}
+
+function hasInventoryRoute(pathname: string | null | undefined) {
+  return typeof pathname === 'string' && /^\/app\/(products|inventory|stock-movements)(?:\/|$)/.test(pathname)
+}
+
+export function classifyAssistantScope(
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  context: AssistantScopeContext = {}
+): AssistantRequestScope {
   const userMessages = messages.filter((message) => message.role === 'user')
   const current = userMessages.at(-1)?.content.trim().slice(0, 1800) ?? ''
-  if (isLeonetyScopedMessage(current)) return 'leonety'
-  if (matchesAny(current, greetingPatterns)) return 'greeting'
+  if (matchesAny(current, clearlyUnrelatedPatterns)) return 'OUT_OF_SCOPE'
+  if (isLeonetyScopedMessage(current)) return 'IN_SCOPE'
+  if (matchesAny(current, greetingPatterns)) return 'GREETING'
+
+  const hasContextualAction = matchesAny(current, appActionPatterns)
+  if (hasInventoryRoute(context.pathname) && hasContextualAction && matchesAny(current, contextualInventoryPatterns)) {
+    return 'IN_SCOPE'
+  }
+
+  if (hasSafeAppRoute(context.pathname) && current.length <= 160 && matchesAny(current, followUpPatterns)) {
+    return 'IN_SCOPE'
+  }
 
   const isShortFollowUp = current.length <= 160 && matchesAny(current, followUpPatterns)
   if (isShortFollowUp && userMessages.slice(0, -1).some((message) => isLeonetyScopedMessage(message.content))) {
-    return 'leonety'
+    return 'IN_SCOPE'
   }
 
-  return 'out_of_scope'
+  return 'UNCLEAR'
 }
 
 export function getAssistantPeriodRange(period: AssistantPeriod, now = new Date(), timeZone = 'UTC') {
@@ -272,37 +328,44 @@ export function getBlockedAssistantResponse(locale: Locale, reason: AssistantBlo
   return blockedResponses[locale][reason]
 }
 
-const scopeResponses: Record<Locale, Record<Exclude<AssistantRequestScope, 'leonety'>, string>> = {
+const scopeResponses: Record<Locale, Record<Exclude<AssistantRequestScope, 'IN_SCOPE'>, string>> = {
   en: {
-    greeting: 'Hello! Ask me a question about Leonety or your authorized workspace data.',
-    out_of_scope: "I didn't understand the question. Please ask another question about Leonety.",
+    GREETING: 'Hello! Ask me a question about Leonety or your authorized workspace data.',
+    OUT_OF_SCOPE: "I didn't understand the question. Please ask another question about Leonety.",
+    UNCLEAR: "I couldn't find that function in Leonety. Please clarify the question.",
   },
   de: {
-    greeting: 'Hallo! Stelle mir eine Frage zu Leonety oder zu deinen freigegebenen Workspace-Daten.',
-    out_of_scope: 'Ich habe die Frage nicht verstanden. Bitte stelle eine andere Frage zu Leonety.',
+    GREETING: 'Hallo! Stelle mir eine Frage zu Leonety oder zu deinen freigegebenen Workspace-Daten.',
+    OUT_OF_SCOPE: 'Ich habe die Frage nicht verstanden. Bitte stelle eine andere Frage zu Leonety.',
+    UNCLEAR: 'Ich konnte diese Funktion in Leonety nicht finden. Bitte präzisiere deine Frage.',
   },
   ru: {
-    greeting: 'Здравствуйте! Задайте вопрос о Leonety или доступных вам данных рабочего пространства.',
-    out_of_scope: 'Я не понял вопрос. Пожалуйста, задайте другой вопрос о Leonety.',
+    GREETING: 'Здравствуйте! Задайте вопрос о Leonety или доступных вам данных рабочего пространства.',
+    OUT_OF_SCOPE: 'Я не понял вопрос. Пожалуйста, задайте другой вопрос о Leonety.',
+    UNCLEAR: 'Я не смог найти такую функцию в Leonety. Пожалуйста, уточните вопрос.',
   },
   tr: {
-    greeting: 'Merhaba! Leonety veya erişiminiz olan çalışma alanı verileri hakkında bir soru sorun.',
-    out_of_scope: 'Soruyu anlamadım. Lütfen Leonety hakkında başka bir soru sorun.',
+    GREETING: 'Merhaba! Leonety veya erişiminiz olan çalışma alanı verileri hakkında bir soru sorun.',
+    OUT_OF_SCOPE: 'Soruyu anlamadım. Lütfen Leonety hakkında başka bir soru sorun.',
+    UNCLEAR: "Leonety'de bu işlevi bulamadım. Lütfen sorunuzu netleştirin.",
   },
   uk: {
-    greeting: 'Вітаю! Поставте запитання про Leonety або доступні вам дані робочого простору.',
-    out_of_scope: 'Я не зрозумів запитання. Будь ласка, поставте інше запитання про Leonety.',
+    GREETING: 'Вітаю! Поставте запитання про Leonety або доступні вам дані робочого простору.',
+    OUT_OF_SCOPE: 'Я не зрозумів запитання. Будь ласка, поставте інше запитання про Leonety.',
+    UNCLEAR: 'Я не зміг знайти таку функцію в Leonety. Будь ласка, уточніть запитання.',
   },
   pl: {
-    greeting: 'Dzień dobry! Zapytaj o Leonety lub dane obszaru roboczego, do których masz dostęp.',
-    out_of_scope: 'Nie rozumiem pytania. Zadaj inne pytanie dotyczące Leonety.',
+    GREETING: 'Dzień dobry! Zapytaj o Leonety lub dane obszaru roboczego, do których masz dostęp.',
+    OUT_OF_SCOPE: 'Nie rozumiem pytania. Zadaj inne pytanie dotyczące Leonety.',
+    UNCLEAR: 'Nie udało mi się znaleźć tej funkcji w Leonety. Doprecyzuj pytanie.',
   },
   fr: {
-    greeting: 'Bonjour ! Posez une question sur Leonety ou sur les données autorisées de votre espace de travail.',
-    out_of_scope: "Je n'ai pas compris la question. Posez une autre question concernant Leonety.",
+    GREETING: 'Bonjour ! Posez une question sur Leonety ou sur les données autorisées de votre espace de travail.',
+    OUT_OF_SCOPE: "Je n'ai pas compris la question. Posez une autre question concernant Leonety.",
+    UNCLEAR: "Je n'ai pas trouvé cette fonction dans Leonety. Veuillez préciser la question.",
   },
 }
 
-export function getAssistantScopeResponse(locale: Locale, scope: Exclude<AssistantRequestScope, 'leonety'>) {
+export function getAssistantScopeResponse(locale: Locale, scope: Exclude<AssistantRequestScope, 'IN_SCOPE'>) {
   return scopeResponses[locale][scope]
 }

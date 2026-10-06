@@ -11,7 +11,7 @@ import { AssistantWorkspaceAccessError, loadAuthorizedAssistantData } from '@/li
 import { createAssistantRateLimiter } from '@/lib/assistant-rate-limit'
 import { assistantRequestSchema } from '@/lib/assistant-request'
 import { defaultLocale, normalizeLocale } from '@/lib/i18n'
-import { buildLeonetyAssistantKnowledge, normalizeAssistantRoute } from '@/lib/leonety-assistant-knowledge'
+import { assistantSupportedRoutes, buildLeonetyAssistantKnowledge, normalizeAssistantRoute } from '@/lib/leonety-assistant-knowledge'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
@@ -50,8 +50,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ answer: getBlockedAssistantResponse(locale, requestAnalysis.blockedReason) })
     }
 
-    const scope = classifyAssistantScope(parsed.data.messages)
-    if (scope !== 'leonety') {
+    const requestedPathname = parsed.data.pathname
+    const pathname = normalizeAssistantRoute(requestedPathname)
+    const hasRecognizedPath = typeof requestedPathname === 'string' && assistantSupportedRoutes.some((route) => (
+      requestedPathname === route || requestedPathname.startsWith(`${route}/`)
+    ))
+    const scope = classifyAssistantScope(parsed.data.messages, { pathname: hasRecognizedPath ? pathname : undefined })
+    if (scope !== 'IN_SCOPE') {
       return NextResponse.json({ answer: getAssistantScopeResponse(locale, scope) })
     }
 
@@ -60,7 +65,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: aiStatus.error ?? 'configuration_missing' }, { status: 503 })
     }
 
-    const pathname = normalizeAssistantRoute(parsed.data.pathname)
     const authorizedData = await loadAuthorizedAssistantData({
       supabase,
       userId: authData.user.id,

@@ -65,6 +65,7 @@ export function buildLeonetyAssistantKnowledge(locale: Locale, pathname: string)
       'Add an expense: open Expenses, choose Add expense, enter amount, description, category, date and save.',
       'Create an invoice: open Invoices, choose Add invoice, select or create a client, add line items, tax settings and save/print.',
       'Add stock: open Stock movements, choose product, movement purpose, quantity, reason and save.',
+      'Change product quantity: use Inventory or Stock movements to create an explicit stock adjustment. Editing product details does not silently change stock.',
       'Connect WooCommerce: open Settings > Integrations > WooCommerce, enter store URL and REST API credentials from WooCommerce settings.',
       'Print transactions: open Transactions, choose date range and Print.',
       'Print Kassenbuch: open Transactions, choose Print, select Kassenbuch and choose the available month-end/page-number options before printing.',
