@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { clearOfflineDataForUser } from '@/lib/offline-drafts'
@@ -18,7 +19,7 @@ import { useI18n } from '@/contexts/i18n-context'
 import { LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { User, Mail, DollarSign, LogOut } from 'lucide-react'
+import { User, Mail, DollarSign, LogOut, Users } from 'lucide-react'
 
 interface UserProfile {
   id: string
@@ -1215,9 +1216,17 @@ export default function ProfilePage() {
 
         {accountAccess.isAdmin && (
           <Card className="overflow-hidden lg:col-span-2">
-            <CardHeader>
-              <CardTitle>{t('profile.adminAccessManagement')}</CardTitle>
-              <CardDescription>{t('profile.adminAccessDescription')}</CardDescription>
+            <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>{t('profile.adminAccessManagement')}</CardTitle>
+                <CardDescription>{t('profile.adminAccessDescription')}</CardDescription>
+              </div>
+              <Button asChild variant="outline">
+                <Link href="/app/admin/users">
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  {t('nav.adminUsers')}
+                </Link>
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               {adminError && (

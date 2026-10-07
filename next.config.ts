@@ -25,6 +25,7 @@ const appRoutes = [
   '/stock-movements',
   '/settings',
   '/settings/:path*',
+  '/admin/:path*',
 ]
 
 const nextConfig: NextConfig = {
