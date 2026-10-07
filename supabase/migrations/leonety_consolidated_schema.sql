@@ -11,6 +11,8 @@
 -- Edit 1 (2026-09-19): consolidated 2026 application schema.
 -- Edit 2 (2026-09-20): incoming-order notification devices, settings and events.
 -- Edit 3 (2026-09-28): employee weekly schedules and location operating hours.
+-- Edit 4 (2026-10-05): workspace-scoped employee numbers and atomic allocation.
+-- Edit 5 (2026-10-06): owner-only encrypted human mailbox connections.
 -- Important: this log documents the repository baseline. Supabase does not rerun an
 -- already-applied timestamp after this file changes; production additions still need
 -- an explicitly reviewed manual application and deployment record.
@@ -2615,6 +2617,475 @@ comment on table public.employee_weekly_schedules is
   'Reusable employee schedule templates only; rows do not create or modify shifts automatically.';
 comment on table public.location_operating_hours is
   'Location opening-hour suggestions only; changes do not modify employee schedules or shifts.';
+
+-- ============================================================================
+-- Edit 4 (2026-10-05): Employee numbers
+-- ============================================================================
+
+-- Employee numbers are optional by default and unique only inside a workspace.
+-- Automatic allocation is performed by the database while holding a row lock on
+-- the workspace settings. The application must not calculate max + 1 itself.
+
+alter table public.employees
+  add column if not exists employee_number text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'employees_employee_number_length_check'
+      and conrelid = 'public.employees'::regclass
+  ) then
+    alter table public.employees
+      add constraint employees_employee_number_length_check
+      check (employee_number is null or char_length(btrim(employee_number)) between 1 and 100);
+  end if;
+end $$;
+
+create unique index if not exists employees_company_employee_number_unique
+  on public.employees(company_id, lower(btrim(employee_number)))
+  where employee_number is not null and btrim(employee_number) <> '';
+
+create index if not exists employees_company_employee_number_search_idx
+  on public.employees(company_id, lower(employee_number) text_pattern_ops)
+  where employee_number is not null and btrim(employee_number) <> '';
+
+create table if not exists public.employee_number_settings (
+  company_id uuid primary key references public.companies(id) on delete cascade,
+  require_employee_number boolean not null default false,
+  automatic_numbering boolean not null default false,
+  number_prefix text not null default '',
+  next_number bigint not null default 1,
+  minimum_digits smallint not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint employee_number_settings_prefix_check
+    check (char_length(number_prefix) <= 32),
+  constraint employee_number_settings_next_number_check
+    check (next_number >= 1),
+  constraint employee_number_settings_minimum_digits_check
+    check (minimum_digits between 1 and 12)
+);
+
+insert into public.employee_number_settings (company_id)
+select company.id
+from public.companies company
+on conflict (company_id) do nothing;
+
+create or replace function public.initialize_employee_number_settings()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  insert into public.employee_number_settings (company_id)
+  values (new.id)
+  on conflict (company_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_initialize_employee_number_settings on public.companies;
+create trigger trg_initialize_employee_number_settings
+after insert on public.companies
+for each row
+execute function public.initialize_employee_number_settings();
+
+alter table public.employee_number_settings enable row level security;
+
+drop policy if exists "Owners view employee number settings"
+  on public.employee_number_settings;
+create policy "Owners view employee number settings"
+  on public.employee_number_settings
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = employee_number_settings.company_id
+        and c.owner_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Owners create employee number settings"
+  on public.employee_number_settings;
+create policy "Owners create employee number settings"
+  on public.employee_number_settings
+  for insert
+  to authenticated
+  with check (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = employee_number_settings.company_id
+        and c.owner_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Owners update employee number settings"
+  on public.employee_number_settings;
+create policy "Owners update employee number settings"
+  on public.employee_number_settings
+  for update
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = employee_number_settings.company_id
+        and c.owner_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.companies c
+      where c.id = employee_number_settings.company_id
+        and c.owner_id = auth.uid()
+    )
+  );
+
+grant select, insert, update on public.employee_number_settings to authenticated;
+
+create or replace function public.guard_employee_number_settings_counter()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.number_prefix := btrim(new.number_prefix);
+
+  if tg_op = 'UPDATE' and new.next_number < old.next_number then
+    raise exception 'Employee number counter cannot be decreased'
+      using errcode = '23514';
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_guard_employee_number_settings_counter
+  on public.employee_number_settings;
+create trigger trg_guard_employee_number_settings_counter
+before insert or update on public.employee_number_settings
+for each row
+execute function public.guard_employee_number_settings_counter();
+
+create or replace function public.prepare_employee_number()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  settings_row public.employee_number_settings%rowtype;
+  candidate text;
+  candidate_number bigint;
+begin
+  new.employee_number := nullif(btrim(new.employee_number), '');
+
+  -- FOR UPDATE serializes settings changes, manual inserts and automatic allocation
+  -- for this workspace. Missing settings intentionally mean both options are off.
+  select *
+  into settings_row
+  from public.employee_number_settings settings
+  where settings.company_id = new.company_id
+  for update;
+
+  if not found then
+    return new;
+  end if;
+
+  if settings_row.automatic_numbering then
+    if tg_op = 'INSERT' and new.employee_number is not null then
+      raise exception 'Manual employee numbers are disabled for this workspace'
+        using errcode = '23514';
+    end if;
+
+    if tg_op = 'UPDATE'
+      and old.employee_number is not null
+      and new.employee_number is distinct from old.employee_number then
+      raise exception 'Employee numbers cannot be changed while automatic numbering is enabled'
+        using errcode = '23514';
+    end if;
+
+    if new.employee_number is null then
+      candidate_number := settings_row.next_number;
+
+      loop
+        candidate := settings_row.number_prefix
+          || lpad(candidate_number::text, settings_row.minimum_digits, '0');
+
+        exit when not exists (
+          select 1
+          from public.employees employee
+          where employee.company_id = new.company_id
+            and lower(btrim(employee.employee_number)) = lower(candidate)
+            and (tg_op = 'INSERT' or employee.id <> new.id)
+        );
+
+        candidate_number := candidate_number + 1;
+      end loop;
+
+      update public.employee_number_settings
+      set next_number = candidate_number + 1,
+          updated_at = now()
+      where company_id = new.company_id;
+
+      new.employee_number := candidate;
+    end if;
+  end if;
+
+  if settings_row.require_employee_number and new.employee_number is null then
+    raise exception 'Employee number is required for this workspace'
+      using errcode = '23502';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_prepare_employee_number on public.employees;
+create trigger trg_prepare_employee_number
+before insert or update on public.employees
+for each row
+execute function public.prepare_employee_number();
+
+comment on column public.employees.employee_number is
+  'Optional workspace-scoped employee number; uniqueness is case-insensitive.';
+comment on table public.employee_number_settings is
+  'Workspace employee-number policy and monotonic atomic allocation counter.';
+
+-- Existing employees remain valid when this edit is applied because employee_number
+-- is nullable and every workspace settings row starts with both options disabled.
+-- Enabling the requirement affects new employees and employees subsequently edited.
+-- The settings row has no DELETE policy and its counter cannot be decreased, so
+-- automatically issued numbers are not reused after an employee is deleted.
+
+-- Rollback notes (manual): remove the three Edit 4 triggers first, then their three
+-- functions and employee_number_settings table. Keep employees.employee_number and
+-- its indexes unless losing assigned numbers has been explicitly approved.
+
+-- ============================================================================
+-- Edit 5 (2026-10-06): Human mailbox connections
+-- ============================================================================
+
+-- Gmail remains the source of truth. This table stores only connection metadata,
+-- encrypted OAuth credentials and an incremental Gmail history cursor. It never
+-- stores message bodies, subjects, recipients, attachments or mailbox HTML.
+
+create table if not exists public.mailbox_connections (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  provider text not null,
+  provider_account_email text not null,
+  access_token_encrypted text not null,
+  refresh_token_encrypted text not null,
+  access_token_expires_at timestamptz,
+  granted_scopes text[] not null default '{}'::text[],
+  status text not null default 'connected',
+  history_id text,
+  last_synced_at timestamptz,
+  last_error_code text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint mailbox_connections_provider_check
+    check (provider in ('google')),
+  constraint mailbox_connections_account_email_check
+    check (char_length(btrim(provider_account_email)) between 3 and 320),
+  constraint mailbox_connections_access_token_encrypted_check
+    check (access_token_encrypted like 'enc:v1:%'),
+  constraint mailbox_connections_refresh_token_encrypted_check
+    check (refresh_token_encrypted like 'enc:v1:%'),
+  constraint mailbox_connections_scopes_check
+    check (granted_scopes @> array['https://www.googleapis.com/auth/gmail.modify']::text[]),
+  constraint mailbox_connections_status_check
+    check (status in ('connected', 'reconnect_required', 'error', 'disabled')),
+  constraint mailbox_connections_error_code_length_check
+    check (last_error_code is null or char_length(last_error_code) <= 100)
+);
+
+-- Multiple Gmail accounts may be connected to one workspace in the future, but
+-- the same provider account must not be connected twice to the same workspace.
+-- The leading company_id columns also support owner-scoped connection listings.
+create unique index if not exists mailbox_connections_company_provider_account_unique
+  on public.mailbox_connections(company_id, provider, lower(btrim(provider_account_email)));
+
+create index if not exists mailbox_connections_company_status_idx
+  on public.mailbox_connections(company_id, status);
+
+alter table public.mailbox_connections enable row level security;
+
+-- Policies are created without granting direct table privileges. Future mailbox
+-- APIs must authenticate the current user, verify companies.owner_id, then use the
+-- server-only service client. Keeping anon/authenticated grants revoked prevents an
+-- otherwise authorized browser from selecting encrypted credential columns.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mailbox_connections'
+      and policyname = 'Owners select mailbox connections'
+  ) then
+    create policy "Owners select mailbox connections"
+      on public.mailbox_connections
+      for select
+      to authenticated
+      using (
+        exists (
+          select 1
+          from public.companies c
+          where c.id = mailbox_connections.company_id
+            and c.owner_id = auth.uid()
+        )
+      );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mailbox_connections'
+      and policyname = 'Owners insert mailbox connections'
+  ) then
+    create policy "Owners insert mailbox connections"
+      on public.mailbox_connections
+      for insert
+      to authenticated
+      with check (
+        exists (
+          select 1
+          from public.companies c
+          where c.id = mailbox_connections.company_id
+            and c.owner_id = auth.uid()
+        )
+      );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mailbox_connections'
+      and policyname = 'Owners update mailbox connections'
+  ) then
+    create policy "Owners update mailbox connections"
+      on public.mailbox_connections
+      for update
+      to authenticated
+      using (
+        exists (
+          select 1
+          from public.companies c
+          where c.id = mailbox_connections.company_id
+            and c.owner_id = auth.uid()
+        )
+      )
+      with check (
+        exists (
+          select 1
+          from public.companies c
+          where c.id = mailbox_connections.company_id
+            and c.owner_id = auth.uid()
+        )
+      );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mailbox_connections'
+      and policyname = 'Owners delete mailbox connections'
+  ) then
+    create policy "Owners delete mailbox connections"
+      on public.mailbox_connections
+      for delete
+      to authenticated
+      using (
+        exists (
+          select 1
+          from public.companies c
+          where c.id = mailbox_connections.company_id
+            and c.owner_id = auth.uid()
+        )
+      );
+  end if;
+end $$;
+
+revoke all on table public.mailbox_connections from anon, authenticated;
+
+create or replace function public.set_mailbox_connection_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.provider_account_email := lower(btrim(new.provider_account_email));
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+revoke all on function public.set_mailbox_connection_updated_at() from public;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'trg_set_mailbox_connection_updated_at'
+      and tgrelid = 'public.mailbox_connections'::regclass
+      and not tgisinternal
+  ) then
+    create trigger trg_set_mailbox_connection_updated_at
+      before insert or update on public.mailbox_connections
+      for each row
+      execute function public.set_mailbox_connection_updated_at();
+  end if;
+end $$;
+
+comment on table public.mailbox_connections is
+  'Server-only workspace mailbox OAuth connections; Gmail message content remains at the provider.';
+comment on column public.mailbox_connections.access_token_encrypted is
+  'AES-256-GCM value produced by the Leonety server credential encryption helper.';
+comment on column public.mailbox_connections.refresh_token_encrypted is
+  'AES-256-GCM value produced by the Leonety server credential encryption helper.';
+comment on column public.mailbox_connections.history_id is
+  'Opaque Gmail history cursor stored as text to avoid JavaScript integer precision loss.';
+
+-- Verification (read-only, never select encrypted token columns):
+-- select column_name, data_type, is_nullable
+-- from information_schema.columns
+-- where table_schema = 'public' and table_name = 'mailbox_connections'
+-- order by ordinal_position;
+-- select indexname, indexdef
+-- from pg_indexes
+-- where schemaname = 'public' and tablename = 'mailbox_connections';
+-- select policyname, cmd, roles, qual, with_check
+-- from pg_policies
+-- where schemaname = 'public' and tablename = 'mailbox_connections'
+-- order by policyname;
+-- select relrowsecurity
+-- from pg_class
+-- where oid = 'public.mailbox_connections'::regclass;
+-- select grantee, privilege_type
+-- from information_schema.role_table_grants
+-- where table_schema = 'public' and table_name = 'mailbox_connections';
+
+-- Encryption assumption: LEONETY_CREDENTIAL_ENCRYPTION_KEY remains a server-only
+-- secret and encryptSecret() must be called before every token insert/update. The
+-- application must reject OAuth callbacks that do not provide a reusable refresh
+-- token instead of storing plaintext or a partial connection.
+
+-- Rollback notes (manual, only after disconnecting/revoking provider grants): remove
+-- the mailbox trigger/function, policies, indexes and table in that order. Removing
+-- the table deletes connection metadata and encrypted tokens, never Gmail messages.
 
 -- The final stock movement implementation is defined by the accounting-link
 -- section above. Restore the grants that originally preceded that replacement.
