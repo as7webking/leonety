@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Leonety
 
-## Getting Started
+Leonety is a Next.js 16 business workspace application covering CRM, finance, invoices, products, inventory, employees, schedules, integrations, notifications and assisted workflows.
 
-First, run the development server:
+## Development
+
+Install dependencies and create a local environment file:
+
+```bash
+npm ci
+cp .env.example .env.local
+```
+
+Fill only the credentials needed for the features being tested. Never commit `.env.local` or server secrets.
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Verification
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx tsc --noEmit
+npm test
+npm run lint
+npm run build
+```
 
-## Learn More
+## Operations
 
-To learn more about Next.js, take a look at the following resources:
+- Environment variable names and safe placeholders: [`.env.example`](./.env.example)
+- Deployment, provider and migration checklist: [`DEPLOYMENT.md`](./DEPLOYMENT.md)
+- Product change history: [`CHANGELOG.md`](./CHANGELOG.md)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Database migrations in `supabase/migrations/` are version-controlled. Never reset production, overwrite migration history or add SQL migrations to `.gitignore`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The public marketing application and authenticated app share this repository. Operational changes must preserve workspace authorization, Supabase RLS and server-only credential boundaries.

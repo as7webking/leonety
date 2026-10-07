@@ -12,10 +12,9 @@ supabase/.temp/
 # production
 /build/
 
-# local env files
-.env
-.env.local
-.env.*.local
+# local environment files and secrets
+.env*
+!.env.example
 
 # debug
 *.log
