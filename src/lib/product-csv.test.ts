@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { classifyProductCsvRows, normalizeProductCsvRows, parseProductCsv } from './product-csv.ts'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { productCsvDictionaries } from './product-csv-i18n.ts'
 
 test('parses quoted Leonety CSV and suggests canonical field mapping', () => {

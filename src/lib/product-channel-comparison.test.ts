@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { productChannelComparisonDictionaries } from './product-channel-i18n.ts'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { buildProductChannelComparison, classifyChannelProviderError, type CanonicalChannelProduct, type ExternalChannelProduct } from './product-channel-comparison.ts'
 
 const localBase: CanonicalChannelProduct = { id:'local-1',name:'Espresso',sku:'SKU-1',barcode:'4001',price:3.5,stock:8,category:'Coffee',image:'https://example.com/espresso.jpg' }

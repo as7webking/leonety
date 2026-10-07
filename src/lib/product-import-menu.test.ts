@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { productMenuDictionaries } from './product-menu-i18n.ts'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { productPhotoSessionDictionaries } from './product-photo-session-i18n.ts'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { buildProductMenuDocument } from './product-menu.ts'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { assessProductImportDraft, mergeProductImportDrafts, parseProductExtraction, validateProductImportDraft } from './product-photo-import.ts'
 
 test('normalizes only credible image extraction fields into editable drafts', () => {

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T00:03:17.173Z",
+  "generatedAt": "2026-10-07T13:11:33.567Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -22,45 +22,51 @@
     "src/lib/country-selector-i18n.ts",
     "src/lib/employee-documents-i18n.ts",
     "src/lib/employee-profile-i18n.ts",
+    "src/lib/employee-schedule-i18n.ts",
     "src/lib/employee-ui-i18n.ts",
     "src/lib/finance-ui-i18n.ts",
     "src/lib/i18n.ts",
     "src/lib/integration-onboarding-i18n.ts",
     "src/lib/kassenbuch-i18n.ts",
+    "src/lib/legal-settings-i18n.ts",
     "src/lib/offline-mode-i18n.ts",
     "src/lib/order-notifications-i18n.ts",
     "src/lib/page-utilities-i18n.ts",
+    "src/lib/product-channel-i18n.ts",
+    "src/lib/product-csv-i18n.ts",
     "src/lib/product-inventory-ux-i18n.ts",
+    "src/lib/product-menu-i18n.ts",
+    "src/lib/product-photo-session-i18n.ts",
     "src/lib/profile-localization-i18n.ts",
     "src/lib/public-website-i18n.ts",
     "src/lib/system-notifications-i18n.ts"
   ],
   "coverage": {
     "en": {
-      "translated": 2157,
-      "total": 2157,
+      "translated": 2471,
+      "total": 2471,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2157,
-      "total": 2157,
+      "translated": 2471,
+      "total": 2471,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2157,
-      "total": 2157,
+      "translated": 2471,
+      "total": 2471,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 1955,
-      "total": 2157,
-      "percent": 90.64,
+      "translated": 2269,
+      "total": 2471,
+      "percent": 91.83,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -352,9 +358,9 @@
       ]
     },
     "uk": {
-      "translated": 1910,
-      "total": 2157,
-      "percent": 88.55,
+      "translated": 2224,
+      "total": 2471,
+      "percent": 90,
       "missing": [
         "support.button",
         "support.title",
@@ -716,9 +722,9 @@
       ]
     },
     "pl": {
-      "translated": 1910,
-      "total": 2157,
-      "percent": 88.55,
+      "translated": 2224,
+      "total": 2471,
+      "percent": 90,
       "missing": [
         "support.button",
         "support.title",
@@ -1080,9 +1086,9 @@
       ]
     },
     "fr": {
-      "translated": 1910,
-      "total": 2157,
-      "percent": 88.55,
+      "translated": 2224,
+      "total": 2471,
+      "percent": 90,
       "missing": [
         "support.button",
         "support.title",
@@ -1448,63 +1454,39 @@
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1306,
-      "type": "jsx-text",
-      "text": "IBAN:"
-    },
-    {
-      "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1309,
-      "type": "jsx-text",
-      "text": "BIC:"
-    },
-    {
-      "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1386,
-      "type": "jsx-text",
-      "text": "IBAN:"
-    },
-    {
-      "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1387,
-      "type": "jsx-text",
-      "text": "BIC:"
-    },
-    {
-      "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1414,
-      "type": "jsx-text",
-      "text": "IBAN:"
-    },
-    {
-      "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1415,
-      "type": "jsx-text",
-      "text": "BIC:"
-    },
-    {
-      "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1590,
+      "line": 1460,
       "type": "jsx-text",
       "text": "IBAN:"
     },
     {
       "file": "src/app/(app)/products/[productId]/edit/page.tsx",
-      "line": 905,
+      "line": 955,
       "type": "jsx-text",
       "text": "ID:"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1203,
+      "line": 1121,
       "type": "jsx-text",
       "text": "· WooCommerce"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1533,
+      "line": 1451,
       "type": "jsx-text",
       "text": "ID:"
+    },
+    {
+      "file": "src/app/(app)/shifts/page.tsx",
+      "line": 235,
+      "type": "jsx-text",
+      "text": "min"
+    },
+    {
+      "file": "src/components/address-autocomplete.tsx",
+      "line": 211,
+      "type": "jsx-text",
+      "text": "Google Maps"
     },
     {
       "file": "src/components/footer.tsx",
@@ -1531,6 +1513,48 @@
       "text": "WooCommerce · #"
     },
     {
+      "file": "src/components/invoices/standard-invoice-renderer.tsx",
+      "line": 43,
+      "type": "jsx-text",
+      "text": "IBAN:"
+    },
+    {
+      "file": "src/components/invoices/standard-invoice-renderer.tsx",
+      "line": 44,
+      "type": "jsx-text",
+      "text": "BIC:"
+    },
+    {
+      "file": "src/components/invoices/standard-invoice-renderer.tsx",
+      "line": 82,
+      "type": "jsx-text",
+      "text": "IBAN:"
+    },
+    {
+      "file": "src/components/invoices/standard-invoice-renderer.tsx",
+      "line": 83,
+      "type": "jsx-text",
+      "text": "BIC:"
+    },
+    {
+      "file": "src/components/products/product-channel-comparison-dialog.tsx",
+      "line": 252,
+      "type": "jsx-text",
+      "text": "SKU:"
+    },
+    {
+      "file": "src/components/products/product-channel-comparison-dialog.tsx",
+      "line": 253,
+      "type": "jsx-text",
+      "text": "· SKU:"
+    },
+    {
+      "file": "src/components/schedules/employee-schedule-print.tsx",
+      "line": 43,
+      "type": "jsx-text",
+      "text": "min"
+    },
+    {
       "file": "src/components/support-widget.tsx",
       "line": 33,
       "type": "jsx-text",
@@ -1538,9 +1562,9 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2157,
-    "authenticatedSourceFileCount": 73,
+    "englishKeyCount": 2471,
+    "authenticatedSourceFileCount": 81,
     "usedMissingInEnglishCount": 0,
-    "hardcodedStringSuspectCount": 15
+    "hardcodedStringSuspectCount": 18
   }
 }
