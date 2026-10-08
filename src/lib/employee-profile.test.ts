@@ -10,11 +10,23 @@ test('builds a structured display name and preserves identifiers as text', () =>
   form.job_title = 'Developer'
   form.tax_id = '00123456789'
   form.social_security_number = '00 123456 A 000'
+  form.employee_number = 'EMP-0001'
   const payload = buildEmployeeProfilePayload(form, 'company-id')
 
   assert.equal(payload.name, 'Ada Lovelace')
   assert.equal(payload.tax_id, '00123456789')
   assert.equal(payload.social_security_number, '00 123456 A 000')
+  assert.equal(payload.employee_number, 'EMP-0001')
+})
+
+test('omits employee number from writes when the optional schema edit is not installed', () => {
+  const form = createEmptyEmployeeProfileForm('EUR')
+  form.first_name = 'Ada'
+  form.last_name = 'Lovelace'
+  form.job_title = 'Developer'
+  form.employee_number = 'EMP-0001'
+  const payload = buildEmployeeProfilePayload(form, 'company-id', false)
+  assert.equal('employee_number' in payload, false)
 })
 
 test('normalizes fixed-term, minijob and compensation dependent fields', () => {

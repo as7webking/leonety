@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Bell, BriefcaseBusiness, Building2, Scale, UserRound } from 'lucide-react'
 import { PageContainer, PageHeader } from '@/components'
 import { WorkspaceSettingsPanel } from '@/components/settings/workspace-settings-panel'
+import { EmployeeNumberSettingsCard } from '@/components/settings/employee-number-settings'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
@@ -19,6 +20,8 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         <WorkspaceSettingsPanel />
+
+        {currentCompany?.type === 'business' && <EmployeeNumberSettingsCard key={currentCompany.id} companyId={currentCompany.id} />}
 
         <Card>
           <CardHeader>

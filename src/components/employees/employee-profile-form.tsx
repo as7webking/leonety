@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AddressAutocomplete } from '@/components/address-autocomplete'
 import { AppSelect } from '@/components/app-select'
@@ -27,6 +27,7 @@ import {
   type EmploymentType,
 } from '@/lib/employee-profile'
 import { createClient } from '@/lib/supabase-client'
+import { isEmployeeNumberSchemaUnavailable } from '@/lib/employee-number'
 
 interface Props {
   companyId: string
@@ -45,6 +46,8 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
   const [form, setForm] = useState<FormState>(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [numberSettings, setNumberSettings] = useState<{ required: boolean; automatic: boolean } | null>(null)
+  const [numberColumnAvailable, setNumberColumnAvailable] = useState(false)
   const normalizedCountryCode = normalizeEmployeeCountryCode(form.country_code)
   const customCountry = getEmployeeCustomCountry(form.country_profile)
   const showGermanyExtension = normalizedCountryCode === 'DE'
@@ -56,13 +59,37 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  useEffect(() => {
+    let cancelled = false
+    void supabase.from('employee_number_settings')
+      .select('require_employee_number, automatic_numbering')
+      .eq('company_id', companyId)
+      .maybeSingle()
+      .then(({ data, error: settingsError }) => {
+        if (cancelled) return
+        if (settingsError) {
+          if (isEmployeeNumberSchemaUnavailable(settingsError)) setNumberColumnAvailable(false)
+          else setNumberColumnAvailable(true)
+          setNumberSettings({ required: false, automatic: false })
+          return
+        }
+        setNumberColumnAvailable(true)
+        setNumberSettings({ required: Boolean(data?.require_employee_number), automatic: Boolean(data?.automatic_numbering) })
+      })
+    return () => { cancelled = true }
+  }, [companyId, supabase])
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (saving) return
+    if (saving || !numberSettings) return
     setError('')
 
     if (!form.first_name.trim() || !form.last_name.trim() || !form.job_title.trim()) {
       setError(t('employees.profile.required'))
+      return
+    }
+    if (numberSettings?.required && !numberSettings.automatic && !form.employee_number.trim()) {
+      setError(t('employeeNumber.required'))
       return
     }
     if (normalizedCountryCode && !/^[A-Z]{2}$/.test(normalizedCountryCode)) {
@@ -83,7 +110,7 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
     }
 
     setSaving(true)
-    const payload = buildEmployeeProfilePayload(form, companyId)
+    const payload = buildEmployeeProfilePayload(form, companyId, numberColumnAvailable)
     const query = employee
       ? supabase.from('employees').update(payload).eq('id', employee.id).eq('company_id', companyId).select('id').single()
       : supabase.from('employees').insert(payload).select('id').single()
@@ -91,9 +118,15 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
     setSaving(false)
 
     if (saveError || !data) {
-      setError(saveError?.code === '42703' || saveError?.code === 'PGRST204'
-        ? t('employees.profile.migrationRequired')
-        : t('employees.profile.saveFailed'))
+      setError(saveError?.code === '23505'
+        ? t('employeeNumber.duplicate')
+        : saveError?.code === '23502'
+          ? t('employeeNumber.required')
+          : saveError?.code === '23514'
+            ? t('employeeNumber.invalidSettings')
+            : saveError?.code === '42703' || saveError?.code === 'PGRST204'
+              ? t('employees.profile.migrationRequired')
+              : t('employees.profile.saveFailed'))
       return
     }
 
@@ -168,6 +201,13 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
       </>)}
 
       {section(t('employees.profile.employment'), <>
+        {numberColumnAvailable && (
+          <label className="min-w-0 space-y-1 sm:col-span-2">
+            <span className="text-sm font-medium">{t('employeeNumber.label')}{numberSettings?.required ? ' *' : ''}</span>
+            <input value={form.employee_number} onChange={(event) => update('employee_number', event.target.value)} className={inputClass} maxLength={100} required={Boolean(numberSettings?.required && !numberSettings.automatic)} disabled={Boolean(numberSettings?.automatic)} readOnly={Boolean(numberSettings?.automatic)} />
+            {numberSettings?.automatic && <span className="block text-sm text-slate-600">{employee?.employee_number ? t('employeeNumber.lockedAutomatic') : t('employeeNumber.assignedOnSave')}</span>}
+          </label>
+        )}
         {field('job_title', t('employees.jobTitle'), { required: true })}
         {field('employment_start_date', t('employees.profile.startDate'), { type: 'date' })}
         <label className="space-y-1">
@@ -227,7 +267,7 @@ export function EmployeeProfileForm({ companyId, currency, employee }: Props) {
           <label className="block space-y-1"><span className="text-sm font-medium">{t('employees.notes')}</span><textarea value={form.notes} onChange={(event) => update('notes', event.target.value)} className={`${inputClass} min-h-28`} /></label>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" onClick={() => router.back()}>{t('common.cancel')}</Button>
-            <Button type="submit" disabled={saving}>{saving ? t('common.loading') : t('common.save')}</Button>
+            <Button type="submit" disabled={saving || !numberSettings}>{saving ? t('common.loading') : t('common.save')}</Button>
           </div>
         </CardContent>
       </Card>

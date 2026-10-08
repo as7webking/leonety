@@ -308,7 +308,8 @@ repository cannot reproduce the full production database from scratch.
 
 ### `employee_number_settings`
 
-- **Evidence:** `PENDING MIGRATION`
+- **Evidence:** `PENDING`; corrected timestamped deployment SQL is
+  `20261008233000_employee_numbers.sql`. Production presence remains `UNKNOWN`.
 - **Purpose:** workspace policy and concurrency-safe counter for Personalnummer.
 - **Primary key:** `company_id` -> `companies.id`.
 - **Important columns:** requirement/automatic flags, prefix, next number, minimum
@@ -449,14 +450,18 @@ repository cannot reproduce the full production database from scratch.
 
 ### `admin_accounts`
 
-- **Evidence:** `CONFIRMED` table definition; security model `UNKNOWN`.
+- **Evidence:** `CONFIRMED` table definition; security hardening
+  `PENDING MIGRATION`.
 - **Purpose:** allowlist for Leonety operator administrators.
 - **Primary key:** `user_id` -> `auth.users.id`; unique email.
 - **Current migration gap:** the consolidated file creates the table but does not
   enable RLS, define policies, revoke grants, or constrain writes.
+- **Pending repair:** `20261008221134_secure_admin_accounts.sql` enables RLS, revokes
+  all direct privileges from `public`, `anon`, and `authenticated`, and grants only
+  server-required select/insert/update/delete privileges to `service_role`.
 - **Application use:** server-side admin authorization queries this table.
-- **Risk:** production RLS, grants and mutation paths must be verified before treating
-  the operator authorization model as secure.
+- **Risk:** the global user directory must remain blocked until the pending migration
+  is manually applied and its RLS/grants are verified in production.
 
 ### `admin_audit_events`
 
@@ -496,10 +501,14 @@ repository cannot reproduce the full production database from scratch.
    logic uses it.
 5. **Legal settings:** application expects 15 company legal columns absent from the
    migration.
-6. **Admin authorization:** `admin_accounts` migration lacks explicit RLS/grants;
-   production policy/grant state requires security verification.
-7. **Personalnummer:** SQL exists only inside the skipped consolidated file;
-   production deployment is not proven by migration history.
+6. **Admin authorization:** the original `admin_accounts` definition lacks explicit
+   RLS/grants. A default-deny repair exists in
+   `20261008221134_secure_admin_accounts.sql` but is not `APPLIED` until manually
+   confirmed and verified.
+7. **Personalnummer:** Edit 4 is the source design; the corrected timestamped
+   migration `20261008233000_employee_numbers.sql` is pending and has not been run.
+   It keeps the same schema and fixes `lpad` truncation. Production deployment is
+   unknown; inspect the live catalog before applying. Do not apply both definitions.
 8. **Mailbox:** SQL exists only inside the skipped consolidated file; production
    deployment is not proven by migration history.
 9. **Identifier types:** historical bigint/UUID conflicts remain for finance records

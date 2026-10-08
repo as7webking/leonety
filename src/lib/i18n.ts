@@ -27,6 +27,7 @@ import { productChannelComparisonDictionaries } from '@/lib/product-channel-i18n
 import { legalSettingsDictionaries } from '@/lib/legal-settings-i18n'
 import { employeeScheduleDictionaries } from '@/lib/employee-schedule-i18n'
 import { adminUsersDictionaries } from '@/lib/admin-users-i18n'
+import { employeeNumberDictionaries } from '@/lib/employee-number-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -8943,6 +8944,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], legalSettingsDictionaries[locale])
   Object.assign(dictionaries[locale], employeeScheduleDictionaries[locale])
   Object.assign(dictionaries[locale], adminUsersDictionaries[locale])
+  Object.assign(dictionaries[locale], employeeNumberDictionaries[locale])
 }
 
 Object.assign(dictionaries.uk, ukrainianAuthenticatedFixes)

@@ -26,17 +26,28 @@ Status meanings:
 - Legal settings: reconcile the 15 legal columns used by
   `src/app/api/workspaces/legal/route.ts` with a reviewed, timestamped migration.
   They are not represented in the current repository migration.
-- `admin_accounts`: verify production grants and policies, then prepare a
-  default-deny repair if required. The consolidated file creates the table but does
-  not enable RLS or define policies for it.
-- Employee numbers and mailbox connections: deployment may not be inferred from SQL
-  or the Git commit title. Verify both objects in the live catalog before recording
-  them as applied or preparing any repair.
+- Global operator user directory: keep blocked until
+  `20261008221134_secure_admin_accounts.sql` has been manually reviewed, applied and
+  verified. The existing consolidated file creates `admin_accounts` without enabling
+  RLS or revoking browser-role grants.
+- Mailbox connections: deployment may not be inferred from SQL or the Git commit
+  title. Verify the object in the live catalog before recording it as applied or
+  preparing any repair.
+
+### PENDING
+
+- Employee Personalnummer: inspect production first, then use
+  `supabase/migrations/20261008233000_employee_numbers.sql` only if the audited
+  objects are absent or compatible. This timestamped file corrects the counter
+  padding bug in Edit 4 while retaining the same schema. Do not apply the entire
+  consolidated file or apply both definitions independently.
 
 ### READY TO APPLY
 
-- None. No current migration has enough migration-history and live-schema evidence
-  to be classified as ready.
+- `20261008221134_secure_admin_accounts.sql`: enable RLS on the Leonety operator
+  allowlist and revoke all direct `public`/`anon`/`authenticated` privileges while
+  retaining the minimum server `service_role` privileges. Manual review and
+  production application are required; status remains unapplied.
 
 ### PENDING DEVELOPMENT
 
@@ -370,17 +381,22 @@ Status meanings:
 
 ### 2026-10-05 - Workspace employee numbers
 
-- **Status:** `BLOCKED`
-- **Migration filename:** Edit 4 in
-  `supabase/migrations/leonety_consolidated_schema.sql`
+- **Status:** `PENDING`
+- **Migration filename:** corrected deployment migration
+  `supabase/migrations/20261008233000_employee_numbers.sql`; source design is Edit 4
+  in `supabase/migrations/leonety_consolidated_schema.sql`.
 - **Purpose:** optional workspace-scoped employee numbers and atomic allocation.
 - **Main objects:** `employees.employee_number`, `employee_number_settings`, unique
   indexes, initialization/counter/allocation triggers.
 - **Production status:** `UNKNOWN`
-- **Verification status:** Git contains implementation and an “applied” commit title,
-  but no remote migration record or current catalog verification proves deployment.
-- **Notes/dependencies:** allocation uses a locked settings row and should not be
-  replaced with client-side `max + 1`.
+- **Verification status:** the Edit 4 schema was audited and one counter-formatting
+  defect was corrected in the timestamped migration. Production presence remains
+  `UNKNOWN`; the migration has not been executed.
+- **Notes/dependencies:** allocation locks the workspace settings row and uses a
+  workspace-scoped unique index. The corrected formatter avoids PostgreSQL `lpad`
+  truncation after the counter exceeds the configured minimum width. Apply only
+  after read-only production inspection; do not apply both SQL definitions or use
+  client-side `max + 1`.
 
 ### 2026-10-06 - Human mailbox connections
 
@@ -408,6 +424,21 @@ Status meanings:
   coverage missing.
 - **Notes/dependencies:** existing production columns must be inspected before any
   additive repair is authored; invoice snapshots are a separate concern.
+
+### 2026-10-08 - Secure operator administrator allowlist
+
+- **Status:** `READY TO APPLY`
+- **Migration filename:**
+  `supabase/migrations/20261008221134_secure_admin_accounts.sql`
+- **Purpose:** make `admin_accounts` server-only before the global auth-user directory
+  can be considered safe for production use.
+- **Main objects:** `admin_accounts` RLS and table grants.
+- **Production status:** `UNKNOWN` (not executed by this task).
+- **Verification status:** repository authorization paths audited; manual migration
+  application and read-only production verification still required.
+- **Notes/dependencies:** current server authorization uses the service-role client;
+  no current client component directly queries `admin_accounts`. The migration does
+  not alter `auth.users` and deliberately creates no browser policy.
 
 ## Future Database Workflow
 

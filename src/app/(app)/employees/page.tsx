@@ -15,6 +15,7 @@ import { employeeStatuses, type EmployeeStatus, type EmploymentType } from '@/li
 import { formatDateOnly } from '@/lib/date-only'
 import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
+import { isEmployeeNumberSchemaUnavailable } from '@/lib/employee-number'
 
 interface EmployeeListItem {
   id: string
@@ -25,6 +26,7 @@ interface EmployeeListItem {
   employment_type: EmploymentType
   status: EmployeeStatus
   employment_start_date: string | null
+  employee_number?: string | null
 }
 
 export default function EmployeesPage() {
@@ -44,15 +46,22 @@ export default function EmployeesPage() {
     if (!currentCompany) { setLoading(false); return }
     setLoading(true)
     setError('')
-    const { data, error: loadError } = await supabase
+    const withNumber = await supabase
       .from('employees')
-      .select('id, name, first_name, last_name, job_title, employment_type, status, employment_start_date')
+      .select('id, name, first_name, last_name, job_title, employment_type, status, employment_start_date, employee_number')
       .eq('company_id', currentCompany.id)
       .order('name')
+    const result = isEmployeeNumberSchemaUnavailable(withNumber.error)
+      ? await supabase.from('employees').select('id, name, first_name, last_name, job_title, employment_type, status, employment_start_date').eq('company_id', currentCompany.id).order('name')
+      : withNumber
+    const loadError = result.error
     if (loadError) {
       setError(['42703', 'PGRST204'].includes(loadError.code ?? '') ? t('employees.profile.migrationRequired') : t('employees.profile.loadFailed'))
       setEmployees([])
-    } else setEmployees((data ?? []) as EmployeeListItem[])
+    } else setEmployees((result.data ?? []).map((employee) => {
+      const row = employee as unknown as Record<string, unknown>
+      return { ...row, employee_number: typeof row.employee_number === 'string' ? row.employee_number : null }
+    }) as unknown as EmployeeListItem[])
     setLoading(false)
   }, [currentCompany, supabase, t])
 
@@ -65,7 +74,7 @@ export default function EmployeesPage() {
   const filteredEmployees = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return employees.filter((employee) => (statusFilter === 'all' || employee.status === statusFilter)
-      && (!normalized || [employee.name, employee.first_name, employee.last_name, employee.job_title]
+      && (!normalized || [employee.name, employee.first_name, employee.last_name, employee.job_title, employee.employee_number]
         .some((value) => String(value ?? '').toLowerCase().includes(normalized))))
   }, [employees, query, statusFilter])
 
@@ -101,7 +110,7 @@ export default function EmployeesPage() {
           {filteredEmployees.map((employee) => (
             <Card key={employee.id}><CardContent className="p-5">
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-semibold">{employee.name}</h2><p className="truncate text-sm text-slate-500">{employee.job_title}</p></div><span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs">{t(`employees.status.${employee.status}`)}</span></div>
-              <div className="mt-3 space-y-1 text-sm text-slate-600"><p>{t(`employees.type.${employee.employment_type}`)}</p>{employee.employment_start_date && <p>{t('employees.profile.startDate')}: {formatDateOnly(employee.employment_start_date, getIntlLocale(locale))}</p>}<p>{currentCompany.name}</p></div>
+              <div className="mt-3 space-y-1 text-sm text-slate-600"><p>{t(`employees.type.${employee.employment_type}`)}</p>{employee.employee_number && <p>{t('employeeNumber.label')}: {employee.employee_number}</p>}{employee.employment_start_date && <p>{t('employees.profile.startDate')}: {formatDateOnly(employee.employment_start_date, getIntlLocale(locale))}</p>}<p>{currentCompany.name}</p></div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild size="sm" variant="outline"><Link href={`/app/employees/${employee.id}`}><Eye />{t('employees.profile.open')}</Link></Button>
                 <Button asChild size="sm" variant="outline"><Link href={`/app/employees/${employee.id}/edit`}><Edit />{t('common.edit')}</Link></Button>

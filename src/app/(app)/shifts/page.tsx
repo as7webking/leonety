@@ -17,6 +17,7 @@ import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { formatDateOnly, formatDateOnlyInput } from '@/lib/date-only'
 import { buildShiftCandidates, classifyShiftCandidates, createDefaultWeeklySchedule, getWorkingMinutes, type ShiftCandidate, type WeeklyScheduleDay } from '@/lib/employee-scheduling'
 import { getIntlLocale } from '@/lib/i18n'
+import { isEmployeeNumberSchemaUnavailable } from '@/lib/employee-number'
 import { createClient } from '@/lib/supabase-client'
 
 const shiftStatuses = ['scheduled', 'completed', 'cancelled', 'missed'] as const
@@ -76,12 +77,15 @@ export default function ShiftsPage() {
 
   const loadData = useCallback(async (queryKey: string) => {
     if (!currentCompany) return
-    const [employeeResult, locationResult, hoursResult, shiftResult] = await Promise.all([
-      supabase.from('employees').select('id, name').eq('company_id', currentCompany.id).eq('status', 'active').order('name'),
+    const [employeeNumberResult, locationResult, hoursResult, shiftResult] = await Promise.all([
+      supabase.from('employees').select('id, name, employee_number').eq('company_id', currentCompany.id).eq('status', 'active').order('name'),
       supabase.from('locations').select('id, name').eq('company_id', currentCompany.id).order('name'),
       supabase.from('location_operating_hours').select('location_id, weekday, is_open, opens_at, closes_at').eq('company_id', currentCompany.id),
       supabase.from('shifts').select('*, employees(id, name), locations(id, name)').eq('company_id', currentCompany.id).gte('date', fromDate).lte('date', toDate).order('date').order('start_time'),
     ])
+    const employeeResult = isEmployeeNumberSchemaUnavailable(employeeNumberResult.error)
+      ? await supabase.from('employees').select('id, name').eq('company_id', currentCompany.id).eq('status', 'active').order('name')
+      : employeeNumberResult
     const loadError = employeeResult.error ?? locationResult.error ?? hoursResult.error ?? shiftResult.error
     if (loadError) {
       setError(loadError.code === '42P01' ? t('modules.databaseRequired') : loadError.message)

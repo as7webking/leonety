@@ -13,5 +13,5 @@ export default function NewEmployeePage() {
   const { t } = useI18n()
   if (!loading && !currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} /></PageContainer>
   if (!loading && currentCompany?.type !== 'business') return <PageContainer><EmptyState icon={Building2} title={t('common.businessOnlyTitle')} description={t('modules.businessOnlyDescription')} /></PageContainer>
-  return <PageContainer><Button asChild variant="ghost" size="sm" className="mb-4"><Link href="/app/employees"><ArrowLeft />{t('employees.profile.back')}</Link></Button><PageHeader title={t('employees.profile.createTitle')} description={t('employees.profile.createDescription')} />{currentCompany && <EmployeeProfileForm companyId={currentCompany.id} currency={currentCompany.currency} />}</PageContainer>
+  return <PageContainer><Button asChild variant="ghost" size="sm" className="mb-4"><Link href="/app/employees"><ArrowLeft />{t('employees.profile.back')}</Link></Button><PageHeader title={t('employees.profile.createTitle')} description={t('employees.profile.createDescription')} />{currentCompany && <EmployeeProfileForm key={currentCompany.id} companyId={currentCompany.id} currency={currentCompany.currency} />}</PageContainer>
 }

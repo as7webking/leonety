@@ -37,6 +37,7 @@ export function withEmployeeCustomCountry(profile: EmployeeCountryProfile, value
 export interface EmployeeProfile {
   id: string
   company_id: string
+  employee_number: string | null
   name: string
   first_name: string | null
   last_name: string | null
@@ -76,6 +77,7 @@ export interface EmployeeProfile {
 }
 
 export type EmployeeProfileForm = {
+  employee_number: string
   first_name: string
   last_name: string
   email: string
@@ -121,8 +123,11 @@ export const employeeProfileColumns = [
   'compensation_currency', 'annual_vacation_days', 'created_at', 'updated_at',
 ].join(', ')
 
+export const employeeProfileColumnsWithNumber = `${employeeProfileColumns}, employee_number`
+
 export function createEmptyEmployeeProfileForm(currency = 'EUR'): EmployeeProfileForm {
   return {
+    employee_number: '',
     first_name: '', last_name: '', email: '', phone: '', job_title: '', employment_type: 'full_time',
     status: 'active', notes: '', tax_id: '', tax_class: '', social_security_number: '', nationality: '',
     street: '', house_number: '', postal_code: '', city: '', country_code: '', country_profile: emptyCountryProfile(), birth_date: '', birth_place: '',
@@ -136,6 +141,7 @@ export function createEmptyEmployeeProfileForm(currency = 'EUR'): EmployeeProfil
 export function employeeProfileToForm(employee: EmployeeProfile): EmployeeProfileForm {
   return {
     ...createEmptyEmployeeProfileForm(employee.compensation_currency ?? 'EUR'),
+    employee_number: employee.employee_number ?? '',
     first_name: employee.first_name ?? '', last_name: employee.last_name ?? '', email: employee.email ?? '',
     phone: employee.phone ?? '', job_title: employee.job_title, employment_type: employee.employment_type,
     status: employee.status, notes: employee.notes ?? '', tax_id: employee.tax_id ?? '',
@@ -179,7 +185,7 @@ export function isGermanyEmployeeProfile(employee: Pick<EmployeeProfile,
     || Boolean(employee.tax_id || employee.tax_class || employee.social_security_number || employee.health_insurance_provider)
 }
 
-export function buildEmployeeProfilePayload(form: EmployeeProfileForm, companyId: string) {
+export function buildEmployeeProfilePayload(form: EmployeeProfileForm, companyId: string, includeEmployeeNumber = true) {
   const firstName = form.first_name.trim()
   const lastName = form.last_name.trim()
   const isMinijob = form.employment_type === 'minijob'
@@ -187,6 +193,7 @@ export function buildEmployeeProfilePayload(form: EmployeeProfileForm, companyId
 
   return {
     company_id: companyId,
+    ...(includeEmployeeNumber ? { employee_number: nullableText(form.employee_number) } : {}),
     name: [firstName, lastName].filter(Boolean).join(' '),
     first_name: firstName || null,
     last_name: lastName || null,

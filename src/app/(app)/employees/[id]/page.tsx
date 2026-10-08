@@ -11,11 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCurrency } from '@/lib/currency'
-import { employeeProfileColumns, getEmployeeCustomCountry, isGermanyEmployeeProfile, type EmployeeProfile } from '@/lib/employee-profile'
+import { employeeProfileColumns, employeeProfileColumnsWithNumber, getEmployeeCustomCountry, isGermanyEmployeeProfile, type EmployeeProfile } from '@/lib/employee-profile'
 import { formatCountryValue } from '@/lib/countries'
 import { getIntlLocale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 import { formatDateOnly } from '@/lib/date-only'
+import { isEmployeeNumberSchemaUnavailable } from '@/lib/employee-number'
 
 function Value({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === '') return null
@@ -33,9 +34,11 @@ export default function EmployeeDetailPage() {
   const load = useCallback(async () => {
     if (!currentCompany || !params.id) return
     setLoading(true)
-    const { data, error: loadError } = await supabase.from('employees').select(employeeProfileColumns).eq('id', params.id).eq('company_id', currentCompany.id).maybeSingle()
-    setEmployee(data as EmployeeProfile | null)
-    setError(loadError ? t('employees.profile.loadFailed') : '')
+    let result = await supabase.from('employees').select(employeeProfileColumnsWithNumber).eq('id', params.id).eq('company_id', currentCompany.id).maybeSingle()
+    if (isEmployeeNumberSchemaUnavailable(result.error)) result = await supabase.from('employees').select(employeeProfileColumns).eq('id', params.id).eq('company_id', currentCompany.id).maybeSingle()
+    const row = result.data as unknown as Record<string, unknown> | null
+    setEmployee(row ? { ...row, employee_number: typeof row.employee_number === 'string' ? row.employee_number : null } as unknown as EmployeeProfile : null)
+    setError(result.error ? t('employees.profile.loadFailed') : '')
     setLoading(false)
   }, [currentCompany, params.id, supabase, t])
   useEffect(() => {
@@ -66,7 +69,7 @@ export default function EmployeeDetailPage() {
         {section(t('employees.profile.personal'), <><Value label={t('employees.profile.firstName')} value={employee.first_name} /><Value label={t('employees.profile.lastName')} value={employee.last_name} /><Value label={t('employees.profile.birthDate')} value={date(employee.birth_date)} /><Value label={t('employees.profile.birthPlace')} value={employee.birth_place} /><Value label={t('employees.profile.birthCountry')} value={formatCountryValue(employee.birth_country, locale)} /><Value label={t('employees.profile.nationality')} value={formatCountryValue(employee.nationality, locale)} /></>)}
         {section(t('employees.profile.contact'), <><Value label={t('employees.email')} value={employee.email} /><Value label={t('employees.phone')} value={employee.phone} /></>)}
         {section(t('employees.profile.address'), <><Value label={t('employees.profile.street')} value={[employee.street, employee.house_number].filter(Boolean).join(' ')} /><Value label={t('employees.profile.city')} value={[employee.postal_code, employee.city].filter(Boolean).join(' ')} /><Value label={t('employees.profile.country')} value={countryName} /></>)}
-        {section(t('employees.profile.employment'), <><Value label={t('employees.jobTitle')} value={employee.job_title} /><Value label={t('employees.profile.startDate')} value={date(employee.employment_start_date)} /><Value label={t('employees.employmentType')} value={t(`employees.type.${employee.employment_type}`)} /><Value label={t('employees.status')} value={t(`employees.status.${employee.status}`)} /><Value label={t('employees.profile.term')} value={employee.is_permanent ? t('employees.profile.permanent') : `${t('employees.profile.fixedUntil')}: ${date(employee.fixed_term_end_date)}`} /></>)}
+        {section(t('employees.profile.employment'), <><Value label={t('employeeNumber.label')} value={employee.employee_number} /><Value label={t('employees.jobTitle')} value={employee.job_title} /><Value label={t('employees.profile.startDate')} value={date(employee.employment_start_date)} /><Value label={t('employees.employmentType')} value={t(`employees.type.${employee.employment_type}`)} /><Value label={t('employees.status')} value={t(`employees.status.${employee.status}`)} /><Value label={t('employees.profile.term')} value={employee.is_permanent ? t('employees.profile.permanent') : `${t('employees.profile.fixedUntil')}: ${date(employee.fixed_term_end_date)}`} /></>)}
         {section(t('employees.profile.compensation'), <><Value label={t('employees.profile.hoursPerWeek')} value={employee.hours_per_week} /><Value label={t('employees.profile.compensationType')} value={employee.compensation_type ? t(`employees.profile.compensation.${employee.compensation_type}`) : null} /><Value label={t('employees.profile.hourlyWage')} value={money(employee.hourly_wage)} /><Value label={t('employees.profile.fixedSalary')} value={money(employee.fixed_salary)} /><Value label={t('employees.profile.annualVacation')} value={employee.annual_vacation_days} /></>)}
         {showGermanyExtension && section(t('employees.profile.countrySpecific'), <><Value label={t('employees.profile.taxId')} value={employee.tax_id} /><Value label={t('employees.profile.taxClass')} value={employee.tax_class} /><Value label={t('employees.profile.socialSecurityNumber')} value={employee.social_security_number} /><Value label={t('employees.profile.healthInsurance')} value={employee.health_insurance_provider} />{employee.employment_type === 'minijob' && <><Value label={t('employees.profile.minijobFlatTax')} value={employee.minijob_flat_tax_2_percent ? t('employees.profile.yes') : t('employees.profile.no')} /><Value label={t('employees.profile.pensionExemption')} value={employee.pension_insurance_exemption ? t('employees.profile.yes') : t('employees.profile.no')} /></>}</>)}
         {employee.notes && <div className="lg:col-span-2">{section(t('employees.notes'), <Value label={t('employees.notes')} value={<span className="whitespace-pre-wrap">{employee.notes}</span>} />)}</div>}

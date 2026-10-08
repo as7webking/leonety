@@ -2817,7 +2817,11 @@ begin
 
       loop
         candidate := settings_row.number_prefix
-          || lpad(candidate_number::text, settings_row.minimum_digits, '0');
+          || case
+            when char_length(candidate_number::text) < settings_row.minimum_digits
+              then lpad(candidate_number::text, settings_row.minimum_digits, '0')
+            else candidate_number::text
+          end;
 
         exit when not exists (
           select 1
