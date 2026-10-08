@@ -17,33 +17,41 @@ interface OfflineModeContextValue {
 
 const OfflineModeContext = createContext<OfflineModeContextValue | undefined>(undefined)
 
+interface DraftKindsState {
+  scope: string | null
+  kinds: OfflineDraftKind[]
+}
+
+async function loadDraftKinds(userId: string, workspaceId: string) {
+  const drafts = await listOfflineDrafts(userId, workspaceId)
+  return drafts.map((draft) => draft.kind)
+}
+
 export function OfflineModeProvider({ children }: { children: React.ReactNode }) {
   const { currentCompanyId } = useCompany()
   const [supabase] = useState(() => createClient())
   const [isOnline, setIsOnline] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
-  const [draftKinds, setDraftKinds] = useState<OfflineDraftKind[]>([])
+  const [draftKindsState, setDraftKindsState] = useState<DraftKindsState>({ scope: null, kinds: [] })
   const [connectionRestored, setConnectionRestored] = useState(false)
   const [storageUnavailable, setStorageUnavailable] = useState(false)
   const previousUserId = useRef<string | null>(null)
   const wasOffline = useRef(false)
+  const draftScope = userId && currentCompanyId ? `${userId}:${currentCompanyId}` : null
 
   const reportStorageUnavailable = useCallback(() => setStorageUnavailable(true), [])
 
   const refreshDrafts = useCallback(async () => {
-    if (!userId || !currentCompanyId) {
-      setDraftKinds([])
-      return
-    }
+    if (!userId || !currentCompanyId || !draftScope) return
     try {
-      const drafts = await listOfflineDrafts(userId, currentCompanyId)
-      setDraftKinds(drafts.map((draft) => draft.kind))
+      const kinds = await loadDraftKinds(userId, currentCompanyId)
+      setDraftKindsState({ scope: draftScope, kinds })
       setStorageUnavailable(false)
     } catch {
-      setDraftKinds([])
+      setDraftKindsState({ scope: draftScope, kinds: [] })
       setStorageUnavailable(true)
     }
-  }, [currentCompanyId, userId])
+  }, [currentCompanyId, draftScope, userId])
 
   useEffect(() => {
     const updateOnlineState = () => {
@@ -89,8 +97,21 @@ export function OfflineModeProvider({ children }: { children: React.ReactNode })
   }, [supabase])
 
   useEffect(() => {
-    void refreshDrafts()
-  }, [refreshDrafts])
+    if (!userId || !currentCompanyId || !draftScope) return
+    let cancelled = false
+    void loadDraftKinds(userId, currentCompanyId)
+      .then((kinds) => {
+        if (cancelled) return
+        setDraftKindsState({ scope: draftScope, kinds })
+        setStorageUnavailable(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setDraftKindsState({ scope: draftScope, kinds: [] })
+        setStorageUnavailable(true)
+      })
+    return () => { cancelled = true }
+  }, [currentCompanyId, draftScope, userId])
 
   useEffect(() => {
     if (!connectionRestored) return
@@ -101,12 +122,12 @@ export function OfflineModeProvider({ children }: { children: React.ReactNode })
   const value = useMemo(() => ({
     isOnline,
     userId,
-    draftKinds,
+    draftKinds: draftKindsState.scope === draftScope ? draftKindsState.kinds : [],
     connectionRestored,
     storageUnavailable,
     refreshDrafts,
     reportStorageUnavailable,
-  }), [connectionRestored, draftKinds, isOnline, refreshDrafts, reportStorageUnavailable, storageUnavailable, userId])
+  }), [connectionRestored, draftKindsState, draftScope, isOnline, refreshDrafts, reportStorageUnavailable, storageUnavailable, userId])
 
   return <OfflineModeContext.Provider value={value}>{children}</OfflineModeContext.Provider>
 }

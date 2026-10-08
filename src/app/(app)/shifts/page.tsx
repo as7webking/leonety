@@ -50,7 +50,8 @@ export default function ShiftsPage() {
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [locationHours, setLocationHours] = useState<LocationHours[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadedQueryKey, setLoadedQueryKey] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showGenerator, setShowGenerator] = useState(false)
   const [showRegularSchedule, setShowRegularSchedule] = useState(false)
@@ -70,9 +71,11 @@ export default function ShiftsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null)
   useBodyScrollLock(preview.length > 0)
 
-  const loadData = useCallback(async () => {
-    if (!currentCompany) { setLoading(false); return }
-    setLoading(true)
+  const dataQueryKey = currentCompany ? `${currentCompany.id}:${fromDate}:${toDate}` : null
+  const loading = dataQueryKey !== null && (loadedQueryKey !== dataQueryKey || refreshing)
+
+  const loadData = useCallback(async (queryKey: string) => {
+    if (!currentCompany) return
     const [employeeResult, locationResult, hoursResult, shiftResult] = await Promise.all([
       supabase.from('employees').select('id, name').eq('company_id', currentCompany.id).eq('status', 'active').order('name'),
       supabase.from('locations').select('id, name').eq('company_id', currentCompany.id).order('name'),
@@ -89,10 +92,22 @@ export default function ShiftsPage() {
       setLocationHours((hoursResult.data ?? []).filter((row) => row.opens_at && row.closes_at).map((row) => ({ locationId: row.location_id, weekday: row.weekday, isOpen: row.is_open, openTime: row.opens_at.slice(0, 5), closeTime: row.closes_at.slice(0, 5) })))
       setShifts((shiftResult.data ?? []).map((shift) => ({ ...shift, break_minutes: Number(shift.break_minutes) })) as unknown as Shift[])
     }
-    setLoading(false)
+    setLoadedQueryKey(queryKey)
   }, [currentCompany, fromDate, supabase, t, toDate])
 
-  useEffect(() => { void loadData() }, [loadData])
+  useEffect(() => {
+    if (dataQueryKey) void loadData(dataQueryKey)
+  }, [dataQueryKey, loadData])
+
+  const reloadData = async () => {
+    if (!dataQueryKey) return
+    setRefreshing(true)
+    try {
+      await loadData(dataQueryKey)
+    } finally {
+      setRefreshing(false)
+    }
+  }
   const groupedShifts = useMemo(() => shifts.reduce<Record<string, Shift[]>>((groups, shift) => ({ ...groups, [shift.date]: [...(groups[shift.date] ?? []), shift] }), {}), [shifts])
   const printableEmployeeIds = useMemo(() => [...new Set(shifts.map((shift) => shift.employee_id))], [shifts])
   const periodEmployees = useMemo(() => printableEmployeeIds.map((employeeId) => {
@@ -114,7 +129,7 @@ export default function ShiftsPage() {
     const payload = { company_id: currentCompany.id, employee_id: form.employee_id, location_id: form.location_id || null, date: form.date, start_time: form.start_time, end_time: form.end_time, break_minutes: Math.max(0, Number(form.break_minutes) || 0), status: form.status, notes: form.notes.trim() || null, updated_at: new Date().toISOString() }
     const result = editing ? await supabase.from('shifts').update(payload).eq('id', editing.id).eq('company_id', currentCompany.id) : await supabase.from('shifts').insert(payload)
     if (result.error) { setError(result.error.code === '23505' ? t('shifts.duplicate') : result.error.message); return }
-    setMessage(editing ? t('shifts.updated') : t('shifts.created')); resetForm(); await loadData()
+    setMessage(editing ? t('shifts.updated') : t('shifts.created')); resetForm(); await reloadData()
   }
 
   const loadRegularSchedule = async (employeeId: string) => {
@@ -172,7 +187,7 @@ export default function ShiftsPage() {
       const { error: insertError } = await supabase.from('shifts').insert(payload)
       if (insertError) { setError(insertError.code === '23505' ? t('shifts.generatorDuplicates') : insertError.message); return }
       const skipped = rechecked.length - payload.length
-      setPreview([]); setSelectedPreviewKeys(new Set()); setMessage(`${t('shifts.generated').replace('{count}', String(payload.length))}${skipped ? ` ${t('schedule.conflictsSkipped').replace('{count}', String(skipped))}` : ''}`); setShowGenerator(false); await loadData()
+      setPreview([]); setSelectedPreviewKeys(new Set()); setMessage(`${t('shifts.generated').replace('{count}', String(payload.length))}${skipped ? ` ${t('schedule.conflictsSkipped').replace('{count}', String(skipped))}` : ''}`); setShowGenerator(false); await reloadData()
     } catch (queryError) { setError(queryError instanceof Error ? queryError.message : t('common.error')) }
   }
 
@@ -180,7 +195,7 @@ export default function ShiftsPage() {
     if (!currentCompany || !deleteTarget) return
     const { error: deleteError } = await supabase.from('shifts').delete().eq('id', deleteTarget.id).eq('company_id', currentCompany.id)
     setDeleteTarget(null)
-    if (deleteError) setError(deleteError.message); else { setMessage(t('shifts.deleted')); await loadData() }
+    if (deleteError) setError(deleteError.message); else { setMessage(t('shifts.deleted')); await reloadData() }
   }
 
   const printSchedule = () => { if (!selectedPrintEmployees.size) setError(t('schedule.printRequired')); else window.print() }
