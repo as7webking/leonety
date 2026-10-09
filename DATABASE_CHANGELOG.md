@@ -44,6 +44,11 @@ Status meanings:
 - Employee shift overlap protection: inspect production shifts for existing
   overlaps, then review `supabase/migrations/20261009120000_prevent_overlapping_employee_shifts.sql`.
   It adds a transaction-serialized trigger; it has not been applied or verified.
+- Invoice document snapshots: verify the live `public.invoices` table and
+  permissions, then review
+  `supabase/migrations/20261009160000_preserve_invoice_document_snapshots.sql`.
+  It adds a nullable JSONB snapshot and an immutability trigger; no historical
+  rows are backfilled.
 
 ### READY TO APPLY
 
@@ -430,6 +435,22 @@ Status meanings:
   but no remote migration record or current catalog verification proves deployment.
 - **Notes/dependencies:** requires server-side AES-256-GCM handling; message content is
   intentionally not stored.
+
+### 2026-10-09 - Finalized invoice document snapshots
+
+- **Status:** `PENDING`
+- **Migration filename:**
+  `supabase/migrations/20261009160000_preserve_invoice_document_snapshots.sql`
+- **Purpose:** preserve seller, buyer and template presentation when a draft first
+  becomes non-draft, without duplicating persisted invoice amounts or line items.
+- **Main objects:** nullable `invoices.document_snapshot` JSONB column and trigger
+  preventing changes after a non-null snapshot has been stored.
+- **Production status:** `UNKNOWN`; migration has not been executed.
+- **Verification status:** application expects the `invoices` table, but the
+  consolidated repository SQL does not create its base table. Verify live table
+  existence, column state and permissions before applying.
+- **Notes/dependencies:** deliberately performs no historical backfill; old issued
+  invoices without a snapshot retain a clearly disclosed live-data print fallback.
 
 ### Date unknown - Workspace Legal / Impressum columns
 

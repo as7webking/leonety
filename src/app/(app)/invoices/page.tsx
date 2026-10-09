@@ -17,7 +17,7 @@ import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
-import { createInvoiceDocumentModel } from '@/lib/invoice-document'
+import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, type InvoiceDocumentSnapshot } from '@/lib/invoice-document'
 
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type InvoiceStatusFilter = 'all' | 'paid' | 'unpaid' | 'overdue' | 'cancelled'
@@ -126,6 +126,7 @@ interface InvoiceRecord {
   status: InvoiceStatus
   notes: string | null
   created_at: string
+  document_snapshot?: InvoiceDocumentSnapshot | null
   clients?: ClientOption | null
   invoice_items?: InvoiceItem[]
   invoice_payments?: InvoicePaymentAllocation[]
@@ -495,6 +496,13 @@ export default function InvoicesPage() {
         repeatBankDetails,
       },
     })
+  }
+
+  const hasLegacyLivePresentation = (invoice: InvoiceRecord) => invoice.status !== 'draft' && !invoice.document_snapshot
+
+  const confirmLegacyPresentation = (selected: InvoiceRecord[]) => {
+    if (!selected.some(hasLegacyLivePresentation)) return true
+    return window.confirm(t('invoices.legacySnapshotWarning'))
   }
 
   useBodyScrollLock(Boolean(deleteInvoice))
@@ -948,6 +956,7 @@ export default function InvoicesPage() {
     setSaving(true)
 
     let clientId = formData.client_id || null
+    let snapshotClient = clients.find((client) => client.id === clientId) ?? null
 
     if (!clientId && quickClient.name.trim()) {
       const { data: createdClient, error: clientCreateError } = await supabase
@@ -969,22 +978,20 @@ export default function InvoicesPage() {
       }
 
       clientId = createdClient.id
-      setClients((current) => [
-        ...current,
-        {
-          id: createdClient.id,
-          name: quickClient.name.trim(),
-          phone: quickClient.phone.trim() || null,
-          email: null,
-          client_company: null,
-          street: null,
-          house_number: null,
-          postal_code: null,
-          city: null,
-          country: null,
-          tax_number: null,
-        },
-      ].sort((left, right) => left.name.localeCompare(right.name)))
+      snapshotClient = {
+        id: createdClient.id,
+        name: quickClient.name.trim(),
+        phone: quickClient.phone.trim() || null,
+        email: null,
+        client_company: null,
+        street: null,
+        house_number: null,
+        postal_code: null,
+        city: null,
+        country: null,
+        tax_number: null,
+      }
+      setClients((current) => [...current, snapshotClient!].sort((left, right) => left.name.localeCompare(right.name)))
     }
 
     const totals = calculateItems(formData.items)
@@ -1004,6 +1011,52 @@ export default function InvoicesPage() {
     }
     if (sourceContractId) {
       invoicePayload.contract_id = sourceContractId
+    }
+
+    const captureDocumentSnapshot = formData.status !== 'draft'
+      && !editingInvoice?.document_snapshot
+      && (!editingInvoice || editingInvoice.status === 'draft')
+    if (captureDocumentSnapshot) {
+      const snapshotModel = createInvoiceDocumentModel({
+        id: editingInvoice?.id ?? 'new-invoice',
+        invoice_number: formData.invoice_number.trim(),
+        status: formData.status,
+        issue_date: formData.issue_date,
+        due_date: formData.due_date || null,
+        currency: normalizeCurrencyCode(formData.currency),
+        notes: formData.notes.trim() || null,
+        subtotal: totals.subtotal,
+        tax_amount: totals.taxAmount,
+        total: totals.total,
+        invoice_items: totals.items,
+        clients: snapshotClient,
+      }, {
+        seller: {
+          name: currentCompany.name,
+          logo: companyLogo,
+          address: companyAddress,
+          email: companyEmail,
+          taxNumber: companyTaxNumber,
+          iban: companyIban,
+          bic: companyBic,
+          showDetails: includeCompanyAddress,
+        },
+        buyerAddressLines: getClientAddressLines(snapshotClient, locale),
+        buyerVisibleFields: clientPrintFields,
+        payment: {
+          method: formData.payment_method,
+          amountPaid: Number(formData.amount_paid || totals.total),
+          splitPayment: formData.split_payment,
+          allocations: formData.payments.map((payment) => ({
+            method: payment.method,
+            amount: Number(payment.amount || 0),
+            reference: payment.reference?.trim() || null,
+          })),
+          groupAllocations: false,
+          repeatBankDetails: true,
+        },
+      })
+      invoicePayload.document_snapshot = createInvoiceDocumentSnapshot(snapshotModel, new Date().toISOString())
     }
 
     try {
@@ -1190,6 +1243,7 @@ export default function InvoicesPage() {
   }
 
   const handlePrint = (invoice: InvoiceRecord) => {
+    if (!confirmLegacyPresentation([invoice])) return
     setPrintingInvoice(invoice)
     setCombinedPrintInvoices([])
     window.setTimeout(() => {
@@ -1235,6 +1289,8 @@ export default function InvoicesPage() {
       setErrorMessage(t('invoices.selectAtLeastOne'))
       return
     }
+
+    if (!confirmLegacyPresentation(selectedInvoices)) return
 
     setPrintingInvoice(null)
     setCombinedPrintInvoices(selectedInvoices)

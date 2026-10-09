@@ -18,6 +18,7 @@ export interface InvoiceDocumentPaymentAllocation {
 
 export interface InvoiceDocumentModel {
   id: string
+  templateId: 'standard'
   invoiceNumber: string
   status: InvoiceDocumentStatus
   issueDate: string
@@ -66,6 +67,14 @@ export interface InvoiceDocumentModel {
   }
 }
 
+export interface InvoiceDocumentSnapshot {
+  schemaVersion: 1
+  capturedAt: string
+  templateId: 'standard'
+  seller: InvoiceDocumentModel['seller']
+  buyer: InvoiceDocumentModel['buyer']
+}
+
 interface InvoiceDocumentSource {
   id: string
   invoice_number: string
@@ -77,6 +86,7 @@ interface InvoiceDocumentSource {
   subtotal: number
   tax_amount: number
   total: number
+  document_snapshot?: InvoiceDocumentSnapshot | null
   invoice_items?: Array<{
     id?: string
     description: string
@@ -91,6 +101,11 @@ interface InvoiceDocumentSource {
     email: string | null
     phone: string | null
     tax_number: string | null
+    street?: string | null
+    house_number?: string | null
+    postal_code?: string | null
+    city?: string | null
+    country?: string | null
   } | null
 }
 
@@ -105,23 +120,29 @@ export function createInvoiceDocumentModel(
   invoice: InvoiceDocumentSource,
   presentation: InvoiceDocumentPresentation,
 ): InvoiceDocumentModel {
+  const snapshot = invoice.document_snapshot
   return {
     id: invoice.id,
+    templateId: snapshot?.templateId ?? 'standard',
     invoiceNumber: invoice.invoice_number,
     status: invoice.status,
     issueDate: invoice.issue_date,
     dueDate: invoice.due_date,
     currency: invoice.currency,
     notes: invoice.notes,
-    seller: { ...presentation.seller },
+    seller: { ...(snapshot?.seller ?? presentation.seller) },
     buyer: {
-      name: invoice.clients?.name ?? '',
-      company: invoice.clients?.client_company ?? null,
-      email: invoice.clients?.email ?? null,
-      phone: invoice.clients?.phone ?? null,
-      addressLines: [...presentation.buyerAddressLines],
-      taxNumber: invoice.clients?.tax_number ?? null,
-      visibleFields: { ...presentation.buyerVisibleFields },
+      ...(snapshot?.buyer ?? {
+        name: invoice.clients?.name ?? '',
+        company: invoice.clients?.client_company ?? null,
+        email: invoice.clients?.email ?? null,
+        phone: invoice.clients?.phone ?? null,
+        addressLines: [...presentation.buyerAddressLines],
+        taxNumber: invoice.clients?.tax_number ?? null,
+        visibleFields: { ...presentation.buyerVisibleFields },
+      }),
+      addressLines: [...(snapshot?.buyer.addressLines ?? presentation.buyerAddressLines)],
+      visibleFields: { ...(snapshot?.buyer.visibleFields ?? presentation.buyerVisibleFields) },
     },
     items: (invoice.invoice_items ?? []).map((item) => ({
       id: item.id,
@@ -141,6 +162,23 @@ export function createInvoiceDocumentModel(
       ...presentation.payment,
       allocations: presentation.payment.allocations.map((allocation) => ({ ...allocation })),
       isPaid: invoice.status === 'paid',
+    },
+  }
+}
+
+export function createInvoiceDocumentSnapshot(
+  model: InvoiceDocumentModel,
+  capturedAt: string,
+): InvoiceDocumentSnapshot {
+  return {
+    schemaVersion: 1,
+    capturedAt,
+    templateId: model.templateId,
+    seller: { ...model.seller },
+    buyer: {
+      ...model.buyer,
+      addressLines: [...model.buyer.addressLines],
+      visibleFields: { ...model.buyer.visibleFields },
     },
   }
 }

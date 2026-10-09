@@ -172,6 +172,11 @@ repository cannot reproduce the full production database from scratch.
 - **Indexes:** company/contract index declared.
 - **RLS:** `UNKNOWN` because base DDL is absent.
 - **Modules:** invoices, print/PDF rendering, contracts, finance.
+- **Snapshot addition:** `document_snapshot` JSONB is proposed by
+  `20261009160000_preserve_invoice_document_snapshots.sql` and remains `PENDING`.
+  It stores seller/buyer presentation and template identity only; canonical totals
+  and line items remain in their existing invoice records. No historical backfill
+  is safe without verified source data.
 
 ### `invoice_items`
 
@@ -524,6 +529,10 @@ repository cannot reproduce the full production database from scratch.
 11. **Application/schema gaps:** `upgrade_requests`, `whatsapp_business_numbers`,
     the full core schema, and possible historical AI chat tables are not represented
     by the current migration.
+12. **Invoice history:** the app currently renders seller/client fields from current
+    workspace/client data. The proposed `invoices.document_snapshot` migration is
+    pending and production deployment is unknown; older issued invoices cannot be
+    reconstructed truthfully from current values.
 
 ## Functions And Triggers Represented In The Repository
 
@@ -542,6 +551,7 @@ The consolidated file defines or replaces these business functions:
 - `guard_employee_number_settings_counter`
 - `prepare_employee_number`
 - `prevent_employee_shift_overlap` (pending migration only; not confirmed in DB)
+- `prevent_invoice_document_snapshot_change` (pending migration only; not confirmed in DB)
 - `set_mailbox_connection_updated_at`
 
 Their corresponding triggers are declared in the same file. Production existence and
