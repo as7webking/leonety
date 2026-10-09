@@ -41,6 +41,9 @@ Status meanings:
   objects are absent or compatible. This timestamped file corrects the counter
   padding bug in Edit 4 while retaining the same schema. Do not apply the entire
   consolidated file or apply both definitions independently.
+- Employee shift overlap protection: inspect production shifts for existing
+  overlaps, then review `supabase/migrations/20261009120000_prevent_overlapping_employee_shifts.sql`.
+  It adds a transaction-serialized trigger; it has not been applied or verified.
 
 ### READY TO APPLY
 
@@ -397,6 +400,22 @@ Status meanings:
   truncation after the counter exceeds the configured minimum width. Apply only
   after read-only production inspection; do not apply both SQL definitions or use
   client-side `max + 1`.
+
+### 2026-10-09 - Concurrent employee shift overlap protection
+
+- **Status:** `PENDING`
+- **Migration filename:**
+  `supabase/migrations/20261009120000_prevent_overlapping_employee_shifts.sql`
+- **Purpose:** prevent concurrent requests from creating overlapping shifts for
+  the same employee on the same calendar date.
+- **Main objects:** `public.prevent_employee_shift_overlap()` and
+  `trg_prevent_employee_shift_overlap` on `public.shifts`.
+- **Production status:** `UNKNOWN`; migration has not been executed.
+- **Verification status:** based on repository DDL only. Inspect the live
+  `shifts` schema and existing overlap records before manual application.
+- **Notes/dependencies:** retains the exact-duplicate unique index, ignores
+  cancelled shifts, follows employee/day conflict scope and does not alter
+  columns, RLS, or overnight-shift semantics.
 
 ### 2026-10-06 - Human mailbox connections
 

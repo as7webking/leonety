@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { buildShiftCandidates, classifyShiftCandidates, createDefaultWeeklySchedule, getWorkingMinutes } from './employee-scheduling.ts'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
+import { employeeScheduleDictionaries } from './employee-schedule-i18n.ts'
 
 describe('employee scheduling', () => {
   it('uses independent weekday times and skips off days', () => {
@@ -24,5 +26,11 @@ describe('employee scheduling', () => {
     assert.equal(getWorkingMinutes('22:00', '06:00', 30), null)
     assert.equal(getWorkingMinutes('09:00', '17:00', 480), null)
     assert.equal(getWorkingMinutes('09:00', '17:00', 30), 450)
+  })
+
+  it('localizes database overlap conflicts in all supported languages', () => {
+    for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
+      assert.ok(employeeScheduleDictionaries[locale]['schedule.concurrentOverlap'])
+    }
   })
 })

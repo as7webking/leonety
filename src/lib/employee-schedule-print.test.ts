@@ -23,3 +23,11 @@ test('employee schedule print includes the required schedule columns and totals'
     assert.match(component, new RegExp(key.replace('.', '\\.')))
   }
 })
+
+test('shift data loads employee numbers and maps them into the dedicated print model', async () => {
+  const page = await readFile(new URL('app/(app)/shifts/page.tsx', root), 'utf8')
+  assert.match(page, /employees\(id, name, employee_number\)/)
+  assert.match(page, /employeeNumber: typeof row\.employee_number === 'string'/)
+  assert.match(page, /employeeNumber: typeof employee\.employee_number === 'string'/)
+  assert.match(page, /periodEmployees/)
+})

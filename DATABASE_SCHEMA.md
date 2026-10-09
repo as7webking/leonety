@@ -294,6 +294,11 @@ repository cannot reproduce the full production database from scratch.
   duplicate non-cancelled shifts.
 - **RLS:** enabled; workspace owner manages rows.
 - **Modules:** shifts and schedule printing.
+- **Concurrency protection:** current repository DDL does not prevent general
+  overlaps. Proposed migration
+  `20261009120000_prevent_overlapping_employee_shifts.sql` is `PENDING`, not
+  production-confirmed; it serializes writes by company/employee/date and retains
+  cancelled-shift and exact-duplicate behavior.
 
 ### `employee_weekly_schedules` and `location_operating_hours`
 
@@ -509,11 +514,14 @@ repository cannot reproduce the full production database from scratch.
    migration `20261008233000_employee_numbers.sql` is pending and has not been run.
    It keeps the same schema and fixes `lpad` truncation. Production deployment is
    unknown; inspect the live catalog before applying. Do not apply both definitions.
-8. **Mailbox:** SQL exists only inside the skipped consolidated file; production
+8. **Shift overlap:** application checks can race, and single-shift insertion has no
+   overlap check. `20261009120000_prevent_overlapping_employee_shifts.sql` proposes
+   a database trigger; it is pending review and has not been applied.
+9. **Mailbox:** SQL exists only inside the skipped consolidated file; production
    deployment is not proven by migration history.
-9. **Identifier types:** historical bigint/UUID conflicts remain for finance records
+10. **Identifier types:** historical bigint/UUID conflicts remain for finance records
    and `stock_movements.linked_expense_id`.
-10. **Application/schema gaps:** `upgrade_requests`, `whatsapp_business_numbers`,
+11. **Application/schema gaps:** `upgrade_requests`, `whatsapp_business_numbers`,
     the full core schema, and possible historical AI chat tables are not represented
     by the current migration.
 
@@ -533,6 +541,7 @@ The consolidated file defines or replaces these business functions:
 - `initialize_employee_number_settings`
 - `guard_employee_number_settings_counter`
 - `prepare_employee_number`
+- `prevent_employee_shift_overlap` (pending migration only; not confirmed in DB)
 - `set_mailbox_connection_updated_at`
 
 Their corresponding triggers are declared in the same file. Production existence and

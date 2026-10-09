@@ -77,24 +77,38 @@ export default function ShiftsPage() {
 
   const loadData = useCallback(async (queryKey: string) => {
     if (!currentCompany) return
-    const [employeeNumberResult, locationResult, hoursResult, shiftResult] = await Promise.all([
+    const [employeeNumberResult, locationResult, hoursResult, shiftNumberResult] = await Promise.all([
       supabase.from('employees').select('id, name, employee_number').eq('company_id', currentCompany.id).eq('status', 'active').order('name'),
       supabase.from('locations').select('id, name').eq('company_id', currentCompany.id).order('name'),
       supabase.from('location_operating_hours').select('location_id, weekday, is_open, opens_at, closes_at').eq('company_id', currentCompany.id),
-      supabase.from('shifts').select('*, employees(id, name), locations(id, name)').eq('company_id', currentCompany.id).gte('date', fromDate).lte('date', toDate).order('date').order('start_time'),
+      supabase.from('shifts').select('*, employees(id, name, employee_number), locations(id, name)').eq('company_id', currentCompany.id).gte('date', fromDate).lte('date', toDate).order('date').order('start_time'),
     ])
     const employeeResult = isEmployeeNumberSchemaUnavailable(employeeNumberResult.error)
       ? await supabase.from('employees').select('id, name').eq('company_id', currentCompany.id).eq('status', 'active').order('name')
       : employeeNumberResult
+    const shiftResult = isEmployeeNumberSchemaUnavailable(shiftNumberResult.error)
+      ? await supabase.from('shifts').select('*, employees(id, name), locations(id, name)').eq('company_id', currentCompany.id).gte('date', fromDate).lte('date', toDate).order('date').order('start_time')
+      : shiftNumberResult
     const loadError = employeeResult.error ?? locationResult.error ?? hoursResult.error ?? shiftResult.error
     if (loadError) {
       setError(loadError.code === '42P01' ? t('modules.databaseRequired') : loadError.message)
       setEmployees([]); setLocations([]); setLocationHours([]); setShifts([])
     } else {
-      setEmployees((employeeResult.data ?? []) as EmployeeOption[])
+      setEmployees((employeeResult.data ?? []).map((employee) => {
+        const row = employee as unknown as Record<string, unknown>
+        return { id: String(row.id), name: String(row.name), employeeNumber: typeof row.employee_number === 'string' ? row.employee_number : null }
+      }))
       setLocations((locationResult.data ?? []) as LocationOption[])
       setLocationHours((hoursResult.data ?? []).filter((row) => row.opens_at && row.closes_at).map((row) => ({ locationId: row.location_id, weekday: row.weekday, isOpen: row.is_open, openTime: row.opens_at.slice(0, 5), closeTime: row.closes_at.slice(0, 5) })))
-      setShifts((shiftResult.data ?? []).map((shift) => ({ ...shift, break_minutes: Number(shift.break_minutes) })) as unknown as Shift[])
+      setShifts((shiftResult.data ?? []).map((shift) => {
+        const row = shift as unknown as Record<string, unknown>
+        const employee = row.employees && typeof row.employees === 'object' ? row.employees as Record<string, unknown> : null
+        return {
+          ...row,
+          employees: employee ? { id: String(employee.id), name: String(employee.name), employeeNumber: typeof employee.employee_number === 'string' ? employee.employee_number : null } : null,
+          break_minutes: Number(row.break_minutes),
+        }
+      }) as unknown as Shift[])
     }
     setLoadedQueryKey(queryKey)
   }, [currentCompany, fromDate, supabase, t, toDate])
@@ -132,7 +146,7 @@ export default function ShiftsPage() {
     if (!form.employee_id || !form.date || getWorkingMinutes(form.start_time, form.end_time, Number(form.break_minutes) || 0) === null) { setError(t('shifts.required')); return }
     const payload = { company_id: currentCompany.id, employee_id: form.employee_id, location_id: form.location_id || null, date: form.date, start_time: form.start_time, end_time: form.end_time, break_minutes: Math.max(0, Number(form.break_minutes) || 0), status: form.status, notes: form.notes.trim() || null, updated_at: new Date().toISOString() }
     const result = editing ? await supabase.from('shifts').update(payload).eq('id', editing.id).eq('company_id', currentCompany.id) : await supabase.from('shifts').insert(payload)
-    if (result.error) { setError(result.error.code === '23505' ? t('shifts.duplicate') : result.error.message); return }
+    if (result.error) { setError(result.error.code === '23505' ? t('shifts.duplicate') : result.error.code === '23P01' ? t('schedule.concurrentOverlap') : result.error.message); return }
     setMessage(editing ? t('shifts.updated') : t('shifts.created')); resetForm(); await reloadData()
   }
 
@@ -189,7 +203,7 @@ export default function ShiftsPage() {
       if (!selected.length) { setError(t('schedule.noReady')); return }
       const payload = selected.map((candidate) => ({ company_id: currentCompany.id, employee_id: generator.employee_id, location_id: candidate.locationId || null, date: candidate.date, start_time: candidate.startTime, end_time: candidate.endTime, break_minutes: candidate.breakMinutes, status: 'scheduled' as const }))
       const { error: insertError } = await supabase.from('shifts').insert(payload)
-      if (insertError) { setError(insertError.code === '23505' ? t('shifts.generatorDuplicates') : insertError.message); return }
+      if (insertError) { setError(insertError.code === '23505' ? t('shifts.generatorDuplicates') : insertError.code === '23P01' ? t('schedule.concurrentOverlap') : insertError.message); return }
       const skipped = rechecked.length - payload.length
       setPreview([]); setSelectedPreviewKeys(new Set()); setMessage(`${t('shifts.generated').replace('{count}', String(payload.length))}${skipped ? ` ${t('schedule.conflictsSkipped').replace('{count}', String(skipped))}` : ''}`); setShowGenerator(false); await reloadData()
     } catch (queryError) { setError(queryError instanceof Error ? queryError.message : t('common.error')) }
