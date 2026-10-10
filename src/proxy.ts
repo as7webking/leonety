@@ -88,7 +88,7 @@ export async function proxy(request: NextRequest) {
 
     const hasCompany = (count ?? 0) > 0
 
-    if (pathname === '/login') {
+    if (pathname === '/login' && !request.nextUrl.searchParams.has('error')) {
       const url = request.nextUrl.clone()
       url.pathname = hasCompany ? '/app/dashboard' : '/app/onboarding'
       return NextResponse.redirect(url)

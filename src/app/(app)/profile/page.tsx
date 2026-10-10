@@ -393,10 +393,11 @@ export default function ProfilePage() {
     try {
       const { data } = await supabase.auth.getUser()
       if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
-      await supabase.auth.signOut()
-      router.push('/login')
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      router.replace('/login')
     } catch {
-      setMessage(t('profile.logoutFailed'))
+      setMessage(t('auth.signOutFailed'))
     }
   }
 

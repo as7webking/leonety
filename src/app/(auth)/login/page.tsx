@@ -46,6 +46,8 @@ export default function LoginPage() {
       auth_callback_failed: 'auth.errorCallbackFailed',
       auth_callback_missing_code: 'auth.errorMissingCode',
       session_missing: 'auth.errorSessionMissing',
+      auth_profile_failed: 'auth.errorProfileFailed',
+      auth_workspace_check_failed: 'auth.errorWorkspaceCheckFailed',
     }
 
     return t(errorKeys[errorCode] ?? 'auth.errorProvider')

@@ -14,6 +14,7 @@ export function ProfileMenuClient() {
   const [supabase] = useState(() => createClient())
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
+  const [logoutError, setLogoutError] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -67,12 +68,18 @@ export function ProfileMenuClient() {
             type="button"
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50"
             onClick={async () => {
-              const { data } = await supabase.auth.getUser()
-              if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
-              await supabase.auth.signOut()
-              setOpen(false)
-              router.replace('/login')
-              router.refresh()
+              setLogoutError(false)
+              try {
+                const { data } = await supabase.auth.getUser()
+                if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
+                const { error } = await supabase.auth.signOut()
+                if (error) throw error
+                setOpen(false)
+                router.replace('/login')
+                router.refresh()
+              } catch {
+                setLogoutError(true)
+              }
             }}
           >
             <LogOut className="h-4 w-4" />
@@ -80,6 +87,7 @@ export function ProfileMenuClient() {
           </button>
         </div>
       )}
+      {logoutError && <p role="alert" className="mt-2 text-xs text-red-700">{t('auth.signOutFailed')}</p>}
     </div>
   )
 }

@@ -23,6 +23,7 @@ export function Nav() {
   const [businessOpen, setBusinessOpen] = useState(false)
   const [wooConnected, setWooConnected] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [logoutError, setLogoutError] = useState(false)
   const [supabase] = useState(() => createClient())
   const router = useRouter()
   const { companies, currentCompanyId, loading, setCurrentCompanyId } = useCompany()
@@ -112,11 +113,17 @@ export function Nav() {
   }, [isOpen])
 
   const handleLogout = async () => {
-    const { data } = await supabase.auth.getUser()
-    if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
-    await supabase.auth.signOut()
-    router.push('/login')
-    setIsOpen(false)
+    setLogoutError(false)
+    try {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) await clearOfflineDataForUser(data.user.id).catch(() => undefined)
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      setIsOpen(false)
+      router.replace('/login')
+    } catch {
+      setLogoutError(true)
+    }
   }
 
   const handleCompanyChange = (value: string) => {
@@ -134,6 +141,7 @@ export function Nav() {
   return (
     <nav ref={navRef} className="fixed inset-x-0 top-0 z-50 w-full max-w-[100vw] overflow-x-clip border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85">
       <div className="mx-auto w-[90%] max-w-7xl min-w-0 py-2.5">
+        {logoutError && <p role="alert" className="mb-2 text-sm text-red-700">{t('auth.signOutFailed')}</p>}
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={() => setIsOpen(false)}>
             <Logo size="md" />
