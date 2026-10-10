@@ -2,6 +2,26 @@ export const ADMIN_USERS_PAGE_SIZE = 25
 export const ADMIN_USERS_MAX_PAGE_SIZE = 100
 
 export type AdminUserStatus = 'active' | 'unconfirmed' | 'deactivated'
+export type AdminUserActivityStatus = 'recent' | 'inactive' | 'never' | 'unknown'
+
+const RECENT_ACTIVITY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+
+export function getAdminUserActivityStatus({
+  lastActivityAt,
+  trackingAvailable,
+  now = new Date(),
+}: {
+  lastActivityAt: string | null
+  trackingAvailable: boolean
+  now?: Date
+}): AdminUserActivityStatus {
+  if (!trackingAvailable) return 'unknown'
+  if (!lastActivityAt) return 'never'
+
+  const activityTime = new Date(lastActivityAt).getTime()
+  if (!Number.isFinite(activityTime)) return 'unknown'
+  return now.getTime() - activityTime <= RECENT_ACTIVITY_WINDOW_MS ? 'recent' : 'inactive'
+}
 
 export function normalizeAdminUsersPage(value: string | null) {
   const page = Number(value)

@@ -481,6 +481,21 @@ repository cannot reproduce the full production database from scratch.
 - **RLS:** enabled; policy design should remain server-only/default-deny.
 - **Modules:** operator access administration.
 
+### `user_activity`
+
+- **Evidence:** `PENDING MIGRATION`; production `UNKNOWN`.
+- **Purpose:** coarse last-use timestamp for the authenticated Leonety app; one row
+  per account, not an event log.
+- **Primary key / foreign key:** `user_id` UUID references `auth.users.id` with
+  `ON DELETE CASCADE`; `last_activity_at` is the only activity value.
+- **RLS/grants:** RLS enabled; no direct `public`, `anon`, or `authenticated`
+  privileges. The server-only service role writes after session authentication; only
+  the operator-authorized Admin Users API reads global activity values.
+- **Function:** `record_leonety_user_activity(uuid)` atomically inserts or updates
+  no more than once per five minutes per user.
+- **Modules:** authenticated app heartbeat and operator Admin Users directory.
+- **Privacy:** no routes, IP addresses, interaction details, or event history stored.
+
 ## Mailbox
 
 ### `mailbox_connections`
@@ -492,8 +507,10 @@ repository cannot reproduce the full production database from scratch.
 - **Important columns:** company/provider/account email, encrypted access/refresh
   tokens, expiry, scopes, status, history cursor and safe error/timestamps.
 - **Indexes:** unique provider account per company and company/status lookup.
-- **RLS/grants:** owner policies are declared, but all direct `anon` and
-  `authenticated` table grants are revoked; server API access is intended.
+- **RLS/grants:** owner policies are declared in the pending timestamped migration;
+  all direct `anon` and `authenticated` table grants are revoked and only
+  `service_role` receives table privileges. API handlers must authenticate and
+  verify `companies.owner_id` before using the service client.
 - **Functions/triggers:** normalize account email and set `updated_at`.
 - **Production status:** `UNKNOWN`; live verification required.
 - **Privacy:** no bodies, subjects, recipients, attachments or mailbox HTML are
@@ -522,14 +539,19 @@ repository cannot reproduce the full production database from scratch.
 8. **Shift overlap:** application checks can race, and single-shift insertion has no
    overlap check. `20261009120000_prevent_overlapping_employee_shifts.sql` proposes
    a database trigger; it is pending review and has not been applied.
-9. **Mailbox:** SQL exists only inside the skipped consolidated file; production
-   deployment is not proven by migration history.
-10. **Identifier types:** historical bigint/UUID conflicts remain for finance records
+9. **Mailbox:** a deployable proposal now exists at
+   `supabase/migrations/20261010130000_google_mailbox_connections.sql`. It is not
+   applied; production table/history state remains `UNKNOWN`. The old consolidated
+   copy is not the deployment source.
+10. **User activity:** `20261010150000_track_admin_user_activity.sql` is pending;
+    until applied, the operator directory reports activity as unknown. Auth sign-in
+    remains sourced from `auth.users.last_sign_in_at`.
+11. **Identifier types:** historical bigint/UUID conflicts remain for finance records
    and `stock_movements.linked_expense_id`.
-11. **Application/schema gaps:** `upgrade_requests`, `whatsapp_business_numbers`,
+12. **Application/schema gaps:** `upgrade_requests`, `whatsapp_business_numbers`,
     the full core schema, and possible historical AI chat tables are not represented
     by the current migration.
-12. **Invoice history:** the app currently renders seller/client fields from current
+13. **Invoice history:** the app currently renders seller/client fields from current
     workspace/client data. The proposed `invoices.document_snapshot` migration is
     pending and production deployment is unknown; older issued invoices cannot be
     reconstructed truthfully from current values.

@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js'
 import { isLeonetyOperatorAdmin } from '@/lib/admin-authorization'
 import {
   escapePostgresLikePattern,
+  getAdminUserActivityStatus,
   getAdminUserStatus,
   getSafeAuthProvider,
   normalizeAdminUsersPage,
@@ -106,10 +107,14 @@ async function loadDirectoryPage(page: number, pageSize: number, search: string)
   const userIds = directory.users.map((user) => user.id)
 
   if (userIds.length === 0) {
-    return { users: [], total: directory.total }
+    return { users: [], total: directory.total, activityTrackingAvailable: false }
   }
 
-  const [{ data: profiles, error: profilesError }, { data: companies, error: companiesError }] = await Promise.all([
+  const [
+    { data: profiles, error: profilesError },
+    { data: companies, error: companiesError },
+    { data: activityRows, error: activityError },
+  ] = await Promise.all([
     adminSupabase
       .from('profiles')
       .select('id, email, full_name, created_at')
@@ -119,12 +124,22 @@ async function loadDirectoryPage(page: number, pageSize: number, search: string)
       .select('id, owner_id, name, created_at')
       .in('owner_id', userIds)
       .order('created_at', { ascending: true }),
+    adminSupabase
+      .from('user_activity')
+      .select('user_id, last_activity_at')
+      .in('user_id', userIds),
   ])
 
   if (profilesError) throw profilesError
   if (companiesError) throw companiesError
+  if (activityError) {
+    console.warn('[admin.users] activity_unavailable', {
+      code: activityError.code ?? 'unknown',
+    })
+  }
 
   const profilesById = new Map(((profiles ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]))
+  const activityByUser = new Map((activityRows ?? []).map((row) => [row.user_id, row.last_activity_at]))
   const companiesByOwner = new Map<string, CompanyRow[]>()
   for (const company of (companies ?? []) as CompanyRow[]) {
     companiesByOwner.set(company.owner_id, [...(companiesByOwner.get(company.owner_id) ?? []), company])
@@ -132,17 +147,25 @@ async function loadDirectoryPage(page: number, pageSize: number, search: string)
 
   return {
     total: directory.total,
+    activityTrackingAvailable: !activityError,
     users: directory.users.map((user) => {
       const profile = profilesById.get(user.id)
       const workspaces = companiesByOwner.get(user.id) ?? []
+      const lastActivityAt = activityByUser.get(user.id) ?? null
       const emailConfirmed = Boolean(user.email_confirmed_at ?? user.confirmed_at)
 
       return {
         id: user.id,
+        accountExists: true,
         email: user.email ?? profile?.email ?? '',
         displayName: profile?.full_name ?? '',
         registeredAt: user.created_at,
         lastSignInAt: user.last_sign_in_at ?? null,
+        lastActivityAt,
+        activityStatus: getAdminUserActivityStatus({
+          lastActivityAt,
+          trackingAvailable: !activityError,
+        }),
         provider: getSafeAuthProvider(user.app_metadata),
         status: getAdminUserStatus({ emailConfirmed, bannedUntil: user.banned_until }),
         hasProfile: Boolean(profile),
@@ -202,6 +225,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       users: directory.users,
+      activityTrackingAvailable: directory.activityTrackingAvailable,
       pagination: { page, pageSize, total: directory.total, totalPages },
       search,
     })

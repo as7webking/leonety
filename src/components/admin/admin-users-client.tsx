@@ -10,10 +10,13 @@ import { getIntlLocale } from '@/lib/i18n'
 
 interface DirectoryUser {
   id: string
+  accountExists: boolean
   email: string
   displayName: string
   registeredAt: string
   lastSignInAt: string | null
+  lastActivityAt: string | null
+  activityStatus: 'recent' | 'inactive' | 'never' | 'unknown'
   provider: string
   status: 'active' | 'unconfirmed' | 'deactivated'
   hasProfile: boolean
@@ -23,6 +26,7 @@ interface DirectoryUser {
 
 interface DirectoryResponse {
   users: DirectoryUser[]
+  activityTrackingAvailable: boolean
   pagination: {
     page: number
     pageSize: number
@@ -68,6 +72,12 @@ export function AdminUsersClient() {
     if (!value) return t('adminUsers.never')
     const date = new Date(value)
     return Number.isFinite(date.getTime()) ? dateFormatter.format(date) : t('adminUsers.never')
+  }
+
+  const formatActivityDate = (user: DirectoryUser) => {
+    if (user.activityStatus === 'unknown') return t('adminUsers.activity.unknown')
+    if (user.activityStatus === 'never') return t('adminUsers.never')
+    return formatDate(user.lastActivityAt)
   }
 
   const loadUsers = useCallback(async (signal?: AbortSignal) => {
@@ -199,16 +209,18 @@ export function AdminUsersClient() {
           ) : (
             <>
               <div className="hidden overflow-x-auto rounded-lg border border-slate-200 lg:block">
-                <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[1280px] border-collapse text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
                       <th className="px-4 py-3 font-semibold">{t('adminUsers.name')}</th>
                       <th className="px-4 py-3 font-semibold">{t('adminUsers.registered')}</th>
                       <th className="px-4 py-3 font-semibold">{t('adminUsers.lastSignIn')}</th>
+                      <th className="px-4 py-3 font-semibold">{t('adminUsers.lastActivity')}</th>
                       <th className="px-4 py-3 font-semibold">{t('adminUsers.provider')}</th>
+                      <th className="px-4 py-3 font-semibold">{t('adminUsers.accountStatus')}</th>
+                      <th className="px-4 py-3 font-semibold">{t('adminUsers.account')}</th>
                       <th className="px-4 py-3 font-semibold">{t('adminUsers.profile')}</th>
                       <th className="px-4 py-3 font-semibold">{t('adminUsers.workspaces')}</th>
-                      <th className="px-4 py-3 font-semibold">{t('adminUsers.status')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
@@ -220,16 +232,21 @@ export function AdminUsersClient() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 align-top text-slate-600">{formatDate(user.registeredAt)}</td>
                         <td className="whitespace-nowrap px-4 py-3 align-top text-slate-600">{formatDate(user.lastSignInAt)}</td>
-                        <td className="px-4 py-3 align-top text-slate-600">{user.provider}</td>
-                        <td className="px-4 py-3 align-top text-slate-600">{user.hasProfile ? t('adminUsers.profileLinked') : t('adminUsers.profileMissing')}</td>
-                        <td className="max-w-56 px-4 py-3 align-top text-slate-600">
-                          <p>{user.workspaceCount}</p>
-                          {user.primaryWorkspace && <p className="break-words text-xs text-slate-500">{user.primaryWorkspace}</p>}
+                        <td className="whitespace-nowrap px-4 py-3 align-top text-slate-600">
+                          <p>{formatActivityDate(user)}</p>
+                          <p className="mt-1 text-xs text-slate-500">{t(`adminUsers.activity.${user.activityStatus}`)}</p>
                         </td>
+                        <td className="px-4 py-3 align-top text-slate-600">{user.provider}</td>
                         <td className="px-4 py-3 align-top">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${statusClasses[user.status]}`}>
                             {t(`adminUsers.status.${user.status}`)}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 align-top text-slate-600">{user.accountExists && t('adminUsers.accountExists')}</td>
+                        <td className="px-4 py-3 align-top text-slate-600">{user.hasProfile ? t('adminUsers.profileLinked') : t('adminUsers.profileMissing')}</td>
+                        <td className="max-w-56 px-4 py-3 align-top text-slate-600">
+                          <p>{user.workspaceCount === 0 ? t('adminUsers.workspaceNone') : user.workspaceCount}</p>
+                          {user.primaryWorkspace && <p className="break-words text-xs text-slate-500">{user.primaryWorkspace}</p>}
                         </td>
                       </tr>
                     ))}
@@ -252,9 +269,12 @@ export function AdminUsersClient() {
                     <dl className="mt-4 grid min-w-0 gap-3 text-sm sm:grid-cols-2">
                       <div><dt className="text-slate-500">{t('adminUsers.registered')}</dt><dd className="break-words text-slate-800">{formatDate(user.registeredAt)}</dd></div>
                       <div><dt className="text-slate-500">{t('adminUsers.lastSignIn')}</dt><dd className="break-words text-slate-800">{formatDate(user.lastSignInAt)}</dd></div>
+                      <div><dt className="text-slate-500">{t('adminUsers.lastActivity')}</dt><dd className="break-words text-slate-800">{formatActivityDate(user)}<span className="block text-xs text-slate-500">{t(`adminUsers.activity.${user.activityStatus}`)}</span></dd></div>
                       <div><dt className="text-slate-500">{t('adminUsers.provider')}</dt><dd className="break-words text-slate-800">{user.provider}</dd></div>
+                      <div><dt className="text-slate-500">{t('adminUsers.accountStatus')}</dt><dd className="text-slate-800">{t(`adminUsers.status.${user.status}`)}</dd></div>
+                      <div><dt className="text-slate-500">{t('adminUsers.account')}</dt><dd className="text-slate-800">{user.accountExists && t('adminUsers.accountExists')}</dd></div>
                       <div><dt className="text-slate-500">{t('adminUsers.profile')}</dt><dd className="text-slate-800">{user.hasProfile ? t('adminUsers.profileLinked') : t('adminUsers.profileMissing')}</dd></div>
-                      <div className="sm:col-span-2"><dt className="text-slate-500">{t('adminUsers.workspaces')}</dt><dd className="break-words text-slate-800">{user.workspaceCount}{user.primaryWorkspace ? ` · ${user.primaryWorkspace}` : ''}</dd></div>
+                      <div className="sm:col-span-2"><dt className="text-slate-500">{t('adminUsers.workspaces')}</dt><dd className="break-words text-slate-800">{user.workspaceCount === 0 ? t('adminUsers.workspaceNone') : `${user.workspaceCount}${user.primaryWorkspace ? ` · ${user.primaryWorkspace}` : ''}`}</dd></div>
                     </dl>
                   </article>
                 ))}

@@ -5,6 +5,7 @@ import { AiAssistantWidget } from "./ai-assistant-widget"
 import { IncomingOrderAlert } from "./incoming-order-alert"
 import { OfflineModeProvider } from '@/contexts/offline-mode-context'
 import { OfflineStatusBar } from '@/components/offline-status-bar'
+import { ActivityHeartbeat } from '@/components/admin/activity-heartbeat'
 
 interface AuthenticatedLayoutProps {
   children: ReactNode
@@ -14,6 +15,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   return (
     <CompanyProvider>
       <OfflineModeProvider>
+        <ActivityHeartbeat />
         <div className="min-h-screen min-w-0 max-w-full bg-background">
           <AppNavigationShell><OfflineStatusBar />{children}</AppNavigationShell>
           <IncomingOrderAlert />

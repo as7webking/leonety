@@ -30,9 +30,6 @@ Status meanings:
   `20261008221134_secure_admin_accounts.sql` has been manually reviewed, applied and
   verified. The existing consolidated file creates `admin_accounts` without enabling
   RLS or revoking browser-role grants.
-- Mailbox connections: deployment may not be inferred from SQL or the Git commit
-  title. Verify the object in the live catalog before recording it as applied or
-  preparing any repair.
 
 ### PENDING
 
@@ -49,6 +46,14 @@ Status meanings:
   `supabase/migrations/20261009160000_preserve_invoice_document_snapshots.sql`.
   It adds a nullable JSONB snapshot and an immutability trigger; no historical
   rows are backfilled.
+- Google mailbox schema: inspect live `companies.id`/`owner_id` types and
+  `mailbox_connections` before considering
+  `supabase/migrations/20261010130000_google_mailbox_connections.sql`. Its
+  production status is unknown and it has not been executed.
+- Leonety activity tracking: review
+  `supabase/migrations/20261010150000_track_admin_user_activity.sql` and verify
+  the `auth.users.id` UUID reference before manual application. It is pending and
+  not executed; Admin Users reports activity as unknown until available.
 
 ### READY TO APPLY
 
@@ -73,9 +78,8 @@ Status meanings:
 
 ## Evidence And Limitations
 
-- Current migration directory: one file,
-  `supabase/migrations/leonety_consolidated_schema.sql`.
-- The Supabase CLI skips that file because it does not match
+- `supabase/migrations/` contains consolidated SQL and timestamped migration
+  proposals. The Supabase CLI skips the consolidated file because it does not match
   `<timestamp>_name.sql`.
 - The linked migration list returned no local/remote versions.
 - A queried `supabase_migrations.schema_migrations` relation was not present. Tables
@@ -424,15 +428,16 @@ Status meanings:
 
 ### 2026-10-06 - Human mailbox connections
 
-- **Status:** `BLOCKED`
+- **Status:** `SUPERSEDED` as a deployment source; retained only as historical
+  consolidated SQL.
 - **Migration filename:** Edit 5 in
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/leonety_consolidated_schema.sql`; do not apply this file.
 - **Purpose:** owner-only Google mailbox connection metadata with encrypted tokens.
-- **Main objects:** `mailbox_connections`, owner policies, revoked client grants,
-  updated-at trigger.
+- **Main objects:** historical proposal for `mailbox_connections`, owner policies,
+  revoked client grants, updated-at trigger.
 - **Production status:** `UNKNOWN`
-- **Verification status:** Git contains implementation and an “applied” commit title,
-  but no remote migration record or current catalog verification proves deployment.
+- **Verification status:** no remote migration record or current catalog verification
+  proves deployment.
 - **Notes/dependencies:** requires server-side AES-256-GCM handling; message content is
   intentionally not stored.
 
@@ -451,6 +456,36 @@ Status meanings:
   existence, column state and permissions before applying.
 - **Notes/dependencies:** deliberately performs no historical backfill; old issued
   invoices without a snapshot retain a clearly disclosed live-data print fallback.
+
+### 2026-10-10 - Timestamped Google mailbox connection schema
+
+- **Status:** `PENDING`
+- **Migration filename:** `supabase/migrations/20261010130000_google_mailbox_connections.sql`
+- **Purpose:** provide a deployable, additive owner-scoped connection model for the
+  first Google human mailbox provider.
+- **Main objects:** `public.mailbox_connections`, owner RLS policies, server-only
+  grants, two lookup/uniqueness indexes, and an `updated_at` trigger.
+- **Production status:** `UNKNOWN`; migration was not executed.
+- **Verification status:** repository/application evidence only. Before manual
+  application, inspect live `companies.id`/`owner_id` types and whether a compatible
+  `mailbox_connections` table already exists.
+- **Notes/dependencies:** tokens use existing `LEONETY_CREDENTIAL_ENCRYPTION_KEY`
+  AES-256-GCM encryption. No Gmail message content is stored. The migration aborts
+  if required company UUID columns are absent or incompatible.
+
+### 2026-10-10 - Coarse Leonety user activity
+
+- **Status:** `PENDING`
+- **Migration filename:** `supabase/migrations/20261010150000_track_admin_user_activity.sql`
+- **Purpose:** persist a coarse last-use timestamp for operator diagnostics without
+  changing authentication sign-in semantics or creating an event log.
+- **Main objects:** `public.user_activity` and the server-only
+  `record_leonety_user_activity(uuid)` RPC.
+- **Production status:** `UNKNOWN`; migration was not executed.
+- **Verification status:** repository-defined only. Verify RLS, table grants and RPC
+  execution privileges after manual application.
+- **Notes/dependencies:** writes are atomically limited to once per user per five
+  minutes. `auth.users` is referenced but not modified.
 
 ### Date unknown - Workspace Legal / Impressum columns
 
