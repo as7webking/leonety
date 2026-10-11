@@ -29,6 +29,10 @@ const appRoutes = [
 ]
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['sharp', 'libheif-js'],
+  outputFileTracingIncludes: {
+    '/api/product-images/normalize': ['./node_modules/libheif-js/libheif-wasm/libheif.wasm'],
+  },
   async redirects() {
     return appRoutes.map((route) => ({
       source: route,

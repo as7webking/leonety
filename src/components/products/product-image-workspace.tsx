@@ -4,6 +4,7 @@ import { PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, RotateCcw, RotateCw, Trash2, UploadCloud } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase-client'
+import { ProductImageUploadError, uploadProductImage } from '@/lib/product-image-upload'
 
 type CropMode = 'free' | 'original' | '1_1' | '4_3' | '3_2' | '16_9'
 type QualityMode = 'high' | 'balanced' | 'small'
@@ -306,8 +307,8 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
     onMessage?.('')
     onError?.('')
 
-    const supported = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)
-    if (!supported) {
+    const header = await file.slice(0, 4096).text().catch(() => '')
+    if (/^\s*(?:\uFEFF)?<(?:\?xml\b|svg\b|!doctype\b)/i.test(header)) {
       onError?.(t('products.unsupportedImageType'))
       return
     }
@@ -334,7 +335,7 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
       await initializeWorkingImage(objectUrl, imageDetails, 0)
       onMessage?.(t('products.imageReady'))
     } catch {
-      onError?.(t('products.imageCompressionFailed'))
+      onError?.(t('products.imageCorrupt'))
     }
   }
 
@@ -352,7 +353,6 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
         body: JSON.stringify({
           companyId,
           imageUrl: value,
-          productName,
         }),
       })
       const payload = await response.json().catch(() => ({})) as { imageUrl?: string; size?: number; error?: string }
@@ -547,22 +547,26 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
 
     try {
       const processed = await createProcessedImageBlob()
-      const storagePath = `${companyId}/products/${Date.now()}-${processed.filename}`
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(storagePath, processed.blob, {
-          contentType: outputFormat,
-          upsert: false,
-        })
+      const result = await uploadProductImage({
+        file: processed.blob,
+        companyId,
+        supabase,
+        onProgress: (progress) => onMessage?.(t(progress === 'uploading' ? 'products.imageUploading' : 'products.imageConverting')),
+      })
 
-      if (uploadError) throw uploadError
-
-      const { data } = supabase.storage.from('product-images').getPublicUrl(storagePath)
-      onChange(data.publicUrl)
-      setLastOutput({ width: processed.width, height: processed.height, size: processed.blob.size })
+      onChange(result.imageUrl)
+      setLastOutput({ width: result.width, height: result.height, size: result.size })
       onMessage?.(t('products.imageProcessed'))
-    } catch {
-      onError?.(t('products.imageCompressionFailed'))
+    } catch (error) {
+      const code = error instanceof ProductImageUploadError ? error.code : 'conversion_failed'
+      const messageKey = code === 'unsupported_image_type'
+        ? 'products.unsupportedImageType'
+        : code === 'image_too_large'
+          ? 'products.imageTooLarge'
+          : code === 'corrupt_image'
+            ? 'products.imageCorrupt'
+            : 'products.imageConversionFailed'
+      onError?.(t(messageKey))
     } finally {
       setProcessing(false)
     }
@@ -642,13 +646,16 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
         : t('products.imageStatus.notDownloaded')
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]" onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+      event.preventDefault()
+      if (!processing) void handleUpload(event.dataTransfer.files?.[0] ?? null)
+    }}>
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            accept="image/*,.tif,.tiff,.bmp,.avif,.heic,.heif,.svg"
             className="hidden"
             aria-hidden="true"
             tabIndex={-1}

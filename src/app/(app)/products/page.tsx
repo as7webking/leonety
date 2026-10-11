@@ -20,6 +20,7 @@ import { ProductMenuBuilderDialog } from '@/components/products/product-menu-bui
 import { ProductCsvDialog } from '@/components/products/product-csv-dialog'
 import { ProductChannelComparisonDialog } from '@/components/products/product-channel-comparison-dialog'
 import type { SupportedComparisonProvider } from '@/lib/product-channel-comparison'
+import { ProductImageUploadError, uploadProductImage } from '@/lib/product-image-upload'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -348,10 +349,7 @@ async function compressImageToJpeg(
     throw new Error('Image must be compressed below 200 KB for WooCommerce publishing.')
   }
 
-  return {
-    blob,
-    dataUrl: canvas.toDataURL('image/jpeg', quality),
-  }
+  return { blob }
 }
 
 export default function ProductsPage() {
@@ -630,47 +628,34 @@ export default function ProductsPage() {
     if (!file) return
     setMessage('')
     setError('')
-  setCompressingImage(true)
-
-  try {
-    const lowerName = file.name.toLowerCase()
-    const supportedByType = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type)
-    const supportedByExtension = /\.(jpe?g|png|webp|heic|heif)$/i.test(lowerName)
-
-    if (!supportedByType && !supportedByExtension) {
-      throw new Error(t('products.unsupportedImageType'))
-    }
-
     if (file.size > 12 * 1024 * 1024) {
-      throw new Error(t('products.imageTooLarge'))
+      setError(t('products.imageTooLarge'))
+      return
     }
+    setCompressingImage(true)
 
-    const { blob } = await compressImageToJpeg(file, true, cropProductImage ? imageCrop : { zoom: 1, offsetX: 0, offsetY: 0 })
-      const storagePath = currentCompany
-        ? `${currentCompany.id}/products/${Date.now()}-${file.name.replace(/\.[^.]+$/, '')}.jpg`
-        : ''
-
-      if (!storagePath) {
-        throw new Error(t('products.imageCompressionFailed'))
+    try {
+      if (!currentCompany) throw new ProductImageUploadError('conversion_failed')
+      const source = cropProductImage
+        ? (await compressImageToJpeg(file, true, imageCrop)).blob
+        : file
+      const result = await uploadProductImage({
+        file: source,
+        companyId: currentCompany.id,
+        supabase,
+        onProgress: (progress) => setMessage(t(progress === 'uploading' ? 'products.imageUploading' : 'products.imageConverting')),
+      })
+      setForm((current) => ({ ...current, image_url: result.imageUrl }))
+      setMessage(t('products.imageUploadSuccess'))
+    } catch (uploadError) {
+      const code = uploadError instanceof ProductImageUploadError ? uploadError.code : 'conversion_failed'
+      const messages: Record<string, string> = {
+        unsupported_image_type: 'products.unsupportedImageType',
+        image_too_large: 'products.imageTooLarge',
+        corrupt_image: 'products.imageCorrupt',
+        conversion_failed: 'products.imageConversionFailed',
       }
-
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(storagePath, blob, {
-          contentType: 'image/jpeg',
-          upsert: false,
-        })
-
-      if (uploadError) throw uploadError
-
-      const { data } = supabase.storage.from('product-images').getPublicUrl(storagePath)
-      setForm((current) => ({ ...current, image_url: data.publicUrl }))
-      setMessage(t('products.imageCompressed'))
-    } catch (compressionError) {
-      const knownMessage = compressionError instanceof Error ? compressionError.message : ''
-      setError(knownMessage === t('products.unsupportedImageType') || knownMessage === t('products.imageTooLarge')
-        ? knownMessage
-        : t('products.imageCompressionFailed'))
+      setError(t(messages[code] ?? 'products.imageConversionFailed'))
     } finally {
       setCompressingImage(false)
     }
@@ -1324,7 +1309,10 @@ export default function ProductsPage() {
 
                 {editorSection === 'image' && (
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
-                    <div className="space-y-4">
+                    <div className="space-y-4" onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+                      event.preventDefault()
+                      if (!compressingImage) void handleImageFileChange(event.dataTransfer.files?.[0] ?? null)
+                    }}>
                       <label className="space-y-1"><span className="text-sm font-medium">{t('woocommerce.imageUrl')}</span><input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="https://example.com/product.jpg" /></label>
                       <label className="space-y-1">
                 <span className="text-sm font-medium">{t('products.uploadImage')}</span>
@@ -1354,10 +1342,10 @@ export default function ProductsPage() {
                     <Button type="button" variant="outline" size="sm" onClick={() => setImageCrop({ zoom: 1, offsetX: 0, offsetY: 0 })}><RotateCcw className="h-4 w-4" />{t('products.resetCrop')}</Button>
                   </div>
                 )}
-                <input
-                  ref={productImageInputRef}
-                  type="file"
-                  accept="image/*"
+                  <input
+                    ref={productImageInputRef}
+                    type="file"
+                    accept="image/*,.tif,.tiff,.bmp,.avif,.heic,.heif,.svg"
                   onChange={(event) => void handleImageFileChange(event.target.files?.[0] ?? null)}
                   className="hidden"
                 />
@@ -1365,7 +1353,7 @@ export default function ProductsPage() {
                   <UploadCloud className="h-4 w-4" />
                   {t('common.chooseFile')}
                 </Button>
-                <span className="text-xs text-slate-500">{compressingImage ? t('products.compressingImage') : t('products.jpgOnly')}</span>
+                <span className="text-xs text-slate-500">{compressingImage ? (message || t('products.imageConverting')) : t('products.jpgOnly')}</span>
               </label>
                     </div>
                     {form.image_url && (

@@ -1,31 +1,15 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { BusinessImageError, normalizeBusinessImage } from '@/lib/business-image-normalizer'
+import { BUSINESS_IMAGE_MAX_INPUT_BYTES } from '@/lib/business-image-limits'
 
 export const runtime = 'nodejs'
 
 const requestSchema = z.object({
   companyId: z.string().uuid(),
   imageUrl: z.string().trim().min(1).max(4096),
-  productName: z.string().trim().max(120).optional(),
 })
-
-const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
-
-function sanitizeFilename(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/\.[^.]+$/, '')
-    .replace(/[^a-z0-9-_]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80) || 'product-image'
-}
-
-function extensionForMimeType(mimeType: string) {
-  if (mimeType === 'image/png') return 'png'
-  if (mimeType === 'image/webp') return 'webp'
-  return 'jpg'
-}
 
 function parseSafeImageUrl(value: string) {
   const url = new URL(value)
@@ -49,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
     }
 
-    const { companyId, imageUrl, productName } = parsed.data
+    const { companyId, imageUrl } = parsed.data
     const { data: company, error: companyError } = await supabase
       .from('companies')
       .select('id')
@@ -69,6 +53,7 @@ export async function POST(request: Request) {
     const response = await fetch(url, {
       cache: 'no-store',
       redirect: 'follow',
+      signal: AbortSignal.timeout(10_000),
       headers: {
         Accept: 'image/avif,image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.1',
       },
@@ -78,22 +63,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'image_import_failed' }, { status: 400 })
     }
 
-    const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() || ''
-    if (!allowedMimeTypes.has(contentType)) {
-      return NextResponse.json({ error: 'unsupported_image_type' }, { status: 400 })
-    }
-
-    const blob = await response.blob()
-    if (blob.size > 12 * 1024 * 1024) {
+    const statedLength = Number(response.headers.get('content-length'))
+    if (Number.isFinite(statedLength) && statedLength > BUSINESS_IMAGE_MAX_INPUT_BYTES) {
       return NextResponse.json({ error: 'image_too_large' }, { status: 400 })
     }
 
-    const filename = `${sanitizeFilename(productName || url.pathname.split('/').pop() || 'product-image')}-original.${extensionForMimeType(contentType)}`
-    const storagePath = `${companyId}/products/originals/${Date.now()}-${filename}`
+    const chunks: Uint8Array[] = []
+    let total = 0
+    if (!response.body) return NextResponse.json({ error: 'corrupt_image' }, { status: 400 })
+    const reader = response.body.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > BUSINESS_IMAGE_MAX_INPUT_BYTES) {
+        await reader.cancel()
+        return NextResponse.json({ error: 'image_too_large' }, { status: 400 })
+      }
+      chunks.push(value)
+    }
+
+    const normalized = await normalizeBusinessImage(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))))
+    const storagePath = `${companyId}/products/${crypto.randomUUID()}.jpg`
     const { error: uploadError } = await supabase.storage
       .from('product-images')
-      .upload(storagePath, blob, {
-        contentType,
+      .upload(storagePath, normalized.buffer, {
+        contentType: 'image/jpeg',
+        cacheControl: '31536000',
         upsert: false,
       })
 
@@ -106,10 +102,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       imageUrl: data.publicUrl,
       storagePath,
-      mimeType: contentType,
-      size: blob.size,
+      mimeType: 'image/jpeg',
+      size: normalized.size,
+      width: normalized.width,
+      height: normalized.height,
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof BusinessImageError) return NextResponse.json({ error: error.code }, { status: 400 })
     return NextResponse.json({ error: 'image_import_failed' }, { status: 400 })
   }
 }
