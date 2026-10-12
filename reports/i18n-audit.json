@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-10T21:38:47.774Z",
+  "generatedAt": "2026-10-11T22:09:54.822Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -46,30 +46,30 @@
   ],
   "coverage": {
     "en": {
-      "translated": 2545,
-      "total": 2545,
+      "translated": 2563,
+      "total": 2563,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2545,
-      "total": 2545,
+      "translated": 2563,
+      "total": 2563,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2545,
-      "total": 2545,
+      "translated": 2563,
+      "total": 2563,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 2343,
-      "total": 2545,
-      "percent": 92.06,
+      "translated": 2361,
+      "total": 2563,
+      "percent": 92.12,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -361,9 +361,9 @@
       ]
     },
     "uk": {
-      "translated": 2298,
-      "total": 2545,
-      "percent": 90.29,
+      "translated": 2316,
+      "total": 2563,
+      "percent": 90.36,
       "missing": [
         "support.button",
         "support.title",
@@ -725,9 +725,9 @@
       ]
     },
     "pl": {
-      "translated": 2298,
-      "total": 2545,
-      "percent": 90.29,
+      "translated": 2316,
+      "total": 2563,
+      "percent": 90.36,
       "missing": [
         "support.button",
         "support.title",
@@ -1089,9 +1089,9 @@
       ]
     },
     "fr": {
-      "translated": 2298,
-      "total": 2545,
-      "percent": 90.29,
+      "translated": 2316,
+      "total": 2563,
+      "percent": 90.36,
       "missing": [
         "support.button",
         "support.title",
@@ -1457,7 +1457,7 @@
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1516,
+      "line": 1855,
       "type": "jsx-text",
       "text": "IBAN:"
     },
@@ -1469,13 +1469,13 @@
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1121,
+      "line": 1106,
       "type": "jsx-text",
       "text": "· WooCommerce"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1451,
+      "line": 1439,
       "type": "jsx-text",
       "text": "ID:"
     },
@@ -1565,7 +1565,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2545,
+    "englishKeyCount": 2563,
     "authenticatedSourceFileCount": 85,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 18

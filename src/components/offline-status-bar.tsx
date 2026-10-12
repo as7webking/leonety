@@ -9,10 +9,11 @@ const draftRoutes = {
   contract: '/app/contracts/new',
   expense: '/app/expenses',
   income: '/app/income',
+  invoice: '/app/invoices',
 } as const
 
 export function OfflineStatusBar() {
-  const { isOnline, draftKinds, connectionRestored, storageUnavailable } = useOfflineMode()
+  const { isOnline, draftKinds, draftCount, connectionRestored, storageUnavailable } = useOfflineMode()
   const { t } = useI18n()
 
   if (isOnline && !connectionRestored && !storageUnavailable) return null
@@ -23,7 +24,7 @@ export function OfflineStatusBar() {
       <div className={`mx-auto flex max-w-7xl flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`} role="status">
         {isOnline ? <Cloud className="h-4 w-4 shrink-0" /> : <WifiOff className="h-4 w-4 shrink-0" />}
         <span className="font-semibold">{isOnline ? t('offline.connectionRestored') : t('offline.status')}</span>
-        <span>{storageUnavailable ? t('offline.storageUnavailable') : isOnline ? (draftKinds.length > 0 ? t('offline.localDraftCount').replace('{count}', String(draftKinds.length)) : '') : t('offline.staleData')}</span>
+        <span>{storageUnavailable ? t('offline.storageUnavailable') : isOnline ? (draftCount > 0 ? t('offline.localDraftCount').replace('{count}', String(draftCount)) : '') : t('offline.staleData')}</span>
         {isOnline && firstDraft && (
           <Link href={draftRoutes[firstDraft]} className="ml-auto font-semibold underline underline-offset-2">
             {t('offline.reviewDraft')}

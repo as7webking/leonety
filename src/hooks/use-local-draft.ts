@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
-import { buildOfflineDraftKey, deleteOfflineDraft, getOfflineDraft, saveOfflineDraft, type OfflineDraft, type OfflineDraftKind } from '@/lib/offline-drafts'
+import { buildOfflineDraftKey, deleteOfflineDraft, getOfflineDraft, saveOfflineDraft, type OfflineDraft, type OfflineFormDraftKind } from '@/lib/offline-drafts'
 
 interface LoadedDraft<T extends object> {
   key: string | null
   draft: OfflineDraft<T> | null
 }
 
-export function useLocalDraft<T extends object>(kind: OfflineDraftKind, workspaceId: string | null | undefined) {
+export function useLocalDraft<T extends object>(kind: OfflineFormDraftKind, workspaceId: string | null | undefined) {
   const { userId, refreshDrafts, reportStorageUnavailable } = useOfflineMode()
   const draftKey = userId && workspaceId ? buildOfflineDraftKey(userId, workspaceId, kind) : null
   const [loadedDraft, setLoadedDraft] = useState<LoadedDraft<T>>({ key: null, draft: null })

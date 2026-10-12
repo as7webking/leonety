@@ -1,10 +1,11 @@
 'use client'
 
-export type OfflineDraftKind = 'income' | 'expense' | 'contract'
+export type OfflineFormDraftKind = 'income' | 'expense' | 'contract'
+export type OfflineDraftKind = OfflineFormDraftKind | 'invoice'
 
 export interface OfflineDraft<T = Record<string, unknown>> {
   key: string
-  kind: OfflineDraftKind
+  kind: OfflineFormDraftKind
   userId: string
   workspaceId: string
   payload: T
@@ -12,10 +13,36 @@ export interface OfflineDraft<T = Record<string, unknown>> {
   updatedAt: string
 }
 
+export interface OfflineInvoiceDraft {
+  key: string
+  kind: 'invoice'
+  userId: string
+  workspaceId: string
+  payload: OfflineInvoiceDraftPayload
+  createdAt: string
+  updatedAt: string
+  localId: string
+}
+
+export interface OfflineInvoiceDraftPayload {
+  clientId: string
+  clientName: string
+  quickClient: { id: string; name: string; phone: string; interestedIn: string }
+  items: Array<{ id: string; description: string; quantity: number; unit_price: number; tax_rate: number }>
+  issueDate: string
+  dueDate: string
+  currency: string
+  taxCountry: string
+  taxType: string
+  notes: string
+}
+
 const DATABASE_NAME = 'leonety-offline-v1'
-const DATABASE_VERSION = 1
+const DATABASE_VERSION = 2
 const DRAFT_STORE = 'drafts'
+const INVOICE_DRAFT_STORE = 'invoiceDrafts'
 const MAX_DRAFT_BYTES = 512 * 1024
+const MAX_LOCAL_INVOICE_DRAFTS_PER_WORKSPACE = 20
 
 function requireIndexedDb() {
   if (typeof window === 'undefined' || !window.indexedDB) {
@@ -36,6 +63,11 @@ function openDatabase(): Promise<IDBDatabase> {
         store.createIndex('by_user', 'userId', { unique: false })
         store.createIndex('by_user_workspace', ['userId', 'workspaceId'], { unique: false })
       }
+      if (!database.objectStoreNames.contains(INVOICE_DRAFT_STORE)) {
+        const store = database.createObjectStore(INVOICE_DRAFT_STORE, { keyPath: 'key' })
+        store.createIndex('by_user', 'userId', { unique: false })
+        store.createIndex('by_user_workspace', ['userId', 'workspaceId'], { unique: false })
+      }
     }
     request.onsuccess = () => resolve(request.result)
   })
@@ -47,7 +79,6 @@ function runRequest<T>(mode: IDBTransactionMode, operation: (store: IDBObjectSto
     const request = operation(transaction.objectStore(DRAFT_STORE))
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(new Error('offline_storage_unavailable'))
-    transaction.oncomplete = () => database.close()
     transaction.onerror = () => {
       database.close()
       reject(new Error('offline_storage_unavailable'))
@@ -55,8 +86,12 @@ function runRequest<T>(mode: IDBTransactionMode, operation: (store: IDBObjectSto
   }))
 }
 
-export function buildOfflineDraftKey(userId: string, workspaceId: string, kind: OfflineDraftKind) {
+export function buildOfflineDraftKey(userId: string, workspaceId: string, kind: OfflineFormDraftKind) {
   return `${userId}:${workspaceId}:${kind}:new`
+}
+
+export function buildOfflineInvoiceDraftKey(userId: string, workspaceId: string, localId: string) {
+  return `${userId}:${workspaceId}:invoice:${localId}`
 }
 
 function text(value: unknown) {
@@ -100,7 +135,7 @@ function sanitizeContractDocument(value: unknown) {
   }
 }
 
-export function sanitizeOfflineDraftPayload(kind: OfflineDraftKind, value: unknown): Record<string, unknown> {
+export function sanitizeOfflineDraftPayload(kind: OfflineFormDraftKind, value: unknown): Record<string, unknown> {
   const payload = safeObject(value)
 
   if (kind === 'income') {
@@ -145,20 +180,179 @@ export function sanitizeOfflineDraftPayload(kind: OfflineDraftKind, value: unkno
   }
 }
 
+export function sanitizeOfflineInvoiceDraftPayload(value: unknown): OfflineInvoiceDraftPayload {
+  const payload = safeObject(value)
+  const quickClient = safeObject(payload.quickClient)
+  const rawItems = Array.isArray(payload.items) ? payload.items : []
+  return {
+    clientId: text(payload.clientId),
+    clientName: text(payload.clientName),
+    quickClient: {
+      id: text(quickClient.id),
+      name: text(quickClient.name),
+      phone: text(quickClient.phone),
+      interestedIn: text(quickClient.interestedIn),
+    },
+    items: rawItems.slice(0, 200).map((value, index) => {
+      const item = safeObject(value)
+      return {
+        id: text(item.id) || `local-item-${index + 1}`,
+        description: text(item.description),
+        quantity: finiteNumber(item.quantity, 1),
+        unit_price: finiteNumber(item.unit_price, 0),
+        tax_rate: finiteNumber(item.tax_rate, 0),
+      }
+    }),
+    issueDate: text(payload.issueDate),
+    dueDate: text(payload.dueDate),
+    currency: text(payload.currency).slice(0, 3),
+    taxCountry: text(payload.taxCountry).slice(0, 8),
+    taxType: text(payload.taxType).slice(0, 24),
+    notes: text(payload.notes).slice(0, 10000),
+  }
+}
+
+function finiteNumber(value: unknown, fallback: number) {
+  const number = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
+
 export async function getOfflineDraft<T = Record<string, unknown>>(
   userId: string,
   workspaceId: string,
-  kind: OfflineDraftKind
+  kind: OfflineFormDraftKind
 ) {
   const result = await runRequest<OfflineDraft<T> | undefined>('readonly', (store) =>
     store.get(buildOfflineDraftKey(userId, workspaceId, kind)))
   return result ?? null
 }
 
+export async function getOfflineInvoiceDraft(userId: string, workspaceId: string, localId: string) {
+  const database = await openDatabase()
+  return new Promise<OfflineInvoiceDraft | null>((resolve, reject) => {
+    const transaction = database.transaction(INVOICE_DRAFT_STORE, 'readonly')
+    const request = transaction.objectStore(INVOICE_DRAFT_STORE).get(buildOfflineInvoiceDraftKey(userId, workspaceId, localId))
+    request.onsuccess = () => resolve((request.result as OfflineInvoiceDraft | undefined) ?? null)
+    request.onerror = () => reject(new Error('offline_storage_unavailable'))
+    transaction.oncomplete = () => database.close()
+    transaction.onerror = () => {
+      database.close()
+      reject(new Error('offline_storage_unavailable'))
+    }
+  })
+}
+
+export async function saveOfflineInvoiceDraft(
+  userId: string,
+  workspaceId: string,
+  localId: string,
+  payload: unknown,
+): Promise<OfflineInvoiceDraft> {
+  const database = await openDatabase()
+  const key = buildOfflineInvoiceDraftKey(userId, workspaceId, localId)
+  const sanitizedPayload = sanitizeOfflineInvoiceDraftPayload(payload)
+  if (new Blob([JSON.stringify(sanitizedPayload)]).size > MAX_DRAFT_BYTES) {
+    database.close()
+    throw new Error('offline_draft_too_large')
+  }
+
+  return new Promise<OfflineInvoiceDraft>((resolve, reject) => {
+    const transaction = database.transaction(INVOICE_DRAFT_STORE, 'readwrite')
+    const store = transaction.objectStore(INVOICE_DRAFT_STORE)
+    const existingRequest = store.get(key)
+    const countRequest = store.index('by_user_workspace').count([userId, workspaceId])
+    const now = new Date().toISOString()
+    let result: OfflineInvoiceDraft
+    let existing: OfflineInvoiceDraft | undefined
+    let existingLoaded = false
+    let count = 0
+    let countLoaded = false
+    let limitReached = false
+    const writeIfReady = () => {
+      if (!existingLoaded || !countLoaded) return
+      if (!existing && count >= MAX_LOCAL_INVOICE_DRAFTS_PER_WORKSPACE) {
+        limitReached = true
+        transaction.abort()
+        return
+      }
+      result = {
+        key,
+        localId,
+        kind: 'invoice',
+        userId,
+        workspaceId,
+        payload: sanitizedPayload,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      }
+      store.put(result)
+    }
+    existingRequest.onsuccess = () => {
+      existing = existingRequest.result as OfflineInvoiceDraft | undefined
+      existingLoaded = true
+      writeIfReady()
+    }
+    countRequest.onsuccess = () => {
+      count = countRequest.result
+      countLoaded = true
+      writeIfReady()
+    }
+    existingRequest.onerror = () => reject(new Error('offline_storage_unavailable'))
+    countRequest.onerror = () => reject(new Error('offline_storage_unavailable'))
+    transaction.oncomplete = () => {
+      database.close()
+      resolve(result)
+    }
+    transaction.onabort = () => {
+      database.close()
+      reject(new Error(limitReached ? 'offline_draft_limit_reached' : 'offline_storage_unavailable'))
+    }
+    transaction.onerror = () => {
+      if (limitReached) return
+      database.close()
+      reject(new Error('offline_storage_unavailable'))
+    }
+  })
+}
+
+export async function deleteOfflineInvoiceDraft(userId: string, workspaceId: string, localId: string) {
+  const database = await openDatabase()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(INVOICE_DRAFT_STORE, 'readwrite')
+    transaction.objectStore(INVOICE_DRAFT_STORE).delete(buildOfflineInvoiceDraftKey(userId, workspaceId, localId))
+    transaction.oncomplete = () => {
+      database.close()
+      resolve()
+    }
+    transaction.onerror = () => {
+      database.close()
+      reject(new Error('offline_storage_unavailable'))
+    }
+  })
+}
+
+export async function listOfflineInvoiceDrafts(userId: string, workspaceId?: string) {
+  const database = await openDatabase()
+  return new Promise<OfflineInvoiceDraft[]>((resolve, reject) => {
+    const transaction = database.transaction(INVOICE_DRAFT_STORE, 'readonly')
+    const store = transaction.objectStore(INVOICE_DRAFT_STORE)
+    const request = workspaceId
+      ? store.index('by_user_workspace').getAll([userId, workspaceId])
+      : store.index('by_user').getAll(userId)
+    request.onsuccess = () => resolve(request.result as OfflineInvoiceDraft[])
+    request.onerror = () => reject(new Error('offline_storage_unavailable'))
+    transaction.oncomplete = () => database.close()
+    transaction.onerror = () => {
+      database.close()
+      reject(new Error('offline_storage_unavailable'))
+    }
+  })
+}
+
 export async function saveOfflineDraft(
   userId: string,
   workspaceId: string,
-  kind: OfflineDraftKind,
+  kind: OfflineFormDraftKind,
   payload: unknown
 ) {
   const key = buildOfflineDraftKey(userId, workspaceId, kind)
@@ -182,24 +376,32 @@ export async function saveOfflineDraft(
   return draft
 }
 
-export async function deleteOfflineDraft(userId: string, workspaceId: string, kind: OfflineDraftKind) {
+export async function deleteOfflineDraft(userId: string, workspaceId: string, kind: OfflineFormDraftKind) {
   await runRequest<undefined>('readwrite', (store) => store.delete(buildOfflineDraftKey(userId, workspaceId, kind)))
 }
 
-export async function listOfflineDrafts(userId: string, workspaceId?: string) {
+export async function listOfflineDrafts(userId: string, workspaceId?: string): Promise<Array<OfflineDraft | OfflineInvoiceDraft>> {
   const database = await openDatabase()
-  return new Promise<OfflineDraft[]>((resolve, reject) => {
-    const transaction = database.transaction(DRAFT_STORE, 'readonly')
-    const store = transaction.objectStore(DRAFT_STORE)
-    const request = workspaceId
-      ? store.index('by_user_workspace').getAll([userId, workspaceId])
-      : store.index('by_user').getAll(userId)
-    request.onsuccess = () => resolve(request.result as OfflineDraft[])
-    request.onerror = () => reject(new Error('offline_storage_unavailable'))
-    transaction.oncomplete = () => database.close()
+  return new Promise<Array<OfflineDraft | OfflineInvoiceDraft>>((resolve, reject) => {
+    const transaction = database.transaction([DRAFT_STORE, INVOICE_DRAFT_STORE], 'readonly')
+    const ordinaryStore = transaction.objectStore(DRAFT_STORE)
+    const invoiceStore = transaction.objectStore(INVOICE_DRAFT_STORE)
+    const ordinaryRequest = workspaceId
+      ? ordinaryStore.index('by_user_workspace').getAll([userId, workspaceId])
+      : ordinaryStore.index('by_user').getAll(userId)
+    const invoiceRequest = workspaceId
+      ? invoiceStore.index('by_user_workspace').getAll([userId, workspaceId])
+      : invoiceStore.index('by_user').getAll(userId)
     transaction.onerror = () => {
       database.close()
       reject(new Error('offline_storage_unavailable'))
+    }
+    transaction.oncomplete = () => {
+      database.close()
+      resolve([
+        ...(ordinaryRequest.result as OfflineDraft[]),
+        ...(invoiceRequest.result as OfflineInvoiceDraft[]),
+      ])
     }
   })
 }
@@ -209,9 +411,13 @@ export async function clearOfflineDataForUser(userId: string) {
   if (drafts.length === 0) return
   const database = await openDatabase()
   await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(DRAFT_STORE, 'readwrite')
+    const transaction = database.transaction([DRAFT_STORE, INVOICE_DRAFT_STORE], 'readwrite')
     const store = transaction.objectStore(DRAFT_STORE)
-    for (const draft of drafts) store.delete(draft.key)
+    const invoiceStore = transaction.objectStore(INVOICE_DRAFT_STORE)
+    for (const draft of drafts) {
+      if (draft.kind === 'invoice') invoiceStore.delete(draft.key)
+      else store.delete(draft.key)
+    }
     transaction.oncomplete = () => {
       database.close()
       resolve()

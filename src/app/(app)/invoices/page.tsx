@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Download, Edit, FileText, PackagePlus, Printer, Trash2 } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
 import { StandardInvoiceRenderer } from '@/components/invoices/standard-invoice-renderer'
 import { useCompany } from '@/contexts/company-context'
+import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { loadCompanyBranding } from '@/lib/company-branding'
@@ -18,6 +19,13 @@ import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
 import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, type InvoiceDocumentSnapshot } from '@/lib/invoice-document'
+import {
+  deleteOfflineInvoiceDraft,
+  listOfflineInvoiceDrafts,
+  saveOfflineInvoiceDraft,
+  type OfflineInvoiceDraft,
+  type OfflineInvoiceDraftPayload,
+} from '@/lib/offline-drafts'
 
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type InvoiceStatusFilter = 'all' | 'paid' | 'unpaid' | 'overdue' | 'cancelled'
@@ -402,6 +410,7 @@ export default function InvoicesPage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { isOnline, userId, refreshDrafts, reportStorageUnavailable } = useOfflineMode()
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([])
@@ -423,6 +432,12 @@ export default function InvoicesPage() {
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [invoiceLocalDraftId, setInvoiceLocalDraftId] = useState<string | null>(null)
+  const [invoiceDraftWorkspaceId, setInvoiceDraftWorkspaceId] = useState<string | null>(null)
+  const [reviewingLocalDraft, setReviewingLocalDraft] = useState(false)
+  const [invoiceLocalDrafts, setInvoiceLocalDrafts] = useState<OfflineInvoiceDraft[]>([])
+  const quickClientLocalId = useRef<string | null>(null)
+  const localDraftWriteRef = useRef<Promise<unknown> | null>(null)
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [companyEmail, setCompanyEmail] = useState('')
@@ -540,6 +555,10 @@ export default function InvoicesPage() {
   const resetForm = useCallback(() => {
     const defaultTaxRate = getTaxRate('DE', 'standard')
     setEditingInvoice(null)
+    setInvoiceLocalDraftId(null)
+    setInvoiceDraftWorkspaceId(null)
+    setReviewingLocalDraft(false)
+    quickClientLocalId.current = null
     setFormData({
       client_id: '',
       invoice_number: makeInvoiceNumber(invoices),
@@ -562,12 +581,143 @@ export default function InvoicesPage() {
     setSourceContractClientId('')
   }, [currentCompany, invoices])
 
+  const refreshInvoiceDraftList = useCallback(async () => {
+    if (!userId || !currentCompany) {
+      setInvoiceLocalDrafts([])
+      return
+    }
+    try {
+      setInvoiceLocalDrafts(await listOfflineInvoiceDrafts(userId, currentCompany.id))
+    } catch {
+      reportStorageUnavailable()
+    }
+  }, [currentCompany, reportStorageUnavailable, userId])
+
+  const saveCurrentInvoiceLocally = useCallback(async () => {
+    if (!showForm || editingInvoice || !invoiceLocalDraftId || !invoiceDraftWorkspaceId || !userId) return
+    const hasDraftContent = Boolean(
+      formData.client_id
+      || quickClient.name.trim()
+      || quickClient.phone.trim()
+      || quickClient.interested_in.trim()
+      || formData.notes.trim()
+      || formData.issue_date !== today()
+      || formData.due_date
+      || formData.tax_country !== 'DE'
+      || formData.tax_type !== 'standard'
+      || normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
+      || formData.items.some((item) => item.description.trim() || item.unit_price !== 0 || item.quantity !== 1)
+    )
+    if (!hasDraftContent) return
+    const selectedClient = clients.find((client) => client.id === formData.client_id)
+    const manualClientId = quickClient.name.trim()
+      ? (quickClientLocalId.current ??= crypto.randomUUID())
+      : ''
+    const payload: OfflineInvoiceDraftPayload = {
+      clientId: formData.client_id,
+      clientName: selectedClient?.name ?? '',
+      quickClient: {
+        id: manualClientId,
+        name: quickClient.name,
+        phone: quickClient.phone,
+        interestedIn: quickClient.interested_in,
+      },
+      items: formData.items.map((item, index) => ({
+        id: item.id ?? `local-item-${index + 1}`,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        tax_rate: item.tax_rate,
+      })),
+      issueDate: formData.issue_date,
+      dueDate: formData.due_date,
+      currency: normalizeCurrencyCode(formData.currency),
+      taxCountry: formData.tax_country,
+      taxType: formData.tax_type,
+      notes: formData.notes,
+    }
+    const draftWorkspaceId = invoiceDraftWorkspaceId
+    const write = saveOfflineInvoiceDraft(userId, draftWorkspaceId, invoiceLocalDraftId, payload)
+      .then(async (draft) => {
+        if (currentCompany?.id === draftWorkspaceId) {
+          setInvoiceLocalDrafts((current) => [draft, ...current.filter((item) => item.key !== draft.key)])
+        }
+        await refreshDrafts()
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.message === 'offline_draft_limit_reached') {
+          setErrorMessage(t('offline.invoice.limitReached'))
+        } else {
+          reportStorageUnavailable()
+          setErrorMessage(t('offline.invoice.storageFailed'))
+        }
+        throw error
+      })
+    localDraftWriteRef.current = write
+    await write
+  }, [
+    clients,
+    currentCompany,
+    editingInvoice,
+    formData,
+    invoiceDraftWorkspaceId,
+    invoiceLocalDraftId,
+    quickClient,
+    refreshDrafts,
+    reportStorageUnavailable,
+    showForm,
+    t,
+    userId,
+  ])
+
+  useEffect(() => {
+    void refreshInvoiceDraftList()
+  }, [refreshInvoiceDraftList])
+
+  useEffect(() => {
+    if (!showForm || editingInvoice || !invoiceLocalDraftId || !userId || !currentCompany) return
+    const timer = window.setTimeout(() => { void saveCurrentInvoiceLocally().catch(() => undefined) }, 400)
+    return () => window.clearTimeout(timer)
+  }, [currentCompany, editingInvoice, invoiceLocalDraftId, saveCurrentInvoiceLocally, showForm, userId])
+
+  useEffect(() => {
+    const handleOffline = () => {
+      if (!invoiceLocalDraftId || editingInvoice) return
+      setReviewingLocalDraft(true)
+      setFormData((current) => ({
+        ...current,
+        invoice_number: '',
+        status: 'sent',
+        amount_paid: '',
+        split_payment: false,
+        payments: [],
+      }))
+    }
+    const handleOnline = () => {
+      if (!invoiceLocalDraftId || editingInvoice) return
+      setFormData((current) => current.invoice_number
+        ? current
+        : { ...current, invoice_number: makeInvoiceNumber(invoices), status: 'sent' })
+    }
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [editingInvoice, invoiceLocalDraftId, invoices])
+
   const openCreateForm = (clientId = '') => {
     const defaultTaxRate = getTaxRate('DE', 'standard')
+    const canSaveOnline = isOnline && navigator.onLine
     setEditingInvoice(null)
+    setInvoiceLocalDraftId(crypto.randomUUID())
+    setInvoiceDraftWorkspaceId(currentCompany?.id ?? null)
+    setReviewingLocalDraft(!canSaveOnline)
+    quickClientLocalId.current = null
     setFormData({
       client_id: clientId,
-      invoice_number: makeInvoiceNumber(invoices),
+      invoice_number: canSaveOnline ? makeInvoiceNumber(invoices) : '',
       issue_date: today(),
       due_date: '',
       currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
@@ -585,6 +735,78 @@ export default function InvoicesPage() {
     setSourceContractId('')
     setSourceContractClientId('')
     setShowForm(true)
+  }
+
+  const reviewLocalInvoiceDraft = async (draft: OfflineInvoiceDraft) => {
+    if (showForm && invoiceLocalDraftId && invoiceLocalDraftId !== draft.localId) {
+      try {
+        await saveCurrentInvoiceLocally()
+      } catch {
+        return
+      }
+    }
+    const payload = draft.payload
+    quickClientLocalId.current = payload.quickClient.id || null
+    setEditingInvoice(null)
+    setSourceContractId('')
+    setSourceContractClientId('')
+    setInvoiceLocalDraftId(draft.localId)
+    setInvoiceDraftWorkspaceId(draft.workspaceId)
+    setReviewingLocalDraft(true)
+    setQuickClient({
+      name: payload.quickClient.name,
+      phone: payload.quickClient.phone,
+      interested_in: payload.quickClient.interestedIn,
+    })
+    setFormData({
+      client_id: payload.clientId,
+      invoice_number: isOnline && navigator.onLine ? makeInvoiceNumber(invoices) : '',
+      issue_date: payload.issueDate || today(),
+      due_date: payload.dueDate,
+      currency: normalizeCurrencyCode(payload.currency || currentCompany?.currency || 'USD'),
+      status: 'sent',
+      notes: payload.notes,
+      tax_country: (taxCountries.some(({ code }) => code === payload.taxCountry) ? payload.taxCountry : 'DE') as TaxCountryCode,
+      tax_type: payload.taxType === 'reduced' || payload.taxType === 'none' ? payload.taxType : 'standard',
+      payment_method: 'bank_transfer',
+      amount_paid: '',
+      split_payment: false,
+      payments: [],
+      items: calculateItems(payload.items.map((item) => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        tax_rate: item.tax_rate,
+        line_total: 0,
+      }))).items,
+    })
+    setShowForm(true)
+  }
+
+  const discardLocalInvoiceDraft = async (draft: OfflineInvoiceDraft) => {
+    if (!userId || !currentCompany || !window.confirm(t('offline.invoice.discardConfirm'))) return
+    try {
+      await localDraftWriteRef.current
+      await deleteOfflineInvoiceDraft(userId, currentCompany.id, draft.localId)
+      setInvoiceLocalDrafts((current) => current.filter((item) => item.localId !== draft.localId))
+      if (invoiceLocalDraftId === draft.localId) resetForm()
+      await refreshDrafts()
+    } catch {
+      reportStorageUnavailable()
+      setErrorMessage(t('offline.invoice.storageFailed'))
+    }
+  }
+
+  const closeInvoiceForm = async () => {
+    if (showForm && invoiceLocalDraftId && !editingInvoice) {
+      try {
+        await saveCurrentInvoiceLocally()
+      } catch {
+        if (!isOnline || !navigator.onLine) return
+      }
+    }
+    resetForm()
   }
 
   const loadInvoices = useCallback(async () => {
@@ -714,18 +936,23 @@ export default function InvoicesPage() {
     }
 
     setEditingInvoice(null)
+    const canSaveOnline = isOnline && navigator.onLine
+    setInvoiceLocalDraftId(crypto.randomUUID())
+    setInvoiceDraftWorkspaceId(currentCompany?.id ?? null)
+    setReviewingLocalDraft(!canSaveOnline)
+    quickClientLocalId.current = null
     setSourceContractId('')
     setSourceContractClientId('')
     setFormData((current) => ({
       ...current,
       client_id: clientId,
-      invoice_number: makeInvoiceNumber(invoices),
+      invoice_number: canSaveOnline ? makeInvoiceNumber(invoices) : '',
       currency: normalizeCurrencyCode(currentCompany?.currency ?? current.currency),
     }))
     setQuickClient({ name: '', phone: '', interested_in: '' })
     setShowForm(true)
     setPrefilledClientId(clientId)
-  }, [clients, createForClientRequested, currentCompany?.currency, invoices, prefilledClientId, searchParams])
+  }, [clients, createForClientRequested, currentCompany?.currency, currentCompany?.id, invoices, isOnline, prefilledClientId, searchParams])
 
   useEffect(() => {
     setSelectedInvoiceIds(new Set())
@@ -761,6 +988,7 @@ export default function InvoicesPage() {
       const terms = contract.terms_snapshot ?? {}
       const amount = Number(terms.price ?? 0)
       const currency = normalizeCurrencyCode(String(terms.currency ?? currentCompany.currency ?? 'USD'))
+      const canSaveOnline = isOnline && navigator.onLine
       const paymentSchedule = typeof terms.paymentSchedule === 'string' ? terms.paymentSchedule.trim() : ''
       const description = [
         contract.reference,
@@ -771,9 +999,13 @@ export default function InvoicesPage() {
       setSourceContractId(contract.id)
       setSourceContractClientId(contract.client_id ?? '')
       setEditingInvoice(null)
+      setInvoiceLocalDraftId(crypto.randomUUID())
+      setInvoiceDraftWorkspaceId(currentCompany.id)
+      setReviewingLocalDraft(!canSaveOnline)
+      quickClientLocalId.current = null
       setFormData({
         client_id: contract.client_id ?? '',
-        invoice_number: makeInvoiceNumber(invoices),
+        invoice_number: canSaveOnline ? makeInvoiceNumber(invoices) : '',
         issue_date: today(),
         due_date: '',
         currency,
@@ -801,7 +1033,7 @@ export default function InvoicesPage() {
     }
 
     void loadContractPrefill()
-  }, [currentCompany, invoices, prefilledContractId, searchParams, supabase, t])
+  }, [currentCompany, invoices, isOnline, prefilledContractId, searchParams, supabase, t])
 
   const updateItem = (index: number, updates: Partial<InvoiceItem>) => {
     setFormData((prev) => ({
@@ -832,6 +1064,9 @@ export default function InvoicesPage() {
       ? invoice.invoice_items
       : [newItem(getTaxRate('DE', 'standard'))]
     setEditingInvoice(invoice)
+    setInvoiceLocalDraftId(null)
+    setInvoiceDraftWorkspaceId(null)
+    setReviewingLocalDraft(false)
     setSourceContractId(invoice.contract_id ?? '')
     setSourceContractClientId(invoice.contract_id ? invoice.client_id ?? '' : '')
     const paymentMeta = loadInvoicePaymentMeta(invoice.id)
@@ -942,8 +1177,17 @@ export default function InvoicesPage() {
     setMessage('')
     setErrorMessage('')
 
+    if (!isOnline || !navigator.onLine) {
+      setErrorMessage(t('offline.requiresConnection'))
+      return
+    }
+
     if (!currentCompany) {
       setErrorMessage('Create or select a workspace first.')
+      return
+    }
+    if (!editingInvoice && invoiceDraftWorkspaceId !== currentCompany.id) {
+      setErrorMessage(t('offline.invoice.workspaceMismatch'))
       return
     }
 
@@ -954,48 +1198,77 @@ export default function InvoicesPage() {
     }
 
     setSaving(true)
+    const localDraftIdForSave = editingInvoice ? null : invoiceLocalDraftId
+    const localDraftIdToDelete = editingInvoice ? null : invoiceLocalDraftId
 
     let clientId = formData.client_id || null
     let snapshotClient = clients.find((client) => client.id === clientId) ?? null
 
     if (!clientId && quickClient.name.trim()) {
-      const { data: createdClient, error: clientCreateError } = await supabase
-        .from('clients')
-        .insert({
-          company_id: currentCompany.id,
+      try {
+        const stableClientId = quickClientLocalId.current ?? (quickClientLocalId.current = crypto.randomUUID())
+        let { data: createdClient, error: clientCreateError } = await supabase
+          .from('clients')
+          .insert({
+            id: stableClientId,
+            company_id: currentCompany.id,
+            name: quickClient.name.trim(),
+            phone: quickClient.phone.trim() || null,
+            interested_in: quickClient.interested_in.trim() || null,
+            status: 'client',
+          })
+          .select('id')
+          .single()
+
+        if (clientCreateError?.code === '23505') {
+          const existingClient = await supabase
+            .from('clients')
+            .select('id')
+            .eq('id', stableClientId)
+            .eq('company_id', currentCompany.id)
+            .maybeSingle()
+          if (!existingClient.error && existingClient.data) {
+            createdClient = existingClient.data
+            clientCreateError = null
+          }
+        }
+
+        if (clientCreateError) {
+          setErrorMessage(clientCreateError.message)
+          setSaving(false)
+          return
+        }
+        if (!createdClient) {
+          setErrorMessage(t('invoices.saveFailed'))
+          setSaving(false)
+          return
+        }
+
+        clientId = createdClient.id
+        snapshotClient = {
+          id: createdClient.id,
           name: quickClient.name.trim(),
           phone: quickClient.phone.trim() || null,
-          interested_in: quickClient.interested_in.trim() || null,
-          status: 'client',
-        })
-        .select('id')
-        .single()
-
-      if (clientCreateError) {
-        setErrorMessage(clientCreateError.message)
+          email: null,
+          client_company: null,
+          street: null,
+          house_number: null,
+          postal_code: null,
+          city: null,
+          country: null,
+          tax_number: null,
+        }
+        setClients((current) => [...current, snapshotClient!].sort((left, right) => left.name.localeCompare(right.name)))
+      } catch {
+        setErrorMessage(reviewingLocalDraft ? t('offline.invoice.saveFailed') : t('invoices.saveFailed'))
         setSaving(false)
         return
       }
-
-      clientId = createdClient.id
-      snapshotClient = {
-        id: createdClient.id,
-        name: quickClient.name.trim(),
-        phone: quickClient.phone.trim() || null,
-        email: null,
-        client_company: null,
-        street: null,
-        house_number: null,
-        postal_code: null,
-        city: null,
-        country: null,
-        tax_number: null,
-      }
-      setClients((current) => [...current, snapshotClient!].sort((left, right) => left.name.localeCompare(right.name)))
     }
 
     const totals = calculateItems(formData.items)
     const invoicePayload: Record<string, unknown> = {
+      ...(localDraftIdForSave ? { id: localDraftIdForSave } : {}),
       company_id: currentCompany.id,
       client_id: clientId,
       invoice_number: formData.invoice_number.trim(),
@@ -1061,6 +1334,7 @@ export default function InvoicesPage() {
 
     try {
       let contractLinkFallback = false
+      let invoiceItemsAlreadySaved = false
       const saveInvoiceRecord = async (payloadToSave: Record<string, unknown>) => {
         if (editingInvoice) {
           const { error } = await supabase
@@ -1077,6 +1351,47 @@ export default function InvoicesPage() {
           .insert(payloadToSave)
           .select('id')
           .single()
+
+        if (error?.code === '23505' && localDraftIdForSave) {
+          const existing = await supabase
+            .from('invoices')
+            .select('id, company_id, client_id, currency, subtotal, tax_amount, total, status, issue_date, due_date, notes')
+            .eq('id', localDraftIdForSave)
+            .eq('company_id', currentCompany.id)
+            .maybeSingle()
+          if (!existing.error && existing.data) {
+            const sameInvoice = existing.data.client_id === clientId
+              && existing.data.currency === normalizeCurrencyCode(formData.currency)
+              && Number(existing.data.subtotal) === totals.subtotal
+              && Number(existing.data.tax_amount) === totals.taxAmount
+              && Number(existing.data.total) === totals.total
+              && existing.data.status === formData.status
+              && existing.data.issue_date === formData.issue_date
+              && (existing.data.due_date ?? null) === (formData.due_date || null)
+              && (existing.data.notes ?? null) === (formData.notes.trim() || null)
+            if (sameInvoice) {
+              const existingItems = await supabase
+                .from('invoice_items')
+                .select('description, quantity, unit_price, tax_rate, line_total')
+                .eq('invoice_id', localDraftIdForSave)
+              if (existingItems.error) return { invoiceId: undefined, error: existingItems.error }
+              const itemsMatch = existingItems.data?.length === totals.items.length
+                && totals.items.every((item, index) => {
+                  const saved = existingItems.data?.[index]
+                  return Boolean(saved)
+                    && saved.description === item.description.trim()
+                    && Number(saved.quantity) === item.quantity
+                    && Number(saved.unit_price) === item.unit_price
+                    && Number(saved.tax_rate) === item.tax_rate
+                    && Number(saved.line_total) === item.line_total
+                })
+              if ((existingItems.data?.length ?? 0) === 0 || itemsMatch) {
+                invoiceItemsAlreadySaved = itemsMatch
+                return { invoiceId: localDraftIdForSave, error: null }
+              }
+            }
+          }
+        }
 
         return { invoiceId: data?.id as string | undefined, error }
       }
@@ -1110,8 +1425,10 @@ export default function InvoicesPage() {
         line_total: item.line_total,
       }))
 
-      const { error: itemError } = await supabase.from('invoice_items').insert(itemPayload)
-      if (itemError) throw itemError
+      if (!invoiceItemsAlreadySaved) {
+        const { error: itemError } = await supabase.from('invoice_items').insert(itemPayload)
+        if (itemError) throw itemError
+      }
 
       const paymentsSaved = await saveInvoicePayments(invoiceId, totals.total)
 
@@ -1194,11 +1511,21 @@ export default function InvoicesPage() {
       }
 
       setMessage(nextSuccessMessage)
+      if (localDraftIdToDelete && userId) {
+        try {
+          await localDraftWriteRef.current
+          await deleteOfflineInvoiceDraft(userId, currentCompany.id, localDraftIdToDelete)
+          await refreshDrafts()
+          await refreshInvoiceDraftList()
+        } catch {
+          reportStorageUnavailable()
+        }
+      }
       resetForm()
       await loadInvoices()
     } catch (error) {
       console.error('Invoice save failed', error instanceof Error ? error.name : 'unknown_error')
-      setErrorMessage(t('invoices.saveFailed'))
+      setErrorMessage(reviewingLocalDraft ? t('offline.invoice.saveFailed') : t('invoices.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -1344,7 +1671,7 @@ export default function InvoicesPage() {
   return (
     <PageContainer>
       <PageHeader title={t('invoices.title')} description={`${t('invoices.description')} · ${currentCompany.name}`}>
-        <Button onClick={() => showForm ? resetForm() : openCreateForm(filteredClient?.id ?? '')}>
+        <Button onClick={() => showForm ? void closeInvoiceForm() : openCreateForm(filteredClient?.id ?? '')}>
           <FileText className="h-4 w-4" />
           {showForm ? t('common.cancel') : t('invoices.add')}
         </Button>
@@ -1385,12 +1712,46 @@ export default function InvoicesPage() {
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>}
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
 
+      {invoiceLocalDrafts.length > 0 && (
+        <section className="mb-6 space-y-3" aria-labelledby="offline-invoice-drafts-title">
+          <div>
+            <h2 id="offline-invoice-drafts-title" className="text-lg font-semibold text-slate-950">{t('offline.invoice.draftsTitle')}</h2>
+            <p className="text-sm text-slate-600">{t('offline.invoice.draftsDescription')}</p>
+          </div>
+          {invoiceLocalDrafts.map((draft) => {
+            const label = draft.payload.clientName || draft.payload.quickClient.name || t('invoices.noClient')
+            return (
+              <Card key={draft.localId}>
+                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium text-slate-900">{label}</p>
+                    <p className="mt-1 break-all text-xs text-slate-500">{t('offline.invoice.localId')}: {draft.localId}</p>
+                    <p className="mt-1 text-xs text-slate-500">{new Date(draft.updatedAt).toLocaleString(locale)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" onClick={() => reviewLocalInvoiceDraft(draft)}>{t('offline.invoice.review')}</Button>
+                    <Button type="button" variant="outline" onClick={() => void discardLocalInvoiceDraft(draft)}>{t('offline.invoice.discard')}</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </section>
+      )}
+
       {showForm && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>{editingInvoice ? t('invoices.edit') : t('invoices.add')}</CardTitle>
           </CardHeader>
           <CardContent>
+            {invoiceLocalDraftId && (!isOnline || reviewingLocalDraft) && (
+              <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+                {invoiceLocalDrafts.some((draft) => draft.localId === invoiceLocalDraftId)
+                  ? t('offline.invoice.savedLocally')
+                  : t('offline.invoice.savingLocally')}
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="space-y-1">
@@ -1439,15 +1800,19 @@ export default function InvoicesPage() {
                 )}
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.invoiceNumber')}</span>
-                  <input value={formData.invoice_number} onChange={(event) => setFormData({ ...formData, invoice_number: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
+                  {!isOnline && invoiceLocalDraftId
+                    ? <span className="block rounded-md border border-dashed px-3 py-2 text-sm text-slate-500">{t('offline.invoice.offlineNumber')}</span>
+                    : <input value={formData.invoice_number} onChange={(event) => setFormData({ ...formData, invoice_number: event.target.value })} className="w-full rounded-md border px-3 py-2" required />}
                 </label>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.status')}</span>
-                  <AppSelect
-                    value={formData.status}
-                    onChange={(value) => setFormData({ ...formData, status: value as InvoiceStatus })}
-                    options={visibleInvoiceStatuses.map((status) => ({ value: status, label: formatInvoiceStatus(status, t) }))}
-                  />
+                  {!isOnline || reviewingLocalDraft
+                    ? <span className="block rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">{invoiceLocalDraftId ? t('offline.localDraft') : formatInvoiceStatus(formData.status, t)}</span>
+                    : <AppSelect
+                      value={formData.status}
+                      onChange={(value) => setFormData({ ...formData, status: value as InvoiceStatus })}
+                      options={visibleInvoiceStatuses.map((status) => ({ value: status, label: formatInvoiceStatus(status, t) }))}
+                    />}
                 </label>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.issueDate')}</span>
@@ -1486,7 +1851,7 @@ export default function InvoicesPage() {
                 </label>
               </div>
 
-              {formData.status === 'paid' && (
+              {formData.status === 'paid' && !reviewingLocalDraft && isOnline && (
                 <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-3">
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="space-y-1">
@@ -1724,9 +2089,11 @@ export default function InvoicesPage() {
                 <div className="flex justify-between border-t pt-2 font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(calculated.total, formData.currency)}</span></div>
               </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" disabled={saving}>{saving ? t('common.loading') : editingInvoice ? t('common.saveChanges') : t('invoices.add')}</Button>
-                <Button type="button" variant="outline" onClick={resetForm}>{t('common.cancel')}</Button>
+              <div className="flex flex-wrap gap-2">
+                {isOnline
+                  ? <Button type="submit" disabled={saving}>{saving ? t('common.loading') : reviewingLocalDraft ? t('offline.invoice.saveToLeonety') : editingInvoice ? t('common.saveChanges') : t('invoices.add')}</Button>
+                  : invoiceLocalDraftId && <span className="self-center text-sm text-slate-600">{t('offline.invoice.savedLocally')}</span>}
+                <Button type="button" variant="outline" onClick={() => void closeInvoiceForm()}>{t('common.cancel')}</Button>
               </div>
             </form>
           </CardContent>
