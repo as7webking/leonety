@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T22:09:54.822Z",
+  "generatedAt": "2026-10-12T10:51:49.020Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -42,34 +42,35 @@
     "src/lib/product-photo-session-i18n.ts",
     "src/lib/profile-localization-i18n.ts",
     "src/lib/public-website-i18n.ts",
-    "src/lib/system-notifications-i18n.ts"
+    "src/lib/system-notifications-i18n.ts",
+    "src/lib/transaction-ordering-i18n.ts"
   ],
   "coverage": {
     "en": {
-      "translated": 2563,
-      "total": 2563,
+      "translated": 2585,
+      "total": 2585,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2563,
-      "total": 2563,
+      "translated": 2585,
+      "total": 2585,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2563,
-      "total": 2563,
+      "translated": 2585,
+      "total": 2585,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 2361,
-      "total": 2563,
-      "percent": 92.12,
+      "translated": 2383,
+      "total": 2585,
+      "percent": 92.19,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -361,9 +362,9 @@
       ]
     },
     "uk": {
-      "translated": 2316,
-      "total": 2563,
-      "percent": 90.36,
+      "translated": 2338,
+      "total": 2585,
+      "percent": 90.44,
       "missing": [
         "support.button",
         "support.title",
@@ -725,9 +726,9 @@
       ]
     },
     "pl": {
-      "translated": 2316,
-      "total": 2563,
-      "percent": 90.36,
+      "translated": 2338,
+      "total": 2585,
+      "percent": 90.44,
       "missing": [
         "support.button",
         "support.title",
@@ -1089,9 +1090,9 @@
       ]
     },
     "fr": {
-      "translated": 2316,
-      "total": 2563,
-      "percent": 90.36,
+      "translated": 2338,
+      "total": 2585,
+      "percent": 90.44,
       "missing": [
         "support.button",
         "support.title",
@@ -1457,7 +1458,7 @@
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1855,
+      "line": 1881,
       "type": "jsx-text",
       "text": "IBAN:"
     },
@@ -1565,7 +1566,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2563,
+    "englishKeyCount": 2585,
     "authenticatedSourceFileCount": 85,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 18

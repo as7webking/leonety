@@ -20,6 +20,7 @@ import { buildKassenbuch, getKassenbuchText, isFullCalendarMonthSelected } from 
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
+import { orderTransactions, type TransactionDayOrder, type TransactionGroupOrder, type TransactionOrder } from '@/lib/transaction-ordering'
 
 interface TransactionRow {
   id: string
@@ -76,8 +77,13 @@ interface TransactionsMemory {
 interface TransactionsViewMemory {
   searchQuery: string
   page: number
-  sortBy: 'date' | 'amount'
-  sortDirection: 'asc' | 'desc'
+  sortOrder: TransactionOrder
+  sortBy?: 'date' | 'amount'
+  sortDirection?: 'asc' | 'desc'
+  groupOrder: TransactionGroupOrder
+  dayOrder: TransactionDayOrder
+  typeFilter: 'all' | 'income' | 'expense'
+  categoryFilter: string
   printFromDate: string
   printToDate: string
 }
@@ -92,8 +98,16 @@ function stripTitle<T extends Record<string, unknown>>(payload: T) {
   return next
 }
 
+function readCanonicalDate(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return ''
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(year, month - 1, day)
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day ? value : ''
+}
+
 export default function TransactionsPage() {
   const router = useRouter()
+  const queryState = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
@@ -111,23 +125,38 @@ export default function TransactionsPage() {
   const [showBulkRename, setShowBulkRename] = useState(false)
   const [importing, setImporting] = useState(false)
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
-  const [searchQuery, setSearchQuery] = useState(() => initialViewMemory?.searchQuery ?? '')
-  const [page, setPage] = useState(() => initialViewMemory?.page ?? 1)
+  const [searchQuery, setSearchQuery] = useState(() => queryState?.get('txSearch') ?? initialViewMemory?.searchQuery ?? '')
+  const [page, setPage] = useState(() => Math.max(1, Number(queryState?.get('txPage')) || initialViewMemory?.page || 1))
   const [bulkEdit, setBulkEdit] = useState({
     category: { enabled: false, value: '' },
     date: { enabled: false, value: '' },
     payment_method: { enabled: false, value: '' },
     note: { enabled: false, value: '' },
   })
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>(() => initialViewMemory?.sortBy ?? 'date')
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => initialViewMemory?.sortDirection ?? 'desc')
+  const [sortOrder, setSortOrder] = useState<TransactionOrder>(() => (['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'title-asc', 'title-desc'].includes(queryState?.get('txSort') ?? '')
+    ? queryState?.get('txSort') as TransactionOrder
+    : initialViewMemory?.sortOrder) ?? (
+    initialViewMemory?.sortBy === 'amount'
+      ? initialViewMemory.sortDirection === 'asc' ? 'amount-asc' : 'amount-desc'
+      : initialViewMemory?.sortDirection === 'asc' ? 'date-asc' : 'date-desc'
+  ))
+  const [groupOrder, setGroupOrder] = useState<TransactionGroupOrder>(() => queryState?.get('txGroup') === 'income-first' || queryState?.get('txGroup') === 'expenses-first' ? queryState.get('txGroup') as TransactionGroupOrder : initialViewMemory?.groupOrder ?? 'chronological')
+  const [dayOrder, setDayOrder] = useState<TransactionDayOrder>(() => queryState?.get('txDay') === 'income-first' || queryState?.get('txDay') === 'expenses-first' ? queryState.get('txDay') as TransactionDayOrder : initialViewMemory?.dayOrder ?? 'chronological')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>(() => queryState?.get('txType') === 'income' || queryState?.get('txType') === 'expense' ? queryState.get('txType') as 'income' | 'expense' : initialViewMemory?.typeFilter ?? 'all')
+  const [categoryFilter, setCategoryFilter] = useState(() => queryState?.get('txCategory') ?? initialViewMemory?.categoryFilter ?? '')
   const [printFromDate, setPrintFromDate] = useState(() => {
+    const queryDate = readCanonicalDate(queryState?.get('txFrom') ?? null)
+    if (queryDate) return queryDate
     if (initialViewMemory?.printFromDate) return initialViewMemory.printFromDate
     const date = new Date()
     date.setDate(1)
     return date.toISOString().split('T')[0]
   })
-  const [printToDate, setPrintToDate] = useState(() => initialViewMemory?.printToDate ?? new Date().toISOString().split('T')[0])
+  const [printToDate, setPrintToDate] = useState(() => {
+    const queryDate = readCanonicalDate(queryState?.get('txTo') ?? null)
+    if (queryDate) return queryDate
+    return initialViewMemory?.printToDate ?? new Date().toISOString().split('T')[0]
+  })
   const [includeOpeningBalance, setIncludeOpeningBalance] = useState(false)
   const [printFormatDialogOpen, setPrintFormatDialogOpen] = useState(false)
   const [selectedPrintFormat, setSelectedPrintFormat] = useState<PrintFormat>('standard')
@@ -281,12 +310,38 @@ export default function TransactionsPage() {
     setAppViewMemory<TransactionsViewMemory>(`transactions-view:${currentCompany.id}`, {
       searchQuery,
       page,
-      sortBy,
-      sortDirection,
+      sortOrder,
+      groupOrder,
+      dayOrder,
+      typeFilter,
+      categoryFilter,
       printFromDate,
       printToDate,
     })
-  }, [currentCompany, page, printFromDate, printToDate, searchQuery, sortBy, sortDirection])
+  }, [currentCompany, page, printFromDate, printToDate, searchQuery, sortOrder, groupOrder, dayOrder, typeFilter, categoryFilter])
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const values: Record<string, string> = {
+      txSearch: searchQuery,
+      txPage: String(page),
+      txSort: sortOrder,
+      txGroup: groupOrder,
+      txDay: dayOrder,
+      txType: typeFilter,
+      txCategory: categoryFilter,
+      txFrom: printFromDate,
+      txTo: printToDate,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value && !(key === 'txPage' && value === '1') && !(key === 'txGroup' && value === 'chronological') && !(key === 'txDay' && value === 'chronological') && !(key === 'txType' && value === 'all')) {
+        url.searchParams.set(key, value)
+      } else {
+        url.searchParams.delete(key)
+      }
+    }
+    window.history.replaceState(window.history.state, '', url)
+  }, [page, searchQuery, sortOrder, groupOrder, dayOrder, typeFilter, categoryFilter, printFromDate, printToDate])
 
   useEffect(() => {
     if (!currentCompany) return
@@ -670,17 +725,19 @@ export default function TransactionsPage() {
   }
 
   const sortedTransactions = useMemo(() => {
-    return transactions.filter((transaction) => matchesFinanceSearch(searchQuery, [transaction.title, transaction.description, transaction.category, transaction.reference]))
-      .sort((left, right) => {
-      const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : left.amount
-      const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : right.amount
-      return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
-    })
-  }, [transactions, searchQuery, sortBy, sortDirection])
+    const filtered = transactions.filter((transaction) => (
+      (typeFilter === 'all' || transaction.type === typeFilter)
+      && (!categoryFilter || transaction.category === categoryFilter)
+      && matchesFinanceSearch(searchQuery, [transaction.title, transaction.description, transaction.category, transaction.reference])
+    ))
+    return orderTransactions(filtered, sortOrder, groupOrder, dayOrder, intlLocale)
+  }, [transactions, searchQuery, sortOrder, groupOrder, dayOrder, typeFilter, categoryFilter, intlLocale])
+  const transactionCategories = useMemo(() => Array.from(new Set(
+    transactions.map((transaction) => transaction.category).filter((category): category is string => Boolean(category))
+  )).sort((left, right) => left.localeCompare(right, intlLocale, { sensitivity: 'base' })), [transactions, intlLocale])
   const totalPages = Math.max(1, Math.ceil(sortedTransactions.length / FINANCE_PAGE_SIZE))
   const paginatedTransactions = useMemo(() => sortedTransactions.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedTransactions])
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
-  useEffect(() => setPage(1), [searchQuery, sortBy, sortDirection])
   const visibleTransactionKeys = useMemo(() => paginatedTransactions.map(getSelectionKey), [paginatedTransactions])
   const selectedTransactionSet = useMemo(() => new Set(selectedTransactions), [selectedTransactions])
   const allVisibleTransactionsSelected = visibleTransactionKeys.length > 0 && visibleTransactionKeys.every((key) => selectedTransactionSet.has(key))
@@ -719,9 +776,8 @@ export default function TransactionsPage() {
   const printColumns = useMemo(() => {
     const incomes = printableTransactions.filter((transaction) => transaction.type === 'income')
     const expenses = printableTransactions.filter((transaction) => transaction.type === 'expense')
-    const rowCount = Math.max(incomes.length, expenses.length)
 
-    return { incomes, expenses, rowCount }
+    return { incomes, expenses }
   }, [printableTransactions])
 
   const openingTransactions = useMemo(
@@ -730,11 +786,16 @@ export default function TransactionsPage() {
   )
 
   const kassenbuchCurrency = normalizeCurrencyCode(currentCompany?.currency ?? 'EUR')
+  const kassenbuchPeriodTransactions = useMemo(() => transactions.filter((transaction) => {
+    const afterStart = !printFromDate || transaction.date >= printFromDate
+    const beforeEnd = !printToDate || transaction.date <= printToDate
+    return afterStart && beforeEnd
+  }), [printFromDate, printToDate, transactions])
   const kassenbuch = useMemo(() => buildKassenbuch({
     openingTransactions,
-    periodTransactions: printableTransactions,
+    periodTransactions: kassenbuchPeriodTransactions,
     currency: kassenbuchCurrency,
-  }), [kassenbuchCurrency, openingTransactions, printableTransactions])
+  }), [kassenbuchCurrency, kassenbuchPeriodTransactions, openingTransactions])
 
   const formatMinorCurrency = (minorUnits: number) => (
     formatCurrency(minorUnits / 100, kassenbuchCurrency, intlLocale)
@@ -789,34 +850,13 @@ export default function TransactionsPage() {
 
   const renderPrintCell = (transaction: TransactionRow | undefined) => {
     if (!transaction) return null
-    const categoryLabel = formatCategoryLabel(transaction.category, t)
-    const displayTitle = transaction.title || transaction.description || transaction.date
-    const isDefaultBusinessIncome =
-      currentCompany?.type === 'business' &&
-      transaction.type === 'income' &&
-      !transaction.title &&
-      (!transaction.description ||
-        transaction.description === transaction.category ||
-        transaction.description === categoryLabel)
+    const displayTitle = transaction.title || transaction.description || t('kassenbuch.genericTransaction')
 
     return (
-      <div className="break-inside-avoid space-y-1">
-        <div className="flex justify-between gap-3">
-          <span className="font-medium">
-            {isDefaultBusinessIncome
-              ? new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)
-              : displayTitle}
-          </span>
-          <span className="whitespace-nowrap font-semibold">
-            {formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
-          </span>
-        </div>
-        {!isDefaultBusinessIncome && (
-          <div className="text-xs text-slate-600">
-            {new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)}
-            {transaction.title && transaction.description ? ` · ${transaction.description}` : ''}
-            {transaction.type === 'expense' && transaction.category ? ` · ${categoryLabel}` : ''}
-          </div>
+      <div className="break-inside-avoid">
+        <span className="font-medium">{displayTitle}</span>
+        {transaction.title && transaction.description && (
+          <span className="mt-1 block text-xs text-slate-600">{transaction.description}</span>
         )}
       </div>
     )
@@ -859,9 +899,12 @@ export default function TransactionsPage() {
         filtersLabel={t('finance.filters')}
         utilitiesLabel={t('finance.utilities')}
         filters={<>
-          <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setSelectedTransactions([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
-          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-full lg:w-36" />
-          <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-full lg:w-40" />
+          <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setPage(1); setSelectedTransactions([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
+          <AppSelect value={sortOrder} onChange={(value) => { setSortOrder(value as TransactionOrder); setPage(1) }} options={(['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'title-asc', 'title-desc'] as const).map((value) => ({ value, label: t(`transactions.order.${value}`) }))} ariaLabel={t('transactions.order')} className="w-full lg:w-48" />
+          <AppSelect value={groupOrder} onChange={(value) => { setGroupOrder(value as TransactionGroupOrder); setPage(1) }} options={(['chronological', 'income-first', 'expenses-first'] as const).map((value) => ({ value, label: t(`transactions.group.${value}`) }))} ariaLabel={t('transactions.groupOrder')} className="w-full lg:w-44" />
+          <AppSelect value={dayOrder} onChange={(value) => { setDayOrder(value as TransactionDayOrder); setPage(1) }} options={(['chronological', 'income-first', 'expenses-first'] as const).map((value) => ({ value, label: t(`transactions.group.${value}`) }))} ariaLabel={t('transactions.withinDay')} disabled={!sortOrder.startsWith('date-')} className="w-full lg:w-44" />
+          <AppSelect value={typeFilter} onChange={(value) => { setTypeFilter(value as 'all' | 'income' | 'expense'); setPage(1) }} options={[{ value: 'all', label: t('transactions.allTypes') }, { value: 'income', label: t('income.title') }, { value: 'expense', label: t('expenses.title') }]} ariaLabel={t('transactions.typeFilter')} className="w-full lg:w-40" />
+          <AppSelect value={categoryFilter} onChange={(value) => { setCategoryFilter(value); setPage(1) }} options={[{ value: '', label: t('transactions.allCategories') }, ...transactionCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('transactions.categoryFilter')} className="w-full lg:w-44" />
           <Button type="button" variant="outline" onClick={() => setShowBulkRename((value) => !value)}>{showBulkRename ? t('common.cancel') : t('transactions.bulkRename')}</Button>
         </>}
         utilities={<>
@@ -929,6 +972,9 @@ export default function TransactionsPage() {
                 <p className="text-xs leading-5 text-slate-600">
                   {t('kassenbuch.pageNumberingHint')}
                 </p>
+                <p className="text-xs leading-5 text-slate-600">
+                  {t('transactions.kassenbuchFixedOrder')}
+                </p>
               </div>
             )}
             <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
@@ -958,6 +1004,14 @@ export default function TransactionsPage() {
             <p className="text-sm text-slate-600">
               {t('transactions.title')} · {printFromDate || '...'} - {printToDate || '...'}
             </p>
+            <p className="text-xs text-slate-600">
+              {t('transactions.printOrdering')}: {t(`transactions.order.${sortOrder}`)} · {t(`transactions.group.${groupOrder}`)} · {t(`transactions.withinDay`)}: {t(`transactions.group.${dayOrder}`)}
+            </p>
+            <p className="text-xs text-slate-600">
+              {t('transactions.printFilters')}: {typeFilter === 'all' ? t('transactions.allTypes') : typeFilter === 'income' ? t('income.title') : t('expenses.title')}
+              {categoryFilter ? ` · ${formatCategoryLabel(categoryFilter, t)}` : ''}
+              {searchQuery.trim() ? ` · ${t('finance.search')}: ${searchQuery.trim()}` : ''}
+            </p>
             {companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{companyAddress}</p>}
           </div>
         </div>
@@ -967,32 +1021,33 @@ export default function TransactionsPage() {
             <span className="font-semibold">{formatNetTotals(openingTransactions)}</span>
           </div>
         )}
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full table-fixed border-collapse text-xs">
           <thead>
             <tr>
-              <th className="w-1/2 border p-2 text-left">{t('income.title')}</th>
-              <th className="w-1/2 border p-2 text-left">{t('expenses.title')}</th>
+              <th className="border p-2 text-left">{t('common.date')}</th>
+              <th className="border p-2 text-left">{t('transactions.type')}</th>
+              <th className="border p-2 text-left">{t('transactions.titleLabel')}</th>
+              <th className="border p-2 text-left">{t('common.category')}</th>
+              <th className="border p-2 text-right">{t('common.amount')}</th>
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: printColumns.rowCount }).map((_, index) => {
-              const income = printColumns.incomes[index]
-              const expense = printColumns.expenses[index]
-
-              return (
-                <tr key={`print-row-${index}`}>
-                  <td className="border p-2 align-top">{renderPrintCell(income)}</td>
-                  <td className="border p-2 align-top">{renderPrintCell(expense)}</td>
-                </tr>
-              )
-            })}
+            {printableTransactions.map((transaction) => (
+              <tr key={`print-row-${transaction.type}:${transaction.id}`}>
+                <td className="whitespace-nowrap border p-2 align-top">{new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)}</td>
+                <td className="break-words border p-2 align-top">{transaction.type === 'income' ? t('income.title') : t('expenses.title')}</td>
+                <td className="border p-2 align-top">{renderPrintCell(transaction)}</td>
+                <td className="break-words border p-2 align-top">{formatCategoryLabel(transaction.category, t)}</td>
+                <td className="whitespace-nowrap border p-2 text-right align-top font-semibold">{formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}</td>
+              </tr>
+            ))}
           </tbody>
           <tfoot>
             <tr className="font-semibold">
-              <td className="border p-2 text-right">
+              <td className="border p-2 text-right" colSpan={3}>
                 {t('income.title')}: {formatTotalsByCurrency(printColumns.incomes)}
               </td>
-              <td className="border p-2 text-right">
+              <td className="border p-2 text-right" colSpan={2}>
                 {t('expenses.title')}: {formatTotalsByCurrency(printColumns.expenses)}
               </td>
             </tr>
