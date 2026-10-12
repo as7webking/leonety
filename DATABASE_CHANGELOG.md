@@ -50,6 +50,11 @@ Status meanings:
   `mailbox_connections` before considering
   `supabase/migrations/20261010130000_google_mailbox_connections.sql`. Its
   production status is unknown and it has not been executed.
+- Multi-provider mailbox extension:
+  `supabase/migrations/20261012120000_extend_mailbox_connections.sql` depends on
+  manual review/application of `20261010130000_google_mailbox_connections.sql`.
+  Inspect the live table and RPC prerequisites first; neither migration has been
+  executed or verified.
 - Leonety activity tracking: review
   `supabase/migrations/20261010150000_track_admin_user_activity.sql` and verify
   the `auth.users.id` UUID reference before manual application. It is pending and
@@ -472,6 +477,25 @@ Status meanings:
 - **Notes/dependencies:** tokens use existing `LEONETY_CREDENTIAL_ENCRYPTION_KEY`
   AES-256-GCM encryption. No Gmail message content is stored. The migration aborts
   if required company UUID columns are absent or incompatible.
+
+### 2026-10-12 - Multi-provider mailbox connections and plan slots
+
+- **Status:** `PENDING`
+- **Migration filename:** `supabase/migrations/20261012120000_extend_mailbox_connections.sql`
+- **Purpose:** extend the existing pending mailbox connection model for Microsoft
+  OAuth and encrypted TLS-only IMAP/SMTP settings; retain credentials through plan
+  downgrades while enforcing per-workspace slot limits atomically.
+- **Main objects:** additional display/account/configuration columns, provider and
+  status constraints, one lookup index, and service-role-only atomic create/activate
+  functions.
+- **Production status:** `UNKNOWN`; SQL has not been executed.
+- **Verification status:** repository-only. It depends on the reviewed shape from
+  `20261010130000_google_mailbox_connections.sql`; inspect live schema, policies,
+  grants and company foreign-key types before applying either file.
+- **Notes/dependencies:** the migration drops/replaces only mailbox provider,
+  credential-format, scope and status checks so the same table accepts the added
+  providers. Existing owner RLS and server-only table grants remain unchanged.
+  It stores no message content. The SQL is a proposal, not a production action.
 
 ### 2026-10-10 - Coarse Leonety user activity
 

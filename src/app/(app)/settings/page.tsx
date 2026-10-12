@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, BriefcaseBusiness, Building2, Scale, UserRound } from 'lucide-react'
+import { Bell, BriefcaseBusiness, Building2, Mail, Scale, UserRound } from 'lucide-react'
 import { PageContainer, PageHeader } from '@/components'
 import { WorkspaceSettingsPanel } from '@/components/settings/workspace-settings-panel'
 import { EmployeeNumberSettingsCard } from '@/components/settings/employee-number-settings'
@@ -46,6 +46,7 @@ export default function SettingsPage() {
                 <Button asChild variant="outline"><Link href="/app/settings/integrations"><BriefcaseBusiness className="mr-2 h-4 w-4" />{t('settings.openIntegrations')}</Link></Button>
               )}
               <Button asChild variant="outline"><Link href="/app/settings/notifications"><Bell className="mr-2 h-4 w-4" />{t('settings.openNotifications')}</Link></Button>
+              <Button asChild variant="outline"><Link href="/app/settings/mailbox"><Mail className="mr-2 h-4 w-4" />{t('mail.settingsTitle')}</Link></Button>
               <Button asChild variant="outline"><Link href="/app/workspaces"><Building2 className="mr-2 h-4 w-4" />{t('settings.manageWorkspaces')}</Link></Button>
             </CardContent>
           </Card>

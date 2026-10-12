@@ -501,20 +501,27 @@ repository cannot reproduce the full production database from scratch.
 ### `mailbox_connections`
 
 - **Evidence:** `PENDING MIGRATION`
-- **Purpose:** server-only Google mailbox OAuth connection metadata. Gmail remains
-  the source of message content.
+- **Purpose:** server-only connected mailbox metadata for Google Gmail, Microsoft
+  Graph, or TLS-only IMAP/SMTP. The provider remains the source of message content.
 - **Primary key:** UUID `id`.
-- **Important columns:** company/provider/account email, encrypted access/refresh
-  tokens, expiry, scopes, status, history cursor and safe error/timestamps.
+- **Important columns:** company/provider/account email; optional display name and
+  provider account ID; encrypted OAuth access/refresh tokens or encrypted IMAP/SMTP
+  configuration; expiry, granted scopes, status, history cursor,
+  successful-connection time and safe error/timestamps.
 - **Indexes:** unique provider account per company and company/status lookup.
 - **RLS/grants:** owner policies are declared in the pending timestamped migration;
   all direct `anon` and `authenticated` table grants are revoked and only
   `service_role` receives table privileges. API handlers must authenticate and
   verify `companies.owner_id` before using the service client.
-- **Functions/triggers:** normalize account email and set `updated_at`.
+- **Functions/triggers:** normalize account email and set `updated_at`; the pending
+  multi-provider extension adds service-role-only atomic connection-slot allocation
+  and reactivation functions.
 - **Production status:** `UNKNOWN`; live verification required.
 - **Privacy:** no bodies, subjects, recipients, attachments or mailbox HTML are
   stored by this model.
+- **Pending SQL:** `20261010130000_google_mailbox_connections.sql` followed by
+  `20261012120000_extend_mailbox_connections.sql`. Both remain unexecuted and must
+  be reviewed against live schema, grants and migration history before application.
 
 ## Known Database Concerns
 
@@ -542,7 +549,9 @@ repository cannot reproduce the full production database from scratch.
 9. **Mailbox:** a deployable proposal now exists at
    `supabase/migrations/20261010130000_google_mailbox_connections.sql`. It is not
    applied; production table/history state remains `UNKNOWN`. The old consolidated
-   copy is not the deployment source.
+   copy is not the deployment source. The multi-provider extension
+   `20261012120000_extend_mailbox_connections.sql` is also pending and depends on
+   that initial proposal; neither migration is confirmed applied.
 10. **User activity:** `20261010150000_track_admin_user_activity.sql` is pending;
     until applied, the operator directory reports activity as unknown. Auth sign-in
     remains sourced from `auth.users.last_sign_in_at`.

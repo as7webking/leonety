@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-12T10:51:49.020Z",
+  "generatedAt": "2026-10-12T14:32:32.552Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -32,6 +32,7 @@
     "src/lib/invoice-snapshot-i18n.ts",
     "src/lib/kassenbuch-i18n.ts",
     "src/lib/legal-settings-i18n.ts",
+    "src/lib/mailbox-i18n.ts",
     "src/lib/offline-mode-i18n.ts",
     "src/lib/order-notifications-i18n.ts",
     "src/lib/page-utilities-i18n.ts",
@@ -47,30 +48,30 @@
   ],
   "coverage": {
     "en": {
-      "translated": 2585,
-      "total": 2585,
+      "translated": 2680,
+      "total": 2680,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2585,
-      "total": 2585,
+      "translated": 2680,
+      "total": 2680,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2585,
-      "total": 2585,
+      "translated": 2680,
+      "total": 2680,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 2383,
-      "total": 2585,
-      "percent": 92.19,
+      "translated": 2478,
+      "total": 2680,
+      "percent": 92.46,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -362,9 +363,9 @@
       ]
     },
     "uk": {
-      "translated": 2338,
-      "total": 2585,
-      "percent": 90.44,
+      "translated": 2433,
+      "total": 2680,
+      "percent": 90.78,
       "missing": [
         "support.button",
         "support.title",
@@ -726,9 +727,9 @@
       ]
     },
     "pl": {
-      "translated": 2338,
-      "total": 2585,
-      "percent": 90.44,
+      "translated": 2433,
+      "total": 2680,
+      "percent": 90.78,
       "missing": [
         "support.button",
         "support.title",
@@ -1090,9 +1091,9 @@
       ]
     },
     "fr": {
-      "translated": 2338,
-      "total": 2585,
-      "percent": 90.44,
+      "translated": 2433,
+      "total": 2680,
+      "percent": 90.78,
       "missing": [
         "support.button",
         "support.title",
@@ -1541,6 +1542,30 @@
       "text": "BIC:"
     },
     {
+      "file": "src/components/mail/mail-client.tsx",
+      "line": 191,
+      "type": "jsx-text",
+      "text": "&lt;"
+    },
+    {
+      "file": "src/components/mail/mail-client.tsx",
+      "line": 191,
+      "type": "jsx-text",
+      "text": "&gt;"
+    },
+    {
+      "file": "src/components/mail/mailbox-settings.tsx",
+      "line": 182,
+      "type": "attribute:placeholder",
+      "text": "imap.example.com"
+    },
+    {
+      "file": "src/components/mail/mailbox-settings.tsx",
+      "line": 187,
+      "type": "attribute:placeholder",
+      "text": "smtp.example.com"
+    },
+    {
       "file": "src/components/products/product-channel-comparison-dialog.tsx",
       "line": 252,
       "type": "jsx-text",
@@ -1566,9 +1591,9 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2585,
-    "authenticatedSourceFileCount": 85,
+    "englishKeyCount": 2680,
+    "authenticatedSourceFileCount": 89,
     "usedMissingInEnglishCount": 0,
-    "hardcodedStringSuspectCount": 18
+    "hardcodedStringSuspectCount": 22
   }
 }

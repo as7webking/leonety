@@ -30,6 +30,7 @@ import { employeeScheduleDictionaries } from '@/lib/employee-schedule-i18n'
 import { adminUsersDictionaries } from '@/lib/admin-users-i18n'
 import { transactionOrderingDictionaries } from '@/lib/transaction-ordering-i18n'
 import { employeeNumberDictionaries } from '@/lib/employee-number-i18n'
+import { mailboxDictionaries } from '@/lib/mailbox-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -53,6 +54,7 @@ type Dictionary = Record<string, string>
 
 export const dictionaries: Record<Locale, Dictionary> = {
   en: {
+    ...mailboxDictionaries.en,
     ...businessModuleDictionaries.en,
     ...countrySelectorDictionaries.en,
     ...productInventoryUxDictionaries.en,
@@ -543,6 +545,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety is monitored to keep your financial workflow available.',
   },
   de: {
+    ...mailboxDictionaries.de,
     ...countrySelectorDictionaries.de,
     ...productInventoryUxDictionaries.de,
     ...productCsvDictionaries.de,
@@ -1032,6 +1035,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety wird überwacht, damit dein Finanzworkflow verfügbar bleibt.',
   },
   ru: {
+    ...mailboxDictionaries.ru,
     ...countrySelectorDictionaries.ru,
     ...productInventoryUxDictionaries.ru,
     ...productCsvDictionaries.ru,
@@ -1521,6 +1525,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.statusText': 'Leonety контролируется, чтобы ваш финансовый процесс оставался доступным.',
   },
   tr: {
+    ...mailboxDictionaries.tr,
     ...countrySelectorDictionaries.tr,
     ...productInventoryUxDictionaries.tr,
     ...productCsvDictionaries.tr,
@@ -1817,6 +1822,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'home.heroText': 'Gelir, gider, zaman, müşteriler, ürünler ve faturaları tek çalışma alanında yönetin.',
   },
   uk: {
+    ...mailboxDictionaries.uk,
     ...countrySelectorDictionaries.uk,
     ...productInventoryUxDictionaries.uk,
     ...productCsvDictionaries.uk,
@@ -1939,6 +1945,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'time.deleteConfirm': 'Видалити цей запис часу?',
   },
   pl: {
+    ...mailboxDictionaries.pl,
     ...countrySelectorDictionaries.pl,
     ...productInventoryUxDictionaries.pl,
     ...productCsvDictionaries.pl,
@@ -2060,6 +2067,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
     'time.deleteConfirm': 'Usunąć ten wpis czasu?',
   },
   fr: {
+    ...mailboxDictionaries.fr,
     ...countrySelectorDictionaries.fr,
     ...productInventoryUxDictionaries.fr,
     ...productCsvDictionaries.fr,
