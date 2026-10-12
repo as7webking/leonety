@@ -12,6 +12,8 @@ import { useI18n } from '@/contexts/i18n-context'
 import { formatCategoryLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
+import { createTransactionFxSnapshot, getMoneyConversionPreview } from '@/lib/transaction-fx'
 import { parseCsv } from '@/lib/csv'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
@@ -37,6 +39,12 @@ interface TransactionRow {
   invoice_id: string | null
   created_at: string | null
   cash_amount: number | null
+  workspace_amount?: number | string | null
+  workspace_currency?: string | null
+  exchange_rate?: number | string | null
+  exchange_rate_source?: string | null
+  exchange_rate_at?: string | null
+  exchange_rate_date?: string | null
 }
 
 interface SupabaseTransactionRow {
@@ -52,6 +60,12 @@ interface SupabaseTransactionRow {
   payment_method?: string | null
   invoice_id?: string | null
   created_at?: string | null
+  workspace_amount?: number | string | null
+  workspace_currency?: string | null
+  exchange_rate?: number | string | null
+  exchange_rate_source?: string | null
+  exchange_rate_at?: string | null
+  exchange_rate_date?: string | null
 }
 
 interface InvoicePaymentRow {
@@ -160,6 +174,7 @@ export default function TransactionsPage() {
   const [includeOpeningBalance, setIncludeOpeningBalance] = useState(false)
   const [printFormatDialogOpen, setPrintFormatDialogOpen] = useState(false)
   const [selectedPrintFormat, setSelectedPrintFormat] = useState<PrintFormat>('standard')
+  const [printCurrencyMode, setPrintCurrencyMode] = useState<'workspace' | 'both'>('workspace')
   const [activePrintFormat, setActivePrintFormat] = useState<PrintFormat>('standard')
   const [showKassenbuchMonthEndBalance, setShowKassenbuchMonthEndBalance] = useState(false)
   const [showKassenbuchPageNumbers, setShowKassenbuchPageNumbers] = useState(false)
@@ -174,6 +189,8 @@ export default function TransactionsPage() {
     date: new Date().toISOString().split('T')[0],
     currency: 'USD',
   })
+  const [latestRate, setLatestRate] = useState<string | null>(null)
+  const [latestRateLoading, setLatestRateLoading] = useState(false)
   const [bulkRename, setBulkRename] = useState({
     target: 'income' as BulkRenameTarget,
     field: 'description' as BulkRenameField,
@@ -183,6 +200,46 @@ export default function TransactionsPage() {
   const [selectedBulkRenameIds, setSelectedBulkRenameIds] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   useBodyScrollLock(printFormatDialogOpen)
+  const conversionPreview = getMoneyConversionPreview(formData.amount, latestRate, currentCompany?.currency ?? 'USD')
+
+  useEffect(() => {
+    if (!currentCompany) return
+    const from = normalizeCurrencyCode(formData.currency)
+    const to = normalizeCurrencyCode(currentCompany.currency ?? 'USD')
+    let cancelled = false
+    if (from === to) {
+      setLatestRate('1')
+      return
+    }
+
+    setLatestRate(null)
+    setLatestRateLoading(true)
+    void fetchLatestExchangeRate(from, to)
+      .then((quote) => { if (!cancelled) setLatestRate(quote.rate) })
+      .catch(() => { if (!cancelled) setLatestRate(null) })
+      .finally(() => { if (!cancelled) setLatestRateLoading(false) })
+
+    return () => { cancelled = true }
+  }, [currentCompany, formData.currency])
+
+  const retryRateLookup = async () => {
+    if (!currentCompany) return
+    const from = normalizeCurrencyCode(formData.currency)
+    const to = normalizeCurrencyCode(currentCompany.currency ?? 'USD')
+    if (from === to) {
+      setLatestRate('1')
+      return
+    }
+    setLatestRateLoading(true)
+    setLatestRate(null)
+    try {
+      setLatestRate((await fetchLatestExchangeRate(from, to)).rate)
+    } catch {
+      setLatestRate(null)
+    } finally {
+      setLatestRateLoading(false)
+    }
+  }
 
   const loadTransactions = useCallback(async () => {
     if (!currentCompany) {
@@ -203,10 +260,13 @@ export default function TransactionsPage() {
       setErrorMessage('')
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
-      const queryTransactions = async (table: TransactionTable, includeTitle: boolean, includeAccounting: boolean): Promise<TransactionQueryResult> => {
+      const queryTransactions = async (table: TransactionTable, includeTitle: boolean, includeAccounting: boolean, includeSnapshot = true): Promise<TransactionQueryResult> => {
+        const snapshotColumns = includeSnapshot
+          ? ', workspace_amount, workspace_currency, exchange_rate, exchange_rate_source, exchange_rate_at, exchange_rate_date'
+          : ''
         const columns = includeAccounting
-          ? 'id, date, title, description, category, amount, currency, note, reference, payment_method, invoice_id, created_at'
-          : includeTitle ? 'id, date, title, description, category, amount, currency, created_at' : 'id, date, description, category, amount, currency, created_at'
+          ? `id, date, title, description, category, amount, currency, note, reference, payment_method, invoice_id, created_at${snapshotColumns}`
+          : includeTitle ? `id, date, title, description, category, amount, currency, created_at${snapshotColumns}` : `id, date, description, category, amount, currency, created_at${snapshotColumns}`
         return await supabase
           .from(table)
           .select(columns)
@@ -221,14 +281,14 @@ export default function TransactionsPage() {
 
       if (isMissingOptionalColumn(incomeRes.error) || isMissingOptionalColumn(expenseRes.error)) {
         ;[incomeRes, expenseRes] = await Promise.all([
-          queryTransactions('incomes', true, false),
-          queryTransactions('expenses', true, false),
+          queryTransactions('incomes', true, true, false),
+          queryTransactions('expenses', true, true, false),
         ])
       }
       if (isMissingOptionalColumn(incomeRes.error) || isMissingOptionalColumn(expenseRes.error)) {
         ;[incomeRes, expenseRes] = await Promise.all([
-          queryTransactions('incomes', false, false),
-          queryTransactions('expenses', false, false),
+          queryTransactions('incomes', false, false, false),
+          queryTransactions('expenses', false, false, false),
         ])
       }
 
@@ -388,6 +448,13 @@ export default function TransactionsPage() {
     }
 
     const table = formData.type === 'income' ? 'incomes' : 'expenses'
+    let fxSnapshot
+    try {
+      fxSnapshot = await createTransactionFxSnapshot(amount, formData.currency, currentCompany.currency ?? 'USD')
+    } catch {
+      setErrorMessage(t('currencySnapshot.rateUnavailable'))
+      return
+    }
     const payload = {
       company_id: currentCompany.id,
       amount,
@@ -396,6 +463,7 @@ export default function TransactionsPage() {
       category: formData.category.trim() || 'Other',
       date: formData.date,
       currency: normalizeCurrencyCode(formData.currency),
+      ...fxSnapshot,
     }
 
     let { error } = await supabase.from(table).insert(payload)
@@ -405,7 +473,9 @@ export default function TransactionsPage() {
     }
 
     if (error) {
-      setErrorMessage(error.message)
+      setErrorMessage(isMissingOptionalColumn(error)
+        ? t('currencySnapshot.migrationRequired')
+        : error.message)
       return
     }
 
@@ -511,6 +581,7 @@ export default function TransactionsPage() {
         }
 
         existingKeys.add(key)
+        const fxSnapshot = await createTransactionFxSnapshot(Number(amount.toFixed(2)), currency, currentCompany.currency ?? 'USD')
         payloads[type].push({
           company_id: currentCompany.id,
           date,
@@ -519,6 +590,7 @@ export default function TransactionsPage() {
           category,
           amount: Number(amount.toFixed(2)),
           currency,
+          ...fxSnapshot,
         })
       }
 
@@ -681,10 +753,26 @@ export default function TransactionsPage() {
   }
 
   const handleEksExport = () => {
-    const monthly = printableTransactions.reduce<Record<string, { income: number; expense: number }>>((acc, transaction) => {
+    const currentCurrency = normalizeCurrencyCode(currentCompany?.currency ?? 'EUR')
+    const rowsWithWorkspaceAmount = printableTransactions.map((transaction) => {
+      const originalCurrency = normalizeCurrencyCode(transaction.currency)
+      if (originalCurrency === currentCurrency) return { transaction, amount: transaction.amount }
+      if (transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
+        && normalizeCurrencyCode(transaction.workspace_currency) === currentCurrency) {
+        return { transaction, amount: Number(transaction.workspace_amount) }
+      }
+      return { transaction, amount: null }
+    })
+    const missingSnapshotCount = rowsWithWorkspaceAmount.filter((row) => row.amount === null).length
+    if (missingSnapshotCount > 0) {
+      setErrorMessage(t('currencySnapshot.incompleteTotal').replace('{count}', String(missingSnapshotCount)))
+      return
+    }
+    const monthly = rowsWithWorkspaceAmount.reduce<Record<string, { income: number; expense: number }>>((acc, item) => {
+      const transaction = item.transaction
       const month = transaction.date.slice(0, 7)
       const current = acc[month] ?? { income: 0, expense: 0 }
-      current[transaction.type] += transaction.amount
+      current[transaction.type] += item.amount ?? 0
       acc[month] = current
       return acc
     }, {})
@@ -698,7 +786,7 @@ export default function TransactionsPage() {
           totals.income.toFixed(2).replace('.', ','),
           totals.expense.toFixed(2).replace('.', ','),
           (totals.income - totals.expense).toFixed(2).replace('.', ','),
-          normalizeCurrencyCode(currentCompany?.currency ?? 'EUR'),
+          currentCurrency,
         ]),
     ]
     const csv = `\uFEFF${rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\r\n')}`
@@ -814,8 +902,22 @@ export default function TransactionsPage() {
       : lastKassenbuchRow?.transaction.date)
     || printFromDate
 
+  const formatStandardPrintAmount = (transaction: TransactionRow) => {
+    const originalCurrency = normalizeCurrencyCode(transaction.currency)
+    const workspaceCurrency = transaction.workspace_currency
+      ? normalizeCurrencyCode(transaction.workspace_currency)
+      : normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
+    const original = formatCurrency(transaction.amount, originalCurrency, intlLocale)
+    if (originalCurrency === workspaceCurrency) return original
+    if (transaction.workspace_amount === null || transaction.workspace_amount === undefined) {
+      return `${original} · ${t('currencySnapshot.noSnapshot')}`
+    }
+    const base = formatCurrency(Number(transaction.workspace_amount), workspaceCurrency, intlLocale)
+    return printCurrencyMode === 'both' ? `${original} · ${base}` : base
+  }
+
   const formatTotalsByCurrency = (items: TransactionRow[]) => {
-    const totals = getTotalsByCurrency(items)
+    const totals = getPrintPresentationTotals(items)
     const totalText = Object.entries(totals)
       .map(([currency, amount]) => formatCurrency(amount, currency, intlLocale))
       .join(' · ')
@@ -823,30 +925,46 @@ export default function TransactionsPage() {
     return totalText || formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'), intlLocale)
   }
 
-  const getTotalsByCurrency = (items: TransactionRow[]) =>
-    items.reduce<Record<string, number>>((acc, transaction) => {
-      const currency = normalizeCurrencyCode(transaction.currency)
-      acc[currency] = (acc[currency] ?? 0) + transaction.amount
+  const getPrintPresentationTotals = (items: TransactionRow[]) => items.reduce<Record<string, number>>((acc, transaction) => {
+      const hasSnapshot = transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
+      const useWorkspace = printCurrencyMode === 'workspace' && hasSnapshot
+      const currency = useWorkspace
+        ? normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany?.currency ?? 'USD')
+        : normalizeCurrencyCode(transaction.currency)
+      const amount = useWorkspace ? Number(transaction.workspace_amount) : transaction.amount
+      acc[currency] = (acc[currency] ?? 0) + amount
       return acc
     }, {})
 
   const formatNetTotals = (items: TransactionRow[]) => {
-    const incomeTotals = getTotalsByCurrency(items.filter((transaction) => transaction.type === 'income'))
-    const expenseTotals = getTotalsByCurrency(items.filter((transaction) => transaction.type === 'expense'))
-    const currencies = Array.from(new Set([...Object.keys(incomeTotals), ...Object.keys(expenseTotals)]))
+    const totals = items.reduce<Record<string, number>>((acc, transaction) => {
+      const hasSnapshot = transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
+      const useWorkspace = printCurrencyMode === 'workspace' && hasSnapshot
+      const currency = useWorkspace
+        ? normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany?.currency ?? 'USD')
+        : normalizeCurrencyCode(transaction.currency)
+      const amount = useWorkspace ? Number(transaction.workspace_amount) : transaction.amount
+      acc[currency] = (acc[currency] ?? 0) + (transaction.type === 'income' ? amount : -amount)
+      return acc
+    }, {})
+    const currencies = Object.keys(totals)
 
     if (currencies.length === 0) {
       return formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'), intlLocale)
     }
 
     return currencies
-      .map((currency) => formatCurrency((incomeTotals[currency] ?? 0) - (expenseTotals[currency] ?? 0), currency, intlLocale))
+      .map((currency) => formatCurrency(totals[currency], currency, intlLocale))
       .join(' · ')
   }
 
   const closingTransactions = includeOpeningBalance
     ? [...openingTransactions, ...printableTransactions]
     : printableTransactions
+  const hasForeignCurrencySnapshots = printableTransactions.some((transaction) => (
+    transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
+    && normalizeCurrencyCode(transaction.currency) !== normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany?.currency ?? 'USD')
+  ))
 
   const renderPrintCell = (transaction: TransactionRow | undefined) => {
     if (!transaction) return null
@@ -977,6 +1095,19 @@ export default function TransactionsPage() {
                 </p>
               </div>
             )}
+            {selectedPrintFormat === 'standard' && hasForeignCurrencySnapshots && (
+              <fieldset className="mt-4 border-t border-slate-200 pt-4">
+                <legend className="mb-2 text-sm font-semibold">{t('common.currency')}</legend>
+                <div className="grid gap-2">
+                  {(['workspace', 'both'] as const).map((mode) => (
+                    <label key={mode} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm">
+                      <input type="radio" name="transaction-print-currency" checked={printCurrencyMode === mode} onChange={() => setPrintCurrencyMode(mode)} className="h-4 w-4" />
+                      {mode === 'workspace' ? t('currencySnapshot.workspaceOnly') : t('currencySnapshot.originalAndWorkspace')}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
             <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
               <Button type="button" variant="outline" onClick={() => setPrintFormatDialogOpen(false)}>
                 {t('common.cancel')}
@@ -1007,6 +1138,7 @@ export default function TransactionsPage() {
             <p className="text-xs text-slate-600">
               {t('transactions.printOrdering')}: {t(`transactions.order.${sortOrder}`)} · {t(`transactions.group.${groupOrder}`)} · {t(`transactions.withinDay`)}: {t(`transactions.group.${dayOrder}`)}
             </p>
+            <p className="text-xs text-slate-600">{t('common.currency')}: {printCurrencyMode === 'workspace' ? t('currencySnapshot.workspaceOnly') : t('currencySnapshot.originalAndWorkspace')}</p>
             <p className="text-xs text-slate-600">
               {t('transactions.printFilters')}: {typeFilter === 'all' ? t('transactions.allTypes') : typeFilter === 'income' ? t('income.title') : t('expenses.title')}
               {categoryFilter ? ` · ${formatCategoryLabel(categoryFilter, t)}` : ''}
@@ -1038,7 +1170,7 @@ export default function TransactionsPage() {
                 <td className="break-words border p-2 align-top">{transaction.type === 'income' ? t('income.title') : t('expenses.title')}</td>
                 <td className="border p-2 align-top">{renderPrintCell(transaction)}</td>
                 <td className="break-words border p-2 align-top">{formatCategoryLabel(transaction.category, t)}</td>
-                <td className="whitespace-nowrap border p-2 text-right align-top font-semibold">{formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}</td>
+                <td className="whitespace-nowrap border p-2 text-right align-top font-semibold">{formatStandardPrintAmount(transaction)}</td>
               </tr>
             ))}
           </tbody>
@@ -1383,6 +1515,21 @@ export default function TransactionsPage() {
                   options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
                 />
               </label>
+              <div className="text-sm text-slate-600 md:col-span-3" aria-live="polite">
+                {latestRateLoading
+                  ? t('currencySnapshot.rateLoading')
+                  : latestRate === null && normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD')
+                    ? t('currencySnapshot.rateUnavailable')
+                    : normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD')
+                      ? `${t('currencySnapshot.rate')}: 1 ${normalizeCurrencyCode(formData.currency)} = ${Number(latestRate).toFixed(6)} ${normalizeCurrencyCode(currentCompany.currency ?? 'USD')}`
+                      : t('currencySnapshot.rate') + ': 1'}
+                {conversionPreview !== null && normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && (
+                  <span className="mt-1 block">{t('currencySnapshot.preview').replace('{amount}', formatCurrency(Number(conversionPreview), currentCompany.currency ?? 'USD', intlLocale))}</span>
+                )}
+                {latestRate === null && normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && (
+                  <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void retryRateLookup()} disabled={latestRateLoading}>{t('currencySnapshot.retry')}</Button>
+                )}
+              </div>
               <label className="space-y-1">
                 <span className="text-sm font-medium">{t('common.date')}</span>
                 <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
@@ -1423,7 +1570,16 @@ export default function TransactionsPage() {
                 badge={<span className={`inline-flex items-center gap-1 text-xs font-medium ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}><Icon className="h-4 w-4" />{isIncome ? t('income.title') : t('expenses.title')}</span>}
                 category={formatCategoryLabel(transaction.category, t)}
                 date={transaction.date}
-                amount={formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
+                amount={transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
+                  && normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
+                  ? formatCurrency(Number(transaction.workspace_amount), normalizeCurrencyCode(transaction.workspace_currency), intlLocale)
+                  : formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)}
+                amountDetail={transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
+                  && normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
+                  ? formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)
+                  : normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
+                    ? t('currencySnapshot.noSnapshot')
+                    : undefined}
                 selection={<label className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedTransactionSet.has(getSelectionKey(transaction))} onChange={(event) => { const key = getSelectionKey(transaction); setSelectedTransactions((current) => event.target.checked ? [...new Set([...current, key])] : current.filter((value) => value !== key)) }} aria-label={`${t('transactions.select')} ${transaction.title || transaction.description || transaction.date}`} className="h-4 w-4" /></label>}
                 actions={<Button size="icon" variant="outline" onClick={() => handleCopyTransaction(transaction)} aria-label={`${t('common.copy')} ${transaction.title || transaction.description || transaction.date}`} title={t('common.copy')}><Copy className="h-4 w-4" /></Button>}
               />

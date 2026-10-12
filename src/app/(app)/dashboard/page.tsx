@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageContainer, PageHeader, EmptyState, LoadingSkeleton } from '@/components'
 import { createClient } from '@/lib/supabase-client'
-import { convertToCurrency, formatCurrency, getSavedAmountInWorkspaceCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { formatCurrency, getSavedAmountInWorkspaceCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
@@ -26,6 +26,7 @@ interface Income {
   company_id: string
   exchange_rate?: number
   workspace_currency?: string
+  workspace_amount?: number | string | null
 }
 
 interface Expense {
@@ -38,6 +39,7 @@ interface Expense {
   company_id: string
   exchange_rate?: number
   workspace_currency?: string
+  workspace_amount?: number | string | null
 }
 
 interface TimeEntry {
@@ -216,23 +218,25 @@ export default function DashboardPage() {
 
   const currency = currentCompany.currency ?? 'USD'
   const planLabel = accountAccess.plan === 'pro' ? 'Pro' : 'Free'
-  const getDisplayAmount = (amount: number, itemCurrency: string, itemExchangeRate?: number, itemWorkspaceCurrency?: string) => {
-    const savedWorkspaceCurrency = normalizeCurrencyCode(itemWorkspaceCurrency ?? currency)
-    const savedAmount = getSavedAmountInWorkspaceCurrency({
-      amount,
-      transactionCurrency: itemCurrency,
+  const getDisplayAmount = (item: Income | Expense) => {
+    const savedWorkspaceCurrency = normalizeCurrencyCode(item.workspace_currency ?? currency)
+    if (savedWorkspaceCurrency !== normalizeCurrencyCode(currency)) return null
+    return getSavedAmountInWorkspaceCurrency({
+      amount: Number(item.amount),
+      transactionCurrency: item.currency,
       workspaceCurrency: savedWorkspaceCurrency,
-      savedExchangeRate: itemExchangeRate ?? 1,
+      savedWorkspaceAmount: item.workspace_amount,
     })
-
-    if (savedWorkspaceCurrency === currency) {
-      return savedAmount
-    }
-
-    return convertToCurrency(savedAmount, savedWorkspaceCurrency, currency)
   }
 
   const formatMoney = (value: number) => formatCurrency(value, currency)
+  const formatRecordMoney = (item: Income | Expense) => {
+    if (item.workspace_amount !== null && item.workspace_amount !== undefined) {
+      return formatCurrency(Number(item.workspace_amount), item.workspace_currency ?? currency)
+    }
+    if (normalizeCurrencyCode(item.currency) === normalizeCurrencyCode(currency)) return formatMoney(Number(item.amount))
+    return `${formatCurrency(Number(item.amount), item.currency)} · ${t('currencySnapshot.noSnapshot')}`
+  }
   const formatHours = (hoursValue: number) => {
     const totalMinutes = Math.round(Math.max(0, hoursValue) * 60)
     const days = Math.floor(totalMinutes / 1440)
@@ -256,13 +260,14 @@ export default function DashboardPage() {
   const totalHours = periodTimeEntries.reduce((sum, item) => sum + Number(item.hours), 0)
   const openingIncome = incomes
     .filter((item) => Boolean(filterFromDate) && item.date < filterFromDate)
-    .reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
+    .reduce((sum, item) => sum + (getDisplayAmount(item) ?? 0), 0)
   const openingExpenses = expenses
     .filter((item) => Boolean(filterFromDate) && item.date < filterFromDate)
-    .reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
+    .reduce((sum, item) => sum + (getDisplayAmount(item) ?? 0), 0)
   const openingBalance = openingIncome - openingExpenses
-  const periodIncome = periodIncomes.reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
-  const periodExpense = periodExpenses.reduce((sum, item) => sum + getDisplayAmount(Number(item.amount), item.currency ?? currency, item.exchange_rate, item.workspace_currency), 0)
+  const periodIncome = periodIncomes.reduce((sum, item) => sum + (getDisplayAmount(item) ?? 0), 0)
+  const periodExpense = periodExpenses.reduce((sum, item) => sum + (getDisplayAmount(item) ?? 0), 0)
+  const unconvertedRecordCount = [...incomes, ...expenses].filter((item) => getDisplayAmount(item) === null).length
   const periodResult = periodIncome - periodExpense
   const closingBalance = openingBalance + periodResult
 
@@ -388,6 +393,7 @@ export default function DashboardPage() {
         />
       </div>
       {mobileFiltersOpen && <div className="fixed inset-0 z-[80] bg-slate-950/40 md:hidden" onClick={() => setMobileFiltersOpen(false)}><section role="dialog" aria-modal="true" aria-label={t('common.filters')} className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-xl bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">{t('common.filters')}</h2><Button type="button" size="icon" variant="ghost" onClick={() => setMobileFiltersOpen(false)} aria-label={t('common.cancel')}><X /></Button></div><div className="grid gap-4"><label className="space-y-1 text-sm"><span className="text-slate-600">{t('dashboard.filterFrom')}</span><input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setPeriodPreset('custom') }} className="w-full rounded-md border px-3 py-2 text-base" /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('dashboard.filterTo')}</span><input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setPeriodPreset('custom') }} className="w-full rounded-md border px-3 py-2 text-base" /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('common.groupByMonth')}</span><AppSelect value={groupByMonth ? 'month':'none'} onChange={(value) => setGroupByMonth(value === 'month')} options={[{value:'none',label:t('common.noMonthGrouping')},{value:'month',label:t('common.groupByMonth')}]} /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('common.sortDate')}</span><AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date'|'amount')} options={[{value:'date',label:t('common.sortDate')},{value:'amount',label:t('common.sortAmount')}]} /></label><label className="space-y-1 text-sm"><span className="text-slate-600">{t('common.descending')}</span><AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc'|'desc')} options={[{value:'desc',label:t('common.descending')},{value:'asc',label:t('common.ascending')}]} /></label><Button type="button" onClick={() => setMobileFiltersOpen(false)}>{t('common.apply')}</Button></div></section></div>}
+      {unconvertedRecordCount > 0 && <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{t('currencySnapshot.incompleteTotal').replace('{count}', String(unconvertedRecordCount))}</p>}
       <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-5">
         <div className="rounded-lg bg-card p-3 sm:p-6">
           <h3 className="text-sm font-medium text-slate-500">{t('dashboard.openingBalance')}</h3>
@@ -438,7 +444,7 @@ export default function DashboardPage() {
           {renderGrouped(sortedIncomes, (income) => (
             <div key={income.id} className="flex justify-between border-b py-2">
               <span>{income.description}</span>
-              <span>{formatMoney(getDisplayAmount(Number(income.amount), income.currency ?? currency, income.exchange_rate, income.workspace_currency))}</span>
+              <span>{formatRecordMoney(income)}</span>
             </div>
           ), t('dashboard.noIncome'))}
           <Link href="/app/income" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">
@@ -453,7 +459,7 @@ export default function DashboardPage() {
           {renderGrouped(sortedExpenses, (expense) => (
             <div key={expense.id} className="flex justify-between border-b py-2">
               <span>{expense.description}</span>
-              <span>{formatMoney(getDisplayAmount(Number(expense.amount), expense.currency ?? currency, expense.exchange_rate, expense.workspace_currency))}</span>
+              <span>{formatRecordMoney(expense)}</span>
             </div>
           ), t('dashboard.noExpenses'))}
           <Link href="/app/expenses" className="mt-4 block text-center text-sm font-medium text-primary hover:underline">

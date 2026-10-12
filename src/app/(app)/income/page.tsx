@@ -10,8 +10,9 @@ import { useCompany } from '@/contexts/company-context'
 import { buildCsv, parseCsv } from '@/lib/csv'
 import { formatCategoryLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
-import { convertToCurrency, currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
+import { createTransactionFxSnapshot, getMoneyConversionPreview, getStoredWorkspaceAmount } from '@/lib/transaction-fx'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,6 +35,12 @@ interface Income extends IncomeForm {
   client_id?: string | null
   invoice_id?: string | null
   payment_method?: string | null
+  workspace_amount?: number | string | null
+  workspace_currency?: string | null
+  exchange_rate?: number | string | null
+  exchange_rate_source?: string | null
+  exchange_rate_at?: string | null
+  exchange_rate_date?: string | null
 }
 
 interface RelatedClient { id: string; name: string; client_company: string | null }
@@ -115,8 +122,9 @@ export default function IncomePage() {
   const [successMessage, setSuccessMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [importing, setImporting] = useState(false)
-  const [latestRate, setLatestRate] = useState<number | null>(null)
+  const [latestRate, setLatestRate] = useState<string | null>(null)
   const [latestRateLoading, setLatestRateLoading] = useState(false)
+  const [printCurrencyMode, setPrintCurrencyMode] = useState<'workspace' | 'both'>('both')
   const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
@@ -143,6 +151,7 @@ export default function IncomePage() {
     ? ['Sales', 'Service', 'Invoice Payment', 'Salary', 'Other']
     : ['Salary', 'Freelance', 'Investment', 'Other']
   const titleSuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.title || income.description), [incomes])
+  const conversionPreview = getMoneyConversionPreview(formData.amount, latestRate, currentCompany?.currency ?? 'USD')
   const descriptionSuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.description), [incomes])
   const categorySuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.category), [incomes])
 
@@ -244,7 +253,7 @@ export default function IncomePage() {
       const toCurrency = normalizeCurrencyCode(currentCompany.currency ?? 'USD')
 
       if (fromCurrency === toCurrency) {
-        setLatestRate(1)
+        setLatestRate('1')
         return
       }
 
@@ -262,6 +271,25 @@ export default function IncomePage() {
 
     void loadLatestRate()
   }, [currentCompany, formData.currency])
+
+  const retryRateLookup = async () => {
+    if (!currentCompany) return
+    const from = normalizeCurrencyCode(formData.currency)
+    const to = normalizeCurrencyCode(currentCompany.currency ?? 'USD')
+    if (from === to) {
+      setLatestRate('1')
+      return
+    }
+    setLatestRateLoading(true)
+    setLatestRate(null)
+    try {
+      setLatestRate((await fetchLatestExchangeRate(from, to)).rate)
+    } catch {
+      setLatestRate(null)
+    } finally {
+      setLatestRateLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -303,10 +331,17 @@ export default function IncomePage() {
         ...formData,
         amount: parsedAmount,
         category: effectiveCategory,
-        currency: isBusinessWorkspace ? normalizeCurrencyCode(currentCompany.currency ?? 'USD') : formData.currency,
+        currency: normalizeCurrencyCode(formData.currency),
         description: fallbackDescription,
       })
       const category = validatedData.category === 'Other' ? customCategory || 'Other' : validatedData.category
+      const financialFieldsChanged = Boolean(editingEntry && (
+        Number(editingEntry.amount) !== validatedData.amount
+        || normalizeCurrencyCode(editingEntry.currency) !== normalizeCurrencyCode(validatedData.currency)
+      ))
+      const fxSnapshot = !editingEntry || financialFieldsChanged
+        ? await createTransactionFxSnapshot(validatedData.amount, validatedData.currency, currentCompany.currency ?? 'USD')
+        : null
       const payload = {
         title: desiredTitle || null,
         description: validatedData.description,
@@ -320,6 +355,7 @@ export default function IncomePage() {
         client_id: formData.client_id || null,
         invoice_id: formData.invoice_id || null,
         payment_method: formData.payment_method || null,
+        ...(fxSnapshot ?? {}),
       }
       let titleFallback = false
       let accountingFallback = false
@@ -370,7 +406,11 @@ export default function IncomePage() {
       window.setTimeout(() => setSuccessMessage(''), 3000)
     } catch (error) {
       console.error('Income submit error:', formatValidationError(error))
-      setErrorMessage(formatValidationError(error))
+      setErrorMessage(error instanceof Error && error.message === 'FX_RATE_UNAVAILABLE'
+        ? t('currencySnapshot.rateUnavailable')
+        : isMissingOptionalColumn(error as { code?: string; message?: string })
+          ? t('currencySnapshot.migrationRequired')
+          : formatValidationError(error))
       window.setTimeout(() => setErrorMessage(''), 5000)
     } finally {
       setSubmitting(false)
@@ -406,6 +446,13 @@ export default function IncomePage() {
       return
     }
 
+    let fxSnapshot
+    try {
+      fxSnapshot = await createTransactionFxSnapshot(entry.amount, entry.currency, currentCompany.currency ?? 'USD')
+    } catch {
+      setErrorMessage(t('currencySnapshot.rateUnavailable'))
+      return
+    }
     const payload = {
       title: entry.title ?? null,
       description: entry.description,
@@ -417,6 +464,7 @@ export default function IncomePage() {
       note: entry.note ?? null,
       client_id: entry.client_id ?? null,
       payment_method: entry.payment_method ?? null,
+      ...fxSnapshot,
     }
 
     try {
@@ -462,8 +510,22 @@ export default function IncomePage() {
       return
     }
 
-    const headers = [t('common.date'), t('transactions.titleLabel'), t('common.description'), t('common.category'), t('common.amount'), t('common.currency')]
-    const rows = sortedIncomes.map((income) => [income.date, income.title ?? '', income.description, formatCategoryLabel(income.category, t), income.amount, income.currency])
+    const missingWorkspaceAmount = sortedIncomes.filter((income) => getWorkspaceAmount(income) === null).length
+    if (printCurrencyMode === 'workspace' && missingWorkspaceAmount > 0) {
+      setErrorMessage(t('currencySnapshot.incompleteTotal').replace('{count}', String(missingWorkspaceAmount)))
+      return
+    }
+    const headers = [t('common.date'), t('transactions.titleLabel'), t('common.description'), t('common.category'),
+      printCurrencyMode === 'both' ? t('currencySnapshot.originalAmount') : t('common.amount'),
+      printCurrencyMode === 'both' ? t('currencySnapshot.originalCurrency') : t('common.currency'),
+      ...(printCurrencyMode === 'both' ? [t('currencySnapshot.workspaceAmount'), t('currencySnapshot.workspaceCurrency')] : [])]
+    const rows = sortedIncomes.map((income) => {
+      const storedWorkspaceAmount = getStoredWorkspaceAmount({ ...income, legacyWorkspaceCurrency: currentCompany?.currency })
+      const originalValues = [income.amount, income.currency]
+      const workspaceValues = [storedWorkspaceAmount ?? t('currencySnapshot.noSnapshot'), income.workspace_currency ?? currentCompany?.currency ?? '']
+      return [income.date, income.title ?? '', income.description, formatCategoryLabel(income.category, t),
+        ...(printCurrencyMode === 'both' ? [...originalValues, ...workspaceValues] : workspaceValues)]
+    })
     const csv = buildCsv([headers, ...rows])
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -474,12 +536,21 @@ export default function IncomePage() {
     URL.revokeObjectURL(url)
   }
 
-  const getWorkspaceAmount = (income: Income) =>
-    convertToCurrency(
-      Number(income.amount),
-      income.currency,
-      normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
-    )
+  const getWorkspaceAmount = (income: Income) => {
+    const amount = getStoredWorkspaceAmount({ ...income, legacyWorkspaceCurrency: currentCompany?.currency })
+    return amount === null ? null : Number(amount)
+  }
+  const formatWorkspaceTotals = (items: Income[]) => {
+    const totals = items.reduce<Record<string, number>>((acc, income) => {
+      const amount = getWorkspaceAmount(income)
+      if (amount === null) return acc
+      const currency = normalizeCurrencyCode(income.workspace_currency ?? currentCompany?.currency ?? income.currency)
+      acc[currency] = (acc[currency] ?? 0) + amount
+      return acc
+    }, {})
+    return Object.entries(totals).map(([currency, amount]) => formatCurrency(amount, currency, intlLocale)).join(' · ')
+      || formatCurrency(0, currentCompany?.currency ?? 'USD', intlLocale)
+  }
 
   const sortedIncomes = useMemo(() => {
     return incomes.filter((income) => {
@@ -570,6 +641,8 @@ export default function IncomePage() {
   }, {})
   const displayGroups = groupReportsByMonth ? Object.entries(groupIncomes(paginatedIncomes)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', paginatedIncomes] as const]
   const printGroups = groupReportsByMonth ? Object.entries(groupIncomes(sortedIncomes)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedIncomes] as const]
+  const hasForeignCurrencySnapshots = sortedIncomes.some((income) => income.workspace_amount !== null && income.workspace_amount !== undefined
+    && normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany?.currency ?? 'USD'))
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
     const [year, month] = monthKey.split('-').map(Number)
@@ -578,14 +651,12 @@ export default function IncomePage() {
 
   const renderPrintAmount = (income: Income) => {
     const originalAmount = `${Number(income.amount).toFixed(2)} ${income.currency}`
-    const workspaceCurrency = normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
-    const convertedAmount = formatCurrency(getWorkspaceAmount(income), workspaceCurrency, intlLocale)
-
-    if (normalizeCurrencyCode(income.currency) === workspaceCurrency) {
-      return originalAmount
-    }
-
-    return `${originalAmount} (${convertedAmount})`
+    const workspaceAmount = getWorkspaceAmount(income)
+    const workspaceCurrency = normalizeCurrencyCode(income.workspace_currency ?? currentCompany?.currency ?? 'USD')
+    if (normalizeCurrencyCode(income.currency) === workspaceCurrency) return originalAmount
+    if (workspaceAmount === null) return `${originalAmount} · ${t('currencySnapshot.noSnapshot')}`
+    const baseText = formatCurrency(workspaceAmount, workspaceCurrency, intlLocale)
+    return printCurrencyMode === 'both' ? `${originalAmount} (${baseText})` : baseText
   }
 
   const handlePrint = () => {
@@ -634,7 +705,7 @@ export default function IncomePage() {
         throw new Error(t('transactions.importMissingColumns'))
       }
 
-      const payload = rows.slice(1).map((columns, index) => {
+      const payload = await Promise.all(rows.slice(1).map(async (columns, index) => {
         const rowNumber = index + 2
         const date = parseTransactionDate(columns[dateIndex] ?? '')
         const description = columns[descriptionIndex]?.trim()
@@ -667,6 +738,7 @@ export default function IncomePage() {
           throw new Error(t('transactions.importRowUnsupportedCurrency').replace('{row}', String(rowNumber)))
         }
 
+        const fxSnapshot = await createTransactionFxSnapshot(amount, currency, currentCompany.currency ?? 'USD')
         return {
           company_id: currentCompany.id,
           date,
@@ -675,8 +747,9 @@ export default function IncomePage() {
           category,
           amount: Number(amount.toFixed(2)),
           currency,
+          ...fxSnapshot,
         }
-      })
+      }))
 
       let { error } = await supabase.from('incomes').insert(payload)
       if (isMissingOptionalColumn(error)) {
@@ -745,6 +818,7 @@ export default function IncomePage() {
         utilities={<>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>{importing ? t('transactions.importing') : t('common.importCsv')}</Button>
           {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
+          {hasForeignCurrencySnapshots && <AppSelect value={printCurrencyMode} onChange={(value) => setPrintCurrencyMode(value as 'workspace' | 'both')} options={[{ value: 'workspace', label: t('currencySnapshot.workspaceOnly') }, { value: 'both', label: t('currencySnapshot.originalAndWorkspace') }]} ariaLabel={t('common.currency')} className="w-full sm:w-56" />}
           {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
         </>}
       />
@@ -797,7 +871,10 @@ export default function IncomePage() {
         ))}
 
         <p className="mt-4 text-right font-semibold">
-          {t('common.total')}: {formatCurrency(sortedIncomes.reduce((sum, income) => sum + getWorkspaceAmount(income), 0), normalizeCurrencyCode(currentCompany.currency ?? 'USD'), intlLocale)}
+          {t('common.total')}: {formatWorkspaceTotals(sortedIncomes)}
+          {sortedIncomes.some((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency) && getWorkspaceAmount(income) === null) && (
+            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(sortedIncomes.filter((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency) && getWorkspaceAmount(income) === null).length))}</span>
+          )}
         </p>
       </div>
 
@@ -930,7 +1007,6 @@ export default function IncomePage() {
                   <label className="mb-1 block text-sm font-medium">{t('common.date')}</label>
                   <input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full rounded-md border px-3 py-2" required />
                 </div>
-                {!isBusinessWorkspace && (
                 <div>
                   <label className="mb-1 block text-sm font-medium">{t('common.currency')}</label>
                   <AppSelect
@@ -939,19 +1015,24 @@ export default function IncomePage() {
                     options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
                   />
                 </div>
-                )}
               </div>
               <Button type="submit" disabled={submitting}>{!isOnline ? t('offline.saveLocalDraft') : submitting ? t('common.loading') : t('income.save')}</Button>
-              {!isBusinessWorkspace && (
-                <p className="text-sm text-slate-500">
-                  {latestRateLoading
-                    ? t('income.latestRateLoading')
+              <div className="text-sm text-slate-500">
+                {latestRateLoading
+                    ? t('currencySnapshot.rateLoading')
+                    : latestRate === null && normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD')
+                      ? t('currencySnapshot.rateUnavailable')
                     : t('income.latestRate')
                       .replace('{from}', normalizeCurrencyCode(formData.currency))
-                      .replace('{rate}', (latestRate ?? 1).toFixed(4))
+                      .replace('{rate}', Number(latestRate ?? '1').toFixed(4))
                       .replace('{to}', normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
-                </p>
-              )}
+                {conversionPreview !== null && normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && (
+                  <span className="mt-1 block">{t('currencySnapshot.preview').replace('{amount}', formatCurrency(Number(conversionPreview), currentCompany.currency ?? 'USD', intlLocale))}</span>
+                )}
+                {latestRate === null && normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && (
+                  <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void retryRateLookup()} disabled={latestRateLoading}>{t('currencySnapshot.retry')}</Button>
+                )}
+              </div>
             </form>
           </CardContent>
         </Card>
@@ -972,8 +1053,14 @@ export default function IncomePage() {
                 description={income.title ? income.description : undefined}
                 category={formatCategoryLabel(income.category, t)}
                 date={income.date}
-                amount={formatCurrency(convertToCurrency(Number(income.amount), income.currency, normalizeCurrencyCode(currentCompany.currency ?? 'USD')), normalizeCurrencyCode(currentCompany.currency ?? 'USD'))}
-                amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') ? formatCurrency(Number(income.amount), income.currency) : undefined}
+                amount={getWorkspaceAmount(income) === null
+                  ? formatCurrency(Number(income.amount), income.currency)
+                  : formatCurrency(getWorkspaceAmount(income)!, income.workspace_currency ?? currentCompany.currency ?? 'USD')}
+                amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency ?? 'USD')
+                  ? getWorkspaceAmount(income) === null
+                    ? t('currencySnapshot.noSnapshot')
+                    : formatCurrency(Number(income.amount), income.currency)
+                  : undefined}
                 selection={<label className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedIncomeIdSet.has(income.id)} onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)} className="h-4 w-4" /><span className="sr-only">{t('income.bulkSelectRow').replace('{title}', income.title || income.description)}</span></label>}
                 actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(income)} aria-label={`${t('common.edit')} ${income.title || income.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => void handleDuplicate(income)} aria-label={`${t('finance.duplicate')} ${income.title || income.description}`} title={t('finance.duplicate')}><Copy className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)} aria-label={`${t('common.delete')} ${income.title || income.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button></>}
               />

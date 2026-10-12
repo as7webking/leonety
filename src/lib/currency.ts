@@ -129,12 +129,11 @@ export function getSavedAmountInWorkspaceCurrency(params: {
   transactionCurrency: string
   workspaceCurrency: string
   savedExchangeRate?: number | null
+  savedWorkspaceAmount?: number | string | null
 }) {
-  const { amount, transactionCurrency, workspaceCurrency, savedExchangeRate } = params
-
-  if (typeof savedExchangeRate === 'number' && Number.isFinite(savedExchangeRate) && savedExchangeRate > 0) {
-    return Number((amount * savedExchangeRate).toFixed(2))
-  }
-
-  return convertToCurrency(amount, transactionCurrency, workspaceCurrency)
+  const { amount, transactionCurrency, workspaceCurrency, savedWorkspaceAmount } = params
+  if (normalizeCurrencyCode(transactionCurrency) === normalizeCurrencyCode(workspaceCurrency)) return amount
+  if (savedWorkspaceAmount === null || savedWorkspaceAmount === undefined) return null
+  const savedAmount = Number(savedWorkspaceAmount)
+  return Number.isFinite(savedAmount) ? savedAmount : null
 }

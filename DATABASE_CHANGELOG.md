@@ -59,6 +59,10 @@ Status meanings:
   `supabase/migrations/20261010150000_track_admin_user_activity.sql` and verify
   the `auth.users.id` UUID reference before manual application. It is pending and
   not executed; Admin Users reports activity as unknown until available.
+- Transaction currency snapshots: review and manually apply
+  `supabase/migrations/20261012150000_add_transaction_currency_snapshots.sql`
+  before deploying the matching finance UI. It adds nullable converted amounts and
+  FX metadata to incomes/expenses only; it deliberately does not backfill history.
 
 ### READY TO APPLY
 
@@ -496,6 +500,23 @@ Status meanings:
   credential-format, scope and status checks so the same table accepts the added
   providers. Existing owner RLS and server-only table grants remain unchanged.
   It stores no message content. The SQL is a proposal, not a production action.
+
+### 2026-10-12 - Immutable transaction currency snapshots
+
+- **Status:** `PENDING`
+- **Migration filename:** `supabase/migrations/20261012150000_add_transaction_currency_snapshots.sql`
+- **Purpose:** store the workspace-currency amount and provider/date metadata beside
+  the original amount/currency for newly created or explicitly repriced income and
+  expense records.
+- **Main objects:** nullable `workspace_amount`, `exchange_rate_source`,
+  `exchange_rate_at`, and `exchange_rate_date` columns on `incomes` and `expenses`.
+- **Production status:** `UNKNOWN`; SQL was not executed.
+- **Verification status:** repository SQL review only; verify live columns and table
+  grants before manual application.
+- **Notes/dependencies:** relies on existing `exchange_rate` and
+  `workspace_currency` columns. No old rows are backfilled or recalculated. The
+  application must not be deployed until the additive migration is applied and
+  verified.
 
 ### 2026-10-10 - Coarse Leonety user activity
 

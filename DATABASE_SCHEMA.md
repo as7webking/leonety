@@ -126,11 +126,22 @@ repository cannot reproduce the full production database from scratch.
   currency, date, category/title/description, and timestamps. Consolidated SQL adds
   `exchange_rate`, `workspace_currency`, `title`, `reference`, `note`, `client_id`,
   `invoice_id`, and `payment_method`.
+- **Pending currency snapshot fields:**
+  `20261012150000_add_transaction_currency_snapshots.sql` proposes nullable
+  `workspace_amount`, `exchange_rate_source`, `exchange_rate_at`, and
+  `exchange_rate_date` for both tables. These are `PENDING`, not confirmed in
+  production. Existing rows intentionally remain NULL because their original
+  conversion cannot be reconstructed safely.
 - **Foreign keys:** expected links to `companies`, `clients`, and `invoices`.
 - **Indexes:** workspace/client and workspace/invoice indexes are declared.
 - **RLS:** `UNKNOWN` because base DDL is absent.
 - **Modules:** income, expenses, transactions, dashboard, Kassenbuch.
 - **Concern:** identifier types must be read from production before a repair.
+- **Currency semantics:** original `amount`/`currency` remain authoritative. New
+  entries store a separate immutable workspace/base amount and rate snapshot;
+  changing future FX rates must never update either value. A legacy foreign-currency
+  row without `workspace_amount` has no verified base conversion and must not be
+  converted using current rates.
 
 ### `time_entries`
 

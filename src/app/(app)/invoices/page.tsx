@@ -14,6 +14,7 @@ import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { createTransactionFxSnapshot, type TransactionFxSnapshot } from '@/lib/transaction-fx'
 import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
@@ -402,6 +403,17 @@ function stripOptionalAccountingFields<T extends Record<string, unknown>>(payloa
   delete next.client_id
   delete next.reference
   delete next.payment_method
+  return next
+}
+
+function stripTransactionFxSnapshot<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload }
+  delete next.workspace_amount
+  delete next.workspace_currency
+  delete next.exchange_rate
+  delete next.exchange_rate_source
+  delete next.exchange_rate_at
+  delete next.exchange_rate_date
   return next
 }
 
@@ -1267,6 +1279,36 @@ export default function InvoicesPage() {
     }
 
     const totals = calculateItems(formData.items)
+    const shouldSnapshotPaidIncome = formData.status === 'paid'
+      && (!editingInvoice || editingInvoice.status !== 'paid')
+    let paidIncomeSnapshot: TransactionFxSnapshot | null = null
+    let existingPaidIncomeId: string | null = null
+    let paidIncomeSnapshotUnavailable = false
+    if (shouldSnapshotPaidIncome && editingInvoice?.id) {
+      const existingPaidIncome = await supabase
+        .from('incomes')
+        .select('id')
+        .eq('company_id', currentCompany.id)
+        .eq('invoice_id', editingInvoice.id)
+        .maybeSingle()
+      if (existingPaidIncome.error) {
+        setErrorMessage(t('invoices.saveFailed'))
+        setSaving(false)
+        return
+      }
+      existingPaidIncomeId = existingPaidIncome.data?.id ?? null
+    }
+    if (shouldSnapshotPaidIncome && !existingPaidIncomeId) {
+      try {
+        paidIncomeSnapshot = await createTransactionFxSnapshot(
+          totals.total,
+          formData.currency,
+          currentCompany.currency ?? 'USD'
+        )
+      } catch {
+        paidIncomeSnapshotUnavailable = true
+      }
+    }
     const invoicePayload: Record<string, unknown> = {
       ...(localDraftIdForSave ? { id: localDraftIdForSave } : {}),
       company_id: currentCompany.id,
@@ -1489,12 +1531,20 @@ export default function InvoicesPage() {
               invoice_id: invoiceId,
               reference: formData.invoice_number.trim(),
               payment_method: formData.split_payment ? null : formData.payment_method,
+              ...(paidIncomeSnapshot ?? {}),
             }
 
             let { error: incomeError } = await supabase.from('incomes').insert(incomePayload)
             let accountingFallback = false
+            let snapshotFallback = false
+            if (isMissingOptionalColumn(incomeError) && paidIncomeSnapshot) {
+              const fallback = await supabase.from('incomes').insert(stripTransactionFxSnapshot(incomePayload))
+              incomeError = fallback.error
+              snapshotFallback = !incomeError
+              if (snapshotFallback) paidIncomeSnapshotUnavailable = true
+            }
             if (isMissingOptionalColumn(incomeError)) {
-              const fallback = await supabase.from('incomes').insert(stripOptionalAccountingFields(incomePayload))
+              const fallback = await supabase.from('incomes').insert(stripOptionalAccountingFields(stripTransactionFxSnapshot(incomePayload)))
               incomeError = fallback.error
               accountingFallback = !incomeError
             }
@@ -1506,7 +1556,20 @@ export default function InvoicesPage() {
             }
           }
         } else {
-          nextSuccessMessage = t('invoices.paidIncomeRecorded')
+          if (paidIncomeSnapshot && !existingPaidIncomeId) {
+            const { error: snapshotError } = await supabase
+              .from('incomes')
+              .update(paidIncomeSnapshot)
+              .eq('company_id', currentCompany.id)
+              .eq('invoice_id', invoiceId)
+            paidIncomeSnapshotUnavailable = Boolean(snapshotError)
+            nextSuccessMessage = t('invoices.paidIncomeRecorded')
+          } else {
+            nextSuccessMessage = t('invoices.paidIncomeRecorded')
+          }
+        }
+        if (paidIncomeSnapshotUnavailable && shouldSnapshotPaidIncome && !existingPaidIncomeId) {
+          nextSuccessMessage = `${nextSuccessMessage} ${t('currencySnapshot.incomeSnapshotPending')}`
         }
       }
 
@@ -1525,7 +1588,9 @@ export default function InvoicesPage() {
       await loadInvoices()
     } catch (error) {
       console.error('Invoice save failed', error instanceof Error ? error.name : 'unknown_error')
-      setErrorMessage(reviewingLocalDraft ? t('offline.invoice.saveFailed') : t('invoices.saveFailed'))
+      setErrorMessage(error instanceof Error && error.message === 'FX_RATE_UNAVAILABLE'
+        ? t('currencySnapshot.rateUnavailable')
+        : reviewingLocalDraft ? t('offline.invoice.saveFailed') : t('invoices.saveFailed'))
     } finally {
       setSaving(false)
     }

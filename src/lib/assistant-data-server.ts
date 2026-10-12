@@ -16,7 +16,7 @@ interface WorkspaceRow {
 interface TransactionAmountRow {
   amount: number | string
   currency: string
-  exchange_rate?: number | string | null
+  workspace_amount?: number | string | null
   workspace_currency?: string | null
 }
 
@@ -41,18 +41,18 @@ export class AssistantWorkspaceAccessError extends Error {
 
 export function summarizeTransactionAmounts(rows: TransactionAmountRow[], workspaceCurrency: string) {
   const currency = normalizeCurrencyCode(workspaceCurrency)
-  const amount = rows.reduce((total, row) => total + getSavedAmountInWorkspaceCurrency({
+  const knownAmounts = rows.map((row) => getSavedAmountInWorkspaceCurrency({
     amount: Number(row.amount) || 0,
     transactionCurrency: row.currency,
     workspaceCurrency: normalizeCurrencyCode(row.workspace_currency ?? currency),
-    savedExchangeRate: row.exchange_rate === null || row.exchange_rate === undefined
-      ? null
-      : Number(row.exchange_rate),
-  }), 0)
+    savedWorkspaceAmount: row.workspace_amount,
+  }))
+  const amount = knownAmounts.reduce<number>((total, value) => total + (value ?? 0), 0)
 
   return {
     count: rows.length,
     amount: Number(amount.toFixed(2)),
+    unconvertedCount: knownAmounts.filter((value) => value === null).length,
     currency,
   }
 }
@@ -134,19 +134,31 @@ export async function loadAuthorizedAssistantData({
 
     if (tool === 'income_summary' || tool === 'expense_summary') {
       const table = tool === 'income_summary' ? 'incomes' : 'expenses'
-      const { data, error } = await supabase
+      const initialResult = await supabase
         .from(table)
-        .select('amount, currency, exchange_rate, workspace_currency')
+        .select('amount, currency, workspace_amount, workspace_currency')
         .eq('company_id', workspace.id)
         .gte('date', range.from)
         .lte('date', range.to)
 
-      if (error) return unavailable(tool, 'query_failed')
+      let resultRows = initialResult.data as TransactionAmountRow[] | null
+      let resultError = initialResult.error
+      if (resultError && ['42703', 'PGRST204', 'PGRST205'].includes(resultError.code ?? '')) {
+        const fallbackResult = await supabase
+          .from(table)
+          .select('amount, currency, workspace_currency')
+          .eq('company_id', workspace.id)
+          .gte('date', range.from)
+          .lte('date', range.to)
+        resultRows = fallbackResult.data as TransactionAmountRow[] | null
+        resultError = fallbackResult.error
+      }
+      if (resultError) return unavailable(tool, 'query_failed')
       return {
         tool,
         status: 'ok' as const,
         period: range,
-        data: summarizeTransactionAmounts((data ?? []) as TransactionAmountRow[], currency),
+        data: summarizeTransactionAmounts(resultRows ?? [], currency),
       }
     }
 

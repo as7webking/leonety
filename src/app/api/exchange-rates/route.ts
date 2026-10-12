@@ -1,53 +1,47 @@
 import { NextResponse } from 'next/server'
-import { convertToCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { getFxRate } from '@/lib/fx-provider'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export async function GET(request: Request) {
+  const supabase = await createServerSupabaseClient()
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError || !authData.user) {
+    return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(request.url)
-  const from = normalizeCurrencyCode(searchParams.get('from') ?? 'USD')
-  const to = normalizeCurrencyCode(searchParams.get('to') ?? 'USD')
+  const rawFrom = searchParams.get('from') ?? ''
+  const rawTo = searchParams.get('to') ?? ''
+  if (!isSupportedCurrency(rawFrom) || !isSupportedCurrency(rawTo)) {
+    return NextResponse.json({ error: 'unsupported_currency' }, { status: 400 })
+  }
+  const from = normalizeCurrencyCode(rawFrom)
+  const to = normalizeCurrencyCode(rawTo)
+  const fetchedAt = new Date().toISOString()
 
   if (from === to) {
     return NextResponse.json({
       from,
       to,
-      rate: 1,
-      fetchedAt: new Date().toISOString(),
-      provider: 'local',
+      rate: '1',
+      rateDate: fetchedAt.slice(0, 10),
+      fetchedAt,
+      provider: 'identity',
     })
   }
 
   try {
-    const response = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`, {
-      method: 'GET',
-      cache: 'no-store',
-    })
-
-    if (!response.ok) {
-      throw new Error(`Exchange rate request failed with ${response.status}`)
-    }
-
-    const data = await response.json() as { rates?: Record<string, number>; date?: string }
-    const rate = data.rates?.[to]
-
-    if (!rate || !Number.isFinite(rate)) {
-      throw new Error('Exchange rate response did not include a valid rate')
-    }
-
+    const quote = await getFxRate(from, to)
     return NextResponse.json({
       from,
       to,
-      rate,
-      fetchedAt: data.date ?? new Date().toISOString(),
-      provider: 'frankfurter',
+      rate: quote.rate,
+      rateDate: quote.rateDate,
+      fetchedAt: quote.fetchedAt,
+      provider: quote.provider,
     })
-  } catch (error) {
-    console.error('Exchange rate lookup failed:', error)
-    return NextResponse.json({
-      from,
-      to,
-      rate: convertToCurrency(1, from, to),
-      fetchedAt: new Date().toISOString(),
-      provider: 'local-fallback',
-    })
+  } catch {
+    return NextResponse.json({ error: 'exchange_rate_unavailable' }, { status: 503 })
   }
 }

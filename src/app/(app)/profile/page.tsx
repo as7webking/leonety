@@ -10,7 +10,7 @@ import { profileUpdateSchema, formatValidationError } from '@/lib/validations'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
-import { convertToCurrency, currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { getIntlLocale } from '@/lib/i18n'
 import { addDaysToDateOnly, formatDateOnlyInput } from '@/lib/date-only'
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -70,6 +70,8 @@ interface PrintableTransaction {
   category: string
   amount: number
   currency: string
+  workspace_amount?: number | string | null
+  workspace_currency?: string | null
 }
 
 export default function ProfilePage() {
@@ -570,18 +572,27 @@ export default function ProfilePage() {
     }))
   }
 
-  const getTransactionAmountInAccountCurrency = (transaction: PrintableTransaction) =>
-    convertToCurrency(transaction.amount, transaction.currency, normalizeCurrencyCode(currency))
-
   const renderTransactionPrintAmount = (transaction: PrintableTransaction) => {
-    const accountCurrency = normalizeCurrencyCode(currency)
     const originalAmount = `${Number(transaction.amount).toFixed(2)} ${transaction.currency}`
+    const baseCurrency = normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany?.currency ?? transaction.currency)
 
-    if (normalizeCurrencyCode(transaction.currency) === accountCurrency) {
+    if (normalizeCurrencyCode(transaction.currency) === baseCurrency) {
       return originalAmount
     }
+    if (transaction.workspace_amount === null || transaction.workspace_amount === undefined) {
+      return `${originalAmount} · ${t('currencySnapshot.noSnapshot')}`
+    }
+    return `${originalAmount} (${formatCurrency(Number(transaction.workspace_amount), baseCurrency)})`
+  }
 
-    return `${originalAmount} (${formatCurrency(getTransactionAmountInAccountCurrency(transaction), accountCurrency)})`
+  const formatPrintTotals = (items: PrintableTransaction[]) => {
+    const totals = items.reduce<Record<string, number>>((acc, item) => {
+      const code = normalizeCurrencyCode(item.currency)
+      acc[code] = (acc[code] ?? 0) + item.amount
+      return acc
+    }, {})
+    return Object.entries(totals).map(([code, amount]) => formatCurrency(amount, code)).join(' · ')
+      || formatCurrency(0, normalizeCurrencyCode(currentCompany?.currency ?? 'USD'))
   }
 
   const getPrintMonthKey = (date: string) => date.slice(0, 7)
@@ -678,40 +689,32 @@ export default function ProfilePage() {
         return
       }
 
-      let incomeQuery = supabase
-        .from('incomes')
-        .select('id, date, description, category, amount, currency')
-        .eq('company_id', currentCompany.id)
-      let expenseQuery = supabase
-        .from('expenses')
-        .select('id, date, description, category, amount, currency')
-        .eq('company_id', currentCompany.id)
-
-      if (reportFromDate) {
-        incomeQuery = incomeQuery.gte('date', reportFromDate)
-        expenseQuery = expenseQuery.gte('date', reportFromDate)
+      const fetchReportRows = async (table: 'incomes' | 'expenses') => {
+        const run = (includeSnapshot: boolean) => {
+          let query = supabase.from(table).select(includeSnapshot
+            ? 'id, date, description, category, amount, currency, workspace_amount, workspace_currency'
+            : 'id, date, description, category, amount, currency').eq('company_id', currentCompany.id)
+          if (reportFromDate) query = query.gte('date', reportFromDate)
+          if (reportToDate) query = query.lte('date', reportToDate)
+          return query.order('date', { ascending: true })
+        }
+        let result = await run(true)
+        if (result.error && ['42703', 'PGRST204', 'PGRST205'].includes(result.error.code ?? '')) result = await run(false)
+        return result
       }
 
-      if (reportToDate) {
-        incomeQuery = incomeQuery.lte('date', reportToDate)
-        expenseQuery = expenseQuery.lte('date', reportToDate)
-      }
-
-      const [incomeRes, expenseRes] = await Promise.all([
-        incomeQuery.order('date', { ascending: true }),
-        expenseQuery.order('date', { ascending: true }),
-      ])
+      const [incomeRes, expenseRes] = await Promise.all([fetchReportRows('incomes'), fetchReportRows('expenses')])
 
       if (incomeRes.error) throw incomeRes.error
       if (expenseRes.error) throw expenseRes.error
 
       const transactions: PrintableTransaction[] = [
-        ...((incomeRes.data ?? []) as Array<Omit<PrintableTransaction, 'type'>>).map((item) => ({
+        ...((incomeRes.data ?? []) as unknown as Array<Omit<PrintableTransaction, 'type'>>).map((item) => ({
           ...item,
           type: 'Income' as const,
           amount: Number(item.amount),
         })),
-        ...((expenseRes.data ?? []) as Array<Omit<PrintableTransaction, 'type'>>).map((item) => ({
+        ...((expenseRes.data ?? []) as unknown as Array<Omit<PrintableTransaction, 'type'>>).map((item) => ({
           ...item,
           type: 'Expense' as const,
           amount: Number(item.amount),
@@ -866,20 +869,10 @@ export default function ProfilePage() {
           {sortedPrintMonthGroups.map(([monthKey, transactions]) => renderMonthlyPrintSection(monthKey, transactions))}
           <div className="mt-4 grid gap-2 border-t pt-3 text-sm font-semibold sm:grid-cols-2">
             <p>
-              {t('income.title')} {t('common.total').toLowerCase()}: {formatCurrency(
-                printTransactions
-                  .filter((transaction) => transaction.type === 'Income')
-                  .reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
-                normalizeCurrencyCode(currency),
-              )}
+              {t('income.title')} {t('common.total').toLowerCase()}: {formatPrintTotals(printTransactions.filter((transaction) => transaction.type === 'Income'))}
             </p>
             <p className="sm:text-right">
-              {t('expenses.title')} {t('common.total').toLowerCase()}: {formatCurrency(
-                printTransactions
-                  .filter((transaction) => transaction.type === 'Expense')
-                  .reduce((sum, transaction) => sum + getTransactionAmountInAccountCurrency(transaction), 0),
-                normalizeCurrencyCode(currency),
-              )}
+              {t('expenses.title')} {t('common.total').toLowerCase()}: {formatPrintTotals(printTransactions.filter((transaction) => transaction.type === 'Expense'))}
             </p>
           </div>
         </div>

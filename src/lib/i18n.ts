@@ -29,6 +29,7 @@ import { legalSettingsDictionaries } from '@/lib/legal-settings-i18n'
 import { employeeScheduleDictionaries } from '@/lib/employee-schedule-i18n'
 import { adminUsersDictionaries } from '@/lib/admin-users-i18n'
 import { transactionOrderingDictionaries } from '@/lib/transaction-ordering-i18n'
+import { transactionFxDictionaries } from '@/lib/transaction-fx-i18n'
 import { employeeNumberDictionaries } from '@/lib/employee-number-i18n'
 import { mailboxDictionaries } from '@/lib/mailbox-i18n'
 
@@ -9002,6 +9003,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], appModeDictionaries[locale])
   Object.assign(dictionaries[locale], financeUiDictionaries[locale])
   Object.assign(dictionaries[locale], transactionOrderingDictionaries[locale])
+  Object.assign(dictionaries[locale], transactionFxDictionaries[locale])
   Object.assign(dictionaries[locale], authenticatedQaDictionaries[locale])
   Object.assign(dictionaries[locale], offlineModeDictionaries[locale])
   Object.assign(dictionaries[locale], clientStatusDictionaries[locale])
