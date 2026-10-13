@@ -37,7 +37,7 @@ Never use `supabase db reset` against production. Do not blindly run migration r
 
 ### Current repository caveat
 
-`supabase/migrations/leonety_consolidated_schema.sql` has no standard timestamp and does not provide trustworthy production migration history by itself. The linked history has previously appeared empty while production contained application tables. Do not rename, execute, delete or reconcile that file during a normal deployment. Resolve migration history separately using production catalog evidence and a reviewed repair plan.
+`supabase/migrations/20260919205522.sql` is a consolidated baseline with incomplete core DDL and does not provide trustworthy production migration history by itself. Its timestamp-only filename is for manual SQL editor copy/paste and is not recognized by the Supabase CLI. The linked history has previously appeared empty while production contained application tables. Do not execute, delete or reconcile that file during a normal deployment. Resolve migration history separately using production catalog evidence and a reviewed repair plan.
 
 Do not create a permanently overwritten `UPD.sql`. Preserve every future database change as a new timestamped migration.
 

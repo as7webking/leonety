@@ -127,7 +127,7 @@ repository cannot reproduce the full production database from scratch.
   `exchange_rate`, `workspace_currency`, `title`, `reference`, `note`, `client_id`,
   `invoice_id`, and `payment_method`.
 - **Pending currency snapshot fields:**
-  `20261012150000_add_transaction_currency_snapshots.sql` proposes nullable
+  `20261012150000.sql` proposes nullable
   `workspace_amount`, `exchange_rate_source`, `exchange_rate_at`, and
   `exchange_rate_date` for both tables. These are `PENDING`, not confirmed in
   production. Existing rows intentionally remain NULL because their original
@@ -184,7 +184,7 @@ repository cannot reproduce the full production database from scratch.
 - **RLS:** `UNKNOWN` because base DDL is absent.
 - **Modules:** invoices, print/PDF rendering, contracts, finance.
 - **Snapshot addition:** `document_snapshot` JSONB is proposed by
-  `20261009160000_preserve_invoice_document_snapshots.sql` and remains `PENDING`.
+  `20261009160000.sql` and remains `PENDING`.
   It stores seller/buyer presentation and template identity only; canonical totals
   and line items remain in their existing invoice records. No historical backfill
   is safe without verified source data.
@@ -312,7 +312,7 @@ repository cannot reproduce the full production database from scratch.
 - **Modules:** shifts and schedule printing.
 - **Concurrency protection:** current repository DDL does not prevent general
   overlaps. Proposed migration
-  `20261009120000_prevent_overlapping_employee_shifts.sql` is `PENDING`, not
+  `20261009120000.sql` is `PENDING`, not
   production-confirmed; it serializes writes by company/employee/date and retains
   cancelled-shift and exact-duplicate behavior.
 
@@ -330,7 +330,7 @@ repository cannot reproduce the full production database from scratch.
 ### `employee_number_settings`
 
 - **Evidence:** `PENDING`; corrected timestamped deployment SQL is
-  `20261008233000_employee_numbers.sql`. Production presence remains `UNKNOWN`.
+  `20261008233000.sql`. Production presence remains `UNKNOWN`.
 - **Purpose:** workspace policy and concurrency-safe counter for Personalnummer.
 - **Primary key:** `company_id` -> `companies.id`.
 - **Important columns:** requirement/automatic flags, prefix, next number, minimum
@@ -409,7 +409,7 @@ repository cannot reproduce the full production database from scratch.
   escalation worker. A `sent` push status means the push service accepted a request,
   not that a person received or acknowledged it.
 - **Production status:** all migration-defined shape remains `UNKNOWN` until checked
-  in the live project; `20261012170000_urgent_order_notification_acknowledgement.sql`
+  in the live project; `20261012170000.sql`
   is `PENDING` and has not been executed.
 
 ## Integrations
@@ -488,7 +488,7 @@ repository cannot reproduce the full production database from scratch.
 - **Primary key:** `user_id` -> `auth.users.id`; unique email.
 - **Current migration gap:** the consolidated file creates the table but does not
   enable RLS, define policies, revoke grants, or constrain writes.
-- **Pending repair:** `20261008221134_secure_admin_accounts.sql` enables RLS, revokes
+- **Pending repair:** `20261008221134.sql` enables RLS, revokes
   all direct privileges from `public`, `anon`, and `authenticated`, and grants only
   server-required select/insert/update/delete privileges to `service_role`.
 - **Application use:** server-side admin authorization queries this table.
@@ -541,16 +541,17 @@ repository cannot reproduce the full production database from scratch.
 - **Production status:** `UNKNOWN`; live verification required.
 - **Privacy:** no bodies, subjects, recipients, attachments or mailbox HTML are
   stored by this model.
-- **Pending SQL:** `20261010130000_google_mailbox_connections.sql` followed by
-  `20261012120000_extend_mailbox_connections.sql`. Both remain unexecuted and must
+- **Pending SQL:** `20261010130000.sql` followed by
+  `20261012120000.sql`. Both remain unexecuted and must
   be reviewed against live schema, grants and migration history before application.
 
 ## Known Database Concerns
 
 1. **Migration history:** linked migration history returned no versions. Repository
    SQL cannot currently be correlated with production deployment records.
-2. **Consolidated filename:** `leonety_consolidated_schema.sql` has no timestamp and
-   is skipped by the Supabase CLI.
+2. **Migration filenames:** current files use timestamp-only names for manual SQL
+   editor copy/paste. The Supabase CLI skips them because they lack the required
+   descriptive suffix; remote migration history remains unverified.
 3. **Incomplete baseline:** core tables are assumed, not created; the repository
    cannot reproduce a fresh database safely.
 4. **Active timers:** current DDL omits `user_id`, but trigger/function/application
@@ -559,22 +560,22 @@ repository cannot reproduce the full production database from scratch.
    migration.
 6. **Admin authorization:** the original `admin_accounts` definition lacks explicit
    RLS/grants. A default-deny repair exists in
-   `20261008221134_secure_admin_accounts.sql` but is not `APPLIED` until manually
+   `20261008221134.sql` but is not `APPLIED` until manually
    confirmed and verified.
 7. **Personalnummer:** Edit 4 is the source design; the corrected timestamped
-   migration `20261008233000_employee_numbers.sql` is pending and has not been run.
+   migration `20261008233000.sql` is pending and has not been run.
    It keeps the same schema and fixes `lpad` truncation. Production deployment is
    unknown; inspect the live catalog before applying. Do not apply both definitions.
 8. **Shift overlap:** application checks can race, and single-shift insertion has no
-   overlap check. `20261009120000_prevent_overlapping_employee_shifts.sql` proposes
+   overlap check. `20261009120000.sql` proposes
    a database trigger; it is pending review and has not been applied.
 9. **Mailbox:** a deployable proposal now exists at
-   `supabase/migrations/20261010130000_google_mailbox_connections.sql`. It is not
+   `supabase/migrations/20261010130000.sql`. It is not
    applied; production table/history state remains `UNKNOWN`. The old consolidated
    copy is not the deployment source. The multi-provider extension
-   `20261012120000_extend_mailbox_connections.sql` is also pending and depends on
+   `20261012120000.sql` is also pending and depends on
    that initial proposal; neither migration is confirmed applied.
-10. **User activity:** `20261010150000_track_admin_user_activity.sql` is pending;
+10. **User activity:** `20261010150000.sql` is pending;
     until applied, the operator directory reports activity as unknown. Auth sign-in
     remains sourced from `auth.users.last_sign_in_at`.
 11. **Identifier types:** historical bigint/UUID conflicts remain for finance records

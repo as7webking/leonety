@@ -58,7 +58,7 @@ test('protects the operator directory with server auth and exposes no mutation h
 test('activity heartbeat authenticates server-side and writes only via throttled RPC', () => {
   const apiSource = readFileSync(new URL('../app/api/activity/heartbeat/route.ts', import.meta.url), 'utf8')
   const clientSource = readFileSync(new URL('../components/admin/activity-heartbeat.tsx', import.meta.url), 'utf8')
-  const migrationSource = readFileSync(new URL('../../supabase/migrations/20261010150000_track_admin_user_activity.sql', import.meta.url), 'utf8')
+  const migrationSource = readFileSync(new URL('../../supabase/migrations/20261010150000.sql', import.meta.url), 'utf8')
 
   assert.match(apiSource, /supabase\.auth\.getUser\(\)/)
   assert.match(apiSource, /record_leonety_user_activity/)

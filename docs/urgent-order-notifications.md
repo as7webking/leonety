@@ -92,6 +92,6 @@ Official references: [Apple Web Push](https://developer.apple.com/documentation/
   variables. Vercel cron invokes `/api/cron/order-notification-escalation` each
   minute with bearer authorization.
 - Database: manually review/apply
-  `supabase/migrations/20261012170000_urgent_order_notification_acknowledgement.sql`
+  `supabase/migrations/20261012170000.sql`
   only after verifying the existing notification tables. It is not executed by
   this task and its production status remains unknown.

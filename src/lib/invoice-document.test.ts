@@ -76,7 +76,7 @@ test('single and batch print use one Standard renderer and retain Standard CSS h
 test('invoice snapshots are captured only on initial issue or draft finalization and old records are disclosed', async () => {
   const [page, migration] = await Promise.all([
     readFile(new URL('app/(app)/invoices/page.tsx', root), 'utf8'),
-    readFile(new URL('../supabase/migrations/20261009160000_preserve_invoice_document_snapshots.sql', root), 'utf8'),
+    readFile(new URL('../supabase/migrations/20261009160000.sql', root), 'utf8'),
   ])
 
   assert.match(page, /formData\.status !== 'draft'/)

@@ -4,6 +4,11 @@ This document is the human-readable deployment ledger for Leonety database work.
 It does not replace executable migrations. `supabase/migrations/` remains the
 version-controlled source of database changes.
 
+The SQL files in this directory currently use timestamp-only filenames for
+manual copy/paste into the Supabase SQL editor. They are not recognized as
+Supabase CLI migrations because the CLI requires a descriptive suffix after the
+timestamp. Renaming files does not mean their SQL has been applied.
+
 Status meanings:
 
 - `APPLIED`: production application and verification are explicitly confirmed.
@@ -17,9 +22,10 @@ Status meanings:
 
 ### BLOCKED
 
-- `supabase/migrations/leonety_consolidated_schema.sql`: do not apply as a fresh
-  production migration. Its filename has no Supabase timestamp, linked migration
-  history is empty, and the file assumes core tables that it does not create.
+- `supabase/migrations/20260919205522.sql`: do not apply as a fresh
+  production migration. It is a consolidated baseline with incomplete core DDL;
+  production migration history is not verified. Its timestamp-only filename is
+  also not recognized by the Supabase CLI.
 - Active timers: reconcile the current SQL definition with the application and live
   catalog. The file creates `active_timers` without `user_id`, while its trigger and
   the application query `user_id`.
@@ -27,44 +33,44 @@ Status meanings:
   `src/app/api/workspaces/legal/route.ts` with a reviewed, timestamped migration.
   They are not represented in the current repository migration.
 - Global operator user directory: keep blocked until
-  `20261008221134_secure_admin_accounts.sql` has been manually reviewed, applied and
+  `20261008221134.sql` has been manually reviewed, applied and
   verified. The existing consolidated file creates `admin_accounts` without enabling
   RLS or revoking browser-role grants.
 
 ### PENDING
 
 - Employee Personalnummer: inspect production first, then use
-  `supabase/migrations/20261008233000_employee_numbers.sql` only if the audited
+  `supabase/migrations/20261008233000.sql` only if the audited
   objects are absent or compatible. This timestamped file corrects the counter
   padding bug in Edit 4 while retaining the same schema. Do not apply the entire
   consolidated file or apply both definitions independently.
 - Employee shift overlap protection: inspect production shifts for existing
-  overlaps, then review `supabase/migrations/20261009120000_prevent_overlapping_employee_shifts.sql`.
+  overlaps, then review `supabase/migrations/20261009120000.sql`.
   It adds a transaction-serialized trigger; it has not been applied or verified.
 - Invoice document snapshots: verify the live `public.invoices` table and
   permissions, then review
-  `supabase/migrations/20261009160000_preserve_invoice_document_snapshots.sql`.
+  `supabase/migrations/20261009160000.sql`.
   It adds a nullable JSONB snapshot and an immutability trigger; no historical
   rows are backfilled.
 - Google mailbox schema: inspect live `companies.id`/`owner_id` types and
   `mailbox_connections` before considering
-  `supabase/migrations/20261010130000_google_mailbox_connections.sql`. Its
+  `supabase/migrations/20261010130000.sql`. Its
   production status is unknown and it has not been executed.
 - Multi-provider mailbox extension:
-  `supabase/migrations/20261012120000_extend_mailbox_connections.sql` depends on
-  manual review/application of `20261010130000_google_mailbox_connections.sql`.
+  `supabase/migrations/20261012120000.sql` depends on
+  manual review/application of `20261010130000.sql`.
   Inspect the live table and RPC prerequisites first; neither migration has been
   executed or verified.
 - Leonety activity tracking: review
-  `supabase/migrations/20261010150000_track_admin_user_activity.sql` and verify
+  `supabase/migrations/20261010150000.sql` and verify
   the `auth.users.id` UUID reference before manual application. It is pending and
   not executed; Admin Users reports activity as unknown until available.
 - Transaction currency snapshots: review and manually apply
-  `supabase/migrations/20261012150000_add_transaction_currency_snapshots.sql`
+  `supabase/migrations/20261012150000.sql`
   before deploying the matching finance UI. It adds nullable converted amounts and
   FX metadata to incomes/expenses only; it deliberately does not backfill history.
 - Urgent order acknowledgement/escalation: review
-  `supabase/migrations/20261012170000_urgent_order_notification_acknowledgement.sql`.
+  `supabase/migrations/20261012170000.sql`.
   It depends on the existing `incoming_order_alert_events` and
   `order_notification_settings` objects; verify those live tables/columns first.
   The new code requires these fields and `CRON_SECRET` before deployment. The
@@ -72,7 +78,7 @@ Status meanings:
 
 ### READY TO APPLY
 
-- `20261008221134_secure_admin_accounts.sql`: enable RLS on the Leonety operator
+- `20261008221134.sql`: enable RLS on the Leonety operator
   allowlist and revoke all direct `public`/`anon`/`authenticated` privileges while
   retaining the minimum server `service_role` privileges. Manual review and
   production application are required; status remains unapplied.
@@ -94,8 +100,9 @@ Status meanings:
 ## Evidence And Limitations
 
 - `supabase/migrations/` contains consolidated SQL and timestamped migration
-  proposals. The Supabase CLI skips the consolidated file because it does not match
-  `<timestamp>_name.sql`.
+  proposals. The current timestamp-only filenames are skipped by Supabase CLI
+  because they do not match `<timestamp>_name.sql`; they are maintained for manual
+  SQL editor copy/paste.
 - The linked migration list returned no local/remote versions.
 - A queried `supabase_migrations.schema_migrations` relation was not present. Tables
   named `schema_migrations` exist in other Supabase-managed schemas, but they are not
@@ -115,7 +122,7 @@ Status meanings:
 - **Migration filename:** historical
   `migrations/20260415_active_timers_workspace.sql` and
   `migrations/20260415_active_timers_pause_and_limit.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** workspace timers, pause/resume/stop RPCs, timer limits, owner-scoped
   access.
 - **Main objects:** `active_timers`; `start_active_timer`, `pause_active_timer`,
@@ -131,7 +138,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260415_exchange_rates_and_timer_start_rpc.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** add `exchange_rate` and `workspace_currency` snapshots to income and
   expenses; provide server-checked timer start.
 - **Main objects:** `incomes`, `expenses`, `start_active_timer`.
@@ -144,7 +151,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260509_timer_history_original_start.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** preserve original timer start and completion timestamps.
 - **Main objects:** `active_timers.original_started_at`,
   `time_entries.timer_started_at`, `time_entries.timer_completed_at`.
@@ -157,7 +164,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260509_user_subscriptions.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** user-level subscription state and operator account records.
 - **Main objects:** `user_subscriptions`, `admin_accounts`.
 - **Production status:** `UNKNOWN`
@@ -170,7 +177,7 @@ Status meanings:
 - **Migration filename:** historical alternatives
   `migrations/20260615_operations_inventory.sql` and
   `migrations/20260615_operations_inventory_compact.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** establish operations and inventory entities with owner-scoped RLS.
 - **Main objects:** `employees`, `locations`, `shifts`, `products`,
   `stock_movements`.
@@ -184,7 +191,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260619_woocommerce_integration.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** WooCommerce connection metadata, product mappings, product images.
 - **Main objects:** `woocommerce_connections`, `product_syncs`, product channel
   columns, `storage.buckets`/`storage.objects` policies for `product-images`.
@@ -197,7 +204,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260623_billing_foundation.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** provider customer, subscription, payment, and idempotent webhook-event
   storage.
 - **Main objects:** `billing_customers`, `billing_subscriptions`,
@@ -212,7 +219,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260627_product_categories_billing_support.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** canonical product categories and subscription-to-entitlement updates.
 - **Main objects:** `product_categories`, `products.category_id`, `app_access`,
   `apply_billing_subscription_to_app_access`.
@@ -225,7 +232,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260727_store_integrations_schema_fix.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** normalize provider connection metadata and supported provider states.
 - **Main objects:** `store_integrations`, `product_syncs` constraints/indexes.
 - **Production status:** `UNKNOWN`
@@ -238,7 +245,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260804_whatsapp_business_integration.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** multi-tenant WhatsApp connection metadata and webhook idempotency.
 - **Main objects:** `store_integrations`, `whatsapp_webhook_events`, selected client
   source/import columns.
@@ -251,7 +258,7 @@ Status meanings:
 
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical `migrations/20260829_contract_builder.sql`;
-  consolidated into `supabase/migrations/leonety_consolidated_schema.sql`
+  consolidated into `supabase/migrations/20260919205522.sql`
 - **Purpose:** contract records, immutable versions, status and update-time handling.
 - **Main objects:** `contracts`, `contract_versions`, `set_contract_updated_at`.
 - **Production status:** `UNKNOWN`
@@ -263,7 +270,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260903_food_marketplace_channels.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** provider allowlists, product publication preferences, transaction
   titles, and contract/invoice association.
 - **Main objects:** `store_integrations`, `product_syncs`,
@@ -279,7 +286,7 @@ Status meanings:
 - **Status:** `BLOCKED`
 - **Migration filename:** historical
   `migrations/20260905_inventory_accounting_links.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** stock audit values, expense linkage, and atomic stock movement RPC.
 - **Main objects:** `stock_movements`, `record_stock_movement`.
 - **Production status:** `UNKNOWN`
@@ -292,7 +299,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260913_accounting_ux_fields.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** references, notes, client/invoice links, and payment method fields.
 - **Main objects:** `incomes`, `expenses`, related indexes.
 - **Production status:** `UNKNOWN`
@@ -305,7 +312,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `migrations/20260914_contract_invoice_transaction_links.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** enforce contract/invoice workspace scope and record paid invoices once
   as income.
 - **Main objects:** `contracts`, `invoices`, `invoice_payments`, `incomes`,
@@ -320,7 +327,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `supabase/migrations/20260915120000_workspace_entitlement_guard.sql`; consolidated
-  into `supabase/migrations/leonety_consolidated_schema.sql`
+  into `supabase/migrations/20260919205522.sql`
 - **Purpose:** enforce workspace plan limits and retain operator audit events.
 - **Main objects:** `admin_audit_events`, `enforce_workspace_entitlement_limit`.
 - **Production status:** `UNKNOWN`
@@ -332,7 +339,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `supabase/migrations/20260917120000_employee_profile_fields.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** employment, compensation, identity, address, and leave fields.
 - **Main objects:** additive columns on `employees`.
 - **Production status:** `UNKNOWN`
@@ -345,7 +352,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `supabase/migrations/20260919120000_employee_country_profiles.sql`; consolidated
-  into `supabase/migrations/leonety_consolidated_schema.sql`
+  into `supabase/migrations/20260919205522.sql`
 - **Purpose:** country-specific employee profile metadata.
 - **Main objects:** additional columns/constraints/indexes on `employees`.
 - **Production status:** `UNKNOWN`
@@ -357,7 +364,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `supabase/migrations/20260919143000_employee_documents.sql`; consolidated into
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** document requirements, private employee document metadata, and
   workspace document settings.
 - **Main objects:** `employee_document_requirements`, `employee_documents`,
@@ -372,7 +379,7 @@ Status meanings:
 - **Status:** `BLOCKED`
 - **Migration filename:** originally
   `supabase/migrations/20260919205522_consolidated_2026_schema.sql`, renamed to
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** replace split 2026 SQL with one intended final-state file.
 - **Main objects:** all 2026 objects listed in this changelog.
 - **Production status:** `UNKNOWN`
@@ -386,7 +393,7 @@ Status meanings:
 - **Status:** `UNKNOWN`
 - **Migration filename:** historical
   `supabase/migrations/20260920153440_incoming_order_notifications.sql`; consolidated
-  into `supabase/migrations/leonety_consolidated_schema.sql` as Edit 2.
+  into `supabase/migrations/20260919205522.sql` as Edit 2.
 - **Purpose:** per-device push subscription storage, workspace settings, and incoming
   order event deduplication.
 - **Main objects:** `order_notification_devices`, `order_notification_settings`,
@@ -399,7 +406,7 @@ Status meanings:
 
 - **Status:** `UNKNOWN`
 - **Migration filename:** Edit 3 in
-  `supabase/migrations/leonety_consolidated_schema.sql`
+  `supabase/migrations/20260919205522.sql`
 - **Purpose:** per-weekday employee schedules and location operating-hour suggestions.
 - **Main objects:** `employee_weekly_schedules`, `location_operating_hours`.
 - **Production status:** `UNKNOWN`
@@ -410,8 +417,8 @@ Status meanings:
 
 - **Status:** `PENDING`
 - **Migration filename:** corrected deployment migration
-  `supabase/migrations/20261008233000_employee_numbers.sql`; source design is Edit 4
-  in `supabase/migrations/leonety_consolidated_schema.sql`.
+  `supabase/migrations/20261008233000.sql`; source design is Edit 4
+  in `supabase/migrations/20260919205522.sql`.
 - **Purpose:** optional workspace-scoped employee numbers and atomic allocation.
 - **Main objects:** `employees.employee_number`, `employee_number_settings`, unique
   indexes, initialization/counter/allocation triggers.
@@ -429,7 +436,7 @@ Status meanings:
 
 - **Status:** `PENDING`
 - **Migration filename:**
-  `supabase/migrations/20261009120000_prevent_overlapping_employee_shifts.sql`
+  `supabase/migrations/20261009120000.sql`
 - **Purpose:** prevent concurrent requests from creating overlapping shifts for
   the same employee on the same calendar date.
 - **Main objects:** `public.prevent_employee_shift_overlap()` and
@@ -446,7 +453,7 @@ Status meanings:
 - **Status:** `SUPERSEDED` as a deployment source; retained only as historical
   consolidated SQL.
 - **Migration filename:** Edit 5 in
-  `supabase/migrations/leonety_consolidated_schema.sql`; do not apply this file.
+  `supabase/migrations/20260919205522.sql`; do not apply this file.
 - **Purpose:** owner-only Google mailbox connection metadata with encrypted tokens.
 - **Main objects:** historical proposal for `mailbox_connections`, owner policies,
   revoked client grants, updated-at trigger.
@@ -460,7 +467,7 @@ Status meanings:
 
 - **Status:** `PENDING`
 - **Migration filename:**
-  `supabase/migrations/20261009160000_preserve_invoice_document_snapshots.sql`
+  `supabase/migrations/20261009160000.sql`
 - **Purpose:** preserve seller, buyer and template presentation when a draft first
   becomes non-draft, without duplicating persisted invoice amounts or line items.
 - **Main objects:** nullable `invoices.document_snapshot` JSONB column and trigger
@@ -475,7 +482,7 @@ Status meanings:
 ### 2026-10-10 - Timestamped Google mailbox connection schema
 
 - **Status:** `PENDING`
-- **Migration filename:** `supabase/migrations/20261010130000_google_mailbox_connections.sql`
+- **Migration filename:** `supabase/migrations/20261010130000.sql`
 - **Purpose:** provide a deployable, additive owner-scoped connection model for the
   first Google human mailbox provider.
 - **Main objects:** `public.mailbox_connections`, owner RLS policies, server-only
@@ -491,7 +498,7 @@ Status meanings:
 ### 2026-10-12 - Multi-provider mailbox connections and plan slots
 
 - **Status:** `PENDING`
-- **Migration filename:** `supabase/migrations/20261012120000_extend_mailbox_connections.sql`
+- **Migration filename:** `supabase/migrations/20261012120000.sql`
 - **Purpose:** extend the existing pending mailbox connection model for Microsoft
   OAuth and encrypted TLS-only IMAP/SMTP settings; retain credentials through plan
   downgrades while enforcing per-workspace slot limits atomically.
@@ -500,7 +507,7 @@ Status meanings:
   functions.
 - **Production status:** `UNKNOWN`; SQL has not been executed.
 - **Verification status:** repository-only. It depends on the reviewed shape from
-  `20261010130000_google_mailbox_connections.sql`; inspect live schema, policies,
+  `20261010130000.sql`; inspect live schema, policies,
   grants and company foreign-key types before applying either file.
 - **Notes/dependencies:** the migration drops/replaces only mailbox provider,
   credential-format, scope and status checks so the same table accepts the added
@@ -510,7 +517,7 @@ Status meanings:
 ### 2026-10-12 - Immutable transaction currency snapshots
 
 - **Status:** `PENDING`
-- **Migration filename:** `supabase/migrations/20261012150000_add_transaction_currency_snapshots.sql`
+- **Migration filename:** `supabase/migrations/20261012150000.sql`
 - **Purpose:** store the workspace-currency amount and provider/date metadata beside
   the original amount/currency for newly created or explicitly repriced income and
   expense records.
@@ -527,7 +534,7 @@ Status meanings:
 ### 2026-10-10 - Coarse Leonety user activity
 
 - **Status:** `PENDING`
-- **Migration filename:** `supabase/migrations/20261010150000_track_admin_user_activity.sql`
+- **Migration filename:** `supabase/migrations/20261010150000.sql`
 - **Purpose:** persist a coarse last-use timestamp for operator diagnostics without
   changing authentication sign-in semantics or creating an event log.
 - **Main objects:** `public.user_activity` and the server-only
@@ -555,7 +562,7 @@ Status meanings:
 
 - **Status:** `READY TO APPLY`
 - **Migration filename:**
-  `supabase/migrations/20261008221134_secure_admin_accounts.sql`
+  `supabase/migrations/20261008221134.sql`
 - **Purpose:** make `admin_accounts` server-only before the global auth-user directory
   can be considered safe for production use.
 - **Main objects:** `admin_accounts` RLS and table grants.

@@ -92,7 +92,7 @@ test('urgent order alerts separate provider acceptance from acknowledgement and 
   const worker = readFileSync(new URL('../app/api/cron/order-notification-escalation/route.ts', import.meta.url), 'utf8')
   const events = readFileSync(new URL('../app/api/order-notifications/events/route.ts', import.meta.url), 'utf8')
   const sw = readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8')
-  const migration = readFileSync(new URL('../../supabase/migrations/20261012170000_urgent_order_notification_acknowledgement.sql', import.meta.url), 'utf8')
+  const migration = readFileSync(new URL('../../supabase/migrations/20261012170000.sql', import.meta.url), 'utf8')
   assert.match(worker, /CRON_SECRET/)
   assert.match(worker, /\.eq\('push_attempt_count', event\.push_attempt_count\)/)
   assert.match(worker, /push_attempt_count: event\.push_attempt_count \+ 1/)

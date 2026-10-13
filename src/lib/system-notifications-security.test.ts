@@ -5,7 +5,7 @@ import test from 'node:test'
 const settingsRoute = readFileSync(new URL('../app/api/notifications/route.ts', import.meta.url), 'utf8')
 const testRoute = readFileSync(new URL('../app/api/notifications/test/route.ts', import.meta.url), 'utf8')
 const pushServer = readFileSync(new URL('./order-notifications-server.ts', import.meta.url), 'utf8')
-const migration = readFileSync(new URL('../../supabase/migrations/leonety_consolidated_schema.sql', import.meta.url), 'utf8')
+const migration = readFileSync(new URL('../../supabase/migrations/20260919205522.sql', import.meta.url), 'utf8')
 
 test('authorizes every notification operation against the authenticated workspace owner', () => {
   assert.match(settingsRoute, /requireOwnedCompany\(parsed\.data\.companyId\)/)

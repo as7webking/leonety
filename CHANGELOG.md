@@ -36,7 +36,7 @@ Meaningful Leonety changes are recorded here. Small formatting-only refactors an
 
 ### Database
 
-- `supabase/migrations/leonety_consolidated_schema.sql` is non-timestamped and the previously observed linked history was empty; it must not be replayed against production automatically.
+- `supabase/migrations/20260919205522.sql` has a timestamp-only filename for manual SQL editor copy/paste (not Supabase CLI use); the previously observed linked history was empty, so it must not be replayed against production automatically.
 - New database work must use reviewed timestamped additive migrations and preserve traceable production history.
 - Employee-number and mailbox schema work appears in repository SQL; verify live-catalog application status before relying on it during deployment.
 
