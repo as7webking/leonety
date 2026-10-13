@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-12T14:32:32.552Z",
+  "generatedAt": "2026-10-12T22:03:02.666Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -44,34 +44,35 @@
     "src/lib/profile-localization-i18n.ts",
     "src/lib/public-website-i18n.ts",
     "src/lib/system-notifications-i18n.ts",
+    "src/lib/transaction-fx-i18n.ts",
     "src/lib/transaction-ordering-i18n.ts"
   ],
   "coverage": {
     "en": {
-      "translated": 2680,
-      "total": 2680,
+      "translated": 2706,
+      "total": 2706,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2680,
-      "total": 2680,
+      "translated": 2706,
+      "total": 2706,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2680,
-      "total": 2680,
+      "translated": 2706,
+      "total": 2706,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 2478,
-      "total": 2680,
-      "percent": 92.46,
+      "translated": 2504,
+      "total": 2706,
+      "percent": 92.54,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -333,7 +334,6 @@
         "income.deleted",
         "income.updated",
         "income.created",
-        "income.latestRateLoading",
         "income.latestRate",
         "expenses.add",
         "expenses.edit",
@@ -347,7 +347,6 @@
         "expenses.deleted",
         "expenses.updated",
         "expenses.created",
-        "expenses.latestRateLoading",
         "expenses.latestRate",
         "time.title",
         "onboarding.title",
@@ -363,9 +362,9 @@
       ]
     },
     "uk": {
-      "translated": 2433,
-      "total": 2680,
-      "percent": 90.78,
+      "translated": 2459,
+      "total": 2706,
+      "percent": 90.87,
       "missing": [
         "support.button",
         "support.title",
@@ -695,7 +694,6 @@
         "income.deleted",
         "income.updated",
         "income.created",
-        "income.latestRateLoading",
         "income.latestRate",
         "expenses.title",
         "expenses.description",
@@ -711,7 +709,6 @@
         "expenses.deleted",
         "expenses.updated",
         "expenses.created",
-        "expenses.latestRateLoading",
         "expenses.latestRate",
         "time.title",
         "onboarding.title",
@@ -727,9 +724,9 @@
       ]
     },
     "pl": {
-      "translated": 2433,
-      "total": 2680,
-      "percent": 90.78,
+      "translated": 2459,
+      "total": 2706,
+      "percent": 90.87,
       "missing": [
         "support.button",
         "support.title",
@@ -1059,7 +1056,6 @@
         "income.deleted",
         "income.updated",
         "income.created",
-        "income.latestRateLoading",
         "income.latestRate",
         "expenses.title",
         "expenses.description",
@@ -1075,7 +1071,6 @@
         "expenses.deleted",
         "expenses.updated",
         "expenses.created",
-        "expenses.latestRateLoading",
         "expenses.latestRate",
         "time.title",
         "onboarding.title",
@@ -1091,9 +1086,9 @@
       ]
     },
     "fr": {
-      "translated": 2433,
-      "total": 2680,
-      "percent": 90.78,
+      "translated": 2459,
+      "total": 2706,
+      "percent": 90.87,
       "missing": [
         "support.button",
         "support.title",
@@ -1423,7 +1418,6 @@
         "income.deleted",
         "income.updated",
         "income.created",
-        "income.latestRateLoading",
         "income.latestRate",
         "expenses.title",
         "expenses.description",
@@ -1439,7 +1433,6 @@
         "expenses.deleted",
         "expenses.updated",
         "expenses.created",
-        "expenses.latestRateLoading",
         "expenses.latestRate",
         "time.title",
         "onboarding.title",
@@ -1459,7 +1452,7 @@
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/invoices/page.tsx",
-      "line": 1881,
+      "line": 1946,
       "type": "jsx-text",
       "text": "IBAN:"
     },
@@ -1513,7 +1506,7 @@
     },
     {
       "file": "src/components/incoming-order-alert.tsx",
-      "line": 78,
+      "line": 113,
       "type": "jsx-text",
       "text": "WooCommerce · #"
     },
@@ -1591,7 +1584,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2680,
+    "englishKeyCount": 2706,
     "authenticatedSourceFileCount": 89,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 22

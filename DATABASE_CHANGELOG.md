@@ -63,6 +63,12 @@ Status meanings:
   `supabase/migrations/20261012150000_add_transaction_currency_snapshots.sql`
   before deploying the matching finance UI. It adds nullable converted amounts and
   FX metadata to incomes/expenses only; it deliberately does not backfill history.
+- Urgent order acknowledgement/escalation: review
+  `supabase/migrations/20261012170000_urgent_order_notification_acknowledgement.sql`.
+  It depends on the existing `incoming_order_alert_events` and
+  `order_notification_settings` objects; verify those live tables/columns first.
+  The new code requires these fields and `CRON_SECRET` before deployment. The
+  migration has not been executed or production-verified.
 
 ### READY TO APPLY
 

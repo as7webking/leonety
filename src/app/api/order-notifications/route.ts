@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const [devicesResult, settingsResult, wooResult] = await Promise.all([
     auth.adminSupabase.from('order_notification_devices').select('id, installation_id, device_label, platform, status, last_seen_at, created_at').eq('company_id', parsed.data.companyId).order('last_seen_at', { ascending: false }),
-    auth.adminSupabase.from('order_notification_settings').select('enabled, active_device_id, foreground_sound_enabled, foreground_sound_name, foreground_sound_mime').eq('company_id', parsed.data.companyId).maybeSingle(),
+    auth.adminSupabase.from('order_notification_settings').select('enabled, active_device_id, foreground_sound_enabled, foreground_sound_volume, foreground_sound_name, foreground_sound_mime, last_test_at, last_test_status').eq('company_id', parsed.data.companyId).maybeSingle(),
     auth.adminSupabase.from('woocommerce_connections').select('id, active, order_webhook_secret, order_webhook_configured_at').eq('company_id', parsed.data.companyId).maybeSingle(),
   ])
   const error = devicesResult.error || settingsResult.error || wooResult.error
@@ -41,10 +41,12 @@ export async function GET(request: Request) {
     })),
     sound: {
       enabled: settingsResult.data?.foreground_sound_enabled ?? true,
+      volume: Number(settingsResult.data?.foreground_sound_volume ?? 0.7),
       hasCustom: Boolean(settingsResult.data?.foreground_sound_name),
       name: settingsResult.data?.foreground_sound_name ?? '',
       mime: settingsResult.data?.foreground_sound_mime ?? '',
     },
+    lastTest: { at: settingsResult.data?.last_test_at ?? null, status: settingsResult.data?.last_test_status ?? null },
     wooCommerce: {
       connected: Boolean(woo?.active),
       webhookConfigured: Boolean(woo?.order_webhook_secret),
@@ -116,6 +118,17 @@ export async function PATCH(request: Request) {
     const { error } = await auth.adminSupabase.from('order_notification_settings').upsert({
       company_id: parsed.data.companyId,
       foreground_sound_enabled: parsed.data.enabled,
+      updated_by: auth.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'company_id' })
+    if (error) return migrationError(error)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === 'set_sound_volume') {
+    const { error } = await auth.adminSupabase.from('order_notification_settings').upsert({
+      company_id: parsed.data.companyId,
+      foreground_sound_volume: parsed.data.volume,
       updated_by: auth.user.id,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'company_id' })

@@ -98,6 +98,21 @@ test('shows generic system notifications as non-silent without changing fetch ha
   assert.equal((notifications[0].options.data as { url?: string }).url, '/app/settings/notifications')
 })
 
+test('order push requests visible, localized action notifications without alarm guarantees', async () => {
+  const { listeners, notifications } = createServiceWorkerHarness()
+  let pending: Promise<unknown> | undefined
+  listeners.get('push')?.({
+    data: { json: () => ({ type:'incoming-order', eventId:'event-1', companyId:'company-1', title:'New order', body:'Order #12', url:'/app/dashboard', acknowledgeLabel:'Acknowledge', viewLabel:'View' }) },
+    waitUntil: (value: Promise<unknown>) => { pending = value },
+  })
+  await pending
+  assert.equal(notifications.length, 1)
+  assert.deepEqual(Array.from(notifications[0].options.vibrate as number[]), [180, 100, 180])
+  assert.equal((notifications[0].options.actions as Array<{ action:string }>)[0].action, 'acknowledge')
+  assert.equal('requireInteraction' in notifications[0].options, false)
+  assert.equal(notifications[0].options.silent, false)
+})
+
 test('ignores unknown push payloads and sanitizes notification click destinations', async () => {
   const { listeners, notifications, openedUrls } = createServiceWorkerHarness()
   let pushPending: Promise<unknown> | undefined

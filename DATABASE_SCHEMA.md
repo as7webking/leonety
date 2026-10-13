@@ -386,7 +386,8 @@ repository cannot reproduce the full production database from scratch.
 ### `order_notification_settings`
 
 - **Evidence:** `CONFIRMED`; production deployment `UNKNOWN`.
-- **Purpose:** workspace order-notification preference.
+- **Purpose:** workspace order-notification preference, foreground sound enablement,
+  volume and custom sound reference.
 - **Primary key:** company-scoped settings row.
 - **RLS:** enabled; owner-scoped access in the consolidated file.
 - **Modules:** notification settings.
@@ -394,12 +395,22 @@ repository cannot reproduce the full production database from scratch.
 ### `incoming_order_alert_events`
 
 - **Evidence:** `CONFIRMED`; production deployment `UNKNOWN`.
-- **Purpose:** deduplicate and audit normalized incoming-order alerts.
+- **Purpose:** durable deduplicated `order.created` event/alert record. This current
+  integration path does not import full provider orders or line items into a separate
+  canonical order-management table; it retains safe event metadata only.
 - **Important columns:** company/provider/event/order identifiers, timestamps and
-  safe notification metadata.
-- **Indexes:** workspace chronology and provider identity constraints.
+  safe notification metadata. The pending additive migration adds independent human
+  acknowledgement (`new`, `notified`, `seen`, `acknowledged`), acknowledgement actor
+  and bounded push-attempt/claim scheduling state.
+- **Indexes:** workspace chronology, provider identity constraint, and pending
+  escalation due-time partial index (pending migration).
 - **RLS:** enabled; intended for authorized server processing.
-- **Modules:** integration webhooks and Web Push.
+- **Modules:** verified integration webhook, in-app alert, Web Push and the bounded
+  escalation worker. A `sent` push status means the push service accepted a request,
+  not that a person received or acknowledged it.
+- **Production status:** all migration-defined shape remains `UNKNOWN` until checked
+  in the live project; `20261012170000_urgent_order_notification_acknowledgement.sql`
+  is `PENDING` and has not been executed.
 
 ## Integrations
 

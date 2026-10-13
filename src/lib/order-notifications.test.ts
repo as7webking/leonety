@@ -30,7 +30,7 @@ test('accepts only order.created and extracts no customer details', () => {
 })
 
 test('creates localized minimal payloads and identifies permanent push failures', () => {
-  const payload = createIncomingOrderPushPayload({ locale:'de', companyId:'company', orderId:'1842', orderNumber:'1842', amount:'73.50', currency:'EUR' })
+  const payload = createIncomingOrderPushPayload({ eventId:'event-1', locale:'de', companyId:'company', orderId:'1842', orderNumber:'1842', amount:'73.50', currency:'EUR' })
   assert.equal(payload.title, 'Neue Bestellung')
   assert.match(payload.body, /WooCommerce.*1842.*73\.50 EUR/)
   assert.equal(JSON.stringify(payload).includes('customer'), false)
@@ -74,16 +74,33 @@ test('emits order.created only after connection and signature verification', () 
   assert.match(wooWebhookRoute, /isWooNewOrderTopic/)
 })
 
-test('deduplicates before push and respects the selected enabled device', () => {
+test('persists verified events before push and targets every enabled device', () => {
   const eventInsert = pushServer.indexOf(".from('incoming_order_alert_events')")
   const pushDelivery = pushServer.indexOf('await deliverIncomingOrderAlert({')
 
   assert.ok(eventInsert > -1)
   assert.ok(pushDelivery > eventInsert)
   assert.match(pushServer, /isDuplicateOrderEventError\(insertError\)/)
-  assert.match(pushServer, /select\('enabled, active_device_id'\)/)
-  assert.match(pushServer, /!settings\?\.enabled \|\| !settings\.active_device_id/)
-  assert.match(pushServer, /\.eq\('id', settings\.active_device_id\)/)
+  assert.match(pushServer, /select\('enabled'\)/)
+  assert.match(pushServer, /\.eq\('status', 'enabled'\)/)
+  assert.match(pushServer, /Promise\.all\(devices\.map/)
+  assert.match(pushServer, /acknowledgement_status/)
+  assert.match(pushServer, /attempt < 3/)
+})
+
+test('urgent order alerts separate provider acceptance from acknowledgement and use bounded server escalation', () => {
+  const worker = readFileSync(new URL('../app/api/cron/order-notification-escalation/route.ts', import.meta.url), 'utf8')
+  const events = readFileSync(new URL('../app/api/order-notifications/events/route.ts', import.meta.url), 'utf8')
+  const sw = readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8')
+  const migration = readFileSync(new URL('../../supabase/migrations/20261012170000_urgent_order_notification_acknowledgement.sql', import.meta.url), 'utf8')
+  assert.match(worker, /CRON_SECRET/)
+  assert.match(worker, /\.eq\('push_attempt_count', event\.push_attempt_count\)/)
+  assert.match(worker, /push_attempt_count: event\.push_attempt_count \+ 1/)
+  assert.match(events, /acknowledgement_status: 'acknowledged'/)
+  assert.match(events, /next_push_attempt_at: null/)
+  assert.match(sw, /actions: isOrder && !payload\.test/)
+  assert.match(sw, /action === 'acknowledge'/)
+  assert.match(migration, /push_attempt_count between 0 and 3/)
 })
 
 test('validates MP3 and WAV content signatures, not MIME alone', () => {

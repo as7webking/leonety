@@ -84,6 +84,7 @@ export async function sendWebPushNotification(device: WebPushDeviceRow, payload:
   return webPush.sendNotification(subscription, JSON.stringify(payload), {
     TTL: 120,
     urgency: 'high',
+    timeout: 10_000,
   })
 }
 
@@ -95,67 +96,87 @@ export async function deliverIncomingOrderAlert(input: {
   orderNumber: string
   amount: string
   currency: string
+  attemptAlreadyClaimed?: boolean
 }) {
   const { data: settings, error: settingsError } = await input.admin
     .from('order_notification_settings')
-    .select('enabled, active_device_id')
+    .select('enabled')
     .eq('company_id', input.companyId)
     .maybeSingle()
   if (settingsError) throw settingsError
 
-  if (!settings?.enabled || !settings.active_device_id) {
-    await input.admin.from('incoming_order_alert_events').update({ notification_status: 'skipped' }).eq('id', input.eventId)
+  if (!settings?.enabled) {
+    await input.admin.from('incoming_order_alert_events').update({ notification_status: 'skipped', next_push_attempt_at: null }).eq('id', input.eventId)
     return { status: 'skipped' as const }
   }
 
   const { data, error } = await input.admin
     .from('order_notification_devices')
     .select('id, company_id, locale, push_endpoint, push_p256dh, push_auth, status')
-    .eq('id', settings.active_device_id)
     .eq('company_id', input.companyId)
-    .maybeSingle()
-  if (error) throw error
-  const device = data as WebPushDeviceRow | null
+    .eq('status', 'enabled')
 
-  if (!device || device.status !== 'enabled') {
+  if (error) throw error
+  const devices = (data ?? []) as WebPushDeviceRow[]
+
+  if (!devices.length) {
     await input.admin.from('incoming_order_alert_events').update({
-      notification_status: 'skipped', notification_error_code: 'active_device_unavailable',
+      notification_status: 'skipped', notification_error_code: 'no_enabled_devices', next_push_attempt_at: null,
     }).eq('id', input.eventId)
     return { status: 'skipped' as const }
   }
 
-  const payload = createIncomingOrderPushPayload({
-    locale: device.locale,
-    companyId: input.companyId,
-    orderId: input.orderId,
-    orderNumber: input.orderNumber,
-    amount: input.amount,
-    currency: input.currency,
-  })
+  const { data: event, error: eventError } = await input.admin.from('incoming_order_alert_events')
+    .select('acknowledgement_status, push_attempt_count').eq('id', input.eventId).eq('company_id', input.companyId).single()
+  if (eventError) throw eventError
+  if (event.acknowledgement_status === 'acknowledged') return { status: 'acknowledged' as const }
 
-  try {
-    await sendWebPushNotification(device, payload)
-    await input.admin.from('incoming_order_alert_events').update({
-      notification_status: 'sent', notified_device_id: device.id, notified_at: new Date().toISOString(), notification_error_code: null,
-    }).eq('id', input.eventId)
-    return { status: 'sent' as const, deviceId: device.id }
-  } catch (error) {
-    const statusCode = error && typeof error === 'object' && 'statusCode' in error
-      ? Number((error as { statusCode?: unknown }).statusCode)
-      : undefined
-    const permanent = isPermanentPushFailure(statusCode)
-    if (permanent) {
-      await input.admin.from('order_notification_devices').update({
+  const outcomes = await Promise.all(devices.map(async (device) => {
+    const payload = createIncomingOrderPushPayload({
+      eventId: input.eventId,
+      locale: device.locale,
+      companyId: input.companyId,
+      orderId: input.orderId,
+      orderNumber: input.orderNumber,
+      amount: input.amount,
+      currency: input.currency,
+    })
+    try {
+      await sendWebPushNotification(device, payload)
+      return { device, ok: true as const }
+    } catch (error) {
+      const statusCode = error && typeof error === 'object' && 'statusCode' in error
+        ? Number((error as { statusCode?: unknown }).statusCode)
+        : undefined
+      const permanent = isPermanentPushFailure(statusCode)
+      if (permanent) await input.admin.from('order_notification_devices').update({
         status: 'invalid', invalidated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq('id', device.id).eq('company_id', input.companyId)
+      return { device, ok: false as const, permanent }
     }
-    await input.admin.from('incoming_order_alert_events').update({
-      notification_status: 'failed',
-      notified_device_id: device.id,
-      notification_error_code: permanent ? 'subscription_invalid' : 'push_delivery_failed',
-    }).eq('id', input.eventId)
-    return { status: 'failed' as const, permanent }
+  }))
+
+  const now = new Date()
+  const attempt = input.attemptAlreadyClaimed ? event.push_attempt_count : event.push_attempt_count + 1
+  const delivered = outcomes.some((outcome) => outcome.ok)
+  const nextAttemptAt = attempt < 3 ? new Date(now.getTime() + (attempt === 1 ? 5 : 10) * 60_000).toISOString() : null
+  const eventUpdate = await input.admin.from('incoming_order_alert_events').update({
+    notification_status: delivered ? 'sent' : 'failed',
+    notification_error_code: delivered ? null : 'push_delivery_failed',
+    ...(delivered ? { notified_at: now.toISOString() } : {}),
+    push_attempt_count: attempt,
+    last_push_attempt_at: now.toISOString(),
+    next_push_attempt_at: nextAttemptAt,
+    push_claimed_until: null,
+  }).eq('id', input.eventId).eq('company_id', input.companyId).neq('acknowledgement_status', 'acknowledged')
+  if (eventUpdate.error) throw eventUpdate.error
+  if (delivered) {
+    const { error: stateError } = await input.admin.from('incoming_order_alert_events').update({ acknowledgement_status:'notified' })
+      .eq('id', input.eventId).eq('company_id', input.companyId).eq('acknowledgement_status', 'new')
+    if (stateError) throw stateError
   }
+
+  return { status: delivered ? 'sent' as const : 'failed' as const, deliveredCount: outcomes.filter((o) => o.ok).length, deviceCount: devices.length }
 }
 
 export async function processVerifiedOrderCreatedEvent(input: {
@@ -198,7 +219,7 @@ export async function processVerifiedOrderCreatedEvent(input: {
   } catch {
     await input.admin
       .from('incoming_order_alert_events')
-      .update({ notification_status: 'failed', notification_error_code: 'push_pipeline_failed' })
+      .update({ notification_status: 'failed', notification_error_code: 'push_pipeline_failed', push_attempt_count: 1, last_push_attempt_at: new Date().toISOString(), next_push_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString() })
       .eq('id', storedEvent.id)
       .eq('company_id', event.workspaceId)
     return { status: 'accepted' as const, delivery: { status: 'failed' as const, permanent: false } }
@@ -217,7 +238,7 @@ export async function sendOrderNotificationTest(device: WebPushDeviceRow, compan
   }
   const copy = localeCopy[device.locale] ?? localeCopy.en
   const payload: IncomingOrderPushPayload = {
-    type: 'incoming-order', companyId: device.company_id, provider: 'woocommerce', orderId: 'test', orderNumber: 'TEST', amount: '', currency: '', title: copy.title, body: copy.body, url: '/app/settings/integrations/woocommerce',
+    type: 'incoming-order', eventId: 'test', test: true, companyId: device.company_id, provider: 'woocommerce', orderId: 'test', orderNumber: 'TEST', amount: '', currency: '', title: copy.title, body: copy.body, url: '/app/settings/integrations/woocommerce', acknowledgeLabel: copy.title, viewLabel: copy.title,
   }
   return sendWebPushNotification(device, payload)
 }

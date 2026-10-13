@@ -14,14 +14,14 @@ export async function GET(request: Request) {
   const auth = await requireOwnedCompany(parsed.data.companyId)
   if ('error' in auth) return auth.error
 
-  const { data: settings, error } = await auth.adminSupabase.from('order_notification_settings').select('foreground_sound_enabled, foreground_sound_path, foreground_sound_name').eq('company_id', parsed.data.companyId).maybeSingle()
+  const { data: settings, error } = await auth.adminSupabase.from('order_notification_settings').select('foreground_sound_enabled, foreground_sound_volume, foreground_sound_path, foreground_sound_name').eq('company_id', parsed.data.companyId).maybeSingle()
   if (error) return NextResponse.json({ error: 'sound_load_failed' }, { status: 500 })
-  if (settings?.foreground_sound_enabled === false) return NextResponse.json({ enabled: false, url: null, name: settings.foreground_sound_name ?? '' })
-  if (!settings?.foreground_sound_path) return NextResponse.json({ enabled: true, url: null, name: '' })
+  if (settings?.foreground_sound_enabled === false) return NextResponse.json({ enabled: false, volume: Number(settings.foreground_sound_volume ?? 0.7), url: null, name: settings.foreground_sound_name ?? '' })
+  if (!settings?.foreground_sound_path) return NextResponse.json({ enabled: true, volume: Number(settings?.foreground_sound_volume ?? 0.7), url: null, name: '' })
 
   const signed = await auth.adminSupabase.storage.from(ORDER_ALERT_SOUND_BUCKET).createSignedUrl(settings.foreground_sound_path, 60)
   if (signed.error) return NextResponse.json({ error: 'sound_load_failed' }, { status: 500 })
-  return NextResponse.json({ enabled: true, url: signed.data.signedUrl, name: settings.foreground_sound_name ?? '' })
+  return NextResponse.json({ enabled: true, volume: Number(settings.foreground_sound_volume ?? 0.7), url: signed.data.signedUrl, name: settings.foreground_sound_name ?? '' })
 }
 
 export async function POST(request: Request) {

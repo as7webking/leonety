@@ -15,8 +15,25 @@ import {
 interface DeviceView { id:string; label:string; platform:string; status:'enabled'|'invalid'|'disabled'; lastSeenAt:string; isCurrent:boolean }
 interface SettingsView {
   enabled:boolean; activeDeviceId:string|null; devices:DeviceView[]; vapidPublicKey:string
-  sound:{enabled:boolean;hasCustom:boolean;name:string;mime:string}
+  sound:{enabled:boolean;volume:number;hasCustom:boolean;name:string;mime:string}
+  lastTest:{at:string|null;status:'request_accepted'|'failed'|null}
   wooCommerce:{connected:boolean;webhookConfigured:boolean;webhookUrl:string;configuredAt:string|null}
+}
+
+function playTestChime(volume:number) {
+  const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioContextClass) return
+  const context = new AudioContextClass()
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  oscillator.frequency.value = 740
+  gain.gain.setValueAtTime(0.0001, context.currentTime)
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.001, 0.15 * volume), context.currentTime + 0.02)
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.45)
+  oscillator.connect(gain).connect(context.destination)
+  oscillator.start()
+  oscillator.stop(context.currentTime + 0.46)
+  oscillator.addEventListener('ended', () => void context.close())
 }
 
 export function OrderNotificationsSettings({ companyId, companyName, wooConnected }: { companyId:string; companyName:string; wooConnected:boolean }) {
@@ -64,6 +81,12 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
     if (previewUrl) URL.revokeObjectURL(previewUrl)
   }, [previewUrl])
 
+  useEffect(() => {
+    const acknowledged = () => setMessage(t('orderNotifications.testAcknowledged'))
+    window.addEventListener('leonety-order-test-acknowledged', acknowledged)
+    return () => window.removeEventListener('leonety-order-test-acknowledged', acknowledged)
+  }, [t])
+
   const registerDevice = async () => {
     if (!capability.supported || capability.iosInstallRequired || !settings?.vapidPublicKey || !installationId) return
     setBusy(true); setError(''); setMessage('')
@@ -91,9 +114,9 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
 
   const sendTest = async () => {
     setBusy(true); setError(''); setMessage('')
-    const response = await fetch('/api/order-notifications/test', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({companyId}) })
+    const response = await fetch('/api/order-notifications/test', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({companyId,installationId}) })
     if (!response.ok) { setError(t('orderNotifications.saveFailed')); await load() }
-    else setMessage(t('orderNotifications.testSent'))
+    else { setMessage(t('orderNotifications.testSent')); await load() }
     setBusy(false)
   }
 
@@ -118,8 +141,14 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
       const response = await fetch(`/api/order-notifications/sound?companyId=${encodeURIComponent(companyId)}`, {cache:'no-store'})
       const payload = await response.json().catch(() => ({})); url = payload.url || ''
     }
-    if (!url) return
+    if (!url) { playTestChime(settings?.sound.volume ?? 0.7); return }
     audioRef.current?.pause(); const audio = new Audio(url); audioRef.current = audio; await audio.play().catch(() => undefined)
+  }
+  const testSound = async () => {
+    if (settings?.sound.enabled === false) return
+    if (settings?.sound.hasCustom) await playSound()
+    else playTestChime(settings?.sound.volume ?? 0.7)
+    setMessage(t('orderNotifications.soundTested'))
   }
   const uploadSound = async () => {
     if (!soundFile || soundFile.size > 2*1024*1024 || !['audio/mpeg','audio/wav','audio/x-wav'].includes(soundFile.type)) { setError(t('orderNotifications.invalidSound')); return }
@@ -137,7 +166,8 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
   }
 
   const permissionLabel = permission === 'granted' ? t('orderNotifications.allowed') : permission === 'denied' ? t('orderNotifications.blocked') : t('orderNotifications.notRequested')
-  const activeDevice = settings?.devices.find((device) => device.id === settings.activeDeviceId)
+  const currentDevice = settings?.devices.find((device) => device.isCurrent)
+  const enabledDeviceCount = settings?.devices.filter((device) => device.status === 'enabled').length ?? 0
 
   return <Card className="mt-5">
     <CardHeader><CardTitle className="flex items-center gap-2"><BellRing className="h-5 w-5" />{t('orderNotifications.title')}</CardTitle></CardHeader>
@@ -146,10 +176,13 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
       {message && <p className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</p>}
       {error && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-md border p-3"><p className="text-xs text-slate-500">{t('orderNotifications.status')}</p><p className="font-medium">{settings?.enabled ? t('orderNotifications.enabled') : t('orderNotifications.disabled')}</p></div>
-        <div className="rounded-md border p-3"><p className="text-xs text-slate-500">{t('orderNotifications.alertDevice')}</p><p className="font-medium">{activeDevice?.label || t('orderNotifications.noDevice')}</p></div>
+        <div className="rounded-md border p-3"><p className="text-xs text-slate-500">{t('orderNotifications.alertDevice')}</p><p className="font-medium">{enabledDeviceCount || t('orderNotifications.noDevice')}</p></div>
         <div className="rounded-md border p-3"><p className="text-xs text-slate-500">{t('orderNotifications.permission')}</p><p className="font-medium">{permissionLabel}</p></div>
+        <div className="rounded-md border p-3"><p className="text-xs text-slate-500">{t('orderNotifications.pushServer')}</p><p className="font-medium">{settings?.vapidPublicKey ? t('orderNotifications.configured') : t('orderNotifications.notConfigured')}</p></div>
+        <div className="rounded-md border p-3"><p className="text-xs text-slate-500">{t('orderNotifications.currentDevice')}</p><p className="font-medium">{currentDevice?.status === 'enabled' ? t('orderNotifications.enabled') : t('orderNotifications.disabled')}</p></div>
+        <div className="rounded-md border p-3"><p className="text-xs text-slate-500">{t('orderNotifications.lastTest')}</p><p className="font-medium">{settings?.lastTest?.at ? `${new Intl.DateTimeFormat(locale, { dateStyle:'short', timeStyle:'short' }).format(new Date(settings.lastTest.at))} · ${t(settings.lastTest.status === 'request_accepted' ? 'orderNotifications.requestAccepted' : 'orderNotifications.testFailed')}` : t('orderNotifications.notRequested')}</p></div>
       </div>
 
       {!capability.supported && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">{t('orderNotifications.unsupported')}</p>}
@@ -158,7 +191,7 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
 
       {!consenting ? <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={()=>setConsenting(true)} disabled={busy||!capability.supported||capability.iosInstallRequired||!settings?.vapidPublicKey}><Smartphone className="h-4 w-4" />{t('orderNotifications.enableDevice')}</Button>
-        {settings?.enabled && <Button type="button" variant="outline" onClick={()=>void sendTest()} disabled={busy}>{t('orderNotifications.test')}</Button>}
+        {settings?.enabled && <Button type="button" variant="outline" onClick={()=>void sendTest()} disabled={busy||!installationId||currentDevice?.status!=='enabled'}>{t('orderNotifications.test')}</Button>}
         {settings?.enabled && <Button type="button" variant="outline" onClick={()=>void update({action:'disable'},t('orderNotifications.disabledSuccess'))} disabled={busy}>{t('orderNotifications.disable')}</Button>}
       </div> : <div className="rounded-md border border-blue-200 bg-blue-50 p-4">
         <p className="font-medium text-blue-950">{t('orderNotifications.consentTitle')}</p><p className="mt-1 text-sm text-blue-900">{t('orderNotifications.consentText')}</p>
@@ -167,11 +200,13 @@ export function OrderNotificationsSettings({ companyId, companyName, wooConnecte
       </div>}
 
       {settings && settings.devices.length>0 && <section><h3 className="font-medium">{t('orderNotifications.registeredDevices')}</h3><div className="mt-2 grid gap-2">
-        {settings.devices.map((device)=><div key={device.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{device.label} {device.isCurrent&&<span className="text-xs text-blue-700">· {t('orderNotifications.currentDevice')}</span>}</p><p className="text-xs text-slate-500">{device.platform} · {device.status==='invalid'?t('orderNotifications.needsAttention'):device.id===settings.activeDeviceId?t('orderNotifications.activeDevice'):t('orderNotifications.disabled')}</p></div>{device.status==='enabled'&&device.id!==settings.activeDeviceId&&<Button type="button" size="sm" variant="outline" onClick={()=>void update({action:'select_device',deviceId:device.id},t('orderNotifications.enabledSuccess'))} disabled={busy}>{t('orderNotifications.makeActive')}</Button>}</div>)}
+        {settings.devices.map((device)=><div key={device.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{device.label} {device.isCurrent&&<span className="text-xs text-blue-700">· {t('orderNotifications.currentDevice')}</span>}</p><p className="text-xs text-slate-500">{device.platform} · {device.status==='invalid'?t('orderNotifications.needsAttention'):device.status==='enabled'?t('orderNotifications.activeDevice'):t('orderNotifications.disabled')}</p></div></div>)}
       </div></section>}
 
       <section className="space-y-3 border-t pt-5"><h3 className="flex items-center gap-2 font-medium"><Volume2 className="h-4 w-4" />{t('orderNotifications.foregroundSound')}</h3><p className="text-sm text-slate-600">{t('orderNotifications.soundHint')}</p><p className="text-sm"><span className="font-medium">{t('orderNotifications.backgroundSound')}:</span> {t('orderNotifications.systemDefault')}</p><p className="text-xs text-slate-500">{t('orderNotifications.systemHint')}</p>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings?.sound.enabled ?? true} onChange={(event)=>void update({action:'set_sound_enabled',enabled:event.target.checked},t('orderNotifications.soundSettingSaved'))} disabled={busy||!settings} />{t('orderNotifications.foregroundSoundEnabled')}</label>
+        <label className="block max-w-sm space-y-1 text-sm"><span>{t('orderNotifications.volume')}</span><input type="range" min="0" max="1" step="0.05" value={settings?.sound.volume ?? 0.7} onChange={(event)=>setSettings((current)=>current?{...current,sound:{...current.sound,volume:Number(event.target.value)}}:current)} onPointerUp={()=>settings&&void update({action:'set_sound_volume',volume:settings.sound.volume},t('orderNotifications.soundSettingSaved'))} onKeyUp={()=>settings&&void update({action:'set_sound_volume',volume:settings.sound.volume},t('orderNotifications.soundSettingSaved'))} disabled={busy||!settings||!settings.sound.enabled} /></label>
+        <Button type="button" size="sm" variant="outline" onClick={()=>void testSound()} disabled={busy||!settings?.sound.enabled}><Play className="h-4 w-4" />{t('orderNotifications.testSound')}</Button>
         <input type="file" accept="audio/mpeg,audio/wav,.mp3,.wav" onChange={(e)=>chooseSound(e.target.files?.[0]||null)} className="block w-full text-sm" aria-label={t('orderNotifications.chooseSound')} />
         {(soundFile||settings?.sound.hasCustom)&&<div className="flex flex-wrap items-center gap-2"><span className="text-sm">{soundFile?.name||settings?.sound.name}</span><Button type="button" size="sm" variant="outline" onClick={()=>void playSound()}><Play className="h-4 w-4" />{t('orderNotifications.play')}</Button><Button type="button" size="sm" variant="outline" onClick={()=>{audioRef.current?.pause();if(audioRef.current)audioRef.current.currentTime=0}}><Square className="h-4 w-4" />{t('orderNotifications.stop')}</Button>{soundFile&&<Button type="button" size="sm" onClick={()=>void uploadSound()} disabled={busy}><Upload className="h-4 w-4" />{t('orderNotifications.uploadSound')}</Button>}{settings?.sound.hasCustom&&!soundFile&&<Button type="button" size="sm" variant="outline" onClick={()=>void removeSound()} disabled={busy}>{t('orderNotifications.removeSound')}</Button>}</div>}
       </section>

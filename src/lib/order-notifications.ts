@@ -26,11 +26,13 @@ export const registerOrderDeviceSchema = z.object({
 export const updateOrderNotificationSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('select_device'), companyId: z.string().uuid(), deviceId: z.string().uuid() }),
   z.object({ action: z.literal('set_sound_enabled'), companyId: z.string().uuid(), enabled: z.boolean() }),
+  z.object({ action: z.literal('set_sound_volume'), companyId: z.string().uuid(), volume: z.number().min(0).max(1) }),
   z.object({ action: z.literal('disable'), companyId: z.string().uuid() }),
 ])
 
 export interface IncomingOrderPushPayload {
   type: 'incoming-order'
+  eventId: string
   companyId: string
   provider: 'woocommerce'
   orderId: string
@@ -40,19 +42,23 @@ export interface IncomingOrderPushPayload {
   title: string
   body: string
   url: string
+  acknowledgeLabel: string
+  viewLabel: string
+  test?: boolean
 }
 
-const pushCopy: Record<Locale, { title: string; order: string }> = {
-  en: { title: 'New order', order: 'Order' },
-  de: { title: 'Neue Bestellung', order: 'Bestellung' },
-  ru: { title: 'Новый заказ', order: 'Заказ' },
-  tr: { title: 'Yeni sipariş', order: 'Sipariş' },
-  uk: { title: 'Нове замовлення', order: 'Замовлення' },
-  pl: { title: 'Nowe zamówienie', order: 'Zamówienie' },
-  fr: { title: 'Nouvelle commande', order: 'Commande' },
+const pushCopy: Record<Locale, { title: string; order: string; acknowledge: string; view: string }> = {
+  en: { title: 'New order', order: 'Order', acknowledge: 'Acknowledge', view: 'View' },
+  de: { title: 'Neue Bestellung', order: 'Bestellung', acknowledge: 'Bestätigen', view: 'Ansehen' },
+  ru: { title: 'Новый заказ', order: 'Заказ', acknowledge: 'Подтвердить', view: 'Открыть' },
+  tr: { title: 'Yeni sipariş', order: 'Sipariş', acknowledge: 'Onayla', view: 'Görüntüle' },
+  uk: { title: 'Нове замовлення', order: 'Замовлення', acknowledge: 'Підтвердити', view: 'Переглянути' },
+  pl: { title: 'Nowe zamówienie', order: 'Zamówienie', acknowledge: 'Potwierdź', view: 'Wyświetl' },
+  fr: { title: 'Nouvelle commande', order: 'Commande', acknowledge: 'Confirmer', view: 'Voir' },
 }
 
 export function createIncomingOrderPushPayload(input: {
+  eventId: string
   locale: Locale
   companyId: string
   orderId: string
@@ -64,6 +70,7 @@ export function createIncomingOrderPushPayload(input: {
   const amount = input.amount && input.currency ? `${input.amount} ${input.currency}` : ''
   return {
     type: 'incoming-order',
+    eventId: input.eventId,
     companyId: input.companyId,
     provider: 'woocommerce',
     orderId: input.orderId,
@@ -73,6 +80,8 @@ export function createIncomingOrderPushPayload(input: {
     title: copy.title,
     body: ['WooCommerce', `${copy.order} #${input.orderNumber}`, amount].filter(Boolean).join(' · '),
     url: '/app/settings/integrations/woocommerce',
+    acknowledgeLabel: copy.acknowledge,
+    viewLabel: copy.view,
   }
 }
 

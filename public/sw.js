@@ -114,9 +114,13 @@ self.addEventListener('push', (event) => {
       badge: '/brand/icon-96.png',
       tag,
       renotify: isOrder,
-      requireInteraction: isOrder,
       silent: isOrder ? Boolean(foregroundClient) : false,
-      data: { url: payload.url || '/app/settings/notifications' },
+      vibrate: isOrder ? [180, 100, 180] : undefined,
+      actions: isOrder && !payload.test ? [
+        { action: 'acknowledge', title: payload.acknowledgeLabel || 'Acknowledge' },
+        { action: 'view', title: payload.viewLabel || 'View' },
+      ] : [],
+      data: { url: payload.url || '/app/settings/notifications', eventId: payload.eventId, companyId: payload.companyId, test: Boolean(payload.test) },
     })
   })().catch((error) => {
     console.warn('Push notification could not be displayed', error)
@@ -125,6 +129,15 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
+  if (event.action === 'acknowledge' && event.notification.data?.eventId && !event.notification.data?.test) {
+    event.waitUntil(fetch('/api/order-notifications/events', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId: event.notification.data.companyId, eventId: event.notification.data.eventId, action: 'acknowledge' }),
+    }).catch(() => undefined))
+    return
+  }
   const requestedUrl = new URL(event.notification.data?.url || '/app/settings/notifications', self.location.origin)
   const safePath = requestedUrl.origin === self.location.origin && requestedUrl.pathname.startsWith('/app/')
     ? `${requestedUrl.pathname}${requestedUrl.search}${requestedUrl.hash}`
