@@ -6,6 +6,7 @@ import { useI18n } from '@/contexts/i18n-context'
 import { intlLocaleMap } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import Link from 'next/link'
 import { mailRouteHref, parseMailRoute, type MailMessageRoute, type MailRouteState } from '@/lib/mailbox/navigation'
 import type { MailboxFilter, MailboxMessage, MailboxMessageSummary } from '@/lib/mailbox/types'
 
@@ -124,18 +125,22 @@ export function MailClient({ companyId }: { companyId: string }) {
     await loadMessages(null)
   }
 
-  const fetchMessage = useCallback(async (route: MailMessageRoute) => {
+  const fetchMessage = useCallback(async (route: MailMessageRoute, signal?: AbortSignal) => {
     setBusy(true); setError(''); setMessage(null)
     try {
       const params = new URLSearchParams({
         companyId, connectionId: route.connectionId, id: route.messageId,
         provider: route.provider, folder: route.folder,
       })
-      const response = await fetch(`/api/mail/message?${params}`, { cache: 'no-store' })
+      const response = await fetch(`/api/mail/message?${params}`, { cache: 'no-store', signal })
       const body = await response.json().catch(() => null)
       if (!response.ok) throw new Error(body?.error || 'mailbox_provider_error')
       setMessage(body.message as MailboxMessage)
-    } catch (caught) { setError(errorKey(caught)) } finally { setBusy(false) }
+    } catch (caught) {
+      if (!signal?.aborted) setError(errorKey(caught))
+    } finally {
+      if (!signal?.aborted) setBusy(false)
+    }
   }, [companyId])
 
   useEffect(() => {
@@ -144,7 +149,9 @@ export function MailClient({ companyId }: { companyId: string }) {
       setError('mail.error.message_mailbox_unavailable')
       return
     }
-    void fetchMessage(requestedMessage)
+    const controller = new AbortController()
+    void fetchMessage(requestedMessage, controller.signal)
+    return () => controller.abort()
   }, [connectionsReady, routeReady, requestedMessage, visibleConnections, fetchMessage])
 
   const openMessage = (item: MailboxMessageSummary) => {
@@ -241,10 +248,10 @@ export function MailClient({ companyId }: { companyId: string }) {
     ? new Intl.DateTimeFormat(intlLocaleMap[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
     : ''
 
-  if (connectionsReady && !visibleConnections.length && !loading) return <Card className="p-5">
+  if (connectionsReady && !visibleConnections.length && !loading && !error) return <Card className="p-5">
     <p className="font-medium">{t('mail.noMessages')}</p>
     <p className="mt-1 text-sm text-muted-foreground">{t('mail.settingsDescription')}</p>
-    <Button asChild variant="outline" className="mt-4"><a href="/app/settings/mailbox">{t('mail.settingsTitle')}</a></Button>
+    <Button asChild variant="outline" className="mt-4"><Link href="/app/settings/mailbox">{t('mail.settingsTitle')}</Link></Button>
   </Card>
 
   return <div className="space-y-4">
@@ -335,6 +342,7 @@ function splitAddresses(value: string) {
 
 function errorKey(error: unknown) {
   const code = error instanceof Error ? error.message : 'mailbox_provider_error'
+  if (code === 'message_not_found') return 'mail.error.message_mailbox_unavailable'
   const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed']
   return known.includes(code) ? `mail.error.${code}` : code.startsWith('mail.error.') ? code : 'mail.error.mailbox_provider_error'
 }

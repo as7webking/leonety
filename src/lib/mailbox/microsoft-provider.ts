@@ -7,7 +7,7 @@ import { readMailboxJson } from './http'
 
 const GRAPH = 'https://graph.microsoft.com/v1.0'
 
-async function graph<T>(token: string, path: string, init?: RequestInit): Promise<T> {
+async function graph<T>(token: string, path: string, init?: RequestInit, missingAsNotFound = false): Promise<T> {
   const url = path.startsWith('https://') ? new URL(path) : new URL(path, GRAPH)
   if (url.origin !== GRAPH) throw new MailboxProviderError('provider_error')
   const response = await fetch(url, {
@@ -22,6 +22,7 @@ async function graph<T>(token: string, path: string, init?: RequestInit): Promis
   })
   if (response.status === 401 || response.status === 403) throw new MailboxProviderError('reconnect_required')
   if (response.status === 429) throw new MailboxProviderError('rate_limited')
+  if (response.status === 404 && missingAsNotFound) throw new MailboxProviderError('message_not_found')
   if (response.status >= 500) throw new MailboxProviderError('provider_unavailable')
   if (!response.ok) throw new MailboxProviderError('provider_error')
   if (response.status === 202 || response.status === 204) return undefined as T
@@ -85,7 +86,7 @@ export class MicrosoftMailboxProvider implements MailboxProvider {
   }
 
   async getMessage(folder: MailboxFolder, id: string): Promise<MailboxMessage> {
-    const message = await graph<GraphMessage>(this.token, `/me/messages/${encodeURIComponent(id)}?$select=id,conversationId,subject,from,toRecipients,body,bodyPreview,receivedDateTime,isRead,hasAttachments,internetMessageId,internetMessageHeaders`)
+    const message = await graph<GraphMessage>(this.token, `/me/messages/${encodeURIComponent(id)}?$select=id,conversationId,subject,from,toRecipients,body,bodyPreview,receivedDateTime,isRead,hasAttachments,internetMessageId,internetMessageHeaders`, undefined, true)
     const from = message.from?.emailAddress
     const references = message.internetMessageHeaders
       ?.filter((header) => ['references', 'in-reply-to'].includes(header.name.toLowerCase()))

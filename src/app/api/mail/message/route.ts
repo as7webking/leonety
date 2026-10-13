@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const id = params.get('id') ?? ''
   const expectedProvider = params.get('provider')
   const folder = params.get('folder') === 'sent' ? 'sent' : 'inbox'
-  if (!id || id.length > 1200) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!id || id.length > 1200 || !['google', 'microsoft', 'imap'].includes(expectedProvider ?? '')) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
   const owned = await requireOwnedMailboxWorkspace(companyId, user.id)
   if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
   try {
@@ -36,6 +36,9 @@ export async function GET(request: Request) {
       }).catch(() => undefined)
     }
     const code = caught instanceof MailboxProviderError ? caught.code : 'mailbox_provider_error'
+    if (code === 'message_not_found' || code === 'invalid_message') {
+      return NextResponse.json({ error: 'message_not_found' }, { status: 404, headers: { 'Cache-Control': 'private, no-store' } })
+    }
     return NextResponse.json({ error: code }, { status: code === 'reconnect_required' ? 409 : code === 'rate_limited' ? 429 : 502 })
   }
 }

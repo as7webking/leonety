@@ -7,7 +7,7 @@ import { readMailboxJson } from './http'
 
 const API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
-async function request<T>(token: string, path: string, init?: RequestInit): Promise<T> {
+async function request<T>(token: string, path: string, init?: RequestInit, missingAsNotFound = false): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
@@ -16,6 +16,7 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
   })
   if (response.status === 401 || response.status === 403) throw new MailboxProviderError('reconnect_required')
   if (response.status === 429) throw new MailboxProviderError('rate_limited')
+  if (response.status === 404 && missingAsNotFound) throw new MailboxProviderError('message_not_found')
   if (response.status >= 500) throw new MailboxProviderError('provider_unavailable')
   if (!response.ok) throw new MailboxProviderError('provider_error')
   return readMailboxJson<T>(response)
@@ -82,7 +83,7 @@ export class GoogleMailboxProvider implements MailboxProvider {
     const message = await request<{
       id: string; threadId: string; snippet?: string; internalDate?: string; labelIds?: string[];
       payload?: GmailPart
-    }>(this.token, `/messages/${encodeURIComponent(id)}?format=full`)
+    }>(this.token, `/messages/${encodeURIComponent(id)}?format=full`, undefined, true)
     const headers = message.payload?.headers ?? []
     const text = await extractText(message.payload)
     const base = {
