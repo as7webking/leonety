@@ -13,6 +13,8 @@ import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { getIntlLocale } from '@/lib/i18n'
 import { addDaysToDateOnly, formatDateOnlyInput } from '@/lib/date-only'
+import { useKassenbuchPrintOrderPreference } from '@/hooks/use-kassenbuch-print-order'
+import type { KassenbuchPrintOrder } from '@/lib/kassenbuch-presentation'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { AppSelect } from '@/components/app-select'
 import { useI18n } from '@/contexts/i18n-context'
@@ -100,6 +102,7 @@ export default function ProfilePage() {
   const [reportToDate, setReportToDate] = useState(() => formatDateOnlyInput())
   const [printTransactions, setPrintTransactions] = useState<PrintableTransaction[]>([])
   const [includeCategoryInPrint, setIncludeCategoryInPrint] = useState(true)
+  const [kassenbuchPrintOrder, setKassenbuchPrintOrder] = useKassenbuchPrintOrderPreference()
   const [invoiceNumberFormat, setInvoiceNumberFormat] = useState<'yy-seq' | 'yyyy-seq'>('yy-seq')
   const [invoiceNumberDigits, setInvoiceNumberDigits] = useState('3')
   const [invoiceNumberPrefix, setInvoiceNumberPrefix] = useState('')
@@ -214,6 +217,10 @@ export default function ProfilePage() {
   const handleIncludeCategoryInPrintChange = (checked: boolean) => {
     setIncludeCategoryInPrint(checked)
     window.localStorage.setItem('leonety-include-category-in-print', String(checked))
+  }
+
+  const handleKassenbuchPrintOrderChange = (value: string) => {
+    setKassenbuchPrintOrder(value as KassenbuchPrintOrder)
   }
 
   const handleInvoiceNumberFormatChange = (value: 'yy-seq' | 'yyyy-seq') => {
@@ -998,6 +1005,21 @@ export default function ProfilePage() {
                 onChange={(event) => handleGroupReportsChange(event.target.checked)}
                 className="h-4 w-4"
                 aria-label={t('profile.groupReportsByMonth')}
+              />
+            </div>
+            <div className="grid min-w-0 grid-cols-1 gap-2 border-b py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] sm:items-center">
+              <div className="min-w-0">
+                <span className="text-sm text-gray-600">{t('kassenbuch.preferredOrdering')}</span>
+                <p className="text-xs text-gray-500">{t('kassenbuch.preferenceHint')}</p>
+              </div>
+              <AppSelect
+                value={kassenbuchPrintOrder}
+                onChange={handleKassenbuchPrintOrderChange}
+                ariaLabel={t('kassenbuch.preferredOrdering')}
+                options={(['chronological', 'income-first', 'expenses-first', 'custom'] as const).map((order) => ({
+                  value: order,
+                  label: t(`kassenbuch.order.${order}`),
+                }))}
               />
             </div>
             <div className="space-y-3 border-b py-2">

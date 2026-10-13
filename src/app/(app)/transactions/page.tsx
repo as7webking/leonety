@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowDownCircle, ArrowUpCircle, Building2, Copy, Printer, Plus } from 'lucide-react'
+import { ArrowDown, ArrowDownCircle, ArrowUp, ArrowUpCircle, Building2, Copy, GripVertical, Printer, Plus } from 'lucide-react'
 import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,6 +23,8 @@ import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTrans
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 import { orderTransactions, type TransactionDayOrder, type TransactionGroupOrder, type TransactionOrder } from '@/lib/transaction-ordering'
+import { buildKassenbuchPresentation, getKassenbuchDays, kassenbuchTransactionKey, type KassenbuchPrintOrder } from '@/lib/kassenbuch-presentation'
+import { useKassenbuchCustomOrder, useKassenbuchPrintOrderPreference } from '@/hooks/use-kassenbuch-print-order'
 
 interface TransactionRow {
   id: string
@@ -178,6 +180,8 @@ export default function TransactionsPage() {
   const [activePrintFormat, setActivePrintFormat] = useState<PrintFormat>('standard')
   const [showKassenbuchMonthEndBalance, setShowKassenbuchMonthEndBalance] = useState(false)
   const [showKassenbuchPageNumbers, setShowKassenbuchPageNumbers] = useState(false)
+  const [kassenbuchPrintOrder, setKassenbuchPrintOrder] = useKassenbuchPrintOrderPreference()
+  const [kassenbuchCustomOrder, setKassenbuchCustomOrder] = useKassenbuchCustomOrder(currentCompany?.id)
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [formData, setFormData] = useState({
@@ -884,6 +888,11 @@ export default function TransactionsPage() {
     periodTransactions: kassenbuchPeriodTransactions,
     currency: kassenbuchCurrency,
   }), [kassenbuchCurrency, kassenbuchPeriodTransactions, openingTransactions])
+  const kassenbuchPresentation = useMemo(
+    () => buildKassenbuchPresentation(kassenbuch, kassenbuchPrintOrder, kassenbuchCustomOrder),
+    [kassenbuch, kassenbuchCustomOrder, kassenbuchPrintOrder],
+  )
+  const kassenbuchDays = useMemo(() => getKassenbuchDays(kassenbuch), [kassenbuch])
 
   const formatMinorCurrency = (minorUnits: number) => (
     formatCurrency(minorUnits / 100, kassenbuchCurrency, intlLocale)
@@ -901,6 +910,41 @@ export default function TransactionsPage() {
       ? lastKassenbuchRow.date
       : lastKassenbuchRow?.transaction.date)
     || printFromDate
+
+  const handleKassenbuchPrintOrderChange = (value: string) => {
+    setKassenbuchPrintOrder(value as KassenbuchPrintOrder)
+  }
+
+  const resetKassenbuchOrder = () => {
+    setKassenbuchPrintOrder('chronological')
+    setKassenbuchCustomOrder({})
+  }
+
+  const moveKassenbuchTransaction = (date: string, sourceKey: string, targetKey: string) => {
+    if (sourceKey === targetKey) return
+    const day = kassenbuchDays.find((candidate) => candidate.date === date)
+    if (!day) return
+    const validKeys = day.transactions.map(kassenbuchTransactionKey)
+    const saved = kassenbuchCustomOrder[date] ?? []
+    const order = [...saved.filter((key) => validKeys.includes(key)), ...validKeys.filter((key) => !saved.includes(key))]
+    const fromIndex = order.indexOf(sourceKey)
+    const toIndex = order.indexOf(targetKey)
+    if (fromIndex < 0 || toIndex < 0) return
+    order.splice(toIndex, 0, ...order.splice(fromIndex, 1))
+    setKassenbuchCustomOrder({ ...kassenbuchCustomOrder, [date]: order })
+  }
+
+  const moveKassenbuchByOffset = (date: string, key: string, offset: -1 | 1) => {
+    const day = kassenbuchDays.find((candidate) => candidate.date === date)
+    if (!day) return
+    const keys = day.transactions.map(kassenbuchTransactionKey)
+    const saved = kassenbuchCustomOrder[date] ?? []
+    const order = [...saved.filter((item) => keys.includes(item)), ...keys.filter((item) => !saved.includes(item))]
+    const index = order.indexOf(key)
+    const target = order[index + offset]
+    if (index < 0 || !target) return
+    moveKassenbuchTransaction(date, key, target)
+  }
 
   const formatStandardPrintAmount = (transaction: TransactionRow) => {
     const originalCurrency = normalizeCurrencyCode(transaction.currency)
@@ -1069,6 +1113,82 @@ export default function TransactionsPage() {
             </div>
             {selectedPrintFormat === 'kassenbuch' && (
               <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+                <label className="block space-y-1">
+                  <span className="text-sm font-medium text-slate-900">{t('kassenbuch.ordering')}</span>
+                  <AppSelect
+                    value={kassenbuchPrintOrder}
+                    onChange={handleKassenbuchPrintOrderChange}
+                    ariaLabel={t('kassenbuch.ordering')}
+                    options={(['chronological', 'income-first', 'expenses-first', 'custom'] as const).map((order) => ({
+                      value: order,
+                      label: t(`kassenbuch.order.${order}`),
+                    }))}
+                  />
+                </label>
+                {kassenbuchPrintOrder !== 'chronological' && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                    {t('kassenbuch.nonChronologicalBalanceNote')}
+                  </p>
+                )}
+                {kassenbuchPrintOrder === 'custom' && (
+                  <div className="space-y-3">
+                    <p className="text-xs leading-5 text-slate-600">{t('kassenbuch.customOrderHint')}</p>
+                    <Button type="button" variant="outline" onClick={resetKassenbuchOrder}>
+                      {t('kassenbuch.resetChronological')}
+                    </Button>
+                    <div className="max-h-72 space-y-4 overflow-y-auto overscroll-contain rounded-md border border-slate-200 p-3">
+                      {kassenbuchDays.length === 0 && <p className="text-sm text-slate-500">{t('common.noData')}</p>}
+                      {kassenbuchDays.map(({ date, transactions }) => {
+                        const saved = kassenbuchCustomOrder[date] ?? []
+                        const keys = transactions.map(kassenbuchTransactionKey)
+                        const orderedKeys = [...saved.filter((key) => keys.includes(key)), ...keys.filter((key) => !saved.includes(key))]
+                        const orderedRows = orderedKeys.map((key) => transactions.find((row) => kassenbuchTransactionKey(row) === key)).filter((row): row is typeof transactions[number] => Boolean(row))
+                        return (
+                          <section key={date} className="space-y-2">
+                            <h3 className="text-xs font-semibold text-slate-700">{formatPrintDate(date)}</h3>
+                            <ol className="space-y-1">
+                              {orderedRows.map((row, index) => {
+                                const key = kassenbuchTransactionKey(row)
+                                const amount = row.incomeMinor ?? row.expenseMinor ?? 0
+                                return (
+                                  <li
+                                    key={key}
+                                    draggable
+                                    onDragStart={(event) => event.dataTransfer.setData('application/x-leonety-kassenbuch-order', JSON.stringify({ date, key }))}
+                                    onDragOver={(event) => event.preventDefault()}
+                                    onDrop={(event) => {
+                                      event.preventDefault()
+                                      try {
+                                        const source = JSON.parse(event.dataTransfer.getData('application/x-leonety-kassenbuch-order')) as { date?: string; key?: string }
+                                        if (source.date === date && source.key) moveKassenbuchTransaction(date, source.key, key)
+                                      } catch {
+                                        // Ignore malformed drag payloads; ordering remains unchanged.
+                                      }
+                                    }}
+                                    className="flex min-w-0 items-center gap-2 rounded border border-slate-200 bg-white px-2 py-2"
+                                  >
+                                    <GripVertical aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
+                                    <span className="min-w-0 flex-1 truncate text-xs">
+                                      <span className="font-medium">{row.transaction.type === 'income' ? t('kassenbuch.income') : t('kassenbuch.expenses')}</span>
+                                      {' · '}{getKassenbuchText(row.transaction, t('kassenbuch.genericTransaction'))}
+                                      {' · '}{formatMinorCurrency(amount)}
+                                    </span>
+                                    <button type="button" title={t('kassenbuch.moveEarlier')} aria-label={t('kassenbuch.moveEarlier')} disabled={index === 0} onClick={() => moveKassenbuchByOffset(date, key, -1)} className="rounded p-1 text-slate-600 disabled:opacity-30">
+                                      <ArrowUp aria-hidden="true" className="h-4 w-4" />
+                                    </button>
+                                    <button type="button" title={t('kassenbuch.moveLater')} aria-label={t('kassenbuch.moveLater')} disabled={index === orderedRows.length - 1} onClick={() => moveKassenbuchByOffset(date, key, 1)} className="rounded p-1 text-slate-600 disabled:opacity-30">
+                                      <ArrowDown aria-hidden="true" className="h-4 w-4" />
+                                    </button>
+                                  </li>
+                                )
+                              })}
+                            </ol>
+                          </section>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
                 <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-slate-900">
                   <input
                     type="checkbox"
@@ -1089,9 +1209,6 @@ export default function TransactionsPage() {
                 </label>
                 <p className="text-xs leading-5 text-slate-600">
                   {t('kassenbuch.pageNumberingHint')}
-                </p>
-                <p className="text-xs leading-5 text-slate-600">
-                  {t('transactions.kassenbuchFixedOrder')}
                 </p>
               </div>
             )}
@@ -1235,7 +1352,11 @@ export default function TransactionsPage() {
             <strong>{formatMinorCurrency(kassenbuch.openingBalanceMinor)}</strong>
           </div>
 
-          {kassenbuch.months.map((month, monthIndex) => (
+          {kassenbuchPrintOrder !== 'chronological' && (
+            <p className="kassenbuch-notes">{t('kassenbuch.nonChronologicalBalanceNote')}</p>
+          )}
+
+          {kassenbuchPresentation.months.map((month, monthIndex) => (
             <section key={month.key} className="kassenbuch-month">
               <h2>{formatPrintMonth(month.key)}</h2>
               {monthIndex > 0 && (
@@ -1267,7 +1388,7 @@ export default function TransactionsPage() {
                       <td className="kassenbuch-amount">{row.incomeMinor === null ? '' : formatMinorCurrency(row.incomeMinor)}</td>
                       <td className="kassenbuch-amount">{row.expenseMinor === null ? '' : formatMinorCurrency(row.expenseMinor)}</td>
                       <td className="kassenbuch-date">{formatPrintDate(row.transaction.date)}</td>
-                      <td className="kassenbuch-amount">{formatMinorCurrency(row.balanceMinor)}</td>
+                      <td className="kassenbuch-amount">{kassenbuchPrintOrder === 'chronological' ? formatMinorCurrency(row.balanceMinor) : ''}</td>
                       <td className="kassenbuch-text">{getKassenbuchText(row.transaction, t('kassenbuch.genericTransaction'))}</td>
                     </tr>
                   ) : (
