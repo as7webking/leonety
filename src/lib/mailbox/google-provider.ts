@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { simpleParser } from 'mailparser'
-import type { MailboxMessage, MailboxMessageSummary, MailboxPage, MailboxProvider, MailboxSendInput, MailboxFolder } from './types'
+import type { MailboxMessage, MailboxMessageSummary, MailboxPage, MailboxProvider, MailboxSendInput, MailboxFolder, MailboxFilter } from './types'
 import { MailboxProviderError } from './types'
 import { readMailboxJson } from './http'
 
@@ -33,14 +33,17 @@ function parseAddress(value: string) {
 }
 
 export class GoogleMailboxProvider implements MailboxProvider {
+  readonly provider = 'google' as const
   constructor(private readonly token: string, private readonly accountEmail: string, private readonly connectionId: string) {}
 
   async testConnection() {
     await request(this.token, '/profile')
   }
 
-  async listMessages(folder: MailboxFolder, cursor?: string | null, limit = 20): Promise<MailboxPage> {
-    const params = new URLSearchParams({ maxResults: String(Math.min(Math.max(limit, 1), 30)), labelIds: folder === 'inbox' ? 'INBOX' : 'SENT' })
+  async listMessages(folder: MailboxFolder, cursor?: string | null, limit = 20, filter: MailboxFilter = 'all'): Promise<MailboxPage> {
+    const params = new URLSearchParams({ maxResults: String(Math.min(Math.max(limit, 1), 30)) })
+    params.append('labelIds', folder === 'inbox' ? 'INBOX' : 'SENT')
+    if (filter === 'unread') params.append('labelIds', 'UNREAD')
     if (cursor) params.set('pageToken', cursor)
     const page = await request<{ messages?: Array<{ id: string; threadId: string }>; nextPageToken?: string }>(this.token, `/messages?${params}`)
     const messages: MailboxMessageSummary[] = []
@@ -54,6 +57,9 @@ export class GoogleMailboxProvider implements MailboxProvider {
         const headers = detail.payload?.headers ?? []
         return {
           id: detail.id,
+          providerMessageId: detail.id,
+          provider: this.provider,
+          connectionId: this.connectionId,
           threadId: detail.threadId,
           mailboxId: this.connectionId,
           mailboxEmail: this.accountEmail,
@@ -81,6 +87,9 @@ export class GoogleMailboxProvider implements MailboxProvider {
     const text = await extractText(message.payload)
     const base = {
       id: message.id,
+      providerMessageId: message.id,
+      provider: this.provider,
+      connectionId: this.connectionId,
       threadId: message.threadId,
       mailboxId: this.connectionId,
       mailboxEmail: this.accountEmail,

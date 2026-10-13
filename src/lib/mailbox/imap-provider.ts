@@ -6,7 +6,7 @@ import { domainToASCII } from 'node:url'
 import nodemailer, { type Transporter } from 'nodemailer'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
-import type { MailboxConnectionRecord, MailboxFolder, MailboxMessage, MailboxMessageSummary, MailboxPage, MailboxProvider, MailboxSendInput } from './types'
+import type { MailboxConnectionRecord, MailboxFolder, MailboxFilter, MailboxMessage, MailboxMessageSummary, MailboxPage, MailboxProvider, MailboxSendInput } from './types'
 import { MailboxProviderError } from './types'
 import { decryptMailboxConfig } from './server'
 import { isMailboxRelatedHost } from './host-scope'
@@ -137,6 +137,7 @@ async function createSmtpTransport(config: ImapSmtpConfig): Promise<Transporter>
 }
 
 export class ImapSmtpMailboxProvider implements MailboxProvider {
+  readonly provider = 'imap' as const
   private readonly config: ImapSmtpConfig
   private readonly connectionId: string
   constructor(connection: MailboxConnectionRecord) {
@@ -149,14 +150,44 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
     if (!results.imap || !results.smtp) throw new MailboxProviderError('provider_error')
   }
 
-  async listMessages(folder: MailboxFolder, cursor?: string | null, limit = PAGE_SIZE): Promise<MailboxPage> {
+  async listMessages(folder: MailboxFolder, cursor?: string | null, limit = PAGE_SIZE, filter: MailboxFilter = 'all'): Promise<MailboxPage> {
     const client = await openImap(this.config)
     try {
       const path = folder === 'inbox' ? 'INBOX' : await sentFolder(client)
       const mailbox = await client.mailboxOpen(path, { readOnly: true })
+      const pageLimit = Math.min(Math.max(limit, 1), PAGE_SIZE)
+      if (filter === 'unread' && folder === 'inbox') {
+        const unreadUids = await client.search({ seen: false }, { uid: true })
+        const allUids = Array.isArray(unreadUids) ? unreadUids : []
+        const offset = cursor ? Number.parseInt(cursor, 10) : 0
+        if (!Number.isSafeInteger(offset) || offset < 0) throw new MailboxProviderError('invalid_message')
+        const end = Math.max(0, allUids.length - offset)
+        const start = Math.max(0, end - pageLimit)
+        const selected = allUids.slice(start, end).reverse()
+        if (!selected.length) return { messages: [], nextCursor: null }
+        const rows = await client.fetchAll(selected, {
+          uid: true, flags: true, internalDate: true, envelope: true, bodyStructure: true,
+        }, { uid: true })
+        const messages = rows.map((message): MailboxMessageSummary => {
+          const from = message.envelope?.from?.[0]
+          const id = `${path}:${message.uid}`
+          return {
+            id, providerMessageId: id, provider: this.provider, connectionId: this.connectionId,
+            threadId: message.envelope?.messageId ?? null,
+            mailboxId: this.connectionId, mailboxEmail: this.config.address, folder,
+            from: { name: from?.name ?? null, email: from?.address ?? '' },
+            to: message.envelope?.to?.map((address) => address.address ?? '').filter(Boolean) ?? [],
+            subject: message.envelope?.subject ?? '', snippet: '',
+            receivedAt: message.internalDate ? new Date(message.internalDate).toISOString() : null,
+            isRead: message.flags?.has('\\Seen') ?? false,
+            hasAttachments: hasAttachment(message.bodyStructure),
+          }
+        }).reverse()
+        const nextOffset = offset + selected.length
+        return { messages, nextCursor: nextOffset < allUids.length ? String(nextOffset) : null }
+      }
       const end = cursor ? Number.parseInt(cursor, 10) : mailbox.exists
       if (!Number.isSafeInteger(end) || end < 1 || mailbox.exists < 1) return { messages: [], nextCursor: null }
-      const pageLimit = Math.min(Math.max(limit, 1), PAGE_SIZE)
       const start = Math.max(1, end - pageLimit + 1)
       const rows: MailboxMessageSummary[] = []
       for await (const message of client.fetch(`${start}:${Math.min(end, mailbox.exists)}`, {
@@ -165,6 +196,9 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
         const from = message.envelope?.from?.[0]
         rows.push({
           id: `${path}:${message.uid}`,
+          providerMessageId: `${path}:${message.uid}`,
+          provider: this.provider,
+          connectionId: this.connectionId,
           threadId: message.envelope?.messageId ?? null,
           mailboxId: this.connectionId,
           mailboxEmail: this.config.address,
@@ -209,6 +243,9 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
       const recipients = envelope?.to ?? []
       return {
         id,
+        providerMessageId: id,
+        provider: this.provider,
+        connectionId: this.connectionId,
         threadId: parsed.messageId ?? null,
         mailboxId: this.connectionId,
         mailboxEmail: this.config.address,

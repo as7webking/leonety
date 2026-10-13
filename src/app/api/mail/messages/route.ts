@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   const companyId = params.get('companyId') ?? ''
   const connectionId = params.get('connectionId') ?? ''
   const folder = params.get('folder') === 'sent' ? 'sent' : 'inbox'
+  const filter = params.get('filter') === 'unread' && folder === 'inbox' ? 'unread' : 'all'
   const cursor = params.get('cursor')
   const owned = await requireOwnedMailboxWorkspace(companyId, user.id)
   if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
         if (mailboxCursor === '') return { messages: [], nextCursor: '', failed: false, id: connection.id }
         try {
           const provider = await createMailboxProvider(connection)
-          const page = await provider.listMessages(folder, mailboxCursor ?? null, 10)
+          const page = await provider.listMessages(folder, mailboxCursor ?? null, 10, filter)
           await recordMailboxUse(connection)
           return { messages: page.messages, nextCursor: page.nextCursor ?? '', failed: false, id: connection.id }
         } catch (caught) {
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     if (!connection) return NextResponse.json({ error: 'mailbox_not_found' }, { status: 404 })
     if (connection.status !== 'connected') return NextResponse.json({ error: 'mailbox_not_connected' }, { status: 409 })
     const provider = await createMailboxProvider(connection)
-    const page = await provider.listMessages(folder, cursor, 20)
+    const page = await provider.listMessages(folder, cursor, 20, filter)
     await recordMailboxUse(connection)
     return NextResponse.json(page, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (caught) {

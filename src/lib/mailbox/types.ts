@@ -1,8 +1,12 @@
 export type MailboxProviderId = 'google' | 'microsoft' | 'imap'
 export type MailboxFolder = 'inbox' | 'sent'
+export type MailboxFilter = 'all' | 'unread'
 
 export interface MailboxMessageSummary {
   id: string
+  providerMessageId: string
+  provider: MailboxProviderId
+  connectionId: string
   threadId: string | null
   mailboxId: string
   mailboxEmail: string
@@ -55,7 +59,7 @@ export interface MailboxSendInput {
 
 export interface MailboxProvider {
   testConnection(): Promise<void>
-  listMessages(folder: MailboxFolder, cursor?: string | null, limit?: number): Promise<MailboxPage>
+  listMessages(folder: MailboxFolder, cursor?: string | null, limit?: number, filter?: MailboxFilter): Promise<MailboxPage>
   getMessage(folder: MailboxFolder, id: string): Promise<MailboxMessage>
   setRead(folder: MailboxFolder, id: string, read: boolean): Promise<void>
   sendMessage(input: MailboxSendInput): Promise<void>

@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { MailboxMessage, MailboxMessageSummary, MailboxPage, MailboxProvider, MailboxSendInput, MailboxFolder } from './types'
+import type { MailboxMessage, MailboxMessageSummary, MailboxPage, MailboxProvider, MailboxSendInput, MailboxFolder, MailboxFilter } from './types'
 import { simpleParser } from 'mailparser'
 import { MailboxProviderError } from './types'
 import { readMailboxJson } from './http'
@@ -44,18 +44,28 @@ interface GraphMessage {
 }
 
 export class MicrosoftMailboxProvider implements MailboxProvider {
+  readonly provider = 'microsoft' as const
   constructor(private readonly token: string, private readonly accountEmail: string, private readonly connectionId: string) {}
 
   async testConnection() {
     await graph(this.token, '/me?$select=id,mail,userPrincipalName')
   }
 
-  async listMessages(folder: MailboxFolder, cursor?: string | null, limit = 20): Promise<MailboxPage> {
+  async listMessages(folder: MailboxFolder, cursor?: string | null, limit = 20, filter: MailboxFilter = 'all'): Promise<MailboxPage> {
     const endpoint = folder === 'inbox' ? 'inbox' : 'sentitems'
-    const path = cursor || `/me/mailFolders/${endpoint}/messages?$select=id,conversationId,subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,hasAttachments&$orderby=receivedDateTime%20desc&$top=${Math.min(Math.max(limit, 1), 30)}`
+    const params = new URLSearchParams({
+      '$select': 'id,conversationId,subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,hasAttachments',
+      '$orderby': 'receivedDateTime desc',
+      '$top': String(Math.min(Math.max(limit, 1), 30)),
+    })
+    if (filter === 'unread' && folder === 'inbox') params.set('$filter', 'isRead eq false')
+    const path = cursor || `/me/mailFolders/${endpoint}/messages?${params}`
     const page = await graph<{ value?: GraphMessage[]; '@odata.nextLink'?: string }>(this.token, path)
     const messages = (page.value ?? []).map((message): MailboxMessageSummary => ({
       id: message.id,
+      providerMessageId: message.id,
+      provider: this.provider,
+      connectionId: this.connectionId,
       threadId: message.conversationId ?? null,
       mailboxId: this.connectionId,
       mailboxEmail: this.accountEmail,
@@ -82,6 +92,9 @@ export class MicrosoftMailboxProvider implements MailboxProvider {
       .flatMap((header) => header.value.split(/\s+/).filter(Boolean)) ?? []
     return {
       id: message.id,
+      providerMessageId: message.id,
+      provider: this.provider,
+      connectionId: this.connectionId,
       threadId: message.conversationId ?? null,
       mailboxId: this.connectionId,
       mailboxEmail: this.accountEmail,
