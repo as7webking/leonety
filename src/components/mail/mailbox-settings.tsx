@@ -16,6 +16,7 @@ interface Connection {
   email: string
   displayName: string | null
   status: 'connected' | 'reconnect_required' | 'error' | 'disabled' | 'plan_restricted'
+  restrictionReason: 'free_email_required' | 'free_email_mismatch' | null
   createdAt: string
   lastSuccessfulConnectionAt: string | null
 }
@@ -26,6 +27,7 @@ interface SettingsData {
   limit: number
   activeCount: number
   canConnect: boolean
+  freeEmailReady: boolean
 }
 
 const initialImap = {
@@ -153,6 +155,7 @@ export function MailboxSettings() {
   }
 
   const hasSlot = data?.canConnect ?? true
+  const canStartConnection = Boolean(data && hasSlot && (data.plan !== 'free' || data.freeEmailReady))
   return (
     <div className="space-y-5">
       <Card>
@@ -166,13 +169,14 @@ export function MailboxSettings() {
             <span className="capitalize">{t('mail.planSummary').replace('{plan}', data.plan)}</span>
           </div>}
           {data?.plan === 'free' && <p className="text-sm text-muted-foreground">{t('mail.freePlan')}</p>}
+          {data?.plan === 'free' && !data.freeEmailReady && <p role="status" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">{t('mail.freeEmailRequired')}</p>}
           {data && !hasSlot && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
             <span>{t('mail.limitReached')}</span><Button asChild size="sm"><Link href="/upgrade">{t('mail.upgrade')}</Link></Button>
           </div>}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" disabled={!hasSlot || busy} onClick={() => connectOAuth('google')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectGoogle')}</Button>
-            <Button type="button" variant="outline" disabled={!hasSlot || busy} onClick={() => connectOAuth('microsoft')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectMicrosoft')}</Button>
-            <Button type="button" variant="outline" disabled={!hasSlot || busy} onClick={() => setShowImap((open) => !open)}><ShieldCheck className="mr-2 h-4 w-4" />{t('mail.connectOther')}</Button>
+            <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => connectOAuth('google')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectGoogle')}</Button>
+            <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => connectOAuth('microsoft')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectMicrosoft')}</Button>
+            <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => setShowImap((open) => !open)}><ShieldCheck className="mr-2 h-4 w-4" />{t('mail.connectOther')}</Button>
           </div>
           {showImap && <div className="space-y-4 rounded-md border p-4">
             <div><h3 className="font-medium">{t('mail.imap.title')}</h3><p className="mt-1 text-sm text-muted-foreground">{t('mail.imap.description')}</p></div>
@@ -189,8 +193,8 @@ export function MailboxSettings() {
               <Field disabled={busy} label={t('mail.imap.password')} value={imap.password} onChange={(value) => updateImap('password', value)} type="password" autoComplete="new-password" />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" disabled={busy} onClick={testImap}>{busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}{busy ? t('mail.testing') : t('mail.imap.test')}</Button>
-              <Button type="button" disabled={busy || !tested || !hasSlot} onClick={saveImap}>{busy ? t('mail.imap.saving') : t('mail.imap.save')}</Button>
+              <Button type="button" variant="outline" disabled={busy || !canStartConnection} onClick={testImap}>{busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}{busy ? t('mail.testing') : t('mail.imap.test')}</Button>
+              <Button type="button" disabled={busy || !tested || !canStartConnection} onClick={saveImap}>{busy ? t('mail.imap.saving') : t('mail.imap.save')}</Button>
             </div>
             {testResults && <div className="space-y-1 text-sm" role="status">
               <p>{testResults.imap ? t('mail.imap.testImapOk') : t('mail.imap.testImapBad')}</p>
@@ -208,7 +212,7 @@ export function MailboxSettings() {
           <div className="min-w-0">
             <p className="break-all font-medium">{connection.displayName || connection.email}</p>
             <p className="break-all text-sm text-muted-foreground">{connection.email} · {providerName(connection.provider)}</p>
-            <p className="text-sm">{t(`mail.status.${connection.status}`)}</p>
+            <p className="text-sm">{connection.restrictionReason ? t(`mail.error.${connection.restrictionReason}`) : t(`mail.status.${connection.status}`)}</p>
             {connection.lastSuccessfulConnectionAt && <p className="text-xs text-muted-foreground">{t('mail.lastConnection')}: {new Intl.DateTimeFormat(intlLocaleMap[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(connection.lastSuccessfulConnectionAt))}</p>}
           </div>
           <div className="flex flex-wrap gap-2">

@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getMailboxEntitlement, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace } from '@/lib/mailbox/server'
 import { imapInputSchema } from '@/lib/mailbox/validation'
 import { testImapSmtpConfig } from '@/lib/mailbox/imap-provider'
+import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
 
 export const runtime = 'nodejs'
 
@@ -16,7 +17,9 @@ export async function POST(request: Request) {
   if (!(await requireOwnedMailboxWorkspace(input.companyId, user.id))) {
     return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
   }
-  const entitlement = await getMailboxEntitlement(input.companyId, user.id, user.email)
+  const entitlement = await getMailboxEntitlement(input.companyId, user.id, user)
+  const identityRestriction = freeMailboxIdentityError(entitlement.plan, user, input.email)
+  if (identityRestriction) return NextResponse.json({ error: identityRestriction }, { status: 403 })
   const connections = await reconcileMailboxDowngrade(input.companyId, entitlement.limit)
   const activeCount = connections.filter((connection) => ['connected', 'reconnect_required', 'error'].includes(connection.status)).length
   if (activeCount >= entitlement.limit) return NextResponse.json({ error: 'mailbox_limit_reached', limit: entitlement.limit }, { status: 409 })

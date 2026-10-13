@@ -20,14 +20,17 @@ export async function GET(request: Request, context: { params: Promise<{ provide
   try {
     const owned = await requireOwnedMailboxWorkspace(companyId, user.id)
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
-    const entitlement = await getMailboxEntitlement(companyId, user.id, user.email)
+    const entitlement = await getMailboxEntitlement(companyId, user.id, user)
+    const base = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || url.origin
+    if (!entitlement.freeEmailReady) {
+      return NextResponse.redirect(new URL('/app/settings/mailbox?mailError=free_email_required', base))
+    }
     const connections = await reconcileMailboxDowngrade(companyId, entitlement.limit)
     const activeCount = connections.filter((connection) => ['connected', 'reconnect_required', 'error'].includes(connection.status)).length
     const reconnectable = connections.some((connection) =>
       connection.provider === provider && ['reconnect_required', 'error'].includes(connection.status)
     )
     if (activeCount >= entitlement.limit && !reconnectable) {
-      const base = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || url.origin
       return NextResponse.redirect(new URL('/app/settings/mailbox?mailError=limit', base))
     }
     const oauthProvider = provider as 'google' | 'microsoft'

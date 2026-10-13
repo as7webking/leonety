@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const owned = await requireOwnedMailboxWorkspace(input.companyId, user.id)
   if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
   try {
-    const entitlement = await getMailboxEntitlement(input.companyId, user.id, user.email)
+    const entitlement = await getMailboxEntitlement(input.companyId, user.id, user)
     await reconcileMailboxDowngrade(input.companyId, entitlement.limit)
     const connection = await getMailboxConnection(input.companyId, input.connectionId)
     if (!connection || connection.status !== 'connected') return NextResponse.json({ error: 'mailbox_not_connected' }, { status: 409 })

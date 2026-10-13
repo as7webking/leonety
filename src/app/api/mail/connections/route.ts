@@ -4,6 +4,7 @@ import { encryptMailboxConfig, getMailboxEntitlement, publicMailboxConnection, r
 import { ImapSmtpMailboxProvider } from '@/lib/mailbox/imap-provider'
 import type { MailboxConnectionRecord } from '@/lib/mailbox/types'
 import { imapInputSchema } from '@/lib/mailbox/validation'
+import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
 
 export const runtime = 'nodejs'
 
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     const companyId = new URL(request.url).searchParams.get('companyId') ?? ''
     const owned = await requireOwnedMailboxWorkspace(companyId, user.id)
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
-    const entitlement = await getMailboxEntitlement(companyId, user.id, user.email)
+    const entitlement = await getMailboxEntitlement(companyId, user.id, user)
     const rows = await reconcileMailboxDowngrade(companyId, entitlement.limit)
     const activeCount = rows.filter((row) => ['connected', 'reconnect_required', 'error'].includes(row.status)).length
     return NextResponse.json({
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
       limit: entitlement.limit,
       activeCount,
       canConnect: activeCount < entitlement.limit,
+      freeEmailReady: entitlement.freeEmailReady,
     }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch {
     return NextResponse.json({ error: 'mailbox_load_failed' }, { status: 503 })
@@ -44,7 +46,9 @@ export async function POST(request: Request) {
     const input = parsed.data
     const owned = await requireOwnedMailboxWorkspace(input.companyId, user.id)
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
-    const entitlement = await getMailboxEntitlement(input.companyId, user.id, user.email)
+    const entitlement = await getMailboxEntitlement(input.companyId, user.id, user)
+    const identityRestriction = freeMailboxIdentityError(entitlement.plan, user, input.email)
+    if (identityRestriction) return NextResponse.json({ error: identityRestriction }, { status: 403 })
     const connections = await reconcileMailboxDowngrade(input.companyId, entitlement.limit)
     const activeCount = connections.filter((connection) => ['connected', 'reconnect_required', 'error'].includes(connection.status)).length
     if (activeCount >= entitlement.limit) {

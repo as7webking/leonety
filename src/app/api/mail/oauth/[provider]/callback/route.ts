@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createLimitedMailboxConnection, decryptMailboxSecret, getMailboxEntitlement, requireOwnedMailboxWorkspace, listMailboxConnections, reconcileMailboxDowngrade } from '@/lib/mailbox/server'
 import { consumeMailboxOAuthState, exchangeOAuthCode } from '@/lib/mailbox/oauth'
 import type { MailboxProviderId } from '@/lib/mailbox/types'
+import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
 
 export const runtime = 'nodejs'
 
@@ -24,11 +25,13 @@ export async function GET(request: Request, context: { params: Promise<{ provide
   try {
     const owned = await requireOwnedMailboxWorkspace(state.companyId, user.id)
     if (!owned) return fail('workspace')
-    const entitlement = await getMailboxEntitlement(state.companyId, user.id, user.email)
+    const entitlement = await getMailboxEntitlement(state.companyId, user.id, user)
     await reconcileMailboxDowngrade(state.companyId, entitlement.limit)
     const oauthProvider = provider as 'google' | 'microsoft'
     const tokens = await exchangeOAuthCode(oauthProvider, url.searchParams.get('code')!)
     const identity = await getProviderIdentity(oauthProvider, tokens.accessToken)
+    const identityRestriction = freeMailboxIdentityError(entitlement.plan, user, identity.email)
+    if (identityRestriction) return fail(identityRestriction)
     const existing = (await listMailboxConnections(state.companyId)).find((connection) =>
       connection.provider === provider && connection.provider_account_email.toLowerCase() === identity.email.toLowerCase()
     )

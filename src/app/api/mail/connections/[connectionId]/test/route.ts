@@ -18,7 +18,7 @@ export async function POST(request: Request, context: { params: Promise<{ connec
   try {
     const owned = await requireOwnedMailboxWorkspace(parsed.data, user.id)
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
-    const entitlement = await getMailboxEntitlement(parsed.data, user.id, user.email)
+    const entitlement = await getMailboxEntitlement(parsed.data, user.id, user)
     await reconcileMailboxDowngrade(parsed.data, entitlement.limit)
     const connection = await getMailboxConnection(parsed.data, connectionId)
     if (!connection || connection.status !== 'connected') return NextResponse.json({ error: 'mailbox_not_connected' }, { status: 409 })

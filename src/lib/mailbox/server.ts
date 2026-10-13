@@ -6,6 +6,7 @@ import type { AppPlan } from '@/lib/billing/plans'
 import { resolveAccountAccessForUser } from '@/lib/account-access-server'
 import type { MailboxConnectionRecord, MailboxProviderId } from './types'
 import { mailboxLimitForPlan } from '@/lib/mailbox-plan'
+import { freeMailboxIdentityError, getVerifiedCanonicalAuthEmail, type AuthEmailIdentity } from '@/lib/mailbox/free-account'
 
 export const MAILBOX_PROVIDERS: MailboxProviderId[] = ['google', 'microsoft', 'imap']
 export const MAILBOX_ACTIVE_STATUSES = ['connected', 'reconnect_required', 'error'] as const
@@ -14,6 +15,7 @@ export interface MailboxEntitlement {
   plan: AppPlan
   limit: number
   activeCount: number
+  freeEmailReady: boolean
 }
 
 const connectionColumns = [
@@ -35,17 +37,35 @@ export async function requireOwnedMailboxWorkspace(companyId: string, userId: st
   return { admin, company }
 }
 
-export async function getMailboxEntitlement(companyId: string, userId: string, email: string | null | undefined): Promise<MailboxEntitlement> {
-  const access = await resolveAccountAccessForUser(userId, email)
+export async function getMailboxEntitlement(companyId: string, userId: string, identity: AuthEmailIdentity): Promise<MailboxEntitlement> {
+  const access = await resolveAccountAccessForUser(userId, identity.email)
   if (!access.companyIds.includes(companyId)) throw new Error('workspace_access_denied')
   const plan = access.accountAccess.plan
   const admin = createSupabaseAdminClient()
+  const canonicalEmail = getVerifiedCanonicalAuthEmail(identity)
+  if (plan === 'free') {
+    const { data: connections, error: connectionsError } = await admin.from('mailbox_connections')
+      .select('id, provider_account_email, status')
+      .eq('company_id', companyId)
+      .in('status', [...MAILBOX_ACTIVE_STATUSES])
+    if (connectionsError) throw connectionsError
+    for (const connection of connections ?? []) {
+      const errorCode = freeMailboxIdentityError(plan, identity, connection.provider_account_email)
+      if (errorCode) {
+        const { error } = await admin.from('mailbox_connections')
+          .update({ status: 'plan_restricted', last_error_code: errorCode })
+          .eq('company_id', companyId)
+          .eq('id', connection.id)
+        if (error) throw error
+      }
+    }
+  }
   const { count, error } = await admin.from('mailbox_connections')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', companyId)
     .in('status', [...MAILBOX_ACTIVE_STATUSES])
   if (error) throw error
-  return { plan, limit: mailboxLimitForPlan(plan), activeCount: count ?? 0 }
+  return { plan, limit: mailboxLimitForPlan(plan), activeCount: count ?? 0, freeEmailReady: plan !== 'free' || Boolean(canonicalEmail) }
 }
 
 export async function listMailboxConnections(companyId: string) {
@@ -150,6 +170,9 @@ export function publicMailboxConnection(connection: MailboxConnectionRecord) {
     email: connection.provider_account_email,
     displayName: connection.display_name,
     status: connection.status,
+    restrictionReason: connection.last_error_code === 'free_email_required' || connection.last_error_code === 'free_email_mismatch'
+      ? connection.last_error_code
+      : null,
     createdAt: connection.created_at,
     lastSuccessfulConnectionAt: connection.last_successful_connection_at,
   }

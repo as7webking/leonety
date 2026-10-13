@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getMailboxConnection, getMailboxEntitlement, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace, updateMailboxConnection } from '@/lib/mailbox/server'
 import { createMailboxProvider } from '@/lib/mailbox/provider'
+import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
 
 export const runtime = 'nodejs'
 
@@ -18,7 +19,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ conne
   try {
     const owned = await requireOwnedMailboxWorkspace(parsed.data.companyId, user.id)
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
-    const entitlement = await getMailboxEntitlement(parsed.data.companyId, user.id, user.email)
+    const entitlement = await getMailboxEntitlement(parsed.data.companyId, user.id, user)
     await reconcileMailboxDowngrade(parsed.data.companyId, entitlement.limit)
     const connection = await getMailboxConnection(parsed.data.companyId, connectionId)
     if (!connection) return NextResponse.json({ error: 'mailbox_not_found' }, { status: 404 })
@@ -29,6 +30,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ conne
       return NextResponse.json({ updated: true })
     }
     if (connection.status !== 'plan_restricted') return NextResponse.json({ updated: true })
+    const identityRestriction = freeMailboxIdentityError(entitlement.plan, user, connection.provider_account_email)
+    if (identityRestriction) return NextResponse.json({ error: identityRestriction }, { status: 403 })
     const { data: activated, error: activationError } = await owned.admin.rpc('activate_mailbox_connection_limited', {
       p_company_id: parsed.data.companyId,
       p_connection_id: connectionId,
