@@ -6,7 +6,7 @@
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "theme_color": "#0f172a",
   "background_color": "#ffffff",
   "categories": ["productivity", "business"],

@@ -12,6 +12,10 @@ const employeeFormSource = read('../components/employees/employee-profile-form.t
 const notificationSource = read('../app/(app)/settings/notifications/page.tsx')
 const shiftSource = read('../app/(app)/shifts/page.tsx')
 const assistantSource = read('../components/ai-assistant-widget.tsx')
+const layoutSource = read('../app/layout.tsx')
+const globalCss = read('../app/globals.css')
+const installerSource = read('../components/pwa-installer.tsx')
+const manifestSource = read('../../public/manifest.json')
 
 test('shared authenticated layout primitives can shrink inside narrow viewports', () => {
   assert.match(cardSource, /min-w-0 max-w-full rounded-lg/)
@@ -41,5 +45,19 @@ test('assistant launcher stays within the safe viewport without widening the doc
   assert.match(assistantSource, /min-w-0 max-w-\[calc\(100%-2rem\)\]/)
   assert.match(assistantSource, /<span className="min-w-0 truncate">/)
   assert.doesNotMatch(assistantSource, /100vw/)
+})
+
+test('enables safe-area insets and keeps the PWA installer clear of device edges', () => {
+  assert.match(layoutSource, /viewportFit:\s*["']cover["']/)
+  assert.match(globalCss, /padding-left:\s*env\(safe-area-inset-left,\s*0px\)/)
+  assert.match(globalCss, /padding-right:\s*env\(safe-area-inset-right,\s*0px\)/)
+  assert.doesNotMatch(globalCss, /padding-(?:left|right|bottom):\s*safe-area-inset-/)
+  assert.match(installerSource, /bottom-\[calc\(1rem\+env\(safe-area-inset-bottom\)\)\]/)
+  assert.match(installerSource, /left-\[max\(1rem,env\(safe-area-inset-left\)\)\]/)
+})
+
+test('installed PWA does not force portrait orientation on tablets', () => {
+  const manifest = JSON.parse(manifestSource) as { orientation?: string }
+  assert.equal(manifest.orientation, 'any')
 })
 
