@@ -5,6 +5,7 @@ import { ImapSmtpMailboxProvider } from '@/lib/mailbox/imap-provider'
 import type { MailboxConnectionRecord } from '@/lib/mailbox/types'
 import { imapInputSchema } from '@/lib/mailbox/validation'
 import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
+import { logMailboxFailure } from '@/lib/mailbox/diagnostics'
 
 export const runtime = 'nodejs'
 
@@ -15,13 +16,17 @@ async function getUser() {
 }
 
 export async function GET(request: Request) {
+  let stage = 'authentication'
   try {
     const user = await getUser()
     if (!user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
     const companyId = new URL(request.url).searchParams.get('companyId') ?? ''
+    stage = 'workspace_authorization'
     const owned = await requireOwnedMailboxWorkspace(companyId, user.id)
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
+    stage = 'entitlement_resolution'
     const entitlement = await getMailboxEntitlement(companyId, user.id, user)
+    stage = 'connection_reconciliation'
     const rows = await reconcileMailboxDowngrade(companyId, entitlement.limit)
     const activeCount = rows.filter((row) => ['connected', 'reconnect_required', 'error'].includes(row.status)).length
     return NextResponse.json({
@@ -32,7 +37,11 @@ export async function GET(request: Request) {
       canConnect: activeCount < entitlement.limit,
       freeEmailReady: entitlement.freeEmailReady,
     }, { headers: { 'Cache-Control': 'private, no-store' } })
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'workspace_access_denied') {
+      return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
+    }
+    logMailboxFailure('connections.get', stage, error)
     return NextResponse.json({ error: 'mailbox_load_failed' }, { status: 503 })
   }
 }

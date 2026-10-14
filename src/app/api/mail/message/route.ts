@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createMailboxProvider, recordMailboxUse } from '@/lib/mailbox/provider'
 import { getMailboxConnection, getMailboxEntitlement, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace, updateMailboxConnection } from '@/lib/mailbox/server'
 import { MailboxProviderError } from '@/lib/mailbox/types'
+import { logMailboxFailure } from '@/lib/mailbox/diagnostics'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,13 @@ export async function GET(request: Request) {
   const expectedProvider = params.get('provider')
   const folder = params.get('folder') === 'sent' ? 'sent' : 'inbox'
   if (!id || id.length > 1200 || !['google', 'microsoft', 'imap'].includes(expectedProvider ?? '')) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
-  const owned = await requireOwnedMailboxWorkspace(companyId, user.id)
+  let owned: Awaited<ReturnType<typeof requireOwnedMailboxWorkspace>>
+  try {
+    owned = await requireOwnedMailboxWorkspace(companyId, user.id)
+  } catch (error) {
+    logMailboxFailure('message.get', 'workspace_authorization', error)
+    return NextResponse.json({ error: 'mailbox_load_failed' }, { status: 503, headers: { 'Cache-Control': 'private, no-store' } })
+  }
   if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
   try {
     const entitlement = await getMailboxEntitlement(companyId, user.id, user)
@@ -30,6 +37,10 @@ export async function GET(request: Request) {
     await recordMailboxUse(connection)
     return NextResponse.json({ message }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (caught) {
+    if (caught instanceof Error && caught.message === 'workspace_access_denied') {
+      return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
+    }
+    logMailboxFailure('message.get', 'entitlement_or_provider', caught)
     if (caught instanceof MailboxProviderError && caught.code === 'reconnect_required') {
       await updateMailboxConnection(companyId, connectionId, {
         status: 'reconnect_required', last_error_code: 'authorization_revoked',

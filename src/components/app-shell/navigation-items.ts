@@ -74,7 +74,6 @@ export const navigationGroups: NavigationGroup[] = [
       { href: '/app/settings/integrations', labelKey: 'nav.storeIntegrations', icon: BriefcaseBusiness, modes: ['business'] },
       { href: '/app/settings/notifications', labelKey: 'nav.notifications', icon: Bell },
       { href: '/app/mail', labelKey: 'nav.mail', icon: Mail },
-      { href: '/app/mail', labelKey: 'nav.mail', icon: Mail },
       { href: '/app/settings', labelKey: 'nav.settings', icon: Settings },
     ],
   },

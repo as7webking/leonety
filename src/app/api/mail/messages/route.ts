@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createMailboxProvider, recordMailboxUse } from '@/lib/mailbox/provider'
 import { getMailboxConnection, getMailboxEntitlement, listMailboxConnections, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace, updateMailboxConnection } from '@/lib/mailbox/server'
 import { MailboxProviderError } from '@/lib/mailbox/types'
+import { logMailboxFailure } from '@/lib/mailbox/diagnostics'
 
 export const runtime = 'nodejs'
 
@@ -16,7 +17,13 @@ export async function GET(request: Request) {
   const folder = params.get('folder') === 'sent' ? 'sent' : 'inbox'
   const filter = params.get('filter') === 'unread' && folder === 'inbox' ? 'unread' : 'all'
   const cursor = params.get('cursor')
-  const owned = await requireOwnedMailboxWorkspace(companyId, user.id)
+  let owned: Awaited<ReturnType<typeof requireOwnedMailboxWorkspace>>
+  try {
+    owned = await requireOwnedMailboxWorkspace(companyId, user.id)
+  } catch (error) {
+    logMailboxFailure('messages.get', 'workspace_authorization', error)
+    return NextResponse.json({ error: 'mailbox_load_failed' }, { status: 503, headers: { 'Cache-Control': 'private, no-store' } })
+  }
   if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
   try {
     const entitlement = await getMailboxEntitlement(companyId, user.id, user)
@@ -57,6 +64,7 @@ export async function GET(request: Request) {
     await recordMailboxUse(connection)
     return NextResponse.json(page, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (caught) {
+    logMailboxFailure('messages.get', 'entitlement_or_provider', caught)
     if (caught instanceof MailboxProviderError && caught.code === 'reconnect_required') {
       await updateMailboxConnection(companyId, connectionId, {
         status: 'reconnect_required', last_error_code: 'authorization_revoked',
@@ -84,8 +92,12 @@ function encodeAllCursor(value: Record<string, string>) {
 }
 
 function providerError(error: unknown) {
+  if (error instanceof Error && error.message === 'workspace_access_denied') {
+    return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
+  }
   const code = error instanceof MailboxProviderError ? error.code
     : error instanceof Error && ['reconnect_required', 'provider_rate_limited', 'provider_unavailable'].includes(error.message)
       ? error.message : 'mailbox_provider_error'
-  return NextResponse.json({ error: code }, { status: code === 'reconnect_required' ? 409 : code === 'rate_limited' ? 429 : 502 })
+  const status = code === 'reconnect_required' ? 409 : code === 'rate_limited' ? 429 : code === 'invalid_message' ? 400 : 502
+  return NextResponse.json({ error: code }, { status, headers: { 'Cache-Control': 'private, no-store' } })
 }

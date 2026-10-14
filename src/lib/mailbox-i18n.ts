@@ -2,7 +2,7 @@ export const mailboxDictionaries = {
   en: {
     'nav.mail': 'Mail', 'mail.title': 'Leonety Mail', 'mail.description': 'Your connected business mailboxes in one place.',
     'mail.inbox': 'Inbox', 'mail.unread': 'Unread', 'mail.sent': 'Sent', 'mail.allInboxes': 'All inboxes', 'mail.selectMailbox': 'Mailbox',
-    'mail.loading': 'Loading messages…', 'mail.loadFailed': 'Messages could not be loaded.', 'mail.noMessages': 'No messages here.',
+    'mail.loading': 'Loading messages…', 'mail.loadFailed': 'Messages could not be loaded.', 'mail.noMessages': 'No messages here.', 'mail.noConnectedMailboxes': 'No mailbox is connected yet.', 'mail.mailboxesNeedAttention': 'Your mailboxes need attention before they can be opened.',
     'mail.open': 'Open message', 'mail.back': 'Back to messages', 'mail.markRead': 'Mark as read', 'mail.markUnread': 'Mark as unread',
     'mail.compose': 'Compose', 'mail.reply': 'Reply', 'mail.send': 'Send', 'mail.sending': 'Sending…', 'mail.to': 'To',
     'mail.cc': 'Cc', 'mail.subject': 'Subject', 'mail.message': 'Message', 'mail.from': 'From', 'mail.sendFailed': 'Message could not be sent.',
@@ -37,7 +37,7 @@ export const mailboxDictionaries = {
   de: {
     'nav.mail': 'E-Mail', 'mail.title': 'Leonety Mail', 'mail.description': 'Alle verbundenen geschäftlichen Postfächer an einem Ort.',
     'mail.inbox': 'Posteingang', 'mail.unread': 'Ungelesen', 'mail.sent': 'Gesendet', 'mail.allInboxes': 'Alle Posteingänge', 'mail.selectMailbox': 'Postfach',
-    'mail.loading': 'Nachrichten werden geladen…', 'mail.loadFailed': 'Nachrichten konnten nicht geladen werden.', 'mail.noMessages': 'Keine Nachrichten vorhanden.',
+    'mail.loading': 'Nachrichten werden geladen…', 'mail.loadFailed': 'Nachrichten konnten nicht geladen werden.', 'mail.noMessages': 'Keine Nachrichten vorhanden.', 'mail.noConnectedMailboxes': 'Es ist noch kein Postfach verbunden.', 'mail.mailboxesNeedAttention': 'Deine Postfächer müssen geprüft werden, bevor sie geöffnet werden können.',
     'mail.open': 'Nachricht öffnen', 'mail.back': 'Zurück zu Nachrichten', 'mail.markRead': 'Als gelesen markieren', 'mail.markUnread': 'Als ungelesen markieren',
     'mail.compose': 'Verfassen', 'mail.reply': 'Antworten', 'mail.send': 'Senden', 'mail.sending': 'Wird gesendet…', 'mail.to': 'An',
     'mail.cc': 'Cc', 'mail.subject': 'Betreff', 'mail.message': 'Nachricht', 'mail.from': 'Von', 'mail.sendFailed': 'Nachricht konnte nicht gesendet werden.',
@@ -72,7 +72,7 @@ export const mailboxDictionaries = {
   ru: {
     'nav.mail': 'Почта', 'mail.title': 'Leonety Mail', 'mail.description': 'Подключённые рабочие почтовые ящики в одном месте.',
     'mail.inbox': 'Входящие', 'mail.unread': 'Непрочитанные', 'mail.sent': 'Отправленные', 'mail.allInboxes': 'Все входящие', 'mail.selectMailbox': 'Почтовый ящик',
-    'mail.loading': 'Загрузка писем…', 'mail.loadFailed': 'Не удалось загрузить письма.', 'mail.noMessages': 'Писем нет.',
+    'mail.loading': 'Загрузка писем…', 'mail.loadFailed': 'Не удалось загрузить письма.', 'mail.noMessages': 'Писем нет.', 'mail.noConnectedMailboxes': 'Почтовый ящик ещё не подключён.', 'mail.mailboxesNeedAttention': 'Перед открытием нужно проверить подключённые почтовые ящики.',
     'mail.open': 'Открыть письмо', 'mail.back': 'Назад к письмам', 'mail.markRead': 'Отметить как прочитанное', 'mail.markUnread': 'Отметить как непрочитанное',
     'mail.compose': 'Написать', 'mail.reply': 'Ответить', 'mail.send': 'Отправить', 'mail.sending': 'Отправка…', 'mail.to': 'Кому',
     'mail.cc': 'Копия', 'mail.subject': 'Тема', 'mail.message': 'Сообщение', 'mail.from': 'От', 'mail.sendFailed': 'Не удалось отправить письмо.',
@@ -107,7 +107,7 @@ export const mailboxDictionaries = {
   tr: {
     'nav.mail': 'Posta', 'mail.title': 'Leonety Mail', 'mail.description': 'Bağlı iş posta kutularınız tek yerde.',
     'mail.inbox': 'Gelen kutusu', 'mail.unread': 'Okunmamış', 'mail.sent': 'Gönderilenler', 'mail.allInboxes': 'Tüm gelen kutuları', 'mail.selectMailbox': 'Posta kutusu',
-    'mail.loading': 'Mesajlar yükleniyor…', 'mail.loadFailed': 'Mesajlar yüklenemedi.', 'mail.noMessages': 'Burada mesaj yok.',
+    'mail.loading': 'Mesajlar yükleniyor…', 'mail.loadFailed': 'Mesajlar yüklenemedi.', 'mail.noMessages': 'Burada mesaj yok.', 'mail.noConnectedMailboxes': 'Henüz bir posta kutusu bağlanmadı.', 'mail.mailboxesNeedAttention': 'Açmadan önce posta kutularınızın kontrol edilmesi gerekiyor.',
     'mail.open': 'Mesajı aç', 'mail.back': 'Mesajlara dön', 'mail.markRead': 'Okundu olarak işaretle', 'mail.markUnread': 'Okunmadı olarak işaretle',
     'mail.compose': 'Oluştur', 'mail.reply': 'Yanıtla', 'mail.send': 'Gönder', 'mail.sending': 'Gönderiliyor…', 'mail.to': 'Alıcı',
     'mail.cc': 'Bilgi', 'mail.subject': 'Konu', 'mail.message': 'Mesaj', 'mail.from': 'Gönderen', 'mail.sendFailed': 'Mesaj gönderilemedi.',
@@ -142,7 +142,7 @@ export const mailboxDictionaries = {
   uk: {
     'nav.mail': 'Пошта', 'mail.title': 'Leonety Mail', 'mail.description': 'Підключені робочі поштові скриньки в одному місці.',
     'mail.inbox': 'Вхідні', 'mail.unread': 'Непрочитані', 'mail.sent': 'Надіслані', 'mail.allInboxes': 'Усі вхідні', 'mail.selectMailbox': 'Поштова скринька',
-    'mail.loading': 'Завантаження листів…', 'mail.loadFailed': 'Не вдалося завантажити листи.', 'mail.noMessages': 'Листів немає.',
+    'mail.loading': 'Завантаження листів…', 'mail.loadFailed': 'Не вдалося завантажити листи.', 'mail.noMessages': 'Листів немає.', 'mail.noConnectedMailboxes': 'Поштову скриньку ще не підключено.', 'mail.mailboxesNeedAttention': 'Перед відкриттям потрібно перевірити поштові скриньки.',
     'mail.open': 'Відкрити лист', 'mail.back': 'Назад до листів', 'mail.markRead': 'Позначити прочитаним', 'mail.markUnread': 'Позначити непрочитаним',
     'mail.compose': 'Написати', 'mail.reply': 'Відповісти', 'mail.send': 'Надіслати', 'mail.sending': 'Надсилання…', 'mail.to': 'Кому',
     'mail.cc': 'Копія', 'mail.subject': 'Тема', 'mail.message': 'Повідомлення', 'mail.from': 'Від', 'mail.sendFailed': 'Не вдалося надіслати лист.',
@@ -177,7 +177,7 @@ export const mailboxDictionaries = {
   pl: {
     'nav.mail': 'Poczta', 'mail.title': 'Leonety Mail', 'mail.description': 'Połączone firmowe skrzynki pocztowe w jednym miejscu.',
     'mail.inbox': 'Odebrane', 'mail.unread': 'Nieprzeczytane', 'mail.sent': 'Wysłane', 'mail.allInboxes': 'Wszystkie skrzynki', 'mail.selectMailbox': 'Skrzynka pocztowa',
-    'mail.loading': 'Ładowanie wiadomości…', 'mail.loadFailed': 'Nie udało się załadować wiadomości.', 'mail.noMessages': 'Brak wiadomości.',
+    'mail.loading': 'Ładowanie wiadomości…', 'mail.loadFailed': 'Nie udało się załadować wiadomości.', 'mail.noMessages': 'Brak wiadomości.', 'mail.noConnectedMailboxes': 'Nie połączono jeszcze żadnej skrzynki.', 'mail.mailboxesNeedAttention': 'Przed otwarciem skrzynki wymagają uwagi.',
     'mail.open': 'Otwórz wiadomość', 'mail.back': 'Wróć do wiadomości', 'mail.markRead': 'Oznacz jako przeczytaną', 'mail.markUnread': 'Oznacz jako nieprzeczytaną',
     'mail.compose': 'Utwórz', 'mail.reply': 'Odpowiedz', 'mail.send': 'Wyślij', 'mail.sending': 'Wysyłanie…', 'mail.to': 'Do',
     'mail.cc': 'DW', 'mail.subject': 'Temat', 'mail.message': 'Wiadomość', 'mail.from': 'Od', 'mail.sendFailed': 'Nie udało się wysłać wiadomości.',
@@ -212,7 +212,7 @@ export const mailboxDictionaries = {
   fr: {
     'nav.mail': 'E-mail', 'mail.title': 'Leonety Mail', 'mail.description': 'Toutes vos boîtes professionnelles connectées au même endroit.',
     'mail.inbox': 'Boîte de réception', 'mail.unread': 'Non lus', 'mail.sent': 'Envoyés', 'mail.allInboxes': 'Toutes les boîtes', 'mail.selectMailbox': 'Boîte mail',
-    'mail.loading': 'Chargement des messages…', 'mail.loadFailed': 'Impossible de charger les messages.', 'mail.noMessages': 'Aucun message.',
+    'mail.loading': 'Chargement des messages…', 'mail.loadFailed': 'Impossible de charger les messages.', 'mail.noMessages': 'Aucun message.', 'mail.noConnectedMailboxes': 'Aucune boîte mail n’est encore connectée.', 'mail.mailboxesNeedAttention': 'Vos boîtes mail doivent être vérifiées avant ouverture.',
     'mail.open': 'Ouvrir le message', 'mail.back': 'Retour aux messages', 'mail.markRead': 'Marquer comme lu', 'mail.markUnread': 'Marquer comme non lu',
     'mail.compose': 'Nouveau message', 'mail.reply': 'Répondre', 'mail.send': 'Envoyer', 'mail.sending': 'Envoi…', 'mail.to': 'À',
     'mail.cc': 'Cc', 'mail.subject': 'Objet', 'mail.message': 'Message', 'mail.from': 'De', 'mail.sendFailed': 'Impossible d’envoyer le message.',
