@@ -10,6 +10,7 @@ const draftRoutes = {
   expense: '/app/expenses',
   income: '/app/income',
   invoice: '/app/invoices',
+  product: '/app/products',
 } as const
 
 export function OfflineStatusBar() {

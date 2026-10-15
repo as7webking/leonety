@@ -201,14 +201,6 @@ const makeEmptyForm = (currency = 'EUR'): ProductForm => ({
   woo_variants: '',
 })
 
-function stringifyJson(value: unknown) {
-  if (!value || (Array.isArray(value) && value.length === 0)) {
-    return ''
-  }
-
-  return JSON.stringify(value, null, 2)
-}
-
 function parseJsonArray(value: string, label: string) {
   const trimmed = value.trim()
   if (!trimmed) return []
@@ -798,34 +790,7 @@ export default function ProductsPage() {
   }
 
   const handleCopyProduct = (product: Product) => {
-    if (!currentCompany) return
-    setMessage('')
-    setError('')
-    setEditing(null)
-    setForm({
-      name: `${product.name} ${t('common.copy')}`,
-      sku: '',
-      barcode: '',
-      category: product.category ?? '',
-      description: decodeHtmlText(product.description ?? ''),
-      purchase_price: product.purchase_price === null ? '' : String(product.purchase_price),
-      selling_price: product.selling_price === null ? '' : String(product.selling_price),
-      currency: product.currency,
-      low_stock_threshold: String(product.low_stock_threshold),
-      status: product.status,
-      image_url: product.image_url ?? '',
-      publish_to_woocommerce: Boolean(product.woo_product_type === 'variable' || product.woo_attributes || product.woo_variants),
-      woo_product_type: product.woo_product_type === 'variable' ? 'variable' : 'simple',
-      woo_attributes: stringifyJson(product.woo_attributes),
-      woo_variants: stringifyJson(product.woo_variants),
-    })
-    setShowForm(true)
-    setEditorSection('general')
-    setMessage(t('products.copyReady'))
-    requestAnimationFrame(() => {
-      editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      firstEditorInputRef.current?.focus()
-    })
+    router.push(`/app/products/new?copyFrom=${encodeURIComponent(product.id)}`)
   }
 
   const handleArchive = async (product: Product) => {
@@ -1036,14 +1001,14 @@ export default function ProductsPage() {
   return (
     <PageContainer>
       <PageHeader title={t('products.title')} description={`${t('products.description')} · ${currentCompany.name}`}>
-        <Button className="hidden lg:inline-flex" onClick={() => showForm ? resetForm() : setShowForm(true)}><PackagePlus className="h-4 w-4" />{showForm ? t('common.cancel') : t('products.add')}</Button>
+        <Button className="hidden lg:inline-flex" onClick={() => router.push('/app/products/new')}><PackagePlus className="h-4 w-4" />{t('products.add')}</Button>
       </PageHeader>
       {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
 
       <div className="mb-4 lg:hidden">
-        <Button className="w-full sm:w-auto" onClick={() => showForm ? resetForm() : setShowForm(true)}>
-          {showForm ? <X className="h-4 w-4" /> : <PackagePlus className="h-4 w-4" />}
-          {showForm ? t('common.cancel') : t('products.add')}
+        <Button className="w-full sm:w-auto" onClick={() => router.push('/app/products/new')}>
+          <PackagePlus className="h-4 w-4" />
+          {t('products.add')}
         </Button>
       </div>
 
@@ -1475,7 +1440,7 @@ export default function ProductsPage() {
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.currentStock')}</p><p className="font-semibold">{product.current_stock} {t('products.unitPiece')}</p></div><div className="rounded-md bg-slate-50 p-2"><p className="text-slate-500">{t('products.sellingPrice')}</p><p className="font-semibold">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</p></div></div>
                     <div className="mt-3 flex flex-wrap gap-1">{providerNames.map((name) => <span key={name} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">{name}</span>)}{renderSyncBadge(product)}</div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setViewingProduct(product)}>{t('products.view')}</Button>
+                      <Button size="sm" variant="outline" onClick={() => router.push(`/app/products/${encodeURIComponent(product.id)}`)}>{t('products.view')}</Button>
                       <Button size="sm" variant="outline" onClick={() => handleEdit(product)}><Edit className="h-4 w-4" />{t('common.edit')}</Button>
                       <Link href="/app/stock-movements"><Button size="sm" variant="outline">{t('products.adjustStock')}</Button></Link>
                       <Button size="sm" variant="outline" onClick={() => handleCopyProduct(product)}><Copy className="h-4 w-4" />{t('common.copy')}</Button>
@@ -1518,7 +1483,7 @@ export default function ProductsPage() {
                           <div className="flex min-w-0 items-center gap-3">
                             {product.image_url ? <img src={product.image_url} alt="" className="h-11 w-11 shrink-0 rounded-md border object-cover" /> : <div className="h-11 w-11 shrink-0 rounded-md border bg-slate-100" />}
                             <div className="min-w-0">
-                              <button type="button" onClick={() => setViewingProduct(product)} className="block max-w-full truncate text-left font-semibold text-slate-950 hover:text-blue-700" title={product.name}>{product.name}</button>
+                              <button type="button" onClick={() => router.push(`/app/products/${encodeURIComponent(product.id)}`)} className="block max-w-full truncate text-left font-semibold text-slate-950 hover:text-blue-700" title={product.name}>{product.name}</button>
                               <p className="truncate text-xs text-slate-500" title={product.category ?? undefined}>{product.category || '—'}</p>
                             </div>
                           </div>
@@ -1535,7 +1500,7 @@ export default function ProductsPage() {
                         </td>
                         <td className="p-3">
                           <div className="flex flex-wrap justify-end gap-1">
-                            <Button size="icon" variant="outline" onClick={() => setViewingProduct(product)} title={t('products.view')} aria-label={t('products.view')}><Eye className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="outline" onClick={() => router.push(`/app/products/${encodeURIComponent(product.id)}`)} title={t('products.view')} aria-label={t('products.view')}><Eye className="h-4 w-4" /></Button>
                             <Button size="icon" variant="outline" onClick={() => handleEdit(product)} title={t('common.edit')} aria-label={t('common.edit')}><Edit className="h-4 w-4" /></Button>
                             <Button size="icon" variant="ghost" onClick={() => handleCopyProduct(product)} title={t('productUx.duplicate')} aria-label={t('productUx.duplicate')}><Copy className="h-4 w-4" /></Button>
                             <Link href="/app/stock-movements" title={t('products.adjustStock')}><Button size="icon" variant="ghost" aria-label={t('products.adjustStock')}><Barcode className="h-4 w-4" /></Button></Link>

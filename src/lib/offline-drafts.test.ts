@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
-import { buildOfflineDraftKey, buildOfflineInvoiceDraftKey, sanitizeOfflineDraftPayload, sanitizeOfflineInvoiceDraftPayload } from './offline-drafts.ts'
+import { buildOfflineDraftKey, buildOfflineInvoiceDraftKey, buildOfflineProductDraftKey, sanitizeOfflineDraftPayload, sanitizeOfflineInvoiceDraftPayload, sanitizeOfflineProductDraftPayload } from './offline-drafts.ts'
 
 test('draft keys isolate user, workspace and form kind', () => {
   const first = buildOfflineDraftKey('user-a', 'workspace-a', 'income')
@@ -16,6 +16,20 @@ test('invoice draft identities isolate user, workspace and multiple local invoic
   assert.notEqual(first, buildOfflineInvoiceDraftKey('user-b', 'workspace-a', 'local-a'))
   assert.notEqual(first, buildOfflineInvoiceDraftKey('user-a', 'workspace-b', 'local-a'))
   assert.notEqual(first, buildOfflineInvoiceDraftKey('user-a', 'workspace-a', 'local-b'))
+})
+
+test('product draft identity is scoped to user, workspace and product', () => {
+  const key = buildOfflineProductDraftKey('user-a', 'workspace-a', 'product-a')
+  assert.notEqual(key, buildOfflineProductDraftKey('user-b', 'workspace-a', 'product-a'))
+  assert.notEqual(key, buildOfflineProductDraftKey('user-a', 'workspace-b', 'product-a'))
+  assert.notEqual(key, buildOfflineProductDraftKey('user-a', 'workspace-a', 'product-b'))
+})
+
+test('product offline draft retains allowlisted data and excludes credentials/foreign ownership', () => {
+  const draft = sanitizeOfflineProductDraftPayload({ form: { name: 'Tea', sku: 'T1', image_url: 'https://example.com/a.jpg', access_token: 'secret' }, company_id: 'wrong', form_id: 'wrong' })
+  assert.equal((draft.form as Record<string, unknown>).name, 'Tea')
+  assert.equal((draft.form as Record<string, unknown>).access_token, undefined)
+  assert.equal('company_id' in draft, false)
 })
 
 test('invoice local payload allowlists drafting fields and excludes finalization/payment data', () => {

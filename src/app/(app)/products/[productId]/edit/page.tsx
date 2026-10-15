@@ -10,9 +10,11 @@ import { ProductImageWorkspace } from '@/components/products/product-image-works
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
+import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
 import { getSafeProductReturnPath } from '@/lib/product-editor-navigation'
+import { deleteOfflineProductDraft, getOfflineProductDraft, saveOfflineProductDraft } from '@/lib/offline-drafts'
 import { createClient } from '@/lib/supabase-client'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
@@ -213,6 +215,7 @@ export default function ProductEditPage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { userId, isOnline, refreshDrafts, reportStorageUnavailable } = useOfflineMode()
   const { t } = useI18n()
   const productId = typeof params.productId === 'string' ? params.productId : ''
   const returnPath = getSafeProductReturnPath(searchParams.get('returnTo'))
@@ -236,6 +239,8 @@ export default function ProductEditPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [offlineDraft, setOfflineDraft] = useState(false)
+  const [draftConflict, setDraftConflict] = useState(false)
 
   const loadProduct = useCallback(async () => {
     if (!currentCompany || !productId) {
@@ -272,6 +277,19 @@ export default function ProductEditPage() {
         .eq('company_id', currentCompany.id)
         .eq('product_id', productId),
     ])
+
+    if (productResult.error && !isOnline && userId) {
+      const local = await getOfflineProductDraft(userId, currentCompany.id, productId).catch(() => null)
+      const saved = local?.payload as { form?: Partial<ProductForm>; baseProduct?: Partial<Product>; baseUpdatedAt?: string } | undefined
+      if (saved?.form && saved.baseProduct?.id) {
+        const restored = saved.baseProduct as Product
+        setProduct(restored)
+        setForm({ ...formFromProduct(restored), ...saved.form })
+        setOfflineDraft(true)
+        setLoading(false)
+        return
+      }
+    }
 
     if (productResult.error) {
       setError(productResult.error.message)
@@ -340,7 +358,7 @@ export default function ProductEditPage() {
     }
     setStoreConnections(connectionMap)
     setLoading(false)
-  }, [currentCompany, productId, supabase])
+  }, [currentCompany, isOnline, productId, supabase, userId])
 
   useEffect(() => {
     // Product edit stays client-side here so it can reuse the existing company/session hooks.
@@ -352,6 +370,20 @@ export default function ProductEditPage() {
     () => categories.find((category) => category.name === form?.category.trim()),
     [categories, form?.category]
   )
+
+  useEffect(() => {
+    if (!product || !form || !currentCompany || !userId) return
+    const original = formFromProduct(product)
+    if (JSON.stringify(original) === JSON.stringify(form)) return
+    const timeout = window.setTimeout(() => {
+      void saveOfflineProductDraft(userId, currentCompany.id, product.id, {
+        form,
+        baseProduct: product,
+        baseUpdatedAt: product.updated_at ?? '',
+      }).then(() => refreshDrafts()).catch(() => reportStorageUnavailable())
+    }, 500)
+    return () => window.clearTimeout(timeout)
+  }, [currentCompany, form, product, refreshDrafts, reportStorageUnavailable, userId])
 
   const availablePublishChannels = useMemo(
     () => productChannels
@@ -568,6 +600,17 @@ export default function ProductEditPage() {
     setMessage('')
     setError('')
 
+    if (!isOnline) {
+      try {
+        await saveOfflineProductDraft(userId!, currentCompany.id, product.id, { form, baseProduct: product, baseUpdatedAt: product.updated_at ?? '' })
+        await refreshDrafts()
+        setOfflineDraft(true)
+        setMessage(t('productUx.offlineNotSynced'))
+      } catch { reportStorageUnavailable(); setError(t('productUx.offlineStorageFailed')) }
+      setSaving(false)
+      return
+    }
+
     if (!form.name.trim()) {
       setError(t('products.nameRequired'))
       setSaving(false)
@@ -617,14 +660,22 @@ export default function ProductEditPage() {
       payload.woo_variants = wooVariants
     }
 
-    const { error: updateError } = await supabase
+    let updateQuery = supabase
       .from('products')
       .update(payload)
       .eq('id', product.id)
       .eq('company_id', currentCompany.id)
+    if (product.updated_at) updateQuery = updateQuery.eq('updated_at', product.updated_at)
+    const { data: updatedRows, error: updateError } = await updateQuery.select('id')
 
     if (updateError) {
       setError(updateError.code === '23505' ? t('products.duplicateCode') : updateError.message)
+      setSaving(false)
+      return
+    }
+    if (!updatedRows?.length) {
+      setDraftConflict(true)
+      setError(t('productUx.editConflict'))
       setSaving(false)
       return
     }
@@ -639,7 +690,38 @@ export default function ProductEditPage() {
     }
 
     setSaving(false)
+    if (userId) {
+      await deleteOfflineProductDraft(userId, currentCompany.id, product.id).catch(() => undefined)
+      await refreshDrafts()
+      setOfflineDraft(false)
+    }
     if (shouldReload) await loadProduct()
+  }
+
+  const reviewLocalDraftAgainstLatest = async () => {
+    if (!currentCompany || !product) return
+    const { data, error: latestError } = await supabase.from('products').select('*').eq('id', product.id).eq('company_id', currentCompany.id).maybeSingle()
+    if (latestError || !data) {
+      setError(latestError?.message ?? t('products.notFoundDescription'))
+      return
+    }
+    setProduct({
+      ...(data as Product),
+      purchase_price: data.purchase_price == null ? null : Number(data.purchase_price),
+      selling_price: data.selling_price == null ? null : Number(data.selling_price),
+      current_stock: Number(data.current_stock),
+      low_stock_threshold: Number(data.low_stock_threshold),
+    })
+    setDraftConflict(false)
+    setMessage(t('productUx.reviewLocalDraft'))
+  }
+
+  const discardLocalDraftAndReload = async () => {
+    if (!currentCompany || !product || !userId) return
+    await deleteOfflineProductDraft(userId, currentCompany.id, product.id).catch(() => undefined)
+    await refreshDrafts()
+    setDraftConflict(false)
+    await loadProduct()
   }
 
   const goBack = () => {
@@ -678,6 +760,8 @@ export default function ProductEditPage() {
 
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</div>}
       {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+      {draftConflict && <div className="mb-4 flex flex-col gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"><span>{t('productUx.editConflict')}</span><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => void discardLocalDraftAndReload()}>{t('productUx.discardDraftReload')}</Button><Button type="button" onClick={() => void reviewLocalDraftAgainstLatest()}>{t('productUx.reviewLocalDraft')}</Button></div></div>}
+      {(offlineDraft || !isOnline) && <div role="status" className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">{t('productUx.offlineNotSynced')}{draftConflict ? ` ${t('productUx.editConflict')}` : ''}</div>}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Card>

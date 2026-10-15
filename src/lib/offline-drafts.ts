@@ -1,16 +1,17 @@
 'use client'
 
 export type OfflineFormDraftKind = 'income' | 'expense' | 'contract'
-export type OfflineDraftKind = OfflineFormDraftKind | 'invoice'
+export type OfflineDraftKind = OfflineFormDraftKind | 'invoice' | 'product'
 
 export interface OfflineDraft<T = Record<string, unknown>> {
   key: string
-  kind: OfflineFormDraftKind
+  kind: OfflineDraftKind
   userId: string
   workspaceId: string
   payload: T
   createdAt: string
   updatedAt: string
+  entityId?: string
 }
 
 export interface OfflineInvoiceDraft {
@@ -92,6 +93,47 @@ export function buildOfflineDraftKey(userId: string, workspaceId: string, kind: 
 
 export function buildOfflineInvoiceDraftKey(userId: string, workspaceId: string, localId: string) {
   return `${userId}:${workspaceId}:invoice:${localId}`
+}
+
+export function buildOfflineProductDraftKey(userId: string, workspaceId: string, entityId: string) {
+  return `${userId}:${workspaceId}:product:${entityId}`
+}
+
+export function sanitizeOfflineProductDraftPayload(value: unknown) {
+  const payload = safeObject(value)
+  const source = safeObject(payload.form)
+  const fields = ['name', 'sku', 'barcode', 'category', 'description', 'purchase_price', 'selling_price', 'currency', 'low_stock_threshold', 'status', 'image_url', 'publish_to_woocommerce', 'woo_product_type', 'woo_attributes', 'woo_variants']
+  return {
+    form: Object.fromEntries(fields.filter((key) => ['string', 'number', 'boolean'].includes(typeof source[key])).map((key) => [key, source[key]])),
+    baseProduct: {
+      ...Object.fromEntries(fields.filter((key) => ['string', 'number', 'boolean'].includes(typeof safeObject(payload.baseProduct)[key])).map((key) => [key, safeObject(payload.baseProduct)[key]])),
+      id: text(safeObject(payload.baseProduct).id),
+      company_id: text(safeObject(payload.baseProduct).company_id),
+      updated_at: text(safeObject(payload.baseProduct).updated_at),
+      current_stock: finiteNumber(safeObject(payload.baseProduct).current_stock, 0),
+    },
+    baseUpdatedAt: text(payload.baseUpdatedAt),
+  }
+}
+
+export async function getOfflineProductDraft(userId: string, workspaceId: string, entityId: string) {
+  const result = await runRequest<OfflineDraft | undefined>('readonly', (store) => store.get(buildOfflineProductDraftKey(userId, workspaceId, entityId)))
+  return result ?? null
+}
+
+export async function saveOfflineProductDraft(userId: string, workspaceId: string, entityId: string, value: unknown) {
+  const key = buildOfflineProductDraftKey(userId, workspaceId, entityId)
+  const payload = sanitizeOfflineProductDraftPayload(value)
+  if (new Blob([JSON.stringify(payload)]).size > MAX_DRAFT_BYTES) throw new Error('offline_draft_too_large')
+  const existing = await runRequest<OfflineDraft | undefined>('readonly', (store) => store.get(key))
+  const now = new Date().toISOString()
+  const draft: OfflineDraft = { key, kind: 'product', entityId, userId, workspaceId, payload, createdAt: existing?.createdAt ?? now, updatedAt: now }
+  await runRequest<IDBValidKey>('readwrite', (store) => store.put(draft))
+  return draft
+}
+
+export async function deleteOfflineProductDraft(userId: string, workspaceId: string, entityId: string) {
+  await runRequest<undefined>('readwrite', (store) => store.delete(buildOfflineProductDraftKey(userId, workspaceId, entityId)))
 }
 
 function text(value: unknown) {
@@ -416,7 +458,7 @@ export async function clearOfflineDataForUser(userId: string) {
     const invoiceStore = transaction.objectStore(INVOICE_DRAFT_STORE)
     for (const draft of drafts) {
       if (draft.kind === 'invoice') invoiceStore.delete(draft.key)
-      else store.delete(draft.key)
+      else if (draft.kind !== 'product') store.delete(draft.key)
     }
     transaction.oncomplete = () => {
       database.close()
