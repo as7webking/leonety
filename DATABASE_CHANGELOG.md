@@ -75,6 +75,10 @@ Status meanings:
   `order_notification_settings` objects; verify those live tables/columns first.
   The new code requires these fields and `CRON_SECRET` before deployment. The
   migration has not been executed or production-verified.
+- `supabase/migrations/20261015100000.sql`: add nullable
+  `product_syncs.external_url` to persist a provider-returned product URL. This is
+  required before deploying the matching WooCommerce integration visibility code.
+  It is additive and has not been executed or production-verified.
 
 ### READY TO APPLY
 
@@ -115,6 +119,20 @@ Status meanings:
   the live catalog and an explicit deployment record.
 
 ## Chronological Change History
+
+### 2026-10-15 - Persist external product URLs for channel mappings
+
+- **Status:** `PENDING`
+- **Migration filename:** `supabase/migrations/20261015100000.sql`
+- **Purpose:** retain the actual public product URL returned by the provider, so
+  Leonety can link to a published external item without constructing a URL from an
+  external ID.
+- **Main objects:** nullable `product_syncs.external_url`.
+- **Production status:** `UNKNOWN`; SQL has not been executed.
+- **Verification status:** repository review only; verify the live `product_syncs`
+  table and apply manually before deploying code that reads/writes the new column.
+- **Notes/dependencies:** old mappings remain NULL and do not receive fabricated
+  URLs. No existing mapping or transaction data is rewritten.
 
 ### 2026-04-15 - Active timers and workspace timer RPCs
 

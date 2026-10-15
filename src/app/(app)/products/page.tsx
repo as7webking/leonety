@@ -21,6 +21,7 @@ import { ProductCsvDialog } from '@/components/products/product-csv-dialog'
 import { ProductChannelComparisonDialog } from '@/components/products/product-channel-comparison-dialog'
 import type { SupportedComparisonProvider } from '@/lib/product-channel-comparison'
 import { ProductImageUploadError, uploadProductImage } from '@/lib/product-image-upload'
+import { getProductChannelPresentation, getProductChannelTranslationKey } from '@/lib/integration-presentation'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -92,6 +93,7 @@ interface ProductSync {
   product_id: string
   channel: ProductChannel
   external_product_id: string | null
+  external_url: string | null
   sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'
   last_synced_at: string | null
   error_message: string | null
@@ -422,7 +424,7 @@ export default function ProductsPage() {
         supabase.from('products').select('*').eq('company_id', currentCompany.id).order('name'),
         supabase
           .from('product_syncs')
-          .select('product_id, channel, external_product_id, sync_status, last_synced_at, error_message')
+          .select('product_id, channel, external_product_id, external_url, sync_status, last_synced_at, error_message')
           .eq('company_id', currentCompany.id),
         supabase
           .from('product_categories')
@@ -952,10 +954,10 @@ export default function ProductsPage() {
   const renderSyncBadge = (product: Product) => {
     const productSyncs = syncs[product.id] ?? []
     const sync = productSyncs.find((item) => item.channel === 'woocommerce') ?? productSyncs[0]
-    const status = sync?.sync_status ?? 'not_synced'
-    const className = status === 'synced'
+    const status = getProductChannelPresentation(sync)
+    const className = status === 'published'
       ? 'bg-green-100 text-green-800'
-      : status === 'failed'
+      : status === 'error'
         ? 'bg-red-100 text-red-800'
         : status === 'pending'
           ? 'bg-blue-100 text-blue-800'
@@ -964,18 +966,18 @@ export default function ProductsPage() {
     return (
       <div className="flex flex-wrap justify-end gap-1">
         {productSyncs.length === 0 ? (
-          <span className={`rounded-full px-2 py-1 text-xs ${className}`}>{t(`woocommerce.syncStatus.${status}`)}</span>
+          <span className={`rounded-full px-2 py-1 text-xs ${className}`}>{t('products.channelStatus.notPublished')}</span>
         ) : productSyncs.map((item) => (
           <span key={`${item.product_id}-${item.channel}`} title={item.error_message ?? undefined} className={`rounded-full px-2 py-1 text-xs ${
-            item.sync_status === 'synced'
+            getProductChannelPresentation(item) === 'published'
               ? 'bg-green-100 text-green-800'
-              : item.sync_status === 'failed'
+              : getProductChannelPresentation(item) === 'error'
                 ? 'bg-red-100 text-red-800'
-                : item.sync_status === 'pending'
+                : getProductChannelPresentation(item) === 'pending'
                   ? 'bg-blue-100 text-blue-800'
                   : 'bg-slate-100 text-slate-600'
           }`}>
-            {item.channel.replace('_', ' ')} · {t(`woocommerce.syncStatus.${item.sync_status}`)}
+            {item.channel.replace('_', ' ')} · {t(`products.channelStatus.${getProductChannelTranslationKey(item)}`)}
           </span>
         ))}
       </div>
@@ -1344,7 +1346,13 @@ export default function ProductsPage() {
                           const connection = storeConnections[channel.channel]
                           const sync = editing ? (syncs[editing.id] ?? []).find((item) => item.channel === channel.channel) : undefined
                           const connected = connection?.status === 'connected'
-                          const published = Boolean(sync?.external_product_id)
+                          const connectionLabel = connected
+                            ? t('integrations.connected')
+                            : connection?.status === 'error'
+                              ? t('common.error')
+                              : t('integrations.notConnected')
+                                  const syncStatus = getProductChannelPresentation(sync)
+                                  const published = syncStatus === 'published'
                           const disabled = !connected || !channel.operational
                           return (
                             <div key={channel.channel} className="rounded-md border border-slate-200 p-3">
@@ -1363,7 +1371,7 @@ export default function ProductsPage() {
                                 <span className="min-w-0">
                                   <span className="block font-medium">{t(channel.publishKey)}</span>
                                   <span className="block text-xs">
-                                    {connected ? t('integrations.connected') : t('integrations.notConnected')} · {published ? t('products.channelStatus.published') : t('products.channelStatus.notPublished')}
+                                    {connectionLabel} · {t(`products.channelStatus.${getProductChannelTranslationKey(sync)}`)}
                                   </span>
                                   {sync?.sync_status === 'failed' && <span className="mt-1 block text-xs text-red-600">{sync.error_message ?? t('products.channelStatus.syncError')}</span>}
                                   {sync?.last_synced_at && <span className="mt-1 block text-xs text-slate-500">{t('products.channelStatus.lastSync')}: {new Date(sync.last_synced_at).toLocaleString()}</span>}

@@ -75,14 +75,16 @@ export async function POST(request: Request) {
       }
     }
 
+    const integrationUpdate: Record<string, unknown> = {
+      status: errors.length > 0 && synced === 0 ? 'error' : 'connected',
+      error_message: errors[0] ?? null,
+      updated_at: new Date().toISOString(),
+    }
+    if (synced > 0) integrationUpdate.last_sync_at = new Date().toISOString()
+
     const { error: integrationError } = await auth.adminSupabase
       .from('store_integrations')
-      .update({
-        last_sync_at: synced > 0 ? new Date().toISOString() : null,
-        status: errors.length > 0 && synced === 0 ? 'error' : 'connected',
-        error_message: errors[0] ?? null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(integrationUpdate)
       .eq('company_id', companyId)
       .eq('provider', provider)
 

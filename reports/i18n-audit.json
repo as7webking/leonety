@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-12T22:03:02.666Z",
+  "generatedAt": "2026-10-15T21:55:08.307Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -49,30 +49,30 @@
   ],
   "coverage": {
     "en": {
-      "translated": 2706,
-      "total": 2706,
+      "translated": 2746,
+      "total": 2746,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 2706,
-      "total": 2706,
+      "translated": 2746,
+      "total": 2746,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 2706,
-      "total": 2706,
+      "translated": 2746,
+      "total": 2746,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 2504,
-      "total": 2706,
-      "percent": 92.54,
+      "translated": 2544,
+      "total": 2746,
+      "percent": 92.64,
       "missing": [
         "transactions.printFrom",
         "transactions.printTo",
@@ -362,9 +362,9 @@
       ]
     },
     "uk": {
-      "translated": 2459,
-      "total": 2706,
-      "percent": 90.87,
+      "translated": 2499,
+      "total": 2746,
+      "percent": 91.01,
       "missing": [
         "support.button",
         "support.title",
@@ -724,9 +724,9 @@
       ]
     },
     "pl": {
-      "translated": 2459,
-      "total": 2706,
-      "percent": 90.87,
+      "translated": 2499,
+      "total": 2746,
+      "percent": 91.01,
       "missing": [
         "support.button",
         "support.title",
@@ -1086,9 +1086,9 @@
       ]
     },
     "fr": {
-      "translated": 2459,
-      "total": 2706,
-      "percent": 90.87,
+      "translated": 2499,
+      "total": 2746,
+      "percent": 91.01,
       "missing": [
         "support.button",
         "support.title",
@@ -1458,19 +1458,19 @@
     },
     {
       "file": "src/app/(app)/products/[productId]/edit/page.tsx",
-      "line": 955,
+      "line": 1051,
       "type": "jsx-text",
       "text": "ID:"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1106,
+      "line": 1073,
       "type": "jsx-text",
       "text": "· WooCommerce"
     },
     {
       "file": "src/app/(app)/products/page.tsx",
-      "line": 1439,
+      "line": 1412,
       "type": "jsx-text",
       "text": "ID:"
     },
@@ -1536,25 +1536,25 @@
     },
     {
       "file": "src/components/mail/mail-client.tsx",
-      "line": 191,
+      "line": 300,
       "type": "jsx-text",
       "text": "&lt;"
     },
     {
       "file": "src/components/mail/mail-client.tsx",
-      "line": 191,
+      "line": 300,
       "type": "jsx-text",
       "text": "&gt;"
     },
     {
       "file": "src/components/mail/mailbox-settings.tsx",
-      "line": 182,
+      "line": 186,
       "type": "attribute:placeholder",
       "text": "imap.example.com"
     },
     {
       "file": "src/components/mail/mailbox-settings.tsx",
-      "line": 187,
+      "line": 191,
       "type": "attribute:placeholder",
       "text": "smtp.example.com"
     },
@@ -1584,8 +1584,8 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 2706,
-    "authenticatedSourceFileCount": 89,
+    "englishKeyCount": 2746,
+    "authenticatedSourceFileCount": 91,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 22
   }

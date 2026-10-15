@@ -256,11 +256,15 @@ repository cannot reproduce the full production database from scratch.
   preferences.
 - **Primary keys:** UUID.
 - **Important columns:** company/product/provider or channel, external IDs, sync
-  status/error, publish request, JSON overrides, timestamps.
+  status/error, nullable provider-returned `external_url` (pending migration
+  `20261015100000.sql`), publish request, JSON overrides, timestamps.
 - **Indexes:** unique workspace/product/channel or provider mapping.
 - **RLS:** enabled; owner-select for syncs and owner select/insert/update for
   preferences.
 - **Modules:** WooCommerce and channel comparison/publishing.
+- **URL semantics:** an external link is stored only when returned by the provider
+  and validated as HTTP(S). Historical rows remain without a URL unless a future
+  provider refresh returns one; Leonety does not infer URLs from IDs or slugs.
 
 ### Product image storage
 

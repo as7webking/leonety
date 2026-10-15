@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Barcode, BriefcaseBusiness, Building2, Plus, Save, UploadCloud } from 'lucide-react'
+import { ArrowLeft, Barcode, BriefcaseBusiness, Building2, ExternalLink, Plus, Save, UploadCloud } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { ProductImageWorkspace } from '@/components/products/product-image-workspace'
@@ -16,6 +16,8 @@ import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
 import { getSafeProductReturnPath } from '@/lib/product-editor-navigation'
 import { deleteOfflineProductDraft, getOfflineProductDraft, saveOfflineProductDraft } from '@/lib/offline-drafts'
 import { createClient } from '@/lib/supabase-client'
+import { safeExternalHttpUrl } from '@/lib/external-url'
+import { getProductChannelPresentation } from '@/lib/integration-presentation'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -68,6 +70,7 @@ interface ProductSync {
   product_id: string
   channel: ProductChannel
   external_product_id: string | null
+  external_url: string | null
   sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'
   last_synced_at: string | null
   error_message: string | null
@@ -265,7 +268,7 @@ export default function ProductEditPage() {
         .order('name'),
       supabase
         .from('product_syncs')
-        .select('product_id, channel, external_product_id, sync_status, last_synced_at, error_message')
+        .select('product_id, channel, external_product_id, external_url, sync_status, last_synced_at, error_message')
         .eq('company_id', currentCompany.id)
         .eq('product_id', productId),
       fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
@@ -918,7 +921,13 @@ export default function ProductEditPage() {
                   const connection = storeConnections[channel.channel]
                   const sync = syncs.find((item) => item.channel === channel.channel)
                   const connected = connection?.status === 'connected'
-                  const published = Boolean(sync?.external_product_id)
+                  const status = getProductChannelPresentation(sync)
+                  const externalUrl = status === 'published' ? safeExternalHttpUrl(sync?.external_url) : null
+                  const connectionLabel = connection?.status === 'connected'
+                    ? t('integrations.connected')
+                    : connection?.status === 'error'
+                      ? t('common.error')
+                      : t('integrations.notConnected')
                   const disabled = !connected || !channel.operational
                   const requested = selectedPublishChannels.includes(channel.channel)
                   return (
@@ -936,10 +945,13 @@ export default function ProductEditPage() {
                         <span className="min-w-0">
                           <span className="block font-medium">{t(channel.publishKey)}</span>
                           <span className="block text-xs">
-                            {connected ? t('integrations.connected') : t('integrations.notConnected')} · {published ? t('products.channelStatus.published') : t('products.channelStatus.notPublished')}
+                            {connectionLabel} · {t(`products.channelStatus.${status === 'error' ? 'syncError' : status === 'pending' ? 'pending' : status === 'published' ? 'published' : 'notPublished'}`)}
                           </span>
                           {sync?.sync_status === 'failed' && <span className="mt-1 block text-xs text-red-600">{sync.error_message ?? t('products.channelStatus.syncError')}</span>}
                           {sync?.last_synced_at && <span className="mt-1 block text-xs text-slate-500">{t('products.channelStatus.lastSync')}: {new Date(sync.last_synced_at).toLocaleString()}</span>}
+                          {externalUrl && <a href={externalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex max-w-full items-center gap-1 break-all text-xs font-medium text-blue-700 underline"><ExternalLink className="h-3.5 w-3.5 shrink-0" />{t('products.channelStatus.viewExternalProduct')}</a>}
+                          {status === 'published' && !externalUrl && <span className="mt-1 block text-xs text-slate-500">{t('products.channelStatus.externalLinkUnavailable')}</span>}
+                          {status === 'error' && connected && channel.operational && <Button type="button" variant="outline" size="sm" className="mt-2" disabled={publishingChannels} onClick={() => void publishChannels([channel.channel])}>{publishingChannels ? t('common.loading') : t('products.channelStatus.retry')}</Button>}
                           {disabled && <span className="mt-1 block text-xs text-slate-500">{connected ? t('products.channelSetupRequired') : t('products.connectIntegration')}</span>}
                         </span>
                       </label>

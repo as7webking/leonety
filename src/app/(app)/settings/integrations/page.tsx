@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
+import { createClient } from '@/lib/supabase-client'
+import { getChannelPublicationCounts } from '@/lib/integration-presentation'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import type { Locale } from '@/lib/i18n'
 import {
@@ -529,6 +531,7 @@ function localizedApiError(payload: { code?: string; error?: string }, labels: R
 }
 
 export default function StoreIntegrationsPage() {
+  const [supabase] = useState(() => createClient())
   const router = useRouter()
   const { currentCompany, loading } = useCompany()
   const { locale, t } = useI18n()
@@ -537,6 +540,8 @@ export default function StoreIntegrationsPage() {
   const [provider, setProvider] = useState<Provider>('woocommerce')
   const [form, setForm] = useState<IntegrationForm>(emptyForm)
   const [integrations, setIntegrations] = useState<StoreIntegration[]>([])
+  const [publicationCounts, setPublicationCounts] = useState<Record<string, ReturnType<typeof getChannelPublicationCounts>> | null>(null)
+  const [publicationCountsError, setPublicationCountsError] = useState(false)
   const [loadingIntegrations, setLoadingIntegrations] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -636,6 +641,32 @@ export default function StoreIntegrationsPage() {
       integrationRequestRef.current?.abort()
     }
   }, [loadIntegrations])
+
+  const loadPublicationCounts = useCallback(async () => {
+    if (!currentCompany) return
+    setPublicationCountsError(false)
+    const [productsResult, wooResult, shopifyResult] = await Promise.all([
+      supabase.from('products').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id),
+      supabase.from('product_syncs').select('external_product_id, sync_status, last_synced_at').eq('company_id', currentCompany.id).eq('channel', 'woocommerce'),
+      supabase.from('product_syncs').select('external_product_id, sync_status, last_synced_at').eq('company_id', currentCompany.id).eq('channel', 'shopify'),
+    ])
+
+    if (productsResult.error || wooResult.error || shopifyResult.error) {
+      setPublicationCounts(null)
+      setPublicationCountsError(true)
+      return
+    }
+
+    const totalProducts = productsResult.count ?? 0
+    setPublicationCounts({
+      woocommerce: getChannelPublicationCounts(totalProducts, (wooResult.data ?? []) as Array<{ external_product_id: string | null; sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'; last_synced_at: string | null }>),
+      shopify: getChannelPublicationCounts(totalProducts, (shopifyResult.data ?? []) as Array<{ external_product_id: string | null; sync_status: 'not_synced' | 'pending' | 'synced' | 'failed'; last_synced_at: string | null }>),
+    })
+  }, [currentCompany, supabase])
+
+  useEffect(() => {
+    void loadPublicationCounts()
+  }, [loadPublicationCounts])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -1116,8 +1147,21 @@ export default function StoreIntegrationsPage() {
                         <p className="mt-1 break-all text-sm text-slate-500">{integration.storeName || integration.storeUrl || integration.merchantId || '-'}</p>
                         <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
                           <Clock3 className="h-3.5 w-3.5" />
-                          {labels.lastSync}: {formatDate(integration.lastSyncAt, locale) || labels.neverSynced}
+                          {labels.lastSync}: {formatDate(integration.lastSyncAt ?? publicationCounts?.[integration.provider]?.lastSuccessfulSync ?? null, locale) || labels.neverSynced}
                         </p>
+                        {['woocommerce', 'shopify'].includes(integration.provider) && (
+                          <div className="mt-3 space-y-1 text-xs text-slate-600">
+                            {publicationCountsError ? <p>{t('integrations.publicationCountsUnavailable')}</p> : publicationCounts ? (() => {
+                              const counts = publicationCounts[integration.provider]
+                              if (!counts) return null
+                              return <>
+                                <p>{t('integrations.publishedCount').replace('{count}', String(counts.published))} · {t('integrations.syncErrorCount').replace('{count}', String(counts.errors))}</p>
+                                <p>{t('integrations.notPublishedCount').replace('{count}', String(counts.notPublished))} · {t('integrations.pendingCount').replace('{count}', String(counts.pending))}</p>
+                              </>
+                            })() : <p>{t('common.loading')}</p>}
+                          </div>
+                        )}
+                        {integration.errorMessage && <p className="mt-2 break-words text-xs text-red-700">{integration.errorMessage}</p>}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs text-green-700">
@@ -1157,8 +1201,21 @@ export default function StoreIntegrationsPage() {
                       <p className="mt-1 break-all text-sm text-slate-500">{integration?.storeName || integration?.storeUrl || integration?.merchantId || '-'}</p>
                       <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
                         <Clock3 className="h-3.5 w-3.5" />
-                        {labels.lastSync}: {formatDate(integration?.lastSyncAt ?? null, locale) || labels.neverSynced}
+                        {labels.lastSync}: {formatDate(integration?.lastSyncAt ?? publicationCounts?.[item.value]?.lastSuccessfulSync ?? null, locale) || labels.neverSynced}
                       </p>
+                      {['woocommerce', 'shopify'].includes(item.value) && (
+                        <div className="mt-3 space-y-1 text-xs text-slate-600">
+                          {publicationCountsError ? <p>{t('integrations.publicationCountsUnavailable')}</p> : publicationCounts ? (() => {
+                            const counts = publicationCounts[item.value]
+                            if (!counts) return null
+                            return <>
+                              <p>{t('integrations.publishedCount').replace('{count}', String(counts.published))} · {t('integrations.syncErrorCount').replace('{count}', String(counts.errors))}</p>
+                              <p>{t('integrations.notPublishedCount').replace('{count}', String(counts.notPublished))} · {t('integrations.pendingCount').replace('{count}', String(counts.pending))}</p>
+                            </>
+                          })() : <p>{t('common.loading')}</p>}
+                        </div>
+                      )}
+                      {integration?.errorMessage && <p className="mt-2 break-words text-xs text-red-700">{integration.errorMessage}</p>}
                       {integration && (
                         <Link href={`/app/settings/integrations/${encodeURIComponent(integration.id)}`} className="mt-3 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700">
                           {labels.openConnection}

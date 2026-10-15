@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { decryptSecret } from '@/lib/credential-encryption'
+import { safeExternalHttpUrl } from '@/lib/external-url'
 import {
   toWooPrice,
   toWooStock,
@@ -39,6 +40,7 @@ interface ProductSyncRow {
 
 interface WooProductResponse {
   id: number
+  permalink?: string
 }
 
 interface WooCategory {
@@ -189,24 +191,30 @@ async function upsertSyncStatus(
   adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
   companyId: string,
   productId: string,
-    payload: {
+  payload: {
     woo_product_id?: number | null
+    external_url?: string | null
     sync_status: 'synced' | 'failed'
     error_message?: string | null
   }
 ) {
+  const row: Record<string, unknown> = {
+    company_id: companyId,
+    product_id: productId,
+    channel: 'woocommerce',
+    sync_status: payload.sync_status,
+    error_message: payload.error_message ?? null,
+    updated_at: new Date().toISOString(),
+  }
+  if (payload.sync_status === 'synced') row.last_synced_at = new Date().toISOString()
+  if (payload.woo_product_id !== undefined) {
+    row.external_product_id = payload.woo_product_id ? String(payload.woo_product_id) : null
+  }
+  if (payload.external_url !== undefined) row.external_url = payload.external_url
+
   await adminSupabase
     .from('product_syncs')
-    .upsert({
-      company_id: companyId,
-      product_id: productId,
-      channel: 'woocommerce',
-      external_product_id: payload.woo_product_id ? String(payload.woo_product_id) : null,
-      sync_status: payload.sync_status,
-      error_message: payload.error_message ?? null,
-      last_synced_at: payload.sync_status === 'synced' ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'company_id,product_id,channel' })
+    .upsert(row, { onConflict: 'company_id,product_id,channel' })
 }
 
 export async function POST(request: Request) {
@@ -296,11 +304,12 @@ export async function POST(request: Request) {
 
     await upsertSyncStatus(auth.adminSupabase, companyId, productId, {
       woo_product_id: wooProduct.id,
+      external_url: safeExternalHttpUrl(wooProduct.permalink),
       sync_status: 'synced',
       error_message: imageWarning,
     })
 
-    return NextResponse.json({ ok: true, wooProductId: wooProduct.id, warning: imageWarning })
+    return NextResponse.json({ ok: true, wooProductId: wooProduct.id, externalUrl: safeExternalHttpUrl(wooProduct.permalink), warning: imageWarning })
   } catch (error) {
     const message = formatApiError(error)
     console.error('WooCommerce product sync failed:', { companyId, productId, message })
