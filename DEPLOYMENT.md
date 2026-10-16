@@ -126,6 +126,25 @@ Generate one VAPID key pair and configure:
 
 Keep the private key server-only. Test the real server-to-push-service-to-service-worker path. On iOS, Web Push requires a supported installed Home Screen web app context.
 
+The order-escalation endpoint requires the server-only `CRON_SECRET`. Vercel
+Hobby does not support the minute-level cron frequency this feature needs, so
+the schedule runs from Hostinger while the application remains deployed on
+Vercel. In Hostinger hPanel, create a Custom cron job on an eligible Web/Cloud
+plan, using a one-minute schedule if the plan offers it:
+
+```sh
+curl --fail --silent --show-error --max-time 50 \
+  -H 'Authorization: Bearer <CRON_SECRET>' \
+  'https://<VERCEL-PRODUCTION-HOST>/api/cron/order-notification-escalation'
+```
+
+Replace the placeholders in hPanel only; do not put the secret in Git or a
+public file. Set the same strong random `CRON_SECRET` in Vercel Production and
+the Hostinger cron command. Use the current Vercel production host, not a
+preview URL. Hostinger schedules use UTC. Verify a successful response in the
+hPanel cron output after deployment. Until this job is configured, immediate
+order pushes still run from the order event, but scheduled retries do not.
+
 ## AI
 
 Only the OpenAI adapter is registered:

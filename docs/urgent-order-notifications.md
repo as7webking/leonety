@@ -52,14 +52,20 @@ stops future attempts. A short database claim lease and compare-and-set update
 prevent concurrent cron invocations from claiming the same attempt. An already
 in-flight push request cannot be recalled after a simultaneous acknowledgement.
 
-The Vercel cron endpoint requires the server-only `CRON_SECRET`, in addition to
+The cron endpoint requires the server-only `CRON_SECRET`, in addition to
 configured Web Push VAPID server variables. It must not expose or log those values.
 The reviewed migration must be manually applied before deploying code that uses
 the new state columns.
 
-Vercel Hobby cron schedules are limited to daily execution, so they cannot meet
-these retry intervals. The every-minute schedule requires a Vercel plan that
-allows sub-daily cron execution; verify the project's plan before deployment.
+The application remains on Vercel, but the every-minute schedule is hosted by
+Hostinger so Vercel Hobby's daily-only cron limit does not block deployments.
+Configure a Hostinger Custom cron job to call
+`/api/cron/order-notification-escalation` with `Authorization: Bearer <CRON_SECRET>`
+once per minute, if the hosting plan permits that frequency. Use the Vercel
+production origin, store the secret only in Vercel server environment and the
+private Hostinger cron configuration, and verify the response in Hostinger's
+cron output. Immediate push delivery remains in the incoming order webhook;
+until the external schedule is configured, only retry/escalation is inactive.
 
 ## DND
 
@@ -89,8 +95,10 @@ Official references: [Apple Web Push](https://developer.apple.com/documentation/
 ## Configuration and deployment
 
 - Vercel: configure `CRON_SECRET` and the existing server-only Web Push VAPID
-  variables. Vercel cron invokes `/api/cron/order-notification-escalation` each
-  minute with bearer authorization.
+  variables.
+- Hostinger: configure a private cron command to invoke
+  `/api/cron/order-notification-escalation` with bearer authorization each
+  minute, subject to the hosting plan's schedule limits.
 - Database: manually review/apply
   `supabase/migrations/20261012170000.sql`
   only after verifying the existing notification tables. It is not executed by
