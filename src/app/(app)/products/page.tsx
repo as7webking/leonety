@@ -1009,10 +1009,13 @@ export default function ProductsPage() {
       {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
 
       <div className="mb-4 lg:hidden">
-        <Button className="w-full sm:w-auto" onClick={() => router.push('/app/products/new')}>
-          <PackagePlus className="h-4 w-4" />
-          {t('products.add')}
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button className="w-full sm:w-auto" onClick={() => router.push('/app/products/new')}>
+            <PackagePlus className="h-4 w-4" />
+            {t('products.add')}
+          </Button>
+          <Button asChild variant="outline" className="w-full sm:w-auto"><Link href="/app/products/categories">{t('productCategories.open')}</Link></Button>
+        </div>
       </div>
 
       <div className="relative mb-3 lg:hidden">
@@ -1080,6 +1083,7 @@ export default function ProductsPage() {
         <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
         <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
         <ProductChannelComparisonDialog companyId={currentCompany.id} connectedProviders={connectedComparisonProviders} onChanged={loadProducts} />
+        <Link href="/app/products/categories"><Button variant="outline">{t('productCategories.open')}</Button></Link>
         <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
         <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
         <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>

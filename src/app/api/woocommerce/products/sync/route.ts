@@ -21,6 +21,7 @@ interface WooConnectionRow extends WooConnection {
 interface ProductRow {
   id: string
   company_id: string
+  category_id?: string | null
   name: string
   sku: string | null
   barcode: string | null
@@ -269,7 +270,19 @@ export async function POST(request: Request) {
     }
     const productRow = product as ProductRow
     const imageWarning = await getWooImageWarning(productRow.image_url)
-    const categoryId = await findOrCreateCategory(wooConnection, productRow.category)
+    let categoryId: number | undefined
+    if (productRow.category_id) {
+      const { data: category, error: categoryError } = await auth.adminSupabase
+        .from('product_categories')
+        .select('woo_category_id')
+        .eq('company_id', companyId)
+        .eq('id', productRow.category_id)
+        .maybeSingle()
+      if (categoryError) throw categoryError
+      const mappedId = category?.woo_category_id ? Number(category.woo_category_id) : NaN
+      if (Number.isFinite(mappedId) && mappedId > 0) categoryId = mappedId
+    }
+    if (!categoryId) categoryId = await findOrCreateCategory(wooConnection, productRow.category)
     const payload = buildBasePayload(productRow, categoryId, !imageWarning)
     const existingWooId = Number((syncRow as ProductSyncRow | null)?.external_product_id ?? 0) || null
     const wooProduct = existingWooId
