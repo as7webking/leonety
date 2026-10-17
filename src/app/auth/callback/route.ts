@@ -9,11 +9,15 @@ export async function GET(request: Request) {
   const providerErrorCode = requestUrl.searchParams.get('error_code')
   const providerErrorDescription = requestUrl.searchParams.get('error_description')
   const next = getSafeAppRedirectPath(requestUrl.searchParams.get('next'))
+  const redirectToLoginWithError = (error: string) => {
+    const loginUrl = new URL('/login', getSiteUrl())
+    loginUrl.searchParams.set('error', error)
+    if (requestUrl.searchParams.has('next')) loginUrl.searchParams.set('next', next)
+    return NextResponse.redirect(loginUrl)
+  }
 
   if (providerError) {
-    const loginUrl = new URL('/login', getSiteUrl())
     const wasDenied = providerError === 'access_denied' || providerErrorCode === 'user_cancelled'
-    loginUrl.searchParams.set('error', wasDenied ? 'auth_provider_denied' : 'auth_provider_error')
 
     if (process.env.NODE_ENV !== 'production') {
       console.warn('[auth.callback] Provider returned an OAuth error', {
@@ -23,7 +27,7 @@ export async function GET(request: Request) {
       })
     }
 
-    return NextResponse.redirect(loginUrl)
+    return redirectToLoginWithError(wasDenied ? 'auth_provider_denied' : 'auth_provider_error')
   }
 
   if (code) {
@@ -35,7 +39,7 @@ export async function GET(request: Request) {
         if (process.env.NODE_ENV !== 'production') {
           console.warn('[auth.callback] Code exchange failed', { message: exchangeError.message })
         }
-        return NextResponse.redirect(new URL('/login?error=auth_callback_failed', getSiteUrl()))
+        return redirectToLoginWithError('auth_callback_failed')
       }
 
       const {
@@ -44,7 +48,7 @@ export async function GET(request: Request) {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        return NextResponse.redirect(new URL('/login?error=session_missing', getSiteUrl()))
+        return redirectToLoginWithError('session_missing')
       }
 
       const { data: existingProfile, error: profileLookupError } = await supabase
@@ -55,7 +59,7 @@ export async function GET(request: Request) {
 
       if (profileLookupError) {
         console.error('[auth.callback] Profile lookup failed', { code: profileLookupError.code })
-        return NextResponse.redirect(new URL('/login?error=auth_profile_failed', getSiteUrl()))
+        return redirectToLoginWithError('auth_profile_failed')
       }
 
       if (!existingProfile) {
@@ -83,7 +87,7 @@ export async function GET(request: Request) {
 
           if (retryLookupError || !concurrentlyCreatedProfile) {
             console.error('[auth.callback] Profile creation failed', { code: profileInsertError.code })
-            return NextResponse.redirect(new URL('/login?error=auth_profile_failed', getSiteUrl()))
+            return redirectToLoginWithError('auth_profile_failed')
           }
         }
       }
@@ -95,7 +99,7 @@ export async function GET(request: Request) {
 
       if (companyLookupError) {
         console.error('[auth.callback] Workspace lookup failed', { code: companyLookupError.code })
-        return NextResponse.redirect(new URL('/login?error=auth_workspace_check_failed', getSiteUrl()))
+        return redirectToLoginWithError('auth_workspace_check_failed')
       }
 
       return NextResponse.redirect(new URL((count ?? 0) > 0 ? next : '/app/onboarding', getSiteUrl()))
@@ -103,9 +107,9 @@ export async function GET(request: Request) {
       console.error('[auth.callback] Unexpected callback failure', {
         category: error instanceof Error ? error.name : 'unknown',
       })
-      return NextResponse.redirect(new URL('/login?error=auth_callback_failed', getSiteUrl()))
+      return redirectToLoginWithError('auth_callback_failed')
     }
   }
 
-  return NextResponse.redirect(new URL('/login?error=auth_callback_missing_code', getSiteUrl()))
+  return redirectToLoginWithError('auth_callback_missing_code')
 }

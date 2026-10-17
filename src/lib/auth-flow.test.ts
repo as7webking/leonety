@@ -22,6 +22,11 @@ test('OAuth callback exchanges PKCE code, creates only a missing profile, and sc
   assert.match(callbackSource, /auth_workspace_check_failed/)
 })
 
+test('OAuth callback preserves a safe intended app destination when returning an error to login', () => {
+  assert.match(callbackSource, /getSafeAppRedirectPath\(requestUrl\.searchParams\.get\('next'\)\)/)
+  assert.match(callbackSource, /if \(requestUrl\.searchParams\.has\('next'\)\) loginUrl\.searchParams\.set\('next', next\)/)
+})
+
 test('authenticated back navigation cannot hide callback errors or reveal app through login', () => {
   assert.match(proxySource, /pathname === '\/login' && !request\.nextUrl\.searchParams\.has\('error'\)/)
   assert.match(proxySource, /if \(!user && isProtectedRoute\)/)

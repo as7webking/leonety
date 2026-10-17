@@ -22,6 +22,10 @@ test('static internal navigation targets resolve to a current Next route', () =>
     const visit = (node: ts.Node) => {
       if (ts.isJsxAttribute(node) && node.name.getText(source) === 'href' && node.initializer) {
         const target = staticValue(node.initializer, source)
+        if (target === '' || target === '#') {
+          const location = source.getLineAndCharacterOfPosition(node.getStart(source))
+          broken.push(`${relative(root, file)}:${location.line + 1} -> placeholder href ${JSON.stringify(target)}`)
+        }
         if (target) checkTarget(target, file, node, source, routes, broken)
       }
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
@@ -37,6 +41,31 @@ test('static internal navigation targets resolve to a current Next route', () =>
   }
 
   assert.deepEqual(broken, [], `Broken internal navigation targets:\n${broken.join('\n')}`)
+})
+
+test('every authenticated app page has a configured /app alias for direct links and refresh', () => {
+  const configPath = join(root, 'next.config.ts')
+  const configText = readFileSync(configPath, 'utf8')
+  const config = ts.createSourceFile(configPath, configText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const routesDeclaration = config.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => statement.declarationList.declarations)
+    .find((declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === 'appRoutes')
+  const aliases = routesDeclaration?.initializer && ts.isArrayLiteralExpression(routesDeclaration.initializer)
+    ? routesDeclaration.initializer.elements
+      .filter(ts.isStringLiteralLike)
+      .map((element) => element.text)
+    : []
+  const appPages = walk(join(sourceRoot, 'app', '(app)')).filter((file) => /(?:^|[/\\])page\.(?:tsx|ts)$/.test(file))
+  const missing: string[] = []
+
+  for (const file of appPages) {
+    const parts = relative(join(sourceRoot, 'app', '(app)'), file).split(sep).slice(0, -1)
+    const pathname = `/${parts.join('/')}`.replace(/\/$/, '') || '/'
+    if (!aliases.some((alias) => routeMatchesAlias(pathname, alias))) missing.push(pathname)
+  }
+
+  assert.deepEqual(missing, [], `Authenticated pages missing /app aliases in next.config.ts: ${missing.join(', ')}`)
 })
 
 function walk(directory: string): string[] {
@@ -83,6 +112,15 @@ function routeMatches(pathname: string, route: string) {
     if (/^\[\.\.\..+\]$/.test(segment)) return '.+'
     if (/^\[\[\.\.\..+\]\]$/.test(segment)) return '.*'
     if (/^\[.+\]$/.test(segment)) return '[^/]+'
+    return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }).join('/')
+  return new RegExp(`^${pattern}/?$`).test(pathname)
+}
+
+function routeMatchesAlias(pathname: string, alias: string) {
+  if (pathname === alias) return true
+  const pattern = alias.split('/').map((segment) => {
+    if (segment === ':path*') return '.+'
     return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }).join('/')
   return new RegExp(`^${pattern}/?$`).test(pathname)

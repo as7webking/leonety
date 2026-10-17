@@ -13,6 +13,7 @@ const appRoutes = [
   '/clients',
   '/clients/:path*',
   '/invoices',
+  '/mail',
   '/contracts',
   '/contracts/:path*',
   '/employees',
