@@ -60,6 +60,7 @@ export default function ProductCategoriesPage() {
   const [wooError, setWooError] = useState('')
   const [wooLoading, setWooLoading] = useState(false)
   const [savingMappingId, setSavingMappingId] = useState<string | null>(null)
+  const [creatingWooCategoryId, setCreatingWooCategoryId] = useState<string | null>(null)
   const loadVersion = useRef(0)
 
   const load = useCallback(async () => {
@@ -200,7 +201,7 @@ export default function ProductCategoriesPage() {
   }
 
   const saveWooMapping = async (category: ProductCategory, value: string) => {
-    if (!currentCompany) return
+    if (!currentCompany) return false
     setSavingMappingId(category.id)
     setError('')
     setNotice('')
@@ -208,10 +209,34 @@ export default function ProductCategoriesPage() {
     setSavingMappingId(null)
     if (mappingError) {
       setError(t('productCategories.wooSaveFailed'))
-      return
+      return false
     }
     setNotice(t('productCategories.wooSaved'))
     await load()
+    return true
+  }
+
+  const createAndMapWooCategory = async (category: ProductCategory) => {
+    if (!currentCompany || creatingWooCategoryId) return
+    setCreatingWooCategoryId(category.id)
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch('/api/woocommerce/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: currentCompany.id, name: category.name }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.category?.id) throw new Error(payload.error ?? t('productCategories.wooCreateFailed'))
+      const mappingSaved = await saveWooMapping(category, String(payload.category.id))
+      if (!mappingSaved) return
+      if (payload.created) setNotice(t('productCategories.wooCreatedAndMapped'))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('productCategories.wooCreateFailed'))
+    } finally {
+      setCreatingWooCategoryId(null)
+    }
   }
 
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('productCategories.title')} /><LoadingSkeleton /></PageContainer>
@@ -264,10 +289,11 @@ export default function ProductCategoriesPage() {
 
               <div className="min-w-0">
                 <label className="mb-1 block text-xs font-medium text-slate-600">{t('productCategories.wooMapping')}</label>
-                {wooConnected && !wooError ? <AppSelect value={category.woo_category_id ?? ''} onChange={(value) => void saveWooMapping(category, value)} disabled={wooLoading || savingMappingId === category.id} ariaLabel={`${t('productCategories.wooMapping')} ${category.name}`} options={[{ value: '', label: t('productCategories.wooUnmapped') }, ...wooCategories.map((item) => ({ value: String(item.id), label: `${item.name} (#${item.id})` }))]} /> : <p className="break-words text-sm text-slate-500">{mappedWoo?.name ?? (category.woo_category_id ? `ID ${category.woo_category_id}` : t('productCategories.wooUnmapped'))}</p>}
+                {wooConnected && !wooError ? <AppSelect value={category.woo_category_id ?? ''} onChange={(value) => void saveWooMapping(category, value)} disabled={wooLoading || savingMappingId === category.id} ariaLabel={`${t('productCategories.wooMapping')} ${category.name}`} options={[{ value: '', label: t('productCategories.wooUnmapped') }, ...(category.woo_category_id && !mappedWoo ? [{ value: category.woo_category_id, label: t('productCategories.wooMissing').replace('{id}', category.woo_category_id) }] : []), ...wooCategories.map((item) => ({ value: String(item.id), label: `${item.name} (#${item.id})` }))]} /> : <p className="break-words text-sm text-slate-500">{mappedWoo?.name ?? (category.woo_category_id ? `ID ${category.woo_category_id}` : t('productCategories.wooUnmapped'))}</p>}
               </div>
 
               <div className="flex min-w-0 flex-wrap gap-2 lg:justify-end">
+                {wooConnected && !wooError && (!category.woo_category_id || !mappedWoo) && <Button type="button" variant="outline" onClick={() => void createAndMapWooCategory(category)} disabled={creatingWooCategoryId === category.id || wooLoading}><Plus className="h-4 w-4" />{creatingWooCategoryId === category.id ? t('common.loading') : t('productCategories.wooCreateAndMap')}</Button>}
                 {editingId !== category.id && <Button type="button" variant="outline" onClick={() => { setEditingId(category.id); setEditingName(category.name); setEditingDescription(category.description ?? '') }}><Pencil className="h-4 w-4" />{t('productCategories.edit')}</Button>}
                 <Button type="button" variant="ghost" onClick={() => { setDeletingCategory(category); setReassignTo('') }}><Trash2 className="h-4 w-4" />{t('productCategories.delete')}</Button>
               </div>

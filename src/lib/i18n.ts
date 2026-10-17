@@ -32,7 +32,7 @@ import { transactionOrderingDictionaries } from '@/lib/transaction-ordering-i18n
 import { transactionFxDictionaries } from '@/lib/transaction-fx-i18n'
 import { employeeNumberDictionaries } from '@/lib/employee-number-i18n'
 import { mailboxDictionaries } from '@/lib/mailbox-i18n'
-import { productCategoriesDictionaries } from '@/lib/product-categories-i18n'
+import { productCategoriesDictionaries, productCategoriesWooDictionaries } from '@/lib/product-categories-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -57,6 +57,7 @@ type Dictionary = Record<string, string>
 export const dictionaries: Record<Locale, Dictionary> = {
   en: {
     ...productCategoriesDictionaries.en,
+    ...productCategoriesWooDictionaries.en,
     ...mailboxDictionaries.en,
     ...businessModuleDictionaries.en,
     ...countrySelectorDictionaries.en,
@@ -550,6 +551,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   de: {
     ...productCategoriesDictionaries.de,
+    ...productCategoriesWooDictionaries.de,
     ...mailboxDictionaries.de,
     ...countrySelectorDictionaries.de,
     ...productInventoryUxDictionaries.de,
@@ -1042,6 +1044,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   ru: {
     ...productCategoriesDictionaries.ru,
+    ...productCategoriesWooDictionaries.ru,
     ...mailboxDictionaries.ru,
     ...countrySelectorDictionaries.ru,
     ...productInventoryUxDictionaries.ru,
@@ -1534,6 +1537,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   tr: {
     ...productCategoriesDictionaries.tr,
+    ...productCategoriesWooDictionaries.tr,
     ...mailboxDictionaries.tr,
     ...countrySelectorDictionaries.tr,
     ...productInventoryUxDictionaries.tr,
@@ -1833,6 +1837,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   uk: {
     ...productCategoriesDictionaries.uk,
+    ...productCategoriesWooDictionaries.uk,
     ...mailboxDictionaries.uk,
     ...countrySelectorDictionaries.uk,
     ...productInventoryUxDictionaries.uk,
@@ -1957,6 +1962,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   pl: {
     ...productCategoriesDictionaries.pl,
+    ...productCategoriesWooDictionaries.pl,
     ...mailboxDictionaries.pl,
     ...countrySelectorDictionaries.pl,
     ...productInventoryUxDictionaries.pl,
@@ -2080,6 +2086,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
   },
   fr: {
     ...productCategoriesDictionaries.fr,
+    ...productCategoriesWooDictionaries.fr,
     ...mailboxDictionaries.fr,
     ...countrySelectorDictionaries.fr,
     ...productInventoryUxDictionaries.fr,
@@ -8405,6 +8412,7 @@ const featureExpansionDictionaries: Record<Locale, Dictionary> = {
     'products.overrideDescription': 'Channel description override',
     'products.overrideCategory': 'Channel category override',
     'products.overridePrice': 'Channel price override',
+    'products.wooCategory': 'WooCommerce category', 'products.wooInherit': 'Use mapped Leonety category', 'products.wooInherited': 'Inherited', 'products.wooOverridden': 'Overridden', 'products.wooNoInheritedCategory': 'No category selected', 'products.wooBulkPreview': 'Review WooCommerce publishing', 'products.wooTargetStore': 'Target store', 'products.wooPreviewCreate': 'New products', 'products.wooPreviewUpdate': 'Updates', 'products.wooPreviewBlocked': 'Skipped / errors', 'products.wooPreviewRun': 'Publish reviewed products', 'products.wooPreviewCancel': 'Cancel', 'products.wooPreviewLoading': 'Loading store and mappings…', 'products.wooPreviewUnavailable': 'Store connection could not be verified.', 'products.wooPreviewUnmapped': 'Category needs a WooCommerce mapping', 'products.wooPreviewCategoryDeleted': 'Mapped WooCommerce category no longer exists', 'products.wooRepublishAsNew': 'Publish replacement as new', 'products.wooRepublishConfirm': 'The mapped WooCommerce product was confirmed missing. Create a replacement product in the connected store?', 'products.wooRunSummary': 'Completed: {done}; failed: {failed}',
     'products.channelPreferencesMigrationRequired': 'Run the product channel preferences SQL to save channel choices and overrides.',
     'products.channelPreferencesSaveFailed': 'Product was saved, but channel preferences could not be saved.',
     'products.downloadImage': 'Download image',
@@ -8470,6 +8478,7 @@ const featureExpansionDictionaries: Record<Locale, Dictionary> = {
     'products.overrideDescription': 'Kanal-Beschreibung überschreiben',
     'products.overrideCategory': 'Kanal-Kategorie überschreiben',
     'products.overridePrice': 'Kanal-Preis überschreiben',
+    'products.wooCategory': 'WooCommerce-Kategorie', 'products.wooInherit': 'Zugeordnete Leonety-Kategorie verwenden', 'products.wooInherited': 'Übernommen', 'products.wooOverridden': 'Überschrieben', 'products.wooNoInheritedCategory': 'Keine Kategorie ausgewählt', 'products.wooBulkPreview': 'WooCommerce-Veröffentlichung prüfen', 'products.wooTargetStore': 'Zielshop', 'products.wooPreviewCreate': 'Neue Produkte', 'products.wooPreviewUpdate': 'Aktualisierungen', 'products.wooPreviewBlocked': 'Übersprungen / Fehler', 'products.wooPreviewRun': 'Geprüfte Produkte veröffentlichen', 'products.wooPreviewCancel': 'Abbrechen', 'products.wooPreviewLoading': 'Shop und Zuordnungen werden geladen…', 'products.wooPreviewUnavailable': 'Shop-Verbindung konnte nicht geprüft werden.', 'products.wooPreviewUnmapped': 'WooCommerce-Zuordnung für Kategorie fehlt', 'products.wooPreviewCategoryDeleted': 'Zugeordnete WooCommerce-Kategorie existiert nicht mehr', 'products.wooRepublishAsNew': 'Ersatz neu veröffentlichen', 'products.wooRepublishConfirm': 'Das zugeordnete WooCommerce-Produkt wurde als nicht mehr vorhanden bestätigt. Ein Ersatzprodukt im verbundenen Shop erstellen?', 'products.wooRunSummary': 'Abgeschlossen: {done}; fehlgeschlagen: {failed}',
     'products.channelPreferencesMigrationRequired': 'Führe das SQL für Produktkanal-Einstellungen aus, um Kanalwahl und Overrides zu speichern.',
     'products.channelPreferencesSaveFailed': 'Produkt wurde gespeichert, aber Kanal-Einstellungen konnten nicht gespeichert werden.',
     'products.downloadImage': 'Bild herunterladen',
@@ -8535,6 +8544,7 @@ const featureExpansionDictionaries: Record<Locale, Dictionary> = {
     'products.overrideDescription': 'Описание для канала',
     'products.overrideCategory': 'Категория для канала',
     'products.overridePrice': 'Цена для канала',
+    'products.wooCategory': 'Категория WooCommerce', 'products.wooInherit': 'Использовать сопоставленную категорию Leonety', 'products.wooInherited': 'Унаследована', 'products.wooOverridden': 'Переопределена', 'products.wooNoInheritedCategory': 'Категория не выбрана', 'products.wooBulkPreview': 'Проверить публикацию в WooCommerce', 'products.wooTargetStore': 'Целевой магазин', 'products.wooPreviewCreate': 'Новые товары', 'products.wooPreviewUpdate': 'Обновления', 'products.wooPreviewBlocked': 'Пропущены / ошибки', 'products.wooPreviewRun': 'Опубликовать проверенные товары', 'products.wooPreviewCancel': 'Отмена', 'products.wooPreviewLoading': 'Загрузка магазина и сопоставлений…', 'products.wooPreviewUnavailable': 'Не удалось проверить подключение магазина.', 'products.wooPreviewUnmapped': 'Для категории не задано сопоставление WooCommerce', 'products.wooPreviewCategoryDeleted': 'Сопоставленная категория WooCommerce больше не существует', 'products.wooRepublishAsNew': 'Опубликовать замену как новый товар', 'products.wooRepublishConfirm': 'Подтверждено, что связанного товара WooCommerce больше нет. Создать замену в подключённом магазине?', 'products.wooRunSummary': 'Завершено: {done}; ошибок: {failed}',
     'products.channelPreferencesMigrationRequired': 'Выполните SQL для product channel preferences, чтобы сохранять выбор каналов и overrides.',
     'products.channelPreferencesSaveFailed': 'Товар сохранен, но настройки каналов сохранить не удалось.',
     'products.downloadImage': 'Скачать изображение',
@@ -8600,6 +8610,7 @@ const featureExpansionDictionaries: Record<Locale, Dictionary> = {
     'products.overrideDescription': 'Kanal açıklaması override',
     'products.overrideCategory': 'Kanal kategorisi override',
     'products.overridePrice': 'Kanal fiyatı override',
+    'products.wooCategory': 'WooCommerce kategorisi', 'products.wooInherit': 'Eşlenmiş Leonety kategorisini kullan', 'products.wooInherited': 'Devralındı', 'products.wooOverridden': 'Ürün için değiştirildi', 'products.wooNoInheritedCategory': 'Kategori seçilmedi', 'products.wooBulkPreview': 'WooCommerce yayınını gözden geçir', 'products.wooTargetStore': 'Hedef mağaza', 'products.wooPreviewCreate': 'Yeni ürünler', 'products.wooPreviewUpdate': 'Güncellemeler', 'products.wooPreviewBlocked': 'Atlananlar / hatalar', 'products.wooPreviewRun': 'İncelenen ürünleri yayınla', 'products.wooPreviewCancel': 'İptal', 'products.wooPreviewLoading': 'Mağaza ve eşlemeler yükleniyor…', 'products.wooPreviewUnavailable': 'Mağaza bağlantısı doğrulanamadı.', 'products.wooPreviewUnmapped': 'Kategori için WooCommerce eşlemesi gerekli', 'products.wooPreviewCategoryDeleted': 'Eşlenmiş WooCommerce kategorisi artık mevcut değil', 'products.wooRepublishAsNew': 'Yeni ürün olarak yeniden yayınla', 'products.wooRepublishConfirm': 'Eşlenmiş WooCommerce ürününün artık bulunmadığı doğrulandı. Bağlı mağazada yerine yeni ürün oluşturulsun mu?', 'products.wooRunSummary': 'Tamamlandı: {done}; başarısız: {failed}',
     'products.channelPreferencesMigrationRequired': 'Kanal seçimi ve override kayıtları için product channel preferences SQL çalıştırın.',
     'products.channelPreferencesSaveFailed': 'Ürün kaydedildi, ancak kanal tercihleri kaydedilemedi.',
     'products.downloadImage': 'Görseli indir',
@@ -8665,6 +8676,7 @@ const featureExpansionDictionaries: Record<Locale, Dictionary> = {
     'products.overrideDescription': 'Опис для каналу',
     'products.overrideCategory': 'Категорія для каналу',
     'products.overridePrice': 'Ціна для каналу',
+    'products.wooCategory': 'Категорія WooCommerce', 'products.wooInherit': 'Використовувати зіставлену категорію Leonety', 'products.wooInherited': 'Успадкована', 'products.wooOverridden': 'Перевизначена', 'products.wooNoInheritedCategory': 'Категорію не вибрано', 'products.wooBulkPreview': 'Перевірити публікацію у WooCommerce', 'products.wooTargetStore': 'Цільовий магазин', 'products.wooPreviewCreate': 'Нові товари', 'products.wooPreviewUpdate': 'Оновлення', 'products.wooPreviewBlocked': 'Пропущено / помилки', 'products.wooPreviewRun': 'Опублікувати перевірені товари', 'products.wooPreviewCancel': 'Скасувати', 'products.wooPreviewLoading': 'Завантаження магазину та зіставлень…', 'products.wooPreviewUnavailable': 'Не вдалося перевірити підключення магазину.', 'products.wooPreviewUnmapped': 'Для категорії потрібне зіставлення WooCommerce', 'products.wooPreviewCategoryDeleted': 'Зіставленої категорії WooCommerce більше не існує', 'products.wooRepublishAsNew': 'Опублікувати заміну як новий товар', 'products.wooRepublishConfirm': 'Підтверджено, що пов’язаного товару WooCommerce більше немає. Створити заміну в підключеному магазині?', 'products.wooRunSummary': 'Завершено: {done}; помилок: {failed}',
     'products.channelPreferencesMigrationRequired': 'Виконайте SQL для product channel preferences, щоб зберігати вибір каналів і overrides.',
     'products.channelPreferencesSaveFailed': 'Товар збережено, але налаштування каналів зберегти не вдалося.',
     'products.downloadImage': 'Завантажити зображення',
@@ -8730,6 +8742,7 @@ const featureExpansionDictionaries: Record<Locale, Dictionary> = {
     'products.overrideDescription': 'Opis dla kanału',
     'products.overrideCategory': 'Kategoria dla kanału',
     'products.overridePrice': 'Cena dla kanału',
+    'products.wooCategory': 'Kategoria WooCommerce', 'products.wooInherit': 'Użyj zmapowanej kategorii Leonety', 'products.wooInherited': 'Dziedziczona', 'products.wooOverridden': 'Nadpisana', 'products.wooNoInheritedCategory': 'Nie wybrano kategorii', 'products.wooBulkPreview': 'Sprawdź publikację w WooCommerce', 'products.wooTargetStore': 'Sklep docelowy', 'products.wooPreviewCreate': 'Nowe produkty', 'products.wooPreviewUpdate': 'Aktualizacje', 'products.wooPreviewBlocked': 'Pominięte / błędy', 'products.wooPreviewRun': 'Opublikuj sprawdzone produkty', 'products.wooPreviewCancel': 'Anuluj', 'products.wooPreviewLoading': 'Wczytywanie sklepu i mapowań…', 'products.wooPreviewUnavailable': 'Nie udało się zweryfikować połączenia ze sklepem.', 'products.wooPreviewUnmapped': 'Kategoria wymaga mapowania WooCommerce', 'products.wooPreviewCategoryDeleted': 'Zmapowana kategoria WooCommerce już nie istnieje', 'products.wooRepublishAsNew': 'Opublikuj zamiennik jako nowy produkt', 'products.wooRepublishConfirm': 'Potwierdzono, że powiązany produkt WooCommerce już nie istnieje. Utworzyć zamiennik w połączonym sklepie?', 'products.wooRunSummary': 'Ukończono: {done}; błędy: {failed}',
     'products.channelPreferencesMigrationRequired': 'Uruchom SQL product channel preferences, aby zapisywać wybór kanałów i override.',
     'products.channelPreferencesSaveFailed': 'Produkt zapisano, ale preferencji kanałów nie udało się zapisać.',
     'products.downloadImage': 'Pobierz obraz',
@@ -8795,6 +8808,7 @@ const featureExpansionDictionaries: Record<Locale, Dictionary> = {
     'products.overrideDescription': 'Description spécifique au canal',
     'products.overrideCategory': 'Catégorie spécifique au canal',
     'products.overridePrice': 'Prix spécifique au canal',
+    'products.wooCategory': 'Catégorie WooCommerce', 'products.wooInherit': 'Utiliser la catégorie Leonety associée', 'products.wooInherited': 'Héritée', 'products.wooOverridden': 'Remplacée', 'products.wooNoInheritedCategory': 'Aucune catégorie sélectionnée', 'products.wooBulkPreview': 'Vérifier la publication WooCommerce', 'products.wooTargetStore': 'Boutique cible', 'products.wooPreviewCreate': 'Nouveaux produits', 'products.wooPreviewUpdate': 'Mises à jour', 'products.wooPreviewBlocked': 'Ignorés / erreurs', 'products.wooPreviewRun': 'Publier les produits vérifiés', 'products.wooPreviewCancel': 'Annuler', 'products.wooPreviewLoading': 'Chargement de la boutique et des associations…', 'products.wooPreviewUnavailable': 'Impossible de vérifier la connexion à la boutique.', 'products.wooPreviewUnmapped': 'La catégorie nécessite une association WooCommerce', 'products.wooPreviewCategoryDeleted': 'La catégorie WooCommerce associée n’existe plus', 'products.wooRepublishAsNew': 'Publier un remplacement comme nouveau produit', 'products.wooRepublishConfirm': 'Le produit WooCommerce associé est confirmé comme introuvable. Créer un produit de remplacement dans la boutique connectée ?', 'products.wooRunSummary': 'Terminés : {done} ; échecs : {failed}',
     'products.channelPreferencesMigrationRequired': 'Exécutez le SQL product channel preferences pour enregistrer les choix de canaux et overrides.',
     'products.channelPreferencesSaveFailed': 'Le produit est enregistré, mais les préférences de canaux n’ont pas pu être enregistrées.',
     'products.downloadImage': 'Télécharger l’image',

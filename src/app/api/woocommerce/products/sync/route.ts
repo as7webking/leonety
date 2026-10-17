@@ -7,6 +7,7 @@ import {
   toWooPrice,
   toWooStock,
   wooRequest,
+  WooRequestError,
   type WooConnection,
   type WooProductPayload,
   type WooVariationPayload,
@@ -72,25 +73,6 @@ function variantKey(variation: WooVariationResponse | WooVariationPayload) {
     .sort()
     .join('|')
     .toLowerCase()
-}
-
-async function findOrCreateCategory(connection: WooConnection, categoryName: string | null) {
-  const name = categoryName?.trim()
-  if (!name) return undefined
-
-  const categories = await wooRequest<WooCategory[]>(
-    connection,
-    `/products/categories?search=${encodeURIComponent(name)}&per_page=20`
-  )
-  const existing = categories.find((category) => category.name.toLowerCase() === name.toLowerCase())
-  if (existing) return existing.id
-
-  const created = await wooRequest<WooCategory>(connection, '/products/categories', {
-    method: 'POST',
-    body: { name },
-  })
-
-  return created.id
 }
 
 function buildBasePayload(product: ProductRow, categoryId?: number, includeImage = true): WooProductPayload {
@@ -221,9 +203,12 @@ async function upsertSyncStatus(
 export async function POST(request: Request) {
   let companyId = ''
   let productId = ''
+  let existingWooProductId: number | null = null
+  let republishAsNew = false
 
   try {
     const body = await request.json().catch(() => ({}))
+    republishAsNew = body.republishAsNew === true
     companyId = typeof body.companyId === 'string' ? body.companyId : ''
     productId = typeof body.productId === 'string' ? body.productId : ''
 
@@ -234,7 +219,7 @@ export async function POST(request: Request) {
     const auth = await requireOwnedCompany(companyId)
     if ('error' in auth) return auth.error
 
-    const [{ data: connection, error: connectionError }, { data: product, error: productError }, { data: syncRow, error: syncError }] = await Promise.all([
+    const [{ data: connection, error: connectionError }, { data: product, error: productError }, { data: syncRow, error: syncError }, { data: preference, error: preferenceError }] = await Promise.all([
       auth.adminSupabase
         .from('woocommerce_connections')
         .select('store_url, consumer_key, consumer_secret, active')
@@ -253,11 +238,19 @@ export async function POST(request: Request) {
         .eq('product_id', productId)
         .eq('channel', 'woocommerce')
         .maybeSingle(),
+      auth.adminSupabase
+        .from('product_channel_preferences')
+        .select('overrides')
+        .eq('company_id', companyId)
+        .eq('product_id', productId)
+        .eq('provider', 'woocommerce')
+        .maybeSingle(),
     ])
 
     if (connectionError) throw connectionError
     if (productError) throw productError
     if (syncError) throw syncError
+    if (preferenceError && !['42P01', '42703', 'PGRST200', 'PGRST204', 'PGRST205'].includes(preferenceError.code ?? '')) throw preferenceError
     if (!connection?.active) {
       return NextResponse.json({ error: 'WooCommerce connection is not configured.' }, { status: 400 })
     }
@@ -271,7 +264,20 @@ export async function POST(request: Request) {
     const productRow = product as ProductRow
     const imageWarning = await getWooImageWarning(productRow.image_url)
     let categoryId: number | undefined
-    if (productRow.category_id) {
+    const overrides = preference?.overrides && typeof preference.overrides === 'object'
+      ? preference.overrides as { woo_category_id?: unknown }
+      : null
+    const overrideValue = Object.prototype.hasOwnProperty.call(body, 'wooCategoryId')
+      ? typeof body.wooCategoryId === 'string' ? body.wooCategoryId.trim() : ''
+      : typeof overrides?.woo_category_id === 'string' ? overrides.woo_category_id.trim() : ''
+    if (overrideValue) {
+      const parsedOverride = Number(overrideValue)
+      if (!Number.isSafeInteger(parsedOverride) || parsedOverride <= 0) {
+        await upsertSyncStatus(auth.adminSupabase, companyId, productId, { sync_status: 'failed', error_message: 'The WooCommerce category override is invalid. Choose a category again.' })
+        return NextResponse.json({ error: 'The WooCommerce category override is invalid. Choose a category again.' }, { status: 400 })
+      }
+      categoryId = parsedOverride
+    } else if (productRow.category_id) {
       const { data: category, error: categoryError } = await auth.adminSupabase
         .from('product_categories')
         .select('woo_category_id')
@@ -282,9 +288,35 @@ export async function POST(request: Request) {
       const mappedId = category?.woo_category_id ? Number(category.woo_category_id) : NaN
       if (Number.isFinite(mappedId) && mappedId > 0) categoryId = mappedId
     }
-    if (!categoryId) categoryId = await findOrCreateCategory(wooConnection, productRow.category)
+    if (productRow.category?.trim() && !categoryId) {
+      const message = 'Map the Leonety category to WooCommerce, or choose a product-specific WooCommerce category before publishing.'
+      await upsertSyncStatus(auth.adminSupabase, companyId, productId, { sync_status: 'failed', error_message: message })
+      return NextResponse.json({ error: 'Map the Leonety category to WooCommerce, or choose a product-specific WooCommerce category before publishing.' }, { status: 409 })
+    }
+    if (categoryId) {
+      try {
+        await wooRequest<WooCategory>(wooConnection, `/products/categories/${categoryId}`)
+      } catch (error) {
+        if (error instanceof WooRequestError && error.status === 404) {
+          const message = 'The selected WooCommerce category no longer exists. Choose a current category or update the Leonety mapping.'
+          await upsertSyncStatus(auth.adminSupabase, companyId, productId, { sync_status: 'failed', error_message: message })
+          return NextResponse.json({ error: message }, { status: 409 })
+        }
+        throw error
+      }
+    }
     const payload = buildBasePayload(productRow, categoryId, !imageWarning)
-    const existingWooId = Number((syncRow as ProductSyncRow | null)?.external_product_id ?? 0) || null
+    let existingWooId = Number((syncRow as ProductSyncRow | null)?.external_product_id ?? 0) || null
+    if (existingWooId && republishAsNew) {
+      try {
+        await wooRequest<WooProductResponse>(wooConnection, `/products/${existingWooId}`)
+        return NextResponse.json({ error: 'The mapped WooCommerce product still exists. Update it instead of creating another product.' }, { status: 409 })
+      } catch (error) {
+        if (!(error instanceof WooRequestError && error.status === 404 && error.providerCode?.includes('product_invalid_id'))) throw error
+        existingWooId = null
+      }
+    }
+    existingWooProductId = existingWooId
     const wooProduct = existingWooId
       ? await wooRequest<WooProductResponse>(wooConnection, `/products/${existingWooId}`, { method: 'PUT', body: payload })
       : await wooRequest<WooProductResponse>(wooConnection, '/products', { method: 'POST', body: payload })
@@ -324,7 +356,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, wooProductId: wooProduct.id, externalUrl: safeExternalHttpUrl(wooProduct.permalink), warning: imageWarning })
   } catch (error) {
-    const message = formatApiError(error)
+    const message = error instanceof WooRequestError && error.status === 404 && existingWooProductId && error.providerCode?.includes('product_invalid_id')
+      ? 'The mapped WooCommerce product no longer exists. Confirm publishing as a new product to create a replacement.'
+      : error instanceof WooRequestError && error.status === 404 && existingWooProductId
+        ? `WooCommerce returned 404 for mapped product ${existingWooProductId}. The mapping was retained and no duplicate was created; verify the REST API endpoint before retrying.`
+      : formatApiError(error)
     console.error('WooCommerce product sync failed:', { companyId, productId, message })
 
     if (companyId && productId) {
@@ -337,7 +373,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const status = message.includes('product_syncs') || message.includes('woocommerce_connections') ? 400 : 500
+    const status = error instanceof WooRequestError
+      ? error.status === 429 ? 429 : error.status === 404 ? 409 : error.status >= 500 ? 502 : 400
+      : message.includes('product_syncs') || message.includes('woocommerce_connections') ? 400 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }

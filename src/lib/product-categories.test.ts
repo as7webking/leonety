@@ -7,6 +7,8 @@ const wooRoute = readFileSync(new URL('../app/api/woocommerce/categories/route.t
 const wooSync = readFileSync(new URL('../app/api/woocommerce/products/sync/route.ts', import.meta.url), 'utf8')
 const i18n = readFileSync(new URL('./product-categories-i18n.ts', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../../supabase/migrations/20260919205522.sql', import.meta.url), 'utf8')
+const productEdit = readFileSync(new URL('../app/(app)/products/[productId]/edit/page.tsx', import.meta.url), 'utf8')
+const productsPage = readFileSync(new URL('../app/(app)/products/page.tsx', import.meta.url), 'utf8')
 
 test('category management reuses workspace-scoped canonical categories and counts products', () => {
   assert.match(page, /from\('product_categories'\)/)
@@ -33,6 +35,42 @@ test('WooCommerce mapping uses owner-authorized provider categories and the cano
   assert.match(page, /api\/woocommerce\/categories/)
   assert.match(wooSync, /select\('woo_category_id'\)/)
   assert.match(wooSync, /categoryId = mappedId/)
+})
+
+test('WooCommerce categories are created only after an explicit owner-authorized action', () => {
+  assert.match(wooRoute, /export async function POST/)
+  assert.match(wooRoute, /requireOwnedCompany\(companyId\)/)
+  assert.match(wooRoute, /method: 'POST'/)
+  assert.match(page, /createAndMapWooCategory/)
+  assert.match(page, /onClick=\{\(\) => void createAndMapWooCategory\(category\)\}/)
+  assert.doesNotMatch(wooSync, /findOrCreateCategory/)
+  assert.doesNotMatch(wooSync, /method: 'POST',[\s\S]*?\/products\/categories/)
+})
+
+test('product WooCommerce category defaults to inheritance and supports a persisted per-product override', () => {
+  assert.match(productEdit, /woo_category_id: string/)
+  assert.match(productEdit, /select\('id, company_id, name, woo_category_id'\)/)
+  assert.match(productEdit, /products\.wooInherited/)
+  assert.match(productEdit, /products\.wooOverridden/)
+  assert.match(productEdit, /updateChannelOverride\('woocommerce', \{ woo_category_id: value \}\)/)
+  assert.match(wooSync, /product_channel_preferences/)
+  assert.match(wooSync, /hasOwnProperty\.call\(body, 'wooCategoryId'\)/)
+  assert.match(wooSync, /products\/categories\/\$\{categoryId\}/)
+  assert.match(wooSync, /republishAsNew/)
+  assert.match(wooSync, /providerCode\?\.includes\('product_invalid_id'\)/)
+  assert.match(productEdit, /products\.wooRepublishConfirm/)
+  assert.match(productEdit, /republishAsNew: true/)
+})
+
+test('bulk WooCommerce publish reviews creates, updates and blocked category mappings before execution', () => {
+  assert.match(productsPage, /openWooPublishPreview/)
+  assert.match(productsPage, /products\.wooBulkPreview/)
+  assert.match(productsPage, /products\.wooPreviewCreate/)
+  assert.match(productsPage, /products\.wooPreviewUpdate/)
+  assert.match(productsPage, /products\.wooPreviewBlocked/)
+  assert.match(productsPage, /runWooPublishPreview/)
+  assert.match(productsPage, /entry\.action !== 'blocked'/)
+  assert.match(productsPage, /wooCategoryId = overrideId \?\? category\?\.woo_category_id/)
 })
 
 test('category management labels are present in all supported locales', () => {

@@ -64,6 +64,7 @@ interface ProductCategory {
   id: string
   company_id: string
   name: string
+  woo_category_id?: string | null
 }
 
 interface ProductSync {
@@ -87,6 +88,7 @@ interface ChannelOverride {
   description: string
   category: string
   price: string
+  woo_category_id: string
 }
 
 interface ProductChannelPreference {
@@ -149,6 +151,7 @@ function emptyChannelOverride(): ChannelOverride {
     description: '',
     category: '',
     price: '',
+    woo_category_id: '',
   }
 }
 
@@ -227,6 +230,7 @@ export default function ProductEditPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductForm | null>(null)
   const [categories, setCategories] = useState<ProductCategory[]>([])
+  const [wooCategories, setWooCategories] = useState<Array<{ id: number; name: string }>>([])
   const [syncs, setSyncs] = useState<ProductSync[]>([])
   const [storeConnections, setStoreConnections] = useState<Record<ProductChannel, StoreConnectionStatus>>({} as Record<ProductChannel, StoreConnectionStatus>)
   const [selectedPublishChannels, setSelectedPublishChannels] = useState<ProductChannel[]>([])
@@ -254,7 +258,7 @@ export default function ProductEditPage() {
     setLoading(true)
     setError('')
 
-    const [productResult, categoryResult, syncResult, integrationResult, preferenceResult] = await Promise.all([
+    const [productResult, categoryResult, syncResult, integrationResult, preferenceResult, wooCategoryResult] = await Promise.all([
       supabase
         .from('products')
         .select('*')
@@ -263,7 +267,7 @@ export default function ProductEditPage() {
         .maybeSingle(),
       supabase
         .from('product_categories')
-        .select('id, company_id, name')
+        .select('id, company_id, name, woo_category_id')
         .eq('company_id', currentCompany.id)
         .order('name'),
       supabase
@@ -279,6 +283,9 @@ export default function ProductEditPage() {
         .select('provider, publish_requested, overrides')
         .eq('company_id', currentCompany.id)
         .eq('product_id', productId),
+      fetch(`/api/woocommerce/categories?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
+        .then(async (response) => response.ok ? response.json() : { categories: [] })
+        .catch(() => ({ categories: [] })),
     ])
 
     if (productResult.error && !isOnline && userId) {
@@ -322,6 +329,7 @@ export default function ProductEditPage() {
     } else {
       setError(categoryResult.error.message)
     }
+    setWooCategories(Array.isArray(wooCategoryResult.categories) ? wooCategoryResult.categories : [])
 
     const loadedSyncs = !syncResult.error ? (syncResult.data ?? []) as ProductSync[] : []
 
@@ -467,8 +475,9 @@ export default function ProductEditPage() {
     return true
   }
 
-  async function publishChannels(channels: ProductChannel[]) {
+  async function publishChannels(channels: ProductChannel[], options: { republishAsNew?: boolean } = {}) {
     if (!currentCompany || !product || !form || publishingChannels) return
+    if (options.republishAsNew && !window.confirm(t('products.wooRepublishConfirm'))) return
 
     const uniqueChannels = Array.from(new Set(channels))
     if (uniqueChannels.length === 0) {
@@ -504,10 +513,11 @@ export default function ProductEditPage() {
       }
 
       if (channel === 'woocommerce') {
+        const wooOverride = channelOverrides.woocommerce?.woo_category_id?.trim() || ''
         const response = await fetch('/api/woocommerce/products/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companyId: currentCompany.id, productId: product.id }),
+          body: JSON.stringify({ companyId: currentCompany.id, productId: product.id, wooCategoryId: wooOverride || null, ...(options.republishAsNew ? { republishAsNew: true } : {}) }),
         })
         const payload = await response.json().catch(() => ({}))
 
@@ -952,6 +962,7 @@ export default function ProductEditPage() {
                           {externalUrl && <a href={externalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex max-w-full items-center gap-1 break-all text-xs font-medium text-blue-700 underline"><ExternalLink className="h-3.5 w-3.5 shrink-0" />{t('products.channelStatus.viewExternalProduct')}</a>}
                           {status === 'published' && !externalUrl && <span className="mt-1 block text-xs text-slate-500">{t('products.channelStatus.externalLinkUnavailable')}</span>}
                           {status === 'error' && connected && channel.operational && <Button type="button" variant="outline" size="sm" className="mt-2" disabled={publishingChannels} onClick={() => void publishChannels([channel.channel])}>{publishingChannels ? t('common.loading') : t('products.channelStatus.retry')}</Button>}
+                          {channel.channel === 'woocommerce' && sync?.sync_status === 'failed' && sync.error_message?.includes('Confirm publishing as a new product') && <Button type="button" variant="outline" size="sm" className="mt-2" disabled={publishingChannels || !connected} onClick={() => void publishChannels(['woocommerce'], { republishAsNew: true })}>{t('products.wooRepublishAsNew')}</Button>}
                           {disabled && <span className="mt-1 block text-xs text-slate-500">{connected ? t('products.channelSetupRequired') : t('products.connectIntegration')}</span>}
                         </span>
                       </label>
@@ -982,8 +993,30 @@ export default function ProductEditPage() {
                             </ul>
                           )}
                           <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            {channel === 'woocommerce' && (() => {
+                              const inheritedCategory = categories.find((item) => item.id === product.category_id)
+                              const inheritedWooCategory = wooCategories.find((item) => String(item.id) === inheritedCategory?.woo_category_id)
+                              const selectedWooCategoryId = override.woo_category_id || ''
+                              const inheritedCategoryLabel = inheritedWooCategory?.name
+                                ?? (inheritedCategory?.woo_category_id ? t('productCategories.wooMissing').replace('{id}', inheritedCategory.woo_category_id) : inheritedCategory ? t('productCategories.wooUnmapped') : t('products.wooNoInheritedCategory'))
+                              return <div className="space-y-1 md:col-span-2">
+                                <label className="block text-sm font-medium">{t('products.wooCategory')}</label>
+                                <AppSelect
+                                  value={selectedWooCategoryId}
+                                  onChange={(value) => updateChannelOverride('woocommerce', { woo_category_id: value })}
+                                  ariaLabel={t('products.wooCategory')}
+                                  options={[
+                                    { value: '', label: `${t('products.wooInherit')} · ${inheritedCategoryLabel}` },
+                                    ...(selectedWooCategoryId && !wooCategories.some((item) => String(item.id) === selectedWooCategoryId) ? [{ value: selectedWooCategoryId, label: t('productCategories.wooMissing').replace('{id}', selectedWooCategoryId) }] : []),
+                                    ...wooCategories.map((item) => ({ value: String(item.id), label: `${item.name} (#${item.id})` })),
+                                  ]}
+                                />
+                                <p className="text-xs text-slate-600">{selectedWooCategoryId ? `${t('products.wooOverridden')} · ${wooCategories.find((item) => String(item.id) === selectedWooCategoryId)?.name ?? t('productCategories.wooMissing').replace('{id}', selectedWooCategoryId)}` : `${t('products.wooInherited')} · ${inheritedCategoryLabel}`}</p>
+                                <Link href="/app/products/categories" className="inline-block text-xs text-blue-700 underline">{t('productCategories.open')}</Link>
+                              </div>
+                            })()}
                             <input value={override.title} onChange={(event) => updateChannelOverride(channel, { title: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.overrideTitle')} />
-                            <input value={override.category} onChange={(event) => updateChannelOverride(channel, { category: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.overrideCategory')} />
+                            {channel !== 'woocommerce' && <input value={override.category} onChange={(event) => updateChannelOverride(channel, { category: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.overrideCategory')} />}
                             <input value={override.price} onChange={(event) => updateChannelOverride(channel, { price: event.target.value })} className="rounded-md border px-3 py-2 text-sm" placeholder={t('products.overridePrice')} inputMode="decimal" />
                             <textarea value={override.description} onChange={(event) => updateChannelOverride(channel, { description: event.target.value })} className="min-h-20 rounded-md border px-3 py-2 text-sm md:col-span-2" placeholder={t('products.overrideDescription')} />
                           </div>

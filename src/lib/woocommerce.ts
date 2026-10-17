@@ -78,14 +78,27 @@ function friendlyWooError(status: number, data: unknown) {
   if (status === 403 || /schreibrechte|write permission|read\/write|cannot create|cannot edit/i.test(rawMessage)) {
     return `${rawMessage} Make sure the WooCommerce REST API key has Read/Write permissions.`
   }
+  if (status === 404 && typeof record.code === 'string' && record.code.includes('product_invalid_id')) {
+    return 'The mapped WooCommerce product no longer exists.'
+  }
   if (status === 404 || lower.includes('rest_no_route')) {
     return 'WooCommerce REST API endpoint was not found. Check that WooCommerce is installed and REST API is enabled.'
+  }
+  if (status === 429) {
+    return 'WooCommerce rate limit reached. Wait a moment, then retry the product sync.'
   }
   if (status >= 500) {
     return 'WooCommerce returned a server error. Check the store health, security plugins, and REST API availability.'
   }
 
   return rawMessage
+}
+
+export class WooRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly providerCode: string | null = null) {
+    super(message)
+    this.name = 'WooRequestError'
+  }
 }
 
 export async function wooRequest<T>(
@@ -126,7 +139,10 @@ export async function wooRequest<T>(
   const data = parseWooResponse(text)
 
   if (!response.ok) {
-    throw new Error(friendlyWooError(response.status, data))
+    const providerCode = data && typeof data === 'object' && typeof (data as { code?: unknown }).code === 'string'
+      ? (data as { code: string }).code
+      : null
+    throw new WooRequestError(friendlyWooError(response.status, data), response.status, providerCode)
   }
 
   return data as T

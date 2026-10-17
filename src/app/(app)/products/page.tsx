@@ -54,6 +54,16 @@ interface ProductCategory {
   id: string
   company_id: string
   name: string
+  woo_category_id?: string | null
+}
+
+interface WooBulkPreviewEntry {
+  product: Product
+  action: 'create' | 'update' | 'blocked'
+  categoryName: string
+  wooCategoryId: string | null
+  overrideId: string | null
+  issue?: string
 }
 
 interface ProductForm {
@@ -363,6 +373,9 @@ export default function ProductsPage() {
   const [storeConnections, setStoreConnections] = useState<Record<ProductChannel, StoreConnectionStatus>>(() => initialDataMemory?.value.storeConnections ?? {} as Record<ProductChannel, StoreConnectionStatus>)
   const [syncingProductId, setSyncingProductId] = useState<string | null>(null)
   const [syncingAll, setSyncingAll] = useState(false)
+  const [wooPreview, setWooPreview] = useState<{ storeUrl: string; entries: WooBulkPreviewEntry[] } | null>(null)
+  const [wooPreviewLoading, setWooPreviewLoading] = useState(false)
+  const [wooPreviewError, setWooPreviewError] = useState('')
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
   const [bulkForm, setBulkForm] = useState<BulkEditForm>({ category: '', selling_price: '', status: '' })
   const [compressingImage, setCompressingImage] = useState(false)
@@ -429,7 +442,7 @@ export default function ProductsPage() {
           .eq('company_id', currentCompany.id),
         supabase
           .from('product_categories')
-          .select('id, company_id, name')
+          .select('id, company_id, name, woo_category_id')
           .eq('company_id', currentCompany.id)
           .order('name'),
         fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
@@ -837,36 +850,98 @@ export default function ProductsPage() {
     await loadProducts()
   }
 
-  const handleWooExportAll = async () => {
-    if (!currentCompany || visibleProducts.length === 0) return
+  const openWooPublishPreview = async (items: Product[]) => {
+    if (!currentCompany || items.length === 0 || wooPreviewLoading) return
+    setWooPreviewLoading(true)
+    setWooPreviewError('')
+    setWooPreview(null)
+    try {
+      const [connectionResponse, categoriesResponse, preferencesResult] = await Promise.all([
+        fetch(`/api/woocommerce/connection?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' }),
+        fetch(`/api/woocommerce/categories?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' }),
+        supabase.from('product_channel_preferences').select('product_id, overrides').eq('company_id', currentCompany.id).eq('provider', 'woocommerce').in('product_id', items.map((item) => item.id)),
+      ])
+      const connection = await connectionResponse.json().catch(() => ({}))
+      const providerCategoriesPayload = await categoriesResponse.json().catch(() => ({}))
+      if (!connectionResponse.ok || !connection.connected) throw new Error(connection.error ?? t('products.wooPreviewUnavailable'))
+      if (!categoriesResponse.ok) throw new Error(providerCategoriesPayload.error ?? t('products.wooPreviewUnavailable'))
+
+      const availableCategoryIds = new Set((providerCategoriesPayload.categories ?? []).map((item: { id: number }) => String(item.id)))
+      const preferences = !preferencesResult.error ? preferencesResult.data ?? [] : []
+      const entries: WooBulkPreviewEntry[] = items.map((product) => {
+        const preference = preferences.find((item) => item.product_id === product.id)
+        const overrideValue = preference?.overrides && typeof preference.overrides === 'object'
+          ? (preference.overrides as { woo_category_id?: unknown }).woo_category_id
+          : null
+        const overrideId = typeof overrideValue === 'string' && overrideValue ? overrideValue : null
+        const category = categories.find((item) => item.id === product.category_id)
+        const wooCategoryId = overrideId ?? category?.woo_category_id ?? null
+        const providerCategoryName = wooCategoryId
+          ? (providerCategoriesPayload.categories ?? []).find((item: { id: number; name: string }) => String(item.id) === wooCategoryId)?.name ?? `#${wooCategoryId}`
+          : ''
+        const categoryName = overrideId
+          ? providerCategoryName
+          : category ? `${category.name} → ${providerCategoryName || t('productCategories.wooUnmapped')}` : (product.category?.trim() || '')
+        const hasCategory = Boolean(product.category?.trim() || product.category_id)
+        const categoryIsUnmapped = hasCategory && !wooCategoryId
+        const categoryWasDeleted = Boolean(wooCategoryId && !availableCategoryIds.has(wooCategoryId))
+        const issue = categoryWasDeleted
+          ? t('products.wooPreviewCategoryDeleted')
+          : categoryIsUnmapped ? t('products.wooPreviewUnmapped') : undefined
+        const mappedProduct = (syncs[product.id] ?? []).find((item) => item.channel === 'woocommerce')
+        return {
+          product,
+          action: issue ? 'blocked' : mappedProduct?.external_product_id ? 'update' : 'create',
+          categoryName: categoryName || t('productCategories.noCategory'),
+          wooCategoryId,
+          overrideId,
+          issue,
+        }
+      })
+      setWooPreview({ storeUrl: connection.storeUrl || '', entries })
+    } catch (caught) {
+      setWooPreviewError(caught instanceof Error ? caught.message : t('products.wooPreviewUnavailable'))
+    } finally {
+      setWooPreviewLoading(false)
+    }
+  }
+
+  const runWooPublishPreview = async () => {
+    if (!currentCompany || !wooPreview || syncingAll) return
+    const runnable = wooPreview.entries.filter((entry) => entry.action !== 'blocked')
+    if (runnable.length === 0) return
     setSyncingAll(true)
     setMessage('')
     setError('')
-    let completed = true
+    let done = 0
+    let failed = 0
+    const failureMessages: string[] = []
 
-    for (const product of visibleProducts) {
+    for (const entry of runnable) {
+      const product = entry.product
       setSyncingProductId(product.id)
       const response = await fetch('/api/woocommerce/products/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: currentCompany.id, productId: product.id }),
+        body: JSON.stringify({ companyId: currentCompany.id, productId: product.id, ...(entry.overrideId ? { wooCategoryId: entry.overrideId } : {}) }),
       })
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        setError(payload.error ?? t('woocommerce.syncFailed'))
-        completed = false
-        break
-      }
+        failed += 1
+        failureMessages.push(`${product.name}: ${payload.error ?? t('woocommerce.syncFailed')}`)
+      } else done += 1
     }
 
     setSyncingProductId(null)
     setSyncingAll(false)
-    if (completed) {
-      setMessage(t('woocommerce.syncSuccess'))
-    }
+    setMessage(t('products.wooRunSummary').replace('{done}', String(done)).replace('{failed}', String(failed)))
+    if (failureMessages.length) setError(failureMessages.join('\n'))
+    setWooPreview(null)
     await loadProducts()
   }
+
+  const handleWooExportAll = async () => openWooPublishPreview(visibleProducts)
 
   const toggleProductSelection = (productId: string) => {
     setSelectedProductIds((current) => {
@@ -888,35 +963,7 @@ export default function ProductsPage() {
     })
   }
 
-  const handleBulkWooSync = async () => {
-    if (!currentCompany || selectedProducts.length === 0) return
-    setSyncingAll(true)
-    setMessage('')
-    setError('')
-
-    for (const product of selectedProducts) {
-      setSyncingProductId(product.id)
-      const response = await fetch('/api/woocommerce/products/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: currentCompany.id, productId: product.id }),
-      })
-      const payload = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        setError(payload.error ?? t('woocommerce.syncFailed'))
-        setSyncingProductId(null)
-        setSyncingAll(false)
-        await loadProducts()
-        return
-      }
-    }
-
-    setSyncingProductId(null)
-    setSyncingAll(false)
-    setMessage(t('woocommerce.syncSuccess'))
-    await loadProducts()
-  }
+  const handleBulkWooSync = async () => openWooPublishPreview(selectedProducts)
 
   const handleBulkEdit = async () => {
     if (!currentCompany || selectedProducts.length === 0) return
@@ -1007,6 +1054,31 @@ export default function ProductsPage() {
         <Button className="hidden lg:inline-flex" onClick={() => router.push('/app/products/new')}><PackagePlus className="h-4 w-4" />{t('products.add')}</Button>
       </PageHeader>
       {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
+      {wooPreviewLoading && <p role="status" className="mb-3 text-sm text-slate-600">{t('products.wooPreviewLoading')}</p>}
+      {wooPreviewError && <p role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{wooPreviewError}</p>}
+      {wooPreview && <Card className="mb-5"><CardContent className="space-y-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0"><h2 className="font-semibold">{t('products.wooBulkPreview')}</h2><p className="break-all text-sm text-slate-600">{t('products.wooTargetStore')}: {wooPreview.storeUrl}</p></div>
+          <Button type="button" variant="ghost" onClick={() => setWooPreview(null)} disabled={syncingAll}>{t('products.wooPreviewCancel')}</Button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3 text-sm">
+          <p>{t('products.wooPreviewCreate')}: {wooPreview.entries.filter((entry) => entry.action === 'create').length}</p>
+          <p>{t('products.wooPreviewUpdate')}: {wooPreview.entries.filter((entry) => entry.action === 'update').length}</p>
+          <p>{t('products.wooPreviewBlocked')}: {wooPreview.entries.filter((entry) => entry.action === 'blocked').length}</p>
+        </div>
+        <ul className="max-h-72 space-y-2 overflow-y-auto rounded-md border p-3 text-sm">
+          {wooPreview.entries.map((entry) => <li key={entry.product.id} className="grid min-w-0 gap-1 border-b pb-2 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <span className="min-w-0 break-words font-medium">{entry.product.name}<span className="block break-words text-xs font-normal text-slate-600">{t('productCategories.wooMapping')}: {entry.categoryName}</span></span>
+            <span className={entry.action === 'blocked' ? 'text-xs font-medium text-amber-800' : 'text-xs text-slate-600'}>{entry.issue ?? (entry.action === 'create' ? t('products.wooPreviewCreate') : t('products.wooPreviewUpdate'))}</span>
+          </li>)}
+        </ul>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button type="button" onClick={() => void runWooPublishPreview()} disabled={syncingAll || wooPreview.entries.every((entry) => entry.action === 'blocked')}>
+            {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}{syncingAll ? t('common.loading') : t('products.wooPreviewRun')}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setWooPreview(null)} disabled={syncingAll}>{t('products.wooPreviewCancel')}</Button>
+        </div>
+      </CardContent></Card>}
 
       <div className="mb-4 lg:hidden">
         <div className="flex flex-col gap-2 sm:flex-row">
