@@ -13,6 +13,7 @@ import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { buildProductEditorHref, rememberProductReturnScroll, restoreProductReturnScroll } from '@/lib/product-editor-navigation'
+import { productListColumns } from '@/lib/performance-query-projections'
 import { createClient } from '@/lib/supabase-client'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 import { ProductPhotoImportDialog } from '@/components/products/product-photo-import-dialog'
@@ -421,7 +422,7 @@ export default function ProductsPage() {
 
     try {
       const [productResult, syncResult, categoryResult, integrationResult] = await Promise.all([
-        supabase.from('products').select('*').eq('company_id', currentCompany.id).order('name'),
+        supabase.from('products').select(productListColumns).eq('company_id', currentCompany.id).order('name'),
         supabase
           .from('product_syncs')
           .select('product_id, channel, external_product_id, external_url, sync_status, last_synced_at, error_message')
@@ -1437,7 +1438,7 @@ export default function ProductsPage() {
                   <CardContent className="p-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} className="mt-1 shrink-0" aria-label={`${t('transactions.select')} ${product.name}`} />
-                      {product.image_url ? <img src={product.image_url} alt="" className="h-16 w-16 shrink-0 rounded-md border object-cover" /> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-slate-50 text-xs text-slate-400">{t('products.imagePreview')}</div>}
+                      {product.image_url ? <img src={product.image_url} alt="" loading="lazy" decoding="async" className="h-16 w-16 shrink-0 rounded-md border object-cover" /> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-slate-50 text-xs text-slate-400">{t('products.imagePreview')}</div>}
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-start justify-between gap-2"><h2 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug" title={product.name}>{product.name}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span></div>
                         <p className="mt-1 truncate text-xs text-slate-500" title={[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}>{[product.sku, product.barcode].filter(Boolean).join(' · ') || t('products.noCode')}</p>
@@ -1489,7 +1490,7 @@ export default function ProductsPage() {
                         <td className="p-3 align-top"><input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} aria-label={`${t('transactions.select')} ${product.name}`} /></td>
                         <td className="p-3">
                           <div className="flex min-w-0 items-center gap-3">
-                            {product.image_url ? <img src={product.image_url} alt="" className="h-11 w-11 shrink-0 rounded-md border object-cover" /> : <div className="h-11 w-11 shrink-0 rounded-md border bg-slate-100" />}
+                            {product.image_url ? <img src={product.image_url} alt="" loading="lazy" decoding="async" className="h-11 w-11 shrink-0 rounded-md border object-cover" /> : <div className="h-11 w-11 shrink-0 rounded-md border bg-slate-100" />}
                             <div className="min-w-0">
                               <button type="button" onClick={() => router.push(`/app/products/${encodeURIComponent(product.id)}`)} className="block max-w-full truncate text-left font-semibold text-slate-950 hover:text-blue-700" title={product.name}>{product.name}</button>
                               <p className="truncate text-xs text-slate-500" title={product.category ?? undefined}>{product.category || '—'}</p>

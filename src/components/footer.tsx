@@ -64,7 +64,7 @@ export function Footer() {
                 <ul className="space-y-2 text-sm text-slate-600">
                   <li><Link href="/#faq" className="hover:text-slate-900 transition">{t('public.helpCenter')}</Link></li>
                   <li><Link href="/#support" className="hover:text-slate-900 transition">{t('footer.contact')}</Link></li>
-                  <li><a href="mailto:support@leonety.app" className="hover:text-slate-900 transition">{t('footer.emailUs')}</a></li>
+                  <li><a href="mailto:admin@ahmedsultanline.com" className="hover:text-slate-900 transition">{t('footer.emailUs')}</a></li>
                 </ul>
               </div>
               <div>

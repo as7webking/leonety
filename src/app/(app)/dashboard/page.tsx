@@ -15,6 +15,7 @@ import { getIntlLocale } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
+import { dashboardFinancialColumns, dashboardLegacyFinancialColumns, dashboardTimeEntryColumns, isMissingDashboardSnapshotColumns } from '@/lib/performance-query-projections'
 
 interface Income {
   id: string
@@ -135,19 +136,35 @@ export default function DashboardPage() {
     }
 
     try {
-      const [incomeRes, expenseRes, timeRes] = await Promise.all([
-        supabase.from('incomes').select('*').eq('company_id', currentCompany.id).order('date', { ascending: false }),
-        supabase.from('expenses').select('*').eq('company_id', currentCompany.id).order('date', { ascending: false }),
-        supabase.from('time_entries').select('*').eq('company_id', currentCompany.id).order('date', { ascending: false }),
+      const [snapshotIncomeRes, snapshotExpenseRes, timeRes] = await Promise.all([
+        supabase.from('incomes').select(dashboardFinancialColumns).eq('company_id', currentCompany.id).order('date', { ascending: false }),
+        supabase.from('expenses').select(dashboardFinancialColumns).eq('company_id', currentCompany.id).order('date', { ascending: false }),
+        supabase.from('time_entries').select(dashboardTimeEntryColumns).eq('company_id', currentCompany.id).order('date', { ascending: false }),
       ])
 
-      if (incomeRes.error) throw incomeRes.error
-      if (expenseRes.error) throw expenseRes.error
+      const legacyProjectionNeeded = isMissingDashboardSnapshotColumns(snapshotIncomeRes.error) || isMissingDashboardSnapshotColumns(snapshotExpenseRes.error)
+      let incomeData = snapshotIncomeRes.data as unknown as Income[] | null
+      let expenseData = snapshotExpenseRes.data as unknown as Expense[] | null
+      let incomeError = snapshotIncomeRes.error
+      let expenseError = snapshotExpenseRes.error
+      if (legacyProjectionNeeded) {
+        const [legacyIncomeRes, legacyExpenseRes] = await Promise.all([
+          supabase.from('incomes').select(dashboardLegacyFinancialColumns).eq('company_id', currentCompany.id).order('date', { ascending: false }),
+          supabase.from('expenses').select(dashboardLegacyFinancialColumns).eq('company_id', currentCompany.id).order('date', { ascending: false }),
+        ])
+        incomeData = legacyIncomeRes.data as unknown as Income[] | null
+        expenseData = legacyExpenseRes.data as unknown as Expense[] | null
+        incomeError = legacyIncomeRes.error
+        expenseError = legacyExpenseRes.error
+      }
+
+      if (incomeError) throw incomeError
+      if (expenseError) throw expenseError
       if (timeRes.error) throw timeRes.error
 
       const nextMemory: DashboardMemory = {
-        incomes: (incomeRes.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })),
-        expenses: (expenseRes.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })),
+        incomes: (incomeData ?? []).map((item) => ({ ...item, amount: Number(item.amount) })),
+        expenses: (expenseData ?? []).map((item) => ({ ...item, amount: Number(item.amount) })),
         timeEntries: (timeRes.data ?? []).map((item) => ({ ...item, hours: Number(item.hours) })),
       }
       setAppDataMemory(memoryKey, nextMemory)
