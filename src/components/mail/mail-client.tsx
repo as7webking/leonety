@@ -357,8 +357,8 @@ export function MailClient({ companyId }: { companyId: string }) {
       {page.nextCursor && <Button type="button" variant="outline" disabled={loading} onClick={() => void loadMessages(page.nextCursor)}>{t('mail.nextPage')}</Button>}
     </div>}
 
-    {composeOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-2 sm:items-center sm:p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setComposeOpen(false) }}>
-      <form onSubmit={send} className="max-h-[94dvh] w-full max-w-2xl overflow-auto rounded-lg border bg-background p-4 shadow-xl sm:p-6" aria-label={t('mail.compose')}>
+    {composeOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] sm:items-center sm:p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setComposeOpen(false) }}>
+      <form onSubmit={send} className="max-h-[calc(94dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-2xl overflow-auto rounded-lg border bg-background p-4 shadow-xl sm:max-h-[94dvh] sm:p-6" aria-label={t('mail.compose')}>
         <div className="mb-4 flex items-center justify-between gap-2"><h2 className="font-semibold">{replyingTo ? t('mail.reply') : t('mail.compose')}</h2><Button type="button" variant="ghost" size="sm" onClick={() => setComposeOpen(false)}>{t('common.cancel')}</Button></div>
         <label className="mb-3 block text-sm">{t('mail.from')}<select value={composeConnectionId} disabled={Boolean(replyingTo)} onChange={(event) => setComposeConnectionId(event.target.value)} className="mt-1 h-10 w-full min-w-0 rounded-md border bg-background px-3">{visibleConnections.map((item) => <option key={item.id} value={item.id}>{item.email}</option>)}</select></label>
         <label className="mb-3 block text-sm">{t('mail.to')}<input required type="text" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 h-10 w-full min-w-0 rounded-md border bg-background px-3" /></label>

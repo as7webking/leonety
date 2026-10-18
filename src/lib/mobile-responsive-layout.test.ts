@@ -12,6 +12,11 @@ const employeeFormSource = read('../components/employees/employee-profile-form.t
 const notificationSource = read('../app/(app)/settings/notifications/page.tsx')
 const shiftSource = read('../app/(app)/shifts/page.tsx')
 const assistantSource = read('../components/ai-assistant-widget.tsx')
+const mailSource = read('../components/mail/mail-client.tsx')
+const productCreateSource = read('../app/(app)/products/new/page.tsx')
+const productEditSource = read('../app/(app)/products/[productId]/edit/page.tsx')
+const contractSource = read('../app/(app)/contracts/page.tsx')
+const timeSource = read('../app/(app)/time/page.tsx')
 const layoutSource = read('../app/layout.tsx')
 const globalCss = read('../app/globals.css')
 const installerSource = read('../components/pwa-installer.tsx')
@@ -59,5 +64,21 @@ test('enables safe-area insets and keeps the PWA installer clear of device edges
 test('installed PWA does not force portrait orientation on tablets', () => {
   const manifest = JSON.parse(manifestSource) as { orientation?: string }
   assert.equal(manifest.orientation, 'any')
+})
+
+test('mobile mail compose respects safe areas and the dynamic viewport', () => {
+  assert.match(mailSource, /pb-\[max\(0\.5rem,env\(safe-area-inset-bottom\)\)\]/)
+  assert.match(mailSource, /pt-\[max\(0\.5rem,env\(safe-area-inset-top\)\)\]/)
+  assert.match(mailSource, /max-h-\[calc\(94dvh-env\(safe-area-inset-top\)-env\(safe-area-inset-bottom\)\)\]/)
+})
+
+test('sticky mobile form actions reserve the home-indicator safe area', () => {
+  for (const source of [productCreateSource, productEditSource, contractSource]) {
+    assert.match(source, /pb-\[calc\([^\]]*env\(safe-area-inset-bottom\)[^\]]*\)\]/)
+  }
+})
+
+test('time entry numeric fields stack on phone-sized screens', () => {
+  assert.match(timeSource, /grid grid-cols-1 gap-4 sm:grid-cols-2/)
 })
 

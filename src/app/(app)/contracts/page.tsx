@@ -940,7 +940,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
                 </label>
               </section>
 
-              <div className="sticky bottom-0 -mx-6 flex flex-wrap items-center justify-end gap-2 border-t bg-white/95 px-6 py-4 backdrop-blur">
+              <div className="sticky bottom-0 -mx-6 flex flex-wrap items-center justify-end gap-2 border-t bg-white/95 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
                 <Button type="button" variant="outline" onClick={printContract}>
                   <Printer className="h-4 w-4" />
                   {t('contracts.exportPdf')}

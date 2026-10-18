@@ -1086,7 +1086,7 @@ export default function ProductEditPage() {
           </Card>
         )}
 
-        <div className="sticky bottom-0 z-30 -mx-4 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+        <div className="sticky bottom-0 z-30 -mx-4 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
           <Button type="button" variant="outline" onClick={goBack}>{t('common.cancel')}</Button>
           <Button type="submit" disabled={saving}>
             <Save className="h-4 w-4" />
