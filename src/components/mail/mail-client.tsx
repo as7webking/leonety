@@ -92,13 +92,20 @@ export function MailClient({ companyId }: { companyId: string }) {
           setConnectionsLoadedFor(companyId)
         }
       })
-      .catch((caught: unknown) => { if (!cancelled) { setError(errorKey(caught)); setConnectionsLoadFailed(true); setConnectionsLoadedFor(companyId) } })
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setError(connectionErrorKey(caught))
+          setConnectionsLoadFailed(true)
+          setConnectionsLoadedFor(companyId)
+          setPage({ messages: [], nextCursor: null })
+          setLoading(false)
+        }
+      })
     return () => { cancelled = true }
   }, [companyId])
 
   const connectionsReady = connectionsLoadedFor === companyId
   const visibleConnections = useMemo(() => connectionsReady ? connections.filter((item) => item.status === 'connected') : [], [connectionsReady, connections])
-  const attentionConnections = useMemo(() => connectionsReady ? connections.filter((item) => item.status !== 'connected') : [], [connectionsReady, connections])
   const applyRoute = useCallback((route: MailRouteState) => {
     setConnectionId(route.mailboxId)
     setFolder(route.folder)
@@ -129,7 +136,9 @@ export function MailClient({ companyId }: { companyId: string }) {
     setError('')
     try { await loadConnections() } catch (caught) {
       setConnectionsLoadFailed(true)
-      setError(errorKey(caught))
+      setError(connectionErrorKey(caught))
+      setPage({ messages: [], nextCursor: null })
+      setLoading(false)
     }
   }
 
@@ -145,7 +154,7 @@ export function MailClient({ companyId }: { companyId: string }) {
       if (!response.ok) throw new Error(body?.error || 'mailbox_provider_error')
       setMessage(body.message as MailboxMessage)
     } catch (caught) {
-      if (!signal?.aborted) setError(errorKey(caught))
+      if (!signal?.aborted) setError(messageErrorKey(caught))
     } finally {
       if (!signal?.aborted) setBusy(false)
     }
@@ -153,14 +162,23 @@ export function MailClient({ companyId }: { companyId: string }) {
 
   useEffect(() => {
     if (!connectionsReady || connectionsLoadFailed || !routeReady || !requestedMessage) return
-    if (!visibleConnections.some((connection) => connection.id === requestedMessage.connectionId && connection.provider === requestedMessage.provider)) {
+    const requestedConnection = connections.find((connection) => connection.id === requestedMessage.connectionId && connection.provider === requestedMessage.provider)
+    if (!requestedConnection || requestedConnection.status === 'disabled' || requestedConnection.status === 'plan_restricted') {
       setError('mail.error.message_mailbox_unavailable')
+      return
+    }
+    if (requestedConnection.status === 'reconnect_required') {
+      setError('mail.error.reconnect')
+      return
+    }
+    if (requestedConnection.status !== 'connected') {
+      setError('mail.error.mailbox_provider_error')
       return
     }
     const controller = new AbortController()
     void fetchMessage(requestedMessage, controller.signal)
     return () => controller.abort()
-  }, [connectionsReady, connectionsLoadFailed, routeReady, requestedMessage, visibleConnections, fetchMessage])
+  }, [connectionsReady, connectionsLoadFailed, routeReady, requestedMessage, connections, fetchMessage])
 
   const openMessage = (item: MailboxMessageSummary) => {
     const identity: MailMessageRoute = {
@@ -256,11 +274,11 @@ export function MailClient({ companyId }: { companyId: string }) {
     ? new Intl.DateTimeFormat(intlLocaleMap[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
     : ''
 
-  if (connectionsReady && !visibleConnections.length && !loading && !error) return <Card className="p-5">
+  if (connectionsReady && !visibleConnections.length && !loading && !error) return <Card className="min-w-0 p-5">
     <p className="font-medium">{connections.length ? t('mail.mailboxesNeedAttention') : t('mail.noConnectedMailboxes')}</p>
     <p className="mt-1 text-sm text-muted-foreground">{t('mail.settingsDescription')}</p>
-    {connections.length > 0 && <ul className="mt-3 space-y-1 text-sm">{connections.map((item) => <li key={item.id} className="break-all">{item.email} · {t(`mail.status.${item.status}`)}</li>)}</ul>}
-    <Button asChild variant="outline" className="mt-4"><Link href="/app/settings/mailbox">{t('mail.settingsTitle')}</Link></Button>
+    {connections.length > 0 && <ul className="mt-3 space-y-2 text-sm">{connections.map((item) => <li key={item.id} className="min-w-0 break-all">{item.email} · {providerName(item.provider)} · {t(`mail.status.${item.status}`)}</li>)}</ul>}
+    <Button asChild variant="outline" className="mt-4"><Link href="/app/settings/mailbox">{connections.length ? t('mail.settingsTitle') : t('mail.connectMailbox')}</Link></Button>
   </Card>
 
   return <div className="space-y-4">
@@ -286,10 +304,13 @@ export function MailClient({ companyId }: { companyId: string }) {
 
     {error && <p role="alert" className="text-sm text-destructive">{t(error)}</p>}
     {notice && <p role="status" className="text-sm text-emerald-700">{t(notice)}</p>}
-    {attentionConnections.length > 0 && visibleConnections.length > 0 && <Card className="flex flex-wrap items-center justify-between gap-3 border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-      <ul className="min-w-0 space-y-1">{attentionConnections.map((item) => <li key={item.id} className="break-all">{item.email} · {t(`mail.status.${item.status}`)}</li>)}</ul>
-      <Button asChild size="sm" variant="outline"><Link href="/app/settings/mailbox">{t('mail.settingsTitle')}</Link></Button>
-    </Card>}
+    {connections.length > 0 && <section aria-label={t('mail.settingsTitle')} className="min-w-0 rounded-md border p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t('mail.settingsTitle')}</h2><Button asChild size="sm" variant="outline"><Link href="/app/settings/mailbox">{t('mail.manageMailboxes')}</Link></Button></div>
+      <ul className="grid min-w-0 gap-2 sm:grid-cols-2">{connections.map((item) => <li key={item.id} className="min-w-0 rounded-md bg-muted/40 px-3 py-2 text-sm">
+        <p className="break-all font-medium">{item.email}</p>
+        <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-xs text-muted-foreground"><span>{providerName(item.provider)}</span><span>{t(`mail.status.${item.status}`)}</span></p>
+      </li>)}</ul>
+    </section>}
     {page.failedMailboxCount ? <p className="text-sm text-amber-800">{t('mail.failedInboxes')}</p> : null}
 
     {message ? <Card className="min-w-0 p-4 sm:p-6">
@@ -311,10 +332,12 @@ export function MailClient({ companyId }: { companyId: string }) {
     </Card> : requestedMessage ? <Card className="flex items-center justify-between gap-3 p-4">
       <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
         {busy && <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />}
-        <span>{busy ? t('mail.loading') : t('mail.error.message_mailbox_unavailable')}</span>
+        <span>{busy ? t('mail.loading') : t(error || 'mail.error.message_mailbox_unavailable')}</span>
       </div>
       <div className="flex shrink-0 gap-2">
-        {!busy && <Button type="button" variant="outline" size="sm" onClick={() => void fetchMessage(requestedMessage)}>{t('common.tryAgain')}</Button>}
+        {!busy && error === 'mail.error.reconnect'
+          ? <Button asChild type="button" variant="outline" size="sm"><Link href="/app/settings/mailbox">{t('mail.reconnect')}</Link></Button>
+          : !busy && <Button type="button" variant="outline" size="sm" onClick={() => void fetchMessage(requestedMessage)}>{t('common.tryAgain')}</Button>}
         <Button type="button" variant="ghost" size="sm" onClick={backToList}><ArrowLeft className="mr-2 h-4 w-4" />{t('mail.back')}</Button>
       </div>
     </Card> : <div className="space-y-2">
@@ -356,10 +379,30 @@ function splitAddresses(value: string) {
 function errorKey(error: unknown) {
   const code = error instanceof Error ? error.message : 'mailbox_provider_error'
   if (code === 'message_not_found') return 'mail.error.message_mailbox_unavailable'
+  if (code === 'provider_error' || code === 'invalid_request') return 'mail.error.mailbox_provider_error'
+  if (code === 'mailbox_not_found' || code === 'message_identity_mismatch') return 'mail.error.message_mailbox_unavailable'
   if (code === 'reconnect_required') return 'mail.error.reconnect'
   if (code === 'mailbox_load_failed') return 'mail.loadFailed'
   if (code === 'workspace_access_denied') return 'mail.error.workspace'
   if (code === 'invalid_message') return 'mail.error.mailbox_provider_error'
   const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed']
   return known.includes(code) ? `mail.error.${code}` : code.startsWith('mail.error.') ? code : 'mail.error.mailbox_provider_error'
+}
+
+function connectionErrorKey(error: unknown) {
+  const code = error instanceof Error ? error.message : 'mailbox_load_failed'
+  if (code === 'mailbox_load_failed') return 'mail.error.mailbox_load_failed'
+  return errorKey(error)
+}
+
+function messageErrorKey(error: unknown) {
+  const code = error instanceof Error ? error.message : 'mailbox_provider_error'
+  if (['message_not_found', 'mailbox_not_found', 'mailbox_not_connected', 'message_identity_mismatch', 'invalid_message'].includes(code)) {
+    return 'mail.error.message_mailbox_unavailable'
+  }
+  return errorKey(error)
+}
+
+function providerName(provider: Connection['provider']) {
+  return provider === 'google' ? 'Gmail / Google Workspace' : provider === 'microsoft' ? 'Microsoft 365 / Outlook' : 'IMAP/SMTP'
 }
