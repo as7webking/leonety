@@ -888,9 +888,9 @@ export default function TimePage() {
         <div className="space-y-4">
           {timeEntries.map((entry) => (
             <Card key={entry.id}>
-              <CardContent className="flex items-center justify-between pt-6">
-                <div>
-                  <p className="font-medium">{entry.description}</p>
+              <CardContent className="flex min-w-0 flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="break-words font-medium">{entry.description}</p>
                   <p className="text-sm text-muted-foreground">{entry.date}</p>
                   {entry.timer_started_at && (
                     <p className="text-xs text-muted-foreground">
@@ -899,13 +899,15 @@ export default function TimePage() {
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-4">
-                  <p className="font-semibold">{formatHours(Number(entry.hours))}</p>
-                  <Button variant="outline" size="icon" onClick={() => handleEdit(entry)}>
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 sm:justify-end sm:gap-3">
+                  <p className="shrink-0 font-semibold">{formatHours(Number(entry.hours))}</p>
+                  <Button type="button" variant="outline" size="sm" className="min-h-11 px-3 sm:min-h-9" onClick={() => handleEdit(entry)} aria-label={`${t('common.edit')}: ${entry.description}`} title={t('common.edit')}>
                     <Edit className="h-4 w-4" />
+                    {t('common.edit')}
                   </Button>
-                  <Button variant="destructive" size="icon" onClick={() => handleDelete(entry.id)}>
+                  <Button type="button" variant="destructive" size="sm" className="min-h-11 px-3 sm:min-h-9" onClick={() => handleDelete(entry.id)} aria-label={`${t('common.delete')}: ${entry.description}`} title={t('common.delete')}>
                     <Trash2 className="h-4 w-4" />
+                    {t('common.delete')}
                   </Button>
                 </div>
               </CardContent>
