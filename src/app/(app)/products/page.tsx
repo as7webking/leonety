@@ -23,6 +23,7 @@ import { ProductChannelComparisonDialog } from '@/components/products/product-ch
 import type { SupportedComparisonProvider } from '@/lib/product-channel-comparison'
 import { ProductImageUploadError, uploadProductImage } from '@/lib/product-image-upload'
 import { getProductChannelPresentation, getProductChannelTranslationKey } from '@/lib/integration-presentation'
+import { clearPendingWooReconciliation, getPendingWooReconciliation, savePendingWooReconciliation } from '@/lib/woocommerce-sync-safety'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -833,16 +834,21 @@ export default function ProductsPage() {
     setMessage('')
     setError('')
 
+    const pendingWooId = getPendingWooReconciliation(currentCompany.id, product.id)
     const response = await fetch('/api/woocommerce/products/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId: currentCompany.id, productId: product.id }),
+      body: JSON.stringify({ companyId: currentCompany.id, productId: product.id, ...(pendingWooId ? { reconcileWooProductId: pendingWooId } : {}) }),
     })
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
+      if (payload.providerPublished && Number.isSafeInteger(payload.reconciliationWooProductId)) {
+        savePendingWooReconciliation(currentCompany.id, product.id, payload.reconciliationWooProductId)
+      }
       setError(payload.error ?? t('woocommerce.syncFailed'))
     } else {
+      clearPendingWooReconciliation(currentCompany.id, product.id)
       setMessage(t('woocommerce.syncSuccess'))
     }
 
@@ -920,17 +926,24 @@ export default function ProductsPage() {
     for (const entry of runnable) {
       const product = entry.product
       setSyncingProductId(product.id)
+      const pendingWooId = getPendingWooReconciliation(currentCompany.id, product.id)
       const response = await fetch('/api/woocommerce/products/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: currentCompany.id, productId: product.id, ...(entry.overrideId ? { wooCategoryId: entry.overrideId } : {}) }),
+        body: JSON.stringify({ companyId: currentCompany.id, productId: product.id, ...(entry.overrideId ? { wooCategoryId: entry.overrideId } : {}), ...(pendingWooId ? { reconcileWooProductId: pendingWooId } : {}) }),
       })
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
+        if (payload.providerPublished && Number.isSafeInteger(payload.reconciliationWooProductId)) {
+          savePendingWooReconciliation(currentCompany.id, product.id, payload.reconciliationWooProductId)
+        }
         failed += 1
         failureMessages.push(`${product.name}: ${payload.error ?? t('woocommerce.syncFailed')}`)
-      } else done += 1
+      } else {
+        clearPendingWooReconciliation(currentCompany.id, product.id)
+        done += 1
+      }
     }
 
     setSyncingProductId(null)

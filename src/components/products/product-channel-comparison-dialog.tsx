@@ -15,6 +15,7 @@ import {
   type ProductFieldOwner,
   type SupportedComparisonProvider,
 } from '@/lib/product-channel-comparison'
+import { clearPendingWooReconciliation, getPendingWooReconciliation, savePendingWooReconciliation } from '@/lib/woocommerce-sync-safety'
 
 interface Props {
   companyId: string
@@ -141,8 +142,16 @@ export function ProductChannelComparisonDialog({ companyId, connectedProviders, 
         completed = Number(payload.synced ?? 0)
       } else {
         for (const productId of productIds) {
-          const response = await fetch('/api/woocommerce/products/sync', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ companyId, productId }) })
-          if (!response.ok) throw new Error('push_failed')
+          const pendingWooId = getPendingWooReconciliation(companyId, productId)
+          const response = await fetch('/api/woocommerce/products/sync', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ companyId, productId, ...(pendingWooId ? { reconcileWooProductId: pendingWooId } : {}) }) })
+          const payload = await response.json().catch(() => ({}))
+          if (!response.ok) {
+            if (payload.providerPublished && Number.isSafeInteger(payload.reconciliationWooProductId)) {
+              savePendingWooReconciliation(companyId, productId, payload.reconciliationWooProductId)
+            }
+            throw new Error('push_failed')
+          }
+          clearPendingWooReconciliation(companyId, productId)
           completed += 1
         }
       }

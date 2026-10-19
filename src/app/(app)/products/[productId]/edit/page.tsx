@@ -18,6 +18,7 @@ import { deleteOfflineProductDraft, getOfflineProductDraft, saveOfflineProductDr
 import { createClient } from '@/lib/supabase-client'
 import { safeExternalHttpUrl } from '@/lib/external-url'
 import { getProductChannelPresentation } from '@/lib/integration-presentation'
+import { clearPendingWooReconciliation, getPendingWooReconciliation, savePendingWooReconciliation } from '@/lib/woocommerce-sync-safety'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -514,16 +515,23 @@ export default function ProductEditPage() {
 
       if (channel === 'woocommerce') {
         const wooOverride = channelOverrides.woocommerce?.woo_category_id?.trim() || ''
+        const pendingWooId = !options.republishAsNew
+          ? getPendingWooReconciliation(currentCompany.id, product.id)
+          : null
         const response = await fetch('/api/woocommerce/products/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companyId: currentCompany.id, productId: product.id, wooCategoryId: wooOverride || null, ...(options.republishAsNew ? { republishAsNew: true } : {}) }),
+          body: JSON.stringify({ companyId: currentCompany.id, productId: product.id, wooCategoryId: wooOverride || null, ...(pendingWooId ? { reconcileWooProductId: pendingWooId } : {}), ...(options.republishAsNew ? { republishAsNew: true } : {}) }),
         })
         const payload = await response.json().catch(() => ({}))
 
         if (response.ok) {
+          clearPendingWooReconciliation(currentCompany.id, product.id)
           results.push({ channel, status: 'published', message: t('products.channelPublished') })
         } else {
+          if (payload.providerPublished && Number.isSafeInteger(payload.reconciliationWooProductId)) {
+            savePendingWooReconciliation(currentCompany.id, product.id, payload.reconciliationWooProductId)
+          }
           results.push({ channel, status: 'failed', message: payload.error ?? t('products.channelFailed') })
         }
         continue

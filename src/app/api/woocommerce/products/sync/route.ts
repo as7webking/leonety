@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { decryptSecret } from '@/lib/credential-encryption'
 import { safeExternalHttpUrl } from '@/lib/external-url'
+import { findLeonetyWooProduct, getWooImageWarning, isLeonetyWooProduct, persistPublishedWooMapping } from '@/lib/woocommerce-sync-safety'
 import {
   toWooPrice,
   toWooStock,
@@ -43,6 +44,7 @@ interface ProductSyncRow {
 interface WooProductResponse {
   id: number
   permalink?: string
+  meta_data?: Array<{ key?: string; value?: unknown }>
 }
 
 interface WooCategory {
@@ -143,33 +145,6 @@ function buildVariationPayloads(product: ProductRow): WooVariationPayload[] {
     .filter(Boolean) as WooVariationPayload[]
 }
 
-async function getWooImageWarning(imageUrl: string | null | undefined) {
-  if (!imageUrl) return null
-
-  const url = imageUrl.split('?')[0].toLowerCase()
-  if (!url.endsWith('.jpg') && !url.endsWith('.jpeg')) {
-    return 'Product synced without image because WooCommerce publishing requires JPG/JPEG. Upload the image through Leonety to compress it.'
-  }
-
-  try {
-    const response = await fetch(imageUrl, { method: 'HEAD', cache: 'no-store' })
-    const contentType = response.headers.get('content-type') ?? ''
-    const contentLength = Number(response.headers.get('content-length') ?? 0)
-
-    if (contentType && !contentType.toLowerCase().includes('jpeg')) {
-      return 'Product synced without image because the image response is not JPEG.'
-    }
-
-    if (contentLength > 200 * 1024) {
-      return 'Product synced without image because WooCommerce product images must be 200 KB or smaller.'
-    }
-  } catch (error) {
-    return error instanceof Error ? error.message : 'Product synced without image because the image could not be checked.'
-  }
-
-  return null
-}
-
 async function upsertSyncStatus(
   adminSupabase: ReturnType<typeof createSupabaseAdminClient>,
   companyId: string,
@@ -195,20 +170,27 @@ async function upsertSyncStatus(
   }
   if (payload.external_url !== undefined) row.external_url = payload.external_url
 
-  await adminSupabase
+  const { error } = await adminSupabase
     .from('product_syncs')
     .upsert(row, { onConflict: 'company_id,product_id,channel' })
+
+  if (error) throw new Error('sync_mapping_persistence_failed')
 }
 
 export async function POST(request: Request) {
   let companyId = ''
   let productId = ''
   let existingWooProductId: number | null = null
+  let publishedWooProduct: WooProductResponse | null = null
   let republishAsNew = false
 
   try {
     const body = await request.json().catch(() => ({}))
     republishAsNew = body.republishAsNew === true
+    const requestedReconciliationId = Number(body.reconcileWooProductId)
+    const reconcileWooProductId = Number.isSafeInteger(requestedReconciliationId) && requestedReconciliationId > 0
+      ? requestedReconciliationId
+      : null
     companyId = typeof body.companyId === 'string' ? body.companyId : ''
     productId = typeof body.productId === 'string' ? body.productId : ''
 
@@ -262,7 +244,7 @@ export async function POST(request: Request) {
       consumer_secret: decryptSecret(savedConnection.consumer_secret),
     }
     const productRow = product as ProductRow
-    const imageWarning = await getWooImageWarning(productRow.image_url)
+    const imageWarning = getWooImageWarning(productRow.image_url)
     let categoryId: number | undefined
     const overrides = preference?.overrides && typeof preference.overrides === 'object'
       ? preference.overrides as { woo_category_id?: unknown }
@@ -307,6 +289,24 @@ export async function POST(request: Request) {
     }
     const payload = buildBasePayload(productRow, categoryId, !imageWarning)
     let existingWooId = Number((syncRow as ProductSyncRow | null)?.external_product_id ?? 0) || null
+    if (reconcileWooProductId && republishAsNew) {
+      return NextResponse.json({ error: 'A product awaiting mapping recovery cannot be republished as a new item.' }, { status: 409 })
+    }
+
+    if (reconcileWooProductId) {
+      const candidate = await wooRequest<WooProductResponse>(wooConnection, `/products/${reconcileWooProductId}`)
+      if (!isLeonetyWooProduct(candidate, productId)) {
+        return NextResponse.json({ error: 'The WooCommerce item could not be verified as this Leonety product. No changes were made.' }, { status: 409 })
+      }
+      existingWooId = candidate.id
+    } else if (!existingWooId && productRow.sku?.trim()) {
+      const skuCandidates = await wooRequest<WooProductResponse[]>(wooConnection, `/products?sku=${encodeURIComponent(productRow.sku.trim())}`)
+      const match = findLeonetyWooProduct(skuCandidates, productId)
+      if (match.ambiguous) {
+        return NextResponse.json({ error: 'More than one WooCommerce item matches this Leonety product. No duplicate was created; resolve the mapping before retrying.' }, { status: 409 })
+      }
+      if (match.product) existingWooId = match.product.id
+    }
     if (existingWooId && republishAsNew) {
       try {
         await wooRequest<WooProductResponse>(wooConnection, `/products/${existingWooId}`)
@@ -320,6 +320,8 @@ export async function POST(request: Request) {
     const wooProduct = existingWooId
       ? await wooRequest<WooProductResponse>(wooConnection, `/products/${existingWooId}`, { method: 'PUT', body: payload })
       : await wooRequest<WooProductResponse>(wooConnection, '/products', { method: 'POST', body: payload })
+    publishedWooProduct = wooProduct
+    existingWooProductId = wooProduct.id
 
     if (productRow.woo_product_type === 'variable') {
       const variations = buildVariationPayloads(productRow)
@@ -347,21 +349,53 @@ export async function POST(request: Request) {
       }
     }
 
-    await upsertSyncStatus(auth.adminSupabase, companyId, productId, {
-      woo_product_id: wooProduct.id,
-      external_url: safeExternalHttpUrl(wooProduct.permalink),
-      sync_status: 'synced',
-      error_message: imageWarning,
+    const mappingResult = await persistPublishedWooMapping(wooProduct, async (published) => {
+      await upsertSyncStatus(auth.adminSupabase, companyId, productId, {
+        woo_product_id: published.id,
+        external_url: safeExternalHttpUrl(published.permalink),
+        sync_status: 'synced',
+        error_message: imageWarning,
+      })
     })
+    if (mappingResult.status === 'mapping_failed') {
+      return NextResponse.json({
+        error: 'WooCommerce published the product, but Leonety could not save its mapping. Retry sync to reconcile the existing WooCommerce item; no new item should be created.',
+        providerPublished: true,
+        reconciliationWooProductId: mappingResult.reconciliationWooProductId,
+        externalUrl: safeExternalHttpUrl(wooProduct.permalink),
+      }, { status: 502 })
+    }
+
+    publishedWooProduct = null
 
     return NextResponse.json({ ok: true, wooProductId: wooProduct.id, externalUrl: safeExternalHttpUrl(wooProduct.permalink), warning: imageWarning })
   } catch (error) {
+    const providerStatus = error instanceof WooRequestError ? error.status : null
     const message = error instanceof WooRequestError && error.status === 404 && existingWooProductId && error.providerCode?.includes('product_invalid_id')
       ? 'The mapped WooCommerce product no longer exists. Confirm publishing as a new product to create a replacement.'
       : error instanceof WooRequestError && error.status === 404 && existingWooProductId
         ? `WooCommerce returned 404 for mapped product ${existingWooProductId}. The mapping was retained and no duplicate was created; verify the REST API endpoint before retrying.`
-      : formatApiError(error)
-    console.error('WooCommerce product sync failed:', { companyId, productId, message })
+        : providerStatus === 401
+          ? 'WooCommerce rejected the connection credentials. Check the store connection.'
+          : providerStatus === 403
+            ? 'WooCommerce denied this operation. Check the REST API key permissions.'
+            : providerStatus === 429
+              ? 'WooCommerce rate limit reached. Wait a moment, then retry.'
+              : providerStatus !== null && providerStatus >= 500
+                ? 'WooCommerce is temporarily unavailable. Retry the sync later.'
+                : 'WooCommerce product sync failed. Check the connection and try again.'
+
+    if (publishedWooProduct) {
+      console.error('WooCommerce published product; sync completion failed.', { companyId, productId })
+      return NextResponse.json({
+        error: 'WooCommerce accepted the product, but Leonety could not complete synchronization. Retry sync to reconcile the existing item; no new item should be created.',
+        providerPublished: true,
+        reconciliationWooProductId: publishedWooProduct.id,
+        externalUrl: safeExternalHttpUrl(publishedWooProduct.permalink),
+      }, { status: 502 })
+    }
+
+    console.error('WooCommerce product sync failed.', { companyId, productId, providerError: providerStatus ?? 'internal' })
 
     if (companyId && productId) {
       const auth = await requireOwnedCompany(companyId)
@@ -369,13 +403,13 @@ export async function POST(request: Request) {
         await upsertSyncStatus(auth.adminSupabase, companyId, productId, {
           sync_status: 'failed',
           error_message: message,
-        })
+        }).catch(() => undefined)
       }
     }
 
     const status = error instanceof WooRequestError
       ? error.status === 429 ? 429 : error.status === 404 ? 409 : error.status >= 500 ? 502 : 400
-      : message.includes('product_syncs') || message.includes('woocommerce_connections') ? 400 : 500
+      : 500
     return NextResponse.json({ error: message }, { status })
   }
 }
