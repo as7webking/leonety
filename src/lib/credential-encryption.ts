@@ -3,6 +3,29 @@ import crypto from 'node:crypto'
 
 const ENCRYPTED_PREFIX = 'enc:v1'
 const ENV_NAME = 'LEONETY_CREDENTIAL_ENCRYPTION_KEY'
+const INVALID_CREDENTIAL_ERROR = 'Saved credential is invalid or cannot be decrypted.'
+
+export type CredentialFormat =
+  | 'CURRENT_ENCRYPTED'
+  | 'LEGACY_PLAINTEXT_OR_LEGACY_FORMAT'
+  | 'INVALID_ENCRYPTED_VALUE'
+
+function decodeBase64Url(value: string) {
+  if (!/^[A-Za-z0-9_-]*$/.test(value)) return null
+  const decoded = Buffer.from(value, 'base64url')
+  return decoded.toString('base64url') === value ? decoded : null
+}
+
+function parseCurrentCiphertext(value: string) {
+  const parts = value.split(':')
+  if (parts.length !== 5 || parts[0] !== 'enc' || parts[1] !== 'v1') return null
+
+  const iv = decodeBase64Url(parts[2])
+  const tag = decodeBase64Url(parts[3])
+  const ciphertext = decodeBase64Url(parts[4])
+  if (!iv || iv.length !== 12 || !tag || tag.length !== 16 || !ciphertext) return null
+  return { iv, tag, ciphertext }
+}
 
 function getEncryptionKey() {
   const secret = process.env[ENV_NAME]
@@ -15,7 +38,14 @@ function getEncryptionKey() {
 }
 
 export function isEncryptedSecret(value: string | null | undefined) {
-  return typeof value === 'string' && value.startsWith(`${ENCRYPTED_PREFIX}:`)
+  return typeof value === 'string' && value.startsWith('enc:')
+}
+
+export function classifySecretFormat(value: string | null | undefined): CredentialFormat {
+  if (typeof value !== 'string' || !value.startsWith('enc:')) {
+    return 'LEGACY_PLAINTEXT_OR_LEGACY_FORMAT'
+  }
+  return parseCurrentCiphertext(value) ? 'CURRENT_ENCRYPTED' : 'INVALID_ENCRYPTED_VALUE'
 }
 
 export function encryptSecret(value: string) {
@@ -34,24 +64,24 @@ export function encryptSecret(value: string) {
 
 export function decryptSecret(value: string | null | undefined) {
   if (!value) return ''
-  if (!isEncryptedSecret(value)) return value
+  const format = classifySecretFormat(value)
+  if (format === 'LEGACY_PLAINTEXT_OR_LEGACY_FORMAT') return value
+  if (format === 'INVALID_ENCRYPTED_VALUE') throw new Error(INVALID_CREDENTIAL_ERROR)
 
-  const [, , ivText, tagText, encryptedText] = value.split(':')
-  if (!ivText || !tagText || !encryptedText) {
-    throw new Error('Saved integration secret is not readable.')
+  const parsed = parseCurrentCiphertext(value)
+  if (!parsed) throw new Error(INVALID_CREDENTIAL_ERROR)
+
+  let decipher: crypto.DecipherGCM
+  try {
+    decipher = crypto.createDecipheriv('aes-256-gcm', getEncryptionKey(), parsed.iv)
+    decipher.setAuthTag(parsed.tag)
+    return Buffer.concat([
+      decipher.update(parsed.ciphertext),
+      decipher.final(),
+    ]).toString('utf8')
+  } catch {
+    throw new Error(INVALID_CREDENTIAL_ERROR)
   }
-
-  const decipher = crypto.createDecipheriv(
-    'aes-256-gcm',
-    getEncryptionKey(),
-    Buffer.from(ivText, 'base64url')
-  )
-  decipher.setAuthTag(Buffer.from(tagText, 'base64url'))
-
-  return Buffer.concat([
-    decipher.update(Buffer.from(encryptedText, 'base64url')),
-    decipher.final(),
-  ]).toString('utf8')
 }
 
 export function maskSecret(value: string | null | undefined) {
