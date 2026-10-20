@@ -27,6 +27,19 @@ function parseCurrentCiphertext(value: string) {
   return { iv, tag, ciphertext }
 }
 
+function decryptCurrentCiphertext(parsed: NonNullable<ReturnType<typeof parseCurrentCiphertext>>) {
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', getEncryptionKey(), parsed.iv)
+    decipher.setAuthTag(parsed.tag)
+    return Buffer.concat([
+      decipher.update(parsed.ciphertext),
+      decipher.final(),
+    ]).toString('utf8')
+  } catch {
+    throw new Error(INVALID_CREDENTIAL_ERROR)
+  }
+}
+
 function getEncryptionKey() {
   const secret = process.env[ENV_NAME]
 
@@ -45,7 +58,14 @@ export function classifySecretFormat(value: string | null | undefined): Credenti
   if (typeof value !== 'string' || !value.startsWith('enc:')) {
     return 'LEGACY_PLAINTEXT_OR_LEGACY_FORMAT'
   }
-  return parseCurrentCiphertext(value) ? 'CURRENT_ENCRYPTED' : 'INVALID_ENCRYPTED_VALUE'
+  const parsed = parseCurrentCiphertext(value)
+  if (!parsed) return 'INVALID_ENCRYPTED_VALUE'
+  try {
+    decryptCurrentCiphertext(parsed)
+    return 'CURRENT_ENCRYPTED'
+  } catch {
+    return 'INVALID_ENCRYPTED_VALUE'
+  }
 }
 
 export function encryptSecret(value: string) {
@@ -70,18 +90,15 @@ export function decryptSecret(value: string | null | undefined) {
 
   const parsed = parseCurrentCiphertext(value)
   if (!parsed) throw new Error(INVALID_CREDENTIAL_ERROR)
+  return decryptCurrentCiphertext(parsed)
+}
 
-  let decipher: crypto.DecipherGCM
-  try {
-    decipher = crypto.createDecipheriv('aes-256-gcm', getEncryptionKey(), parsed.iv)
-    decipher.setAuthTag(parsed.tag)
-    return Buffer.concat([
-      decipher.update(parsed.ciphertext),
-      decipher.final(),
-    ]).toString('utf8')
-  } catch {
-    throw new Error(INVALID_CREDENTIAL_ERROR)
-  }
+export function encryptSecretForStorage(value: string | null | undefined) {
+  if (value === null || value === undefined || value === '') return value ?? ''
+  const format = classifySecretFormat(value)
+  if (format === 'CURRENT_ENCRYPTED') return value
+  if (format === 'INVALID_ENCRYPTED_VALUE') throw new Error(INVALID_CREDENTIAL_ERROR)
+  return encryptSecret(value)
 }
 
 export function maskSecret(value: string | null | undefined) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
-import { encryptSecret, maskSecret } from '@/lib/credential-encryption'
+import { encryptSecret, encryptSecretForStorage, maskSecret } from '@/lib/credential-encryption'
 import { normalizeWooStoreUrl } from '@/lib/woocommerce'
 
 export const runtime = 'nodejs'
@@ -73,8 +73,8 @@ export async function POST(request: Request) {
     const payload = {
       company_id: companyId,
       store_url: normalizedStoreUrl,
-      consumer_key: consumerKey ? encryptSecret(consumerKey) : (existing as ConnectionRow | null)?.consumer_key,
-      consumer_secret: consumerSecret ? encryptSecret(consumerSecret) : (existing as ConnectionRow | null)?.consumer_secret,
+      consumer_key: consumerKey ? encryptSecret(consumerKey) : encryptSecretForStorage((existing as ConnectionRow | null)?.consumer_key),
+      consumer_secret: consumerSecret ? encryptSecret(consumerSecret) : encryptSecretForStorage((existing as ConnectionRow | null)?.consumer_secret),
       inventory_sync_enabled: inventorySyncEnabled,
       active: true,
       updated_at: new Date().toISOString(),

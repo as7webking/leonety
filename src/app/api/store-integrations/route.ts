@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
-import { encryptSecret, maskSecret as maskStoredSecret } from '@/lib/credential-encryption'
+import { encryptSecret, encryptSecretForStorage, maskSecret as maskStoredSecret } from '@/lib/credential-encryption'
 import { isStoreProvider, normalizeStoreUrl, type StoreProvider } from '@/lib/store-integrations'
 
 export const runtime = 'nodejs'
@@ -84,7 +84,7 @@ function responseError(error: unknown, fallbackStatus = 500) {
 }
 
 function secretForStorage(nextValue: string, existingValue?: string | null) {
-  if (!nextValue) return existingValue || ''
+  if (!nextValue) return encryptSecretForStorage(existingValue) || ''
   return encryptSecret(nextValue)
 }
 

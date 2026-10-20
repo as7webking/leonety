@@ -29,6 +29,17 @@ test('credential format detection preserves legacy data and rejects malformed en
   assert.equal(encryption.isEncryptedSecret('enc:v1:broken'), true)
 })
 
+test('explicit connection saves rotate legacy values without revealing them', () => {
+  process.env.LEONETY_CREDENTIAL_ENCRYPTION_KEY = 'test-key-with-more-than-thirty-two-characters'
+  const legacy = 'legacy-credential-value-never-printed'
+  const rotated = encryption.encryptSecretForStorage(legacy)
+  assert.notEqual(rotated, legacy)
+  assert.equal(encryption.classifySecretFormat(rotated), 'CURRENT_ENCRYPTED')
+  assert.equal(encryption.decryptSecret(rotated), legacy)
+  assert.equal(encryption.encryptSecretForStorage(rotated), rotated)
+  assert.equal(encryption.encryptSecretForStorage(null), '')
+})
+
 test('new credentials round-trip using the authenticated current format', () => {
   process.env.LEONETY_CREDENTIAL_ENCRYPTION_KEY = 'test-key-with-more-than-thirty-two-characters'
   const secret = 'credential-that-must-never-be-logged-or-returned-on-failure'
@@ -53,6 +64,7 @@ test('malformed, tampered, wrong-key and missing-key ciphertext fail without rev
   ]
 
   process.env.LEONETY_CREDENTIAL_ENCRYPTION_KEY = 'a-different-encryption-key-with-adequate-length'
+  assert.equal(encryption.classifySecretFormat(encrypted), 'INVALID_ENCRYPTED_VALUE')
   failures.push(() => encryption.decryptSecret(encrypted))
   delete process.env.LEONETY_CREDENTIAL_ENCRYPTION_KEY
   failures.push(() => encryption.decryptSecret(encrypted))
@@ -93,7 +105,8 @@ test('mailbox and integration credential creation, reconnect and refresh paths e
   assert.match(storeRoute, /return encryptSecret\(nextValue\)/)
   assert.match(storeOAuth, /access_token:\s*tokens\.accessToken\s*\?\s*encryptSecret/)
   assert.match(storeOAuth, /refresh_token:\s*tokens\.refreshToken\s*\?\s*encryptSecret/)
-  assert.match(wooRoute, /consumer_key:\s*consumerKey\s*\?\s*encryptSecret/)
-  assert.match(wooRoute, /consumer_secret:\s*consumerSecret\s*\?\s*encryptSecret/)
+  assert.match(wooRoute, /consumer_key:\s*consumerKey\s*\?\s*encryptSecret\(consumerKey\)\s*:\s*encryptSecretForStorage/)
+  assert.match(wooRoute, /consumer_secret:\s*consumerSecret\s*\?\s*encryptSecret\(consumerSecret\)\s*:\s*encryptSecretForStorage/)
+  assert.match(storeRoute, /if \(!nextValue\) return encryptSecretForStorage\(existingValue\)/)
   assert.match(webhookRoute, /order_webhook_secret:\s*encryptSecret\(secret\)/)
 })
