@@ -82,3 +82,14 @@ test('route checks mapping persistence and returns reconciliation identity after
   assert.doesNotMatch(route, /method:\s*'HEAD'/)
   assert.doesNotMatch(route, /fetch\(imageUrl/)
 })
+
+test('external URL remains optional and only the validated provider permalink is persisted', () => {
+  assert.match(route, /external_url\?: string \| null/)
+  assert.match(route, /if \(payload\.external_url !== undefined\) row\.external_url = payload\.external_url/)
+  assert.match(route, /external_url: safeExternalHttpUrl\(published\.permalink\)/)
+  assert.match(route, /externalUrl: safeExternalHttpUrl\(wooProduct\.permalink\)/)
+  assert.match(route, /if \(error\) throw new Error\('sync_mapping_persistence_failed'\)/)
+  const migration = readFileSync(resolve('supabase/migrations/20261015100000.sql'), 'utf8')
+  assert.match(migration, /add column if not exists external_url text/i)
+  assert.doesNotMatch(migration, /external_url\s+text\s+not\s+null/i)
+})

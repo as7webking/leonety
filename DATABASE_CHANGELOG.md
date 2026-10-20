@@ -26,66 +26,37 @@ Status meanings:
   production migration. It is a consolidated baseline with incomplete core DDL;
   production migration history is not verified. Its timestamp-only filename is
   also not recognized by the Supabase CLI.
-- Active timers: reconcile the current SQL definition with the application and live
-  catalog. The file creates `active_timers` without `user_id`, while its trigger and
-  the application query `user_id`.
-- Legal settings: reconcile the 15 legal columns used by
-  `src/app/api/workspaces/legal/route.ts` with a reviewed, timestamped migration.
-  They are not represented in the current repository migration.
-- Global operator user directory: keep blocked until
-  `20261008221134.sql` has been manually reviewed, applied and
-  verified. The existing consolidated file creates `admin_accounts` without enabling
-  RLS or revoking browser-role grants.
+- Admin routine security sign-off: production confirms restrictive
+  `admin_accounts` RLS/grants, but the exact production definition of
+  `is_current_user_admin` was not included in the inspection output and no repository
+  definition exists. Do not claim full routine verification until its definition and
+  execute ACL are reviewed.
 
 ### PENDING
 
-- Employee Personalnummer: inspect production first, then use
-  `supabase/migrations/20261008233000.sql` only if the audited
-  objects are absent or compatible. This timestamped file corrects the counter
-  padding bug in Edit 4 while retaining the same schema. Do not apply the entire
-  consolidated file or apply both definitions independently.
+- Employee number formatting migration `20261008233000.sql`: production already has
+  the employee number, settings, workspace-scoped uniqueness and RLS. Migration
+  history remains unknown; review the counter-padding correction separately before
+  considering manual application. Do not apply the schema proposal blindly.
 - Employee shift overlap protection: inspect production shifts for existing
   overlaps, then review `supabase/migrations/20261009120000.sql`.
   It adds a transaction-serialized trigger; it has not been applied or verified.
-- Invoice document snapshots: verify the live `public.invoices` table and
-  permissions, then review
-  `supabase/migrations/20261009160000.sql`.
-  It adds a nullable JSONB snapshot and an immutability trigger; no historical
-  rows are backfilled.
-- Google mailbox schema: inspect live `companies.id`/`owner_id` types and
-  `mailbox_connections` before considering
-  `supabase/migrations/20261010130000.sql`. Its
-  production status is unknown and it has not been executed.
-- Multi-provider mailbox extension:
-  `supabase/migrations/20261012120000.sql` depends on
-  manual review/application of `20261010130000.sql`.
-  Inspect the live table and RPC prerequisites first; neither migration has been
-  executed or verified.
-- Leonety activity tracking: review
-  `supabase/migrations/20261010150000.sql` and verify
-  the `auth.users.id` UUID reference before manual application. It is pending and
-  not executed; Admin Users reports activity as unknown until available.
-- Transaction currency snapshots: review and manually apply
-  `supabase/migrations/20261012150000.sql`
-  before deploying the matching finance UI. It adds nullable converted amounts and
-  FX metadata to incomes/expenses only; it deliberately does not backfill history.
+- Activity tracking `20261010150000.sql`: production migration-history status remains
+  unknown; the production inspection supplied for this cycle did not cover this
+  object.
 - Urgent order acknowledgement/escalation: review
   `supabase/migrations/20261012170000.sql`.
   It depends on the existing `incoming_order_alert_events` and
   `order_notification_settings` objects; verify those live tables/columns first.
   The new code requires these fields and `CRON_SECRET` before deployment. The
   migration has not been executed or production-verified.
-- `supabase/migrations/20261015100000.sql`: add nullable
-  `product_syncs.external_url` to persist a provider-returned product URL. This is
-  required before deploying the matching WooCommerce integration visibility code.
-  It is additive and has not been executed or production-verified.
 
 ### READY TO APPLY
 
-- `20261008221134.sql`: enable RLS on the Leonety operator
-  allowlist and revoke all direct `public`/`anon`/`authenticated` privileges while
-  retaining the minimum server `service_role` privileges. Manual review and
-  production application are required; status remains unapplied.
+- `supabase/migrations/20261015100000.sql`: add nullable `text` column
+  `public.product_syncs.external_url`. Production inspection confirmed this column
+  is missing. This is the only migration needed for the verified findings in this
+  task; manually review it before execution.
 
 ### PENDING DEVELOPMENT
 
@@ -115,22 +86,50 @@ Status meanings:
   applied...” is not independent production verification.
 - The 2026-09-13 audit reports that production contained objects not reconstructible
   from the then-available migration archive and was likely changed with manual SQL.
-- Consequently, all production statuses below remain `UNKNOWN` until verified from
-  the live catalog and an explicit deployment record.
+- A read-only production catalog inspection was supplied on 2026-10-20. It confirms
+  selected current schema/security properties, but does not prove which local SQL
+  files were applied or when. Production object state and migration-history state
+  are recorded separately below.
+
+## Production Verification Snapshot - 2026-10-20
+
+These are production catalog findings, not migration-history claims:
+
+- `admin_accounts`: RLS enabled; `anon` and `authenticated` have no effective table
+  privileges; `service_role` has access; the policy permits selecting the caller's
+  own admin row; no table trigger was found. Routine `is_current_user_admin` still
+  needs its exact production definition and execute ACL reviewed.
+- `active_timers.user_id` exists and references `auth.users(id)`; `company_id` is a
+  required UUID FK and `accumulated_seconds` is a required integer. This corrects the
+  old production claim that `user_id` was absent. The consolidated repository SQL
+  still has an internal omission and is not a safe fresh baseline.
+- All Legal/Impressum fields selected by
+  `src/app/api/workspaces/legal/route.ts` are present on `companies`.
+- `invoices.currency`, `invoices.document_snapshot` (JSONB), and invoice snapshot
+  protection/requirement triggers are present. No snapshot migration is needed now;
+  this does not mark a local migration applied.
+- Income and expense currency snapshot fields are present. Historical finance values
+  must not be recalculated.
+- `employees.employee_number`, required `employee_number_settings` fields,
+  workspace-scoped uniqueness and relevant RLS policies are present.
+- `mailbox_connections` has the current application columns and supports the current
+  multi-provider architecture. Do not apply the obsolete Google-only migration.
+- `product_syncs.external_url` is missing. The existing nullable additive migration
+  below is ready for manual review/application.
 
 ## Chronological Change History
 
 ### 2026-10-15 - Persist external product URLs for channel mappings
 
-- **Status:** `PENDING`
+- **Status:** `READY TO APPLY`
 - **Migration filename:** `supabase/migrations/20261015100000.sql`
 - **Purpose:** retain the actual public product URL returned by the provider, so
   Leonety can link to a published external item without constructing a URL from an
   external ID.
 - **Main objects:** nullable `product_syncs.external_url`.
-- **Production status:** `UNKNOWN`; SQL has not been executed.
-- **Verification status:** repository review only; verify the live `product_syncs`
-  table and apply manually before deploying code that reads/writes the new column.
+- **Production status:** `MISSING` (confirmed by read-only inspection on 2026-10-20).
+- **Verification status:** application use confirmed; the existing migration is
+  additive/idempotent. It is `READY TO APPLY`, not `APPLIED`.
 - **Notes/dependencies:** old mappings remain NULL and do not receive fabricated
   URLs. No existing mapping or transaction data is rewritten.
 
@@ -145,11 +144,14 @@ Status meanings:
   access.
 - **Main objects:** `active_timers`; `start_active_timer`, `pause_active_timer`,
   `resume_active_timer`, `stop_active_timer`, `enforce_active_timer_limit`.
-- **Production status:** `UNKNOWN`
-- **Verification status:** repository inconsistency confirmed; live final definition
-  still requires authoritative verification.
+- **Production status:** `active_timers.user_id` exists and references
+  `auth.users(id)` (verified 2026-10-20); migration-history status remains `UNKNOWN`.
+- **Verification status:** the production field is present; repository migration has
+  an internal inconsistency.
 - **Notes/dependencies:** depends on `companies`, `time_entries`, and `auth.uid()`.
-  Current consolidated DDL omits `active_timers.user_id` while later logic requires it.
+  The consolidated repository DDL still omits `active_timers.user_id` while later
+  logic requires it; this is a repository baseline defect, not current production
+  schema state.
 
 ### 2026-04-15 - Finance exchange-rate snapshots and timer start RPC
 
@@ -186,7 +188,9 @@ Status meanings:
 - **Purpose:** user-level subscription state and operator account records.
 - **Main objects:** `user_subscriptions`, `admin_accounts`.
 - **Production status:** `UNKNOWN`
-- **Verification status:** `admin_accounts` security remains under audit.
+- **Verification status:** production RLS and effective table privileges for
+  `admin_accounts` were verified on 2026-10-20. Routine-level review of the
+  production `is_current_user_admin` definition/ACL remains open.
 - **Notes/dependencies:** references `auth.users`; it does not modify `auth.users`.
 
 ### 2026-06-15 - Employees, locations, shifts, products and stock
@@ -440,14 +444,16 @@ Status meanings:
 - **Purpose:** optional workspace-scoped employee numbers and atomic allocation.
 - **Main objects:** `employees.employee_number`, `employee_number_settings`, unique
   indexes, initialization/counter/allocation triggers.
-- **Production status:** `UNKNOWN`
+- **Production status:** employee number, settings columns, workspace-scoped unique
+  index and relevant RLS policies are `PRESENT` (verified 2026-10-20); migration
+  history remains `UNKNOWN`.
 - **Verification status:** the Edit 4 schema was audited and one counter-formatting
-  defect was corrected in the timestamped migration. Production presence remains
-  `UNKNOWN`; the migration has not been executed.
+  defect was corrected in the timestamped migration. Production has the architecture,
+  but this does not prove the timestamped migration was applied.
 - **Notes/dependencies:** allocation locks the workspace settings row and uses a
   workspace-scoped unique index. The corrected formatter avoids PostgreSQL `lpad`
-  truncation after the counter exceeds the configured minimum width. Apply only
-  after read-only production inspection; do not apply both SQL definitions or use
+  truncation after the counter exceeds the configured minimum width. Review this
+  narrow formatting correction separately; do not reapply the schema blindly or use
   client-side `max + 1`.
 
 ### 2026-10-09 - Concurrent employee shift overlap protection
@@ -483,39 +489,42 @@ Status meanings:
 
 ### 2026-10-09 - Finalized invoice document snapshots
 
-- **Status:** `PENDING`
+- **Status:** production schema `CONFIRMED`; migration history `UNKNOWN`.
 - **Migration filename:**
   `supabase/migrations/20261009160000.sql`
 - **Purpose:** preserve seller, buyer and template presentation when a draft first
   becomes non-draft, without duplicating persisted invoice amounts or line items.
 - **Main objects:** nullable `invoices.document_snapshot` JSONB column and trigger
   preventing changes after a non-null snapshot has been stored.
-- **Production status:** `UNKNOWN`; migration has not been executed.
-- **Verification status:** application expects the `invoices` table, but the
-  consolidated repository SQL does not create its base table. Verify live table
-  existence, column state and permissions before applying.
+- **Production status:** `invoices.currency`, JSONB `document_snapshot`, and
+  snapshot protection/requirement triggers are `PRESENT` (verified 2026-10-20).
+- **Verification status:** production catalog verified; no invoice snapshot schema
+  migration is needed now. Local migration history remains unknown, so the proposal
+  is not marked `APPLIED`.
 - **Notes/dependencies:** deliberately performs no historical backfill; old issued
   invoices without a snapshot retain a clearly disclosed live-data print fallback.
 
 ### 2026-10-10 - Timestamped Google mailbox connection schema
 
-- **Status:** `PENDING`
+- **Status:** `SUPERSEDED` as a deployment source by the verified production
+  multi-provider architecture; migration-history identity remains `UNKNOWN`.
 - **Migration filename:** `supabase/migrations/20261010130000.sql`
 - **Purpose:** provide a deployable, additive owner-scoped connection model for the
   first Google human mailbox provider.
 - **Main objects:** `public.mailbox_connections`, owner RLS policies, server-only
   grants, two lookup/uniqueness indexes, and an `updated_at` trigger.
-- **Production status:** `UNKNOWN`; migration was not executed.
-- **Verification status:** repository/application evidence only. Before manual
-  application, inspect live `companies.id`/`owner_id` types and whether a compatible
-  `mailbox_connections` table already exists.
+- **Production status:** current application columns and multi-provider architecture
+  are `PRESENT` (verified 2026-10-20); migration-history status is `UNKNOWN`.
+- **Verification status:** production already has a newer multi-provider table. Do
+  not apply this obsolete Google-only schema. The local migration is not marked
+  applied because deployment identity is unproven.
 - **Notes/dependencies:** tokens use existing `LEONETY_CREDENTIAL_ENCRYPTION_KEY`
   AES-256-GCM encryption. No Gmail message content is stored. The migration aborts
   if required company UUID columns are absent or incompatible.
 
 ### 2026-10-12 - Multi-provider mailbox connections and plan slots
 
-- **Status:** `PENDING`
+- **Status:** production schema `CONFIRMED`; migration history `UNKNOWN`.
 - **Migration filename:** `supabase/migrations/20261012120000.sql`
 - **Purpose:** extend the existing pending mailbox connection model for Microsoft
   OAuth and encrypted TLS-only IMAP/SMTP settings; retain credentials through plan
@@ -523,10 +532,11 @@ Status meanings:
 - **Main objects:** additional display/account/configuration columns, provider and
   status constraints, one lookup index, and service-role-only atomic create/activate
   functions.
-- **Production status:** `UNKNOWN`; SQL has not been executed.
-- **Verification status:** repository-only. It depends on the reviewed shape from
-  `20261010130000.sql`; inspect live schema, policies,
-  grants and company foreign-key types before applying either file.
+- **Production status:** current application columns and multi-provider support are
+  `PRESENT` (verified 2026-10-20); migration-history status is `UNKNOWN`.
+- **Verification status:** production has the current architecture. Do not replay the
+  Google-only prerequisite or apply this SQL without comparing each operation to the
+  live table; its history identity is not confirmed.
 - **Notes/dependencies:** the migration drops/replaces only mailbox provider,
   credential-format, scope and status checks so the same table accepts the added
   providers. Existing owner RLS and server-only table grants remain unchanged.
@@ -534,20 +544,21 @@ Status meanings:
 
 ### 2026-10-12 - Immutable transaction currency snapshots
 
-- **Status:** `PENDING`
+- **Status:** production schema `CONFIRMED`; migration history `UNKNOWN`.
 - **Migration filename:** `supabase/migrations/20261012150000.sql`
 - **Purpose:** store the workspace-currency amount and provider/date metadata beside
   the original amount/currency for newly created or explicitly repriced income and
   expense records.
 - **Main objects:** nullable `workspace_amount`, `exchange_rate_source`,
   `exchange_rate_at`, and `exchange_rate_date` columns on `incomes` and `expenses`.
-- **Production status:** `UNKNOWN`; SQL was not executed.
-- **Verification status:** repository SQL review only; verify live columns and table
-  grants before manual application.
+- **Production status:** current income and expense currency snapshot fields are
+  `PRESENT` (verified 2026-10-20); migration-history status is `UNKNOWN`.
+- **Verification status:** production column presence is confirmed. No currency
+  snapshot migration is needed now; historical amounts must not be recalculated.
 - **Notes/dependencies:** relies on existing `exchange_rate` and
   `workspace_currency` columns. No old rows are backfilled or recalculated. The
-  application must not be deployed until the additive migration is applied and
-  verified.
+  corresponding production columns are present; the local migration is not marked
+  applied because deployment identity remains unknown.
 
 ### 2026-10-10 - Coarse Leonety user activity
 
@@ -565,28 +576,33 @@ Status meanings:
 
 ### Date unknown - Workspace Legal / Impressum columns
 
-- **Status:** `BLOCKED`
+- **Status:** production schema `CONFIRMED`; migration history `UNKNOWN`.
 - **Migration filename:** not present in `supabase/migrations/`
 - **Purpose:** authoritative workspace legal configuration.
 - **Main objects:** 15 legal columns expected on `companies` by
   `src/app/api/workspaces/legal/route.ts`.
-- **Production status:** `UNKNOWN`
-- **Verification status:** application expectation confirmed; repository migration
-  coverage missing.
-- **Notes/dependencies:** existing production columns must be inspected before any
-  additive repair is authored; invoice snapshots are a separate concern.
+- **Production status:** all application-required Legal columns are `PRESENT`
+  (verified 2026-10-20).
+- **Verification status:** no repair migration is required for these fields. This
+  does not identify which SQL or manual action introduced them.
+- **Notes/dependencies:** Legal fields and invoice document snapshots are separate.
 
 ### 2026-10-08 - Secure operator administrator allowlist
 
-- **Status:** `READY TO APPLY`
+- **Status:** migration history `UNKNOWN`; equivalent restrictive production state
+  confirmed.
 - **Migration filename:**
   `supabase/migrations/20261008221134.sql`
 - **Purpose:** make `admin_accounts` server-only before the global auth-user directory
   can be considered safe for production use.
 - **Main objects:** `admin_accounts` RLS and table grants.
-- **Production status:** `UNKNOWN` (not executed by this task).
-- **Verification status:** repository authorization paths audited; manual migration
-  application and read-only production verification still required.
+- **Production status:** RLS enabled, no effective `anon`/`authenticated` table
+  privileges, `service_role` access, self-row SELECT policy, and no table trigger
+  (verified 2026-10-20).
+- **Verification status:** production catalog state confirmed. The migration is not
+  marked applied because no migration-history evidence maps it to production. The
+  production routine `is_current_user_admin` still needs its exact definition/ACL
+  reviewed.
 - **Notes/dependencies:** current server authorization uses the service-role client;
   no current client component directly queries `admin_accounts`. The migration does
   not alter `auth.users` and deliberately creates no browser policy.
