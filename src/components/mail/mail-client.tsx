@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, LoaderCircle, MailPlus, RefreshCw, Reply, Send } from 'lucide-react'
 import { useI18n } from '@/contexts/i18n-context'
 import { intlLocaleMap } from '@/lib/i18n'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import Link from 'next/link'
 import { mailRouteHref, parseMailRoute, type MailMessageRoute, type MailRouteState } from '@/lib/mailbox/navigation'
+import { refreshMailView, type MailView } from '@/lib/mailbox/refresh'
 import type { MailboxFilter, MailboxMessage, MailboxMessageSummary } from '@/lib/mailbox/types'
 
 interface Connection {
@@ -37,6 +38,7 @@ export function MailClient({ companyId }: { companyId: string }) {
   const [page, setPage] = useState<PageData>({ messages: [], nextCursor: null })
   const [message, setMessage] = useState<MailboxMessage | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -47,6 +49,7 @@ export function MailClient({ companyId }: { companyId: string }) {
   const [text, setText] = useState('')
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [composeConnectionId, setComposeConnectionId] = useState('')
+  const refreshInFlight = useRef(false)
 
   const loadConnections = useCallback(async () => {
     const response = await fetch(`/api/mail/connections?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
@@ -58,13 +61,15 @@ export function MailClient({ companyId }: { companyId: string }) {
     setConnectionsLoadFailed(false)
     setConnectionId((current) => current === 'all' || connected.some((item) => item.id === current) ? current : 'all')
     setConnectionsLoadedFor(companyId)
+    return available
   }, [companyId])
 
-  const loadMessages = useCallback(async (nextCursor: string | null = null) => {
+  const loadMessages = useCallback(async (nextCursor: string | null = null, options?: { view?: MailView; preserveOnError?: boolean }) => {
     setLoading(true); setError('')
     try {
-      const params = new URLSearchParams({ companyId, connectionId, folder })
-      if (filter === 'unread' && folder === 'inbox') params.set('filter', 'unread')
+      const view = options?.view ?? { connectionId, folder, filter }
+      const params = new URLSearchParams({ companyId, connectionId: view.connectionId, folder: view.folder })
+      if (view.filter === 'unread' && view.folder === 'inbox') params.set('filter', 'unread')
       if (nextCursor) params.set('cursor', nextCursor)
       const response = await fetch(`/api/mail/messages?${params}`, { cache: 'no-store' })
       const body = await response.json().catch(() => null)
@@ -73,7 +78,8 @@ export function MailClient({ companyId }: { companyId: string }) {
         ? { ...body, messages: [...current.messages, ...(body.messages ?? [])] }
         : body as PageData)
     } catch (caught) {
-      setError(errorKey(caught)); setPage({ messages: [], nextCursor: null })
+      setError(errorKey(caught))
+      if (!options?.preserveOnError) setPage({ messages: [], nextCursor: null })
     } finally { setLoading(false) }
   }, [companyId, connectionId, folder, filter])
 
@@ -133,17 +139,41 @@ export function MailClient({ companyId }: { companyId: string }) {
   }, [connectionsReady, connectionsLoadFailed, routeReady, requestedMessage, loadMessages])
 
   const refreshAll = async () => {
+    if (refreshInFlight.current) return
+    refreshInFlight.current = true
+    setRefreshing(true)
     setError('')
-    try { await loadConnections() } catch (caught) {
-      setConnectionsLoadFailed(true)
+    const currentView: MailView = { connectionId, folder, filter }
+    try {
+      const available = await loadConnections()
+      setConnectionsLoadFailed(false)
+      const result = await refreshMailView({
+        view: currentView,
+        connections: available,
+        reloadMessages: (view) => {
+          if (view.connectionId !== currentView.connectionId) return Promise.resolve()
+          return requestedMessage
+            ? fetchMessage(requestedMessage, undefined, true)
+            : loadMessages(null, { view, preserveOnError: true })
+        },
+      })
+      if (result.view.connectionId !== currentView.connectionId) {
+        setConnectionId(result.view.connectionId)
+        const route = { mailboxId: result.view.connectionId, folder, filter, message: null }
+        writeRoute(route, true)
+      }
+    } catch (caught) {
       setError(connectionErrorKey(caught))
-      setPage({ messages: [], nextCursor: null })
       setLoading(false)
+    } finally {
+      refreshInFlight.current = false
+      setRefreshing(false)
     }
   }
 
-  const fetchMessage = useCallback(async (route: MailMessageRoute, signal?: AbortSignal) => {
-    setBusy(true); setError(''); setMessage(null)
+  const fetchMessage = useCallback(async (route: MailMessageRoute, signal?: AbortSignal, preserveOnError = false) => {
+    setBusy(true); setError('')
+    if (!preserveOnError) setMessage(null)
     try {
       const params = new URLSearchParams({
         companyId, connectionId: route.connectionId, id: route.messageId,
@@ -297,7 +327,7 @@ export function MailClient({ companyId }: { companyId: string }) {
         </div>
       </div>
       <div className="flex gap-2">
-        <Button type="button" variant="outline" size="icon" aria-label={t('common.tryAgain')} title={t('common.tryAgain')} disabled={loading} onClick={() => void refreshAll()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>
+        <Button type="button" variant="outline" size="icon" aria-label={t('common.tryAgain')} title={t('common.tryAgain')} disabled={loading || refreshing} onClick={() => void refreshAll()}><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></Button>
         <Button type="button" onClick={() => openCompose()} disabled={!visibleConnections.length}><MailPlus className="mr-2 h-4 w-4" />{t('mail.compose')}</Button>
       </div>
     </div>
