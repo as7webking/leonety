@@ -68,7 +68,7 @@ export interface MailboxProvider {
 }
 
 export class MailboxProviderError extends Error {
-  constructor(readonly code: 'reconnect_required' | 'rate_limited' | 'provider_unavailable' | 'provider_error' | 'invalid_message' | 'message_not_found') {
+  constructor(readonly code: 'reconnect_required' | 'missing_scope' | 'rate_limited' | 'provider_unavailable' | 'provider_error' | 'invalid_host' | 'server_unreachable' | 'connection_timeout' | 'tls_certificate_failure' | 'authentication_rejected' | 'invalid_message' | 'message_not_found') {
     super(code)
     this.name = 'MailboxProviderError'
   }

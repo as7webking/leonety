@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getMailboxEntitlement, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace } from '@/lib/mailbox/server'
-import { imapInputSchema } from '@/lib/mailbox/validation'
+import { getImapInputError, imapInputSchema } from '@/lib/mailbox/validation'
 import { testImapSmtpConfig } from '@/lib/mailbox/imap-provider'
 import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
 
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   const { data: { user }, error } = await auth.auth.getUser()
   if (error || !user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
   const parsed = imapInputSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: 'invalid_mailbox_settings' }, { status: 400 })
+  if (!parsed.success) return NextResponse.json(getImapInputError(parsed.error), { status: 400 })
   const input = parsed.data
   if (!(await requireOwnedMailboxWorkspace(input.companyId, user.id))) {
     return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })

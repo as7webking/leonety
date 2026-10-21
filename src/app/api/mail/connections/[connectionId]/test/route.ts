@@ -30,9 +30,9 @@ export async function POST(request: Request, context: { params: Promise<{ connec
     return NextResponse.json({ success: true })
   } catch (caught) {
     const code = caught instanceof MailboxProviderError ? caught.code : 'mailbox_test_failed'
-    if (code === 'reconnect_required') {
+    if (code === 'reconnect_required' || code === 'missing_scope') {
       await updateMailboxConnection(parsed.data, connectionId, {
-        status: 'reconnect_required', last_error_code: 'authorization_revoked',
+        status: 'reconnect_required', last_error_code: code === 'missing_scope' ? 'missing_scope' : 'authorization_revoked',
       }).catch(() => undefined)
     }
     return NextResponse.json({ error: code }, { status: code === 'reconnect_required' ? 409 : 502 })

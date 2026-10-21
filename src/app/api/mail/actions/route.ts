@@ -48,10 +48,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (caught) {
     const code = caught instanceof MailboxProviderError ? caught.code
-      : caught instanceof Error && ['reconnect_required', 'provider_rate_limited', 'provider_unavailable'].includes(caught.message)
+      : caught instanceof Error && ['reconnect_required', 'missing_scope', 'rate_limited', 'provider_unavailable'].includes(caught.message)
         ? caught.message : 'mailbox_provider_error'
-    if (code === 'reconnect_required') {
-      await updateMailboxConnection(input.companyId, input.connectionId, { status: 'reconnect_required', last_error_code: 'authorization_revoked' }).catch(() => undefined)
+    if (code === 'reconnect_required' || code === 'missing_scope') {
+      await updateMailboxConnection(input.companyId, input.connectionId, { status: 'reconnect_required', last_error_code: code === 'missing_scope' ? 'missing_scope' : 'authorization_revoked' }).catch(() => undefined)
     }
     return NextResponse.json({ error: code }, { status: code === 'reconnect_required' ? 409 : code === 'rate_limited' ? 429 : 502 })
   }

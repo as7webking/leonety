@@ -1,14 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { CheckCircle2, LoaderCircle, Mail, ShieldCheck, Unplug } from 'lucide-react'
+import { CheckCircle2, LoaderCircle, Mail, ShieldCheck, Star, Unplug } from 'lucide-react'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { intlLocaleMap } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { createClient } from '@/lib/supabase-client'
+import { mailboxDefaultStorageKey, readBrowserDefaultMailboxId, resolveDefaultMailboxId, writeBrowserDefaultMailboxId } from '@/lib/mailbox/default-preference'
 
 interface Connection {
   id: string
@@ -28,6 +30,7 @@ interface SettingsData {
   activeCount: number
   canConnect: boolean
   freeEmailReady: boolean
+  canonicalVerifiedEmail: string | null
 }
 
 const initialImap = {
@@ -40,34 +43,65 @@ export function MailboxSettings() {
   const { t, locale } = useI18n()
   const searchParams = useSearchParams()
   const [data, setData] = useState<SettingsData | null>(null)
+  const [authUserId, setAuthUserId] = useState('')
+  const authUserRef = useRef('')
+  const authEventVersion = useRef(0)
+  const companyIdRef = useRef(currentCompany?.id ?? '')
+  companyIdRef.current = currentCompany?.id ?? ''
+  const [defaultMailboxId, setDefaultMailboxId] = useState('')
+  const [supabase] = useState(() => createClient())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [showImap, setShowImap] = useState(false)
   const [imap, setImap] = useState(initialImap)
   const [tested, setTested] = useState(false)
-  const [testResults, setTestResults] = useState<{ imap: boolean; smtp: boolean } | null>(null)
+  const [testResults, setTestResults] = useState<{ imap: { ok: boolean; error?: string }; smtp: { ok: boolean; error?: string } } | null>(null)
 
   const load = useCallback(async () => {
-    if (!currentCompany?.id) return
-    const response = await fetch(`/api/mail/connections?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
+    const companyId = currentCompany?.id
+    const userId = authUserRef.current
+    if (!companyId || !userId) return
+    const response = await fetch(`/api/mail/connections?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
     const body = await response.json().catch(() => null)
     if (!response.ok) throw new Error(body?.error || 'mailbox_load_failed')
-    setData(body as SettingsData)
+    if (authUserRef.current !== userId || companyIdRef.current !== companyId) return
+    const result = body as SettingsData
+    setData(result)
+    const key = mailboxDefaultStorageKey(userId, companyId)
+    const preferred = readBrowserDefaultMailboxId(key)
+    const resolved = resolveDefaultMailboxId(preferred, result.connections)
+    setDefaultMailboxId(resolved)
+    if (preferred !== resolved) writeBrowserDefaultMailboxId(key, resolved || null)
   }, [currentCompany?.id])
 
   useEffect(() => {
-    if (!currentCompany?.id) return
+    let active = true
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return
+      authEventVersion.current += 1
+      const nextId = session?.user.id ?? ''
+      if (authUserRef.current === nextId) return
+      authUserRef.current = nextId
+      setAuthUserId(nextId); setData(null); setDefaultMailboxId(''); setError('')
+      setImap(initialImap); setShowImap(false); setTested(false); setTestResults(null)
+    })
+    const initialVersion = authEventVersion.current
+    void supabase.auth.getUser().then(({ data: authData }) => {
+      if (!active || authEventVersion.current !== initialVersion) return
+      const userId = authData.user?.id ?? ''
+      authUserRef.current = userId
+      setAuthUserId(userId)
+    })
+    return () => { active = false; data.subscription.unsubscribe() }
+  }, [supabase])
+
+  useEffect(() => {
+    if (!currentCompany?.id || !authUserId) return
     let cancelled = false
-    void fetch(`/api/mail/connections?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
-      .then(async (response) => {
-        const body = await response.json().catch(() => null)
-        if (!response.ok) throw new Error(body?.error || 'mailbox_load_failed')
-        if (!cancelled) setData(body as SettingsData)
-      })
-      .catch((caught: unknown) => { if (!cancelled) setError(errorKey(caught)) })
+    void load().catch((caught: unknown) => { if (!cancelled) setError(errorKey(caught)) })
     return () => { cancelled = true }
-  }, [currentCompany?.id])
+  }, [currentCompany?.id, authUserId, load])
 
   useEffect(() => {
     const value = searchParams.get('mailError')
@@ -91,7 +125,7 @@ export function MailboxSettings() {
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'mailbox_connection_test_failed')
       setTestResults(result)
-      setTested(Boolean(result.imap && result.smtp))
+      setTested(Boolean(result.imap?.ok && result.smtp?.ok))
     } catch (caught) { setError(errorKey(caught)) } finally { setBusy(false) }
   }
 
@@ -149,6 +183,13 @@ export function MailboxSettings() {
     } catch (caught) { setError(errorKey(caught)) } finally { setBusy(false) }
   }
 
+  const setDefault = (connectionId: string) => {
+    if (!authUserId || !currentCompany?.id) return
+    const key = mailboxDefaultStorageKey(authUserId, currentCompany.id)
+    if (writeBrowserDefaultMailboxId(key, connectionId)) setDefaultMailboxId(connectionId)
+    else setError('mail.error.default_save_failed')
+  }
+
   const updateImap = (key: keyof typeof initialImap, value: string | number) => {
     setTested(false); setTestResults(null)
     setImap((current) => ({ ...current, [key]: value }))
@@ -164,6 +205,11 @@ export function MailboxSettings() {
           <CardDescription>{t('mail.settingsDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="border-b pb-4 text-sm">
+            <p className="font-medium">{t('mail.accountEmail')}</p>
+            <p className="mt-1 break-all text-muted-foreground">{data?.canonicalVerifiedEmail || t('mail.accountEmailUnverified')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('mail.accountEmailNote')}</p>
+          </div>
           {data && <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4 text-sm">
             <span>{t('mail.limit')}: {data.activeCount} / {data.limit}</span>
             <span className="capitalize">{t('mail.planSummary').replace('{plan}', data.plan)}</span>
@@ -178,6 +224,7 @@ export function MailboxSettings() {
             <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => connectOAuth('microsoft')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectMicrosoft')}</Button>
             <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => setShowImap((open) => !open)}><ShieldCheck className="mr-2 h-4 w-4" />{t('mail.connectOther')}</Button>
           </div>
+          <p className="text-xs text-muted-foreground">{t('mail.defaultDeviceNote')}</p>
           {showImap && <div className="space-y-4 rounded-md border p-4">
             <div><h3 className="font-medium">{t('mail.imap.title')}</h3><p className="mt-1 text-sm text-muted-foreground">{t('mail.imap.description')}</p></div>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2">
@@ -197,8 +244,8 @@ export function MailboxSettings() {
               <Button type="button" disabled={busy || !tested || !canStartConnection} onClick={saveImap}>{busy ? t('mail.imap.saving') : t('mail.imap.save')}</Button>
             </div>
             {testResults && <div className="space-y-1 text-sm" role="status">
-              <p>{testResults.imap ? t('mail.imap.testImapOk') : t('mail.imap.testImapBad')}</p>
-              <p>{testResults.smtp ? t('mail.imap.testSmtpOk') : t('mail.imap.testSmtpBad')}</p>
+              <p>{testResults.imap.ok ? t('mail.imap.testImapOk') : `${t('mail.imap.testImapBad')}: ${t(`mail.error.${testResults.imap.error || 'provider_unavailable'}`)}`}</p>
+              <p>{testResults.smtp.ok ? t('mail.imap.testSmtpOk') : `${t('mail.imap.testSmtpBad')}: ${t(`mail.error.${testResults.smtp.error || 'provider_unavailable'}`)}`}</p>
             </div>}
           </div>}
           {error && <p role="alert" className="text-sm text-destructive">{t(error)}</p>}
@@ -216,6 +263,9 @@ export function MailboxSettings() {
             {connection.lastSuccessfulConnectionAt && <p className="text-xs text-muted-foreground">{t('mail.lastConnection')}: {new Intl.DateTimeFormat(intlLocaleMap[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(connection.lastSuccessfulConnectionAt))}</p>}
           </div>
           <div className="flex flex-wrap gap-2">
+            {connection.status === 'connected' && <Button size="sm" variant={defaultMailboxId === connection.id ? 'secondary' : 'outline'} disabled={busy || defaultMailboxId === connection.id} onClick={() => setDefault(connection.id)}>
+              <Star className="mr-1 h-4 w-4" />{defaultMailboxId === connection.id ? t('mail.defaultMailbox') : t('mail.setDefault')}
+            </Button>}
             {connection.status === 'plan_restricted'
               ? <Button size="sm" variant="outline" disabled={busy || !hasSlot} onClick={() => updateConnection(connection, 'activate')}>{t('mail.activate')}</Button>
               : connection.status !== 'disabled' && <>

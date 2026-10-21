@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { encryptMailboxConfig, getMailboxEntitlement, publicMailboxConnection, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace, createLimitedMailboxConnection } from '@/lib/mailbox/server'
 import { ImapSmtpMailboxProvider } from '@/lib/mailbox/imap-provider'
-import type { MailboxConnectionRecord } from '@/lib/mailbox/types'
-import { imapInputSchema } from '@/lib/mailbox/validation'
-import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
+import { getImapInputError, imapInputSchema } from '@/lib/mailbox/validation'
+import { freeMailboxIdentityError, getVerifiedCanonicalAuthEmail } from '@/lib/mailbox/free-account'
 import { logMailboxFailure } from '@/lib/mailbox/diagnostics'
+import { MailboxProviderError, type MailboxConnectionRecord } from '@/lib/mailbox/types'
 
 export const runtime = 'nodejs'
 
@@ -36,6 +36,7 @@ export async function GET(request: Request) {
       activeCount,
       canConnect: activeCount < entitlement.limit,
       freeEmailReady: entitlement.freeEmailReady,
+      canonicalVerifiedEmail: getVerifiedCanonicalAuthEmail(user),
     }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     if (error instanceof Error && error.message === 'workspace_access_denied') {
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     const user = await getUser()
     if (!user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
     const parsed = imapInputSchema.safeParse(await request.json().catch(() => null))
-    if (!parsed.success) return NextResponse.json({ error: 'invalid_mailbox_settings' }, { status: 400 })
+    if (!parsed.success) return NextResponse.json(getImapInputError(parsed.error), { status: 400 })
     const input = parsed.data
     const owned = await requireOwnedMailboxWorkspace(input.companyId, user.id)
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
@@ -87,8 +88,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ id, connected: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : ''
+    const diagnosticCodes = ['invalid_host', 'server_unreachable', 'connection_timeout', 'tls_certificate_failure', 'authentication_rejected', 'provider_unavailable']
     const error = message.includes('mailbox_limit_reached') ? 'mailbox_limit_reached'
-      : message === 'invalid_message' ? 'mailbox_server_rejected'
+      : caught instanceof MailboxProviderError && diagnosticCodes.includes(caught.code) ? caught.code
         : message.includes('mailbox_secret_not_encrypted') ? 'mailbox_configuration_missing'
           : 'mailbox_connection_test_failed'
     return NextResponse.json({ error }, { status: error === 'mailbox_limit_reached' ? 409 : 400 })

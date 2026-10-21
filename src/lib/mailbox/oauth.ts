@@ -4,10 +4,11 @@ import crypto from 'node:crypto'
 import { cookies } from 'next/headers'
 import { decryptSecret, encryptSecret } from '@/lib/credential-encryption'
 import type { MailboxProviderId } from './types'
+import { MAILBOX_REQUIRED_SCOPES } from './scopes'
 
 const STATE_COOKIE = 'leonety-mail-oauth-state'
-const GOOGLE_SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
-const MICROSOFT_SCOPES = ['openid', 'profile', 'email', 'offline_access', 'User.Read', 'Mail.ReadWrite', 'Mail.Send']
+const GOOGLE_SCOPES = [...MAILBOX_REQUIRED_SCOPES.google]
+const MICROSOFT_SCOPES = ['openid', 'profile', 'email', 'offline_access', ...MAILBOX_REQUIRED_SCOPES.microsoft]
 
 interface OAuthState {
   state: string
@@ -102,7 +103,7 @@ export async function exchangeOAuthCode(provider: 'google' | 'microsoft', code: 
   if (!response.ok || typeof body?.access_token !== 'string') {
     throw new Error(response.status === 429 ? 'provider_rate_limited' : response.status >= 500 ? 'provider_unavailable' : 'mailbox_oauth_failed')
   }
-  const scopeValue = typeof body.scope === 'string' ? body.scope : getOAuthScopes(provider).join(' ')
+  const scopeValue = typeof body.scope === 'string' ? body.scope : ''
   const refresh = typeof body.refresh_token === 'string' ? body.refresh_token : ''
   const expiresIn = typeof body.expires_in === 'number' ? body.expires_in : 3600
   return {

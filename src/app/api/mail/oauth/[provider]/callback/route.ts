@@ -4,6 +4,7 @@ import { createLimitedMailboxConnection, decryptMailboxSecret, getMailboxEntitle
 import { consumeMailboxOAuthState, exchangeOAuthCode } from '@/lib/mailbox/oauth'
 import type { MailboxProviderId } from '@/lib/mailbox/types'
 import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
+import { hasRequiredMailboxScopes } from '@/lib/mailbox/scopes'
 
 export const runtime = 'nodejs'
 
@@ -29,6 +30,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     await reconcileMailboxDowngrade(state.companyId, entitlement.limit)
     const oauthProvider = provider as 'google' | 'microsoft'
     const tokens = await exchangeOAuthCode(oauthProvider, url.searchParams.get('code')!)
+    if (!hasRequiredMailboxScopes(oauthProvider, tokens.scopes)) return fail('missing_scope')
     const identity = await getProviderIdentity(oauthProvider, tokens.accessToken)
     const identityRestriction = freeMailboxIdentityError(entitlement.plan, user, identity.email)
     if (identityRestriction) return fail(identityRestriction)
@@ -57,7 +59,9 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     const code = message.includes('mailbox_limit_reached') ? 'limit'
       : message === 'provider_rate_limited' ? 'rate_limited'
         : message === 'provider_unavailable' ? 'provider_unavailable'
-          : message === 'mailbox_configuration_missing' ? 'configuration'
+      : message === 'mailbox_configuration_missing' ? 'configuration'
+        : message === 'missing_scope' ? 'missing_scope'
+          : message === 'mailbox_identity_missing' ? 'identity_missing'
             : message === 'reconnect_required' ? 'reconnect'
               : 'connect_failed'
     return fail(code)
@@ -73,7 +77,7 @@ async function getProviderIdentity(provider: 'google' | 'microsoft', token: stri
     signal: AbortSignal.timeout(12_000),
     cache: 'no-store',
   })
-  if (!response.ok) throw new Error(response.status === 429 ? 'provider_rate_limited' : response.status >= 500 ? 'provider_unavailable' : 'mailbox_identity_failed')
+  if (!response.ok) throw new Error(response.status === 429 ? 'provider_rate_limited' : response.status >= 500 ? 'provider_unavailable' : response.status === 403 ? 'missing_scope' : 'mailbox_identity_failed')
   const data = await response.json() as Record<string, unknown>
   const email = provider === 'google'
     ? data.emailAddress

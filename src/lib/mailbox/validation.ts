@@ -11,3 +11,21 @@ export const imapInputSchema = z.object({
   username: z.string().trim().min(1).max(320),
   password: z.string().min(1).max(512),
 })
+
+const fieldErrors: Record<string, string> = {
+  companyId: 'invalid_request',
+  email: 'invalid_email',
+  imapHost: 'invalid_imap_host',
+  imapPort: 'invalid_imap_port',
+  smtpHost: 'invalid_smtp_host',
+  smtpPort: 'invalid_smtp_port',
+  displayName: 'invalid_display_name',
+  username: 'invalid_username',
+  password: 'invalid_password',
+}
+
+export function getImapInputError(error: z.ZodError) {
+  const issue = error.issues[0]
+  const field = String(issue?.path[0] ?? '')
+  return { error: fieldErrors[field] ?? 'invalid_request', ...(field ? { field } : {}) }
+}

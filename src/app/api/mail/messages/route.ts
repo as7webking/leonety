@@ -40,9 +40,9 @@ export async function GET(request: Request) {
           await recordMailboxUse(connection)
           return { messages: page.messages, nextCursor: page.nextCursor ?? '', failed: false, id: connection.id }
         } catch (caught) {
-          if (caught instanceof MailboxProviderError && caught.code === 'reconnect_required') {
+          if (caught instanceof MailboxProviderError && ['reconnect_required', 'missing_scope'].includes(caught.code)) {
             await updateMailboxConnection(companyId, connection.id, {
-              status: 'reconnect_required', last_error_code: 'authorization_revoked',
+              status: 'reconnect_required', last_error_code: caught.code === 'missing_scope' ? 'missing_scope' : 'authorization_revoked',
             }).catch(() => undefined)
           }
           return { messages: [], nextCursor: mailboxCursor ?? '', failed: true, id: connection.id }
@@ -65,9 +65,9 @@ export async function GET(request: Request) {
     return NextResponse.json(page, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (caught) {
     logMailboxFailure('messages.get', 'entitlement_or_provider', caught)
-    if (caught instanceof MailboxProviderError && caught.code === 'reconnect_required') {
+    if (caught instanceof MailboxProviderError && ['reconnect_required', 'missing_scope'].includes(caught.code)) {
       await updateMailboxConnection(companyId, connectionId, {
-        status: 'reconnect_required', last_error_code: 'authorization_revoked',
+        status: 'reconnect_required', last_error_code: caught.code === 'missing_scope' ? 'missing_scope' : 'authorization_revoked',
       }).catch(() => undefined)
     }
     return providerError(caught)
@@ -96,7 +96,7 @@ function providerError(error: unknown) {
     return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
   }
   const code = error instanceof MailboxProviderError ? error.code
-    : error instanceof Error && ['reconnect_required', 'provider_rate_limited', 'provider_unavailable'].includes(error.message)
+    : error instanceof Error && ['reconnect_required', 'missing_scope', 'rate_limited', 'provider_unavailable'].includes(error.message)
       ? error.message : 'mailbox_provider_error'
   const status = code === 'reconnect_required' ? 409 : code === 'rate_limited' ? 429 : code === 'invalid_message' ? 400 : 502
   return NextResponse.json({ error: code }, { status, headers: { 'Cache-Control': 'private, no-store' } })

@@ -41,9 +41,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
     }
     logMailboxFailure('message.get', 'entitlement_or_provider', caught)
-    if (caught instanceof MailboxProviderError && caught.code === 'reconnect_required') {
+    if (caught instanceof MailboxProviderError && ['reconnect_required', 'missing_scope'].includes(caught.code)) {
       await updateMailboxConnection(companyId, connectionId, {
-        status: 'reconnect_required', last_error_code: 'authorization_revoked',
+        status: 'reconnect_required', last_error_code: caught.code === 'missing_scope' ? 'missing_scope' : 'authorization_revoked',
       }).catch(() => undefined)
     }
     const code = caught instanceof MailboxProviderError ? caught.code : 'mailbox_provider_error'

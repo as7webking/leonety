@@ -10,6 +10,8 @@ import Link from 'next/link'
 import { mailRouteHref, parseMailRoute, type MailMessageRoute, type MailRouteState } from '@/lib/mailbox/navigation'
 import { refreshMailView, type MailView } from '@/lib/mailbox/refresh'
 import type { MailboxFilter, MailboxMessage, MailboxMessageSummary } from '@/lib/mailbox/types'
+import { mailboxDefaultStorageKey, readBrowserDefaultMailboxId, resolveComposeMailboxId, resolveDefaultMailboxId, writeBrowserDefaultMailboxId } from '@/lib/mailbox/default-preference'
+import { createClient } from '@/lib/supabase-client'
 
 interface Connection {
   id: string
@@ -28,7 +30,14 @@ interface PageData {
 export function MailClient({ companyId }: { companyId: string }) {
   const { t, locale } = useI18n()
   const [connections, setConnections] = useState<Connection[]>([])
+  const [authUserId, setAuthUserId] = useState('')
+  const [supabase] = useState(() => createClient())
+  const authUserRef = useRef('')
+  const authEventVersion = useRef(0)
+  const companyIdRef = useRef(companyId)
+  companyIdRef.current = companyId
   const [connectionsLoadedFor, setConnectionsLoadedFor] = useState<string | null>(null)
+  const [connectionsLoadedForUser, setConnectionsLoadedForUser] = useState('')
   const [connectionsLoadFailed, setConnectionsLoadFailed] = useState(false)
   const [connectionId, setConnectionId] = useState('all')
   const [folder, setFolder] = useState<'inbox' | 'sent'>('inbox')
@@ -51,20 +60,53 @@ export function MailClient({ companyId }: { companyId: string }) {
   const [composeConnectionId, setComposeConnectionId] = useState('')
   const refreshInFlight = useRef(false)
 
+  useEffect(() => {
+    let active = true
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return
+      authEventVersion.current += 1
+      const id = session?.user.id ?? ''
+      if (authUserRef.current !== id) {
+        authUserRef.current = id
+        setMessage(null); setPage({ messages: [], nextCursor: null }); setConnections([])
+        setConnectionsLoadedFor(null); setConnectionsLoadedForUser('')
+        setRequestedMessage(null); setComposeOpen(false); setComposeConnectionId('')
+        setTo(''); setCc(''); setSubject(''); setText(''); setReplyingTo(null)
+        setLoading(true); setError('')
+      }
+      setAuthUserId(id)
+    })
+    const initialVersion = authEventVersion.current
+    void supabase.auth.getUser().then(({ data: authData }) => {
+      if (!active || authEventVersion.current !== initialVersion) return
+      const id = authData.user?.id ?? ''
+      authUserRef.current = id
+      setAuthUserId(id)
+    })
+    return () => { active = false; data.subscription.unsubscribe() }
+  }, [supabase])
+
   const loadConnections = useCallback(async () => {
+    if (!authUserId) throw new Error('mailbox_load_failed')
+    const requestUserId = authUserId
+    const requestCompanyId = companyId
     const response = await fetch(`/api/mail/connections?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
     const body = await response.json().catch(() => null)
     if (!response.ok) throw new Error(body?.error || 'mailbox_load_failed')
+    if (authUserRef.current !== requestUserId || companyIdRef.current !== requestCompanyId) return []
     const available = body.connections as Connection[]
     const connected = available.filter((item) => item.status === 'connected')
     setConnections(available)
     setConnectionsLoadFailed(false)
     setConnectionId((current) => current === 'all' || connected.some((item) => item.id === current) ? current : 'all')
     setConnectionsLoadedFor(companyId)
+    setConnectionsLoadedForUser(authUserId)
     return available
-  }, [companyId])
+  }, [authUserId, companyId])
 
   const loadMessages = useCallback(async (nextCursor: string | null = null, options?: { view?: MailView; preserveOnError?: boolean }) => {
+    const requestUserId = authUserRef.current
+    const requestCompanyId = companyId
     setLoading(true); setError('')
     try {
       const view = options?.view ?? { connectionId, folder, filter }
@@ -74,43 +116,37 @@ export function MailClient({ companyId }: { companyId: string }) {
       const response = await fetch(`/api/mail/messages?${params}`, { cache: 'no-store' })
       const body = await response.json().catch(() => null)
       if (!response.ok) throw new Error(body?.error || 'mailbox_load_failed')
+      if (!requestUserId || authUserRef.current !== requestUserId || companyIdRef.current !== requestCompanyId) return
       setPage((current) => nextCursor
         ? { ...body, messages: [...current.messages, ...(body.messages ?? [])] }
         : body as PageData)
     } catch (caught) {
+      if (!requestUserId || authUserRef.current !== requestUserId || companyIdRef.current !== requestCompanyId) return
       setError(errorKey(caught))
       if (!options?.preserveOnError) setPage({ messages: [], nextCursor: null })
-    } finally { setLoading(false) }
+    } finally {
+      if (requestUserId && authUserRef.current === requestUserId && companyIdRef.current === requestCompanyId) setLoading(false)
+    }
   }, [companyId, connectionId, folder, filter])
 
   useEffect(() => {
+    if (!authUserId) return
     let cancelled = false
-    void fetch(`/api/mail/connections?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
-      .then(async (response) => {
-        const body = await response.json().catch(() => null)
-        if (!response.ok) throw new Error(body?.error || 'mailbox_load_failed')
-        if (!cancelled) {
-          const available = body.connections as Connection[]
-          const connected = available.filter((item) => item.status === 'connected')
-          setConnections(available)
-          setConnectionsLoadFailed(false)
-          setConnectionId((current) => current === 'all' || connected.some((item) => item.id === current) ? current : 'all')
-          setConnectionsLoadedFor(companyId)
-        }
-      })
+    void loadConnections()
       .catch((caught: unknown) => {
         if (!cancelled) {
           setError(connectionErrorKey(caught))
           setConnectionsLoadFailed(true)
           setConnectionsLoadedFor(companyId)
+          setConnectionsLoadedForUser(authUserId)
           setPage({ messages: [], nextCursor: null })
           setLoading(false)
         }
       })
     return () => { cancelled = true }
-  }, [companyId])
+  }, [authUserId, companyId, loadConnections])
 
-  const connectionsReady = connectionsLoadedFor === companyId
+  const connectionsReady = Boolean(authUserId && connectionsLoadedFor === companyId && connectionsLoadedForUser === authUserId)
   const visibleConnections = useMemo(() => connectionsReady ? connections.filter((item) => item.status === 'connected') : [], [connectionsReady, connections])
   const applyRoute = useCallback((route: MailRouteState) => {
     setConnectionId(route.mailboxId)
@@ -172,6 +208,8 @@ export function MailClient({ companyId }: { companyId: string }) {
   }
 
   const fetchMessage = useCallback(async (route: MailMessageRoute, signal?: AbortSignal, preserveOnError = false) => {
+    const requestUserId = authUserRef.current
+    const requestCompanyId = companyId
     setBusy(true); setError('')
     if (!preserveOnError) setMessage(null)
     try {
@@ -182,11 +220,12 @@ export function MailClient({ companyId }: { companyId: string }) {
       const response = await fetch(`/api/mail/message?${params}`, { cache: 'no-store', signal })
       const body = await response.json().catch(() => null)
       if (!response.ok) throw new Error(body?.error || 'mailbox_provider_error')
+      if (!requestUserId || authUserRef.current !== requestUserId || companyIdRef.current !== requestCompanyId) return
       setMessage(body.message as MailboxMessage)
     } catch (caught) {
-      if (!signal?.aborted) setError(messageErrorKey(caught))
+      if (!signal?.aborted && requestUserId && authUserRef.current === requestUserId && companyIdRef.current === requestCompanyId) setError(messageErrorKey(caught))
     } finally {
-      if (!signal?.aborted) setBusy(false)
+      if (!signal?.aborted && requestUserId && authUserRef.current === requestUserId && companyIdRef.current === requestCompanyId) setBusy(false)
     }
   }, [companyId])
 
@@ -261,7 +300,15 @@ export function MailClient({ companyId }: { companyId: string }) {
   }
 
   const openCompose = (reply?: MailboxMessage) => {
-    const defaultConnection = reply?.connectionId || reply?.mailboxId || (connectionId === 'all' ? visibleConnections[0]?.id : connectionId) || ''
+    if (reply && !visibleConnections.some((item) => item.id === reply.connectionId)) {
+      setError('mail.error.mailbox_not_connected')
+      return
+    }
+    const key = authUserId ? mailboxDefaultStorageKey(authUserId, companyId) : ''
+    const preferredId = key ? readBrowserDefaultMailboxId(key) : ''
+    const resolvedDefault = resolveDefaultMailboxId(preferredId, visibleConnections)
+    if (!reply && key && resolvedDefault && preferredId !== resolvedDefault) writeBrowserDefaultMailboxId(key, resolvedDefault)
+    const defaultConnection = resolveComposeMailboxId(reply?.connectionId ?? null, resolvedDefault, visibleConnections)
     setComposeConnectionId(defaultConnection)
     setReplyingTo(reply?.providerMessageId ?? null)
     setTo(reply ? reply.from.email : '')

@@ -10,6 +10,7 @@ import type { MailboxConnectionRecord, MailboxFolder, MailboxFilter, MailboxMess
 import { MailboxProviderError } from './types'
 import { decryptMailboxConfig } from './server'
 import { isMailboxRelatedHost } from './host-scope'
+import { classifyMailboxConnectionFailure } from './connection-diagnostics'
 
 interface ImapSmtpConfig {
   address: string
@@ -47,32 +48,34 @@ function publicIpv4(address: string) {
 async function resolvePublicMailHost(input: string) {
   const normalized = domainToASCII(input.trim().replace(/\.$/, '').toLowerCase())
   if (!normalized || normalized.length > 253 || normalized.includes('..') || normalized.endsWith('.local') || normalized.endsWith('.internal')) {
-    throw new MailboxProviderError('invalid_message')
+    throw new MailboxProviderError('invalid_host')
   }
-  if (net.isIP(normalized)) throw new MailboxProviderError('invalid_message')
+  if (net.isIP(normalized)) throw new MailboxProviderError('invalid_host')
   const labels = normalized.split('.')
   if (labels.length < 2 || labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) {
-    throw new MailboxProviderError('invalid_message')
+    throw new MailboxProviderError('invalid_host')
   }
-  const records = await withTimeout(dns.lookup(normalized, { all: true, family: 4, verbatim: true }))
-  if (!records.length || records.length > 16 || records.some((record) => !publicIpv4(record.address))) {
-    throw new MailboxProviderError('invalid_message')
-  }
+  let records: Array<{ address: string; family: number }>
+  try { records = await withTimeout(dns.lookup(normalized, { all: true, family: 4, verbatim: true })) }
+  catch (error) { if (error instanceof MailboxProviderError) throw error; throw new MailboxProviderError('server_unreachable') }
+  if (!records.length) throw new MailboxProviderError('server_unreachable')
+  if (records.length > 16 || records.some((record) => !publicIpv4(record.address))) throw new MailboxProviderError('invalid_host')
   return { hostname: normalized, address: records[0].address }
 }
 
 async function assertMailboxHostScope(host: string, address: string) {
   const emailDomain = domainToASCII(address.trim().toLowerCase().split('@').at(-1) ?? '')
-  if (!emailDomain) throw new MailboxProviderError('invalid_message')
+  if (!emailDomain) throw new MailboxProviderError('invalid_host')
   if (isMailboxRelatedHost(host, emailDomain, [])) return
   let mxHosts: string[]
   try {
     mxHosts = (await withTimeout(dns.resolveMx(emailDomain))).slice(0, 16).map((record) => record.exchange)
-  } catch {
-    throw new MailboxProviderError('invalid_message')
+  } catch (error) {
+    if (error instanceof MailboxProviderError) throw error
+    throw new MailboxProviderError('server_unreachable')
   }
   if (!mxHosts.length || !isMailboxRelatedHost(host, emailDomain, mxHosts)) {
-    throw new MailboxProviderError('invalid_message')
+    throw new MailboxProviderError('invalid_host')
   }
 }
 
@@ -90,7 +93,7 @@ async function withTimeout<T>(work: Promise<T>) {
     return await Promise.race([
       work,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new MailboxProviderError('provider_unavailable')), OPERATION_TIMEOUT_MS)
+        timer = setTimeout(() => reject(new MailboxProviderError('connection_timeout')), OPERATION_TIMEOUT_MS)
       }),
     ])
   } finally {
@@ -147,7 +150,8 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
 
   async testConnection() {
     const results = await testImapSmtpConfig(this.config)
-    if (!results.imap || !results.smtp) throw new MailboxProviderError('provider_error')
+    if (!results.imap.ok) throw new MailboxProviderError(results.imap.error ?? 'provider_unavailable')
+    if (!results.smtp.ok) throw new MailboxProviderError(results.smtp.error ?? 'provider_unavailable')
   }
 
   async listMessages(folder: MailboxFolder, cursor?: string | null, limit = PAGE_SIZE, filter: MailboxFilter = 'all'): Promise<MailboxPage> {
@@ -316,27 +320,32 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
 }
 
 export async function testImapSmtpConfig(config: ImapSmtpConfig) {
-  let imap = false
-  let smtp = false
+  let imap: { ok: boolean; error?: MailboxProviderError['code'] } = { ok: false }
+  let smtp: { ok: boolean; error?: MailboxProviderError['code'] } = { ok: false }
   try {
     const client = await openImap(config)
     try {
       await withTimeout(client.list())
-      imap = true
+      imap = { ok: true }
     } finally {
       await client.logout().catch(() => undefined)
     }
-  } catch { imap = false }
+  } catch (error) { imap = { ok: false, error: diagnosticCode(error) } }
   try {
     const transporter = await createSmtpTransport(config)
     try {
       await withTimeout(transporter.verify())
-      smtp = true
+      smtp = { ok: true }
     } finally {
       transporter.close()
     }
-  } catch { smtp = false }
+  } catch (error) { smtp = { ok: false, error: diagnosticCode(error) } }
   return { imap, smtp }
+}
+
+function diagnosticCode(error: unknown): MailboxProviderError['code'] {
+  if (error instanceof MailboxProviderError) return error.code
+  return classifyMailboxConnectionFailure(error)
 }
 
 async function sentFolder(client: ImapFlow) {
