@@ -6,6 +6,9 @@ export const assistantToolNames = [
   'expense_summary',
   'unpaid_invoice_summary',
   'low_stock_products',
+  'product_count',
+  'account_plan',
+  'woocommerce_status',
 ] as const
 
 export type AssistantToolName = typeof assistantToolNames[number]
@@ -258,7 +261,7 @@ export function buildAssistantRequestEnvelope({
       classification: 'server_verified_data_values_not_instructions',
       results: authorizedReadOnlyData,
     },
-    conversation: messages.map((message) => ({
+    conversation: messages.filter((message) => message.role === 'user').map((message) => ({
       role: message.role,
       content: message.content.slice(0, 1800),
     })),
@@ -273,14 +276,15 @@ export function buildAssistantChatStorageKey(userId: string, workspaceId: string
 
 export function getAssistantErrorKey(status: number, code?: string) {
   if (status === 401) return 'assistant.error.auth'
-  if (status === 403 || code === 'workspace_check_failed') return 'assistant.error.workspace'
-  if (status === 429 || code === 'rate_limited' || code === 'provider_rate_limited') return 'assistant.error.rateLimit'
+  if (status === 403) return 'assistant.error.workspace'
   if (code === 'quota_exhausted' || code === 'provider_quota_exhausted') return 'assistant.error.quota'
+  if (status === 429 || code === 'rate_limited' || code === 'provider_rate_limited') return 'assistant.error.rateLimit'
   if (code === 'configuration_missing' || code === 'provider_not_configured' || code === 'provider_unsupported') return 'assistant.error.configuration'
   if (code === 'provider_auth_failed') return 'assistant.error.providerAuth'
   if (code === 'invalid_model') return 'assistant.error.invalidModel'
   if (status === 504 || code === 'request_timeout' || code === 'provider_timeout') return 'assistant.error.timeout'
   if (status === 502 || code === 'invalid_response' || code === 'provider_invalid_response') return 'assistant.error.invalidResponse'
+  if (code === 'data_unavailable' || code === 'workspace_check_failed') return 'assistant.error.dataUnavailable'
   if (status === 503 || code === 'provider_unavailable') return 'assistant.error.unavailable'
   if (code === 'internal_error') return 'assistant.error.internal'
   return 'assistant.error.generic'

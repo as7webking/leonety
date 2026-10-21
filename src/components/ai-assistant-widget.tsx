@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import {
   isRetryingLastUserMessage,
-  parseAssistantChatCache,
   serializeAssistantChatCache,
+  isAssistantRequestInCurrentScope,
+  readScopedAssistantChatCache,
   type AssistantChatMessage as ChatMessage,
   type AssistantChatRole as ChatRole,
   type AssistantChatSession as ChatSession,
@@ -54,17 +55,18 @@ export function AiAssistantWidget() {
   const [failedRequest, setFailedRequest] = useState<{ chatId: string; text: string; errorKey: string } | null>(null)
   const [renamingChatId, setRenamingChatId] = useState('')
   const [renameValue, setRenameValue] = useState('')
-  const activeRequestRef = useRef<{ chatId: string; controller: AbortController; timedOut: boolean } | null>(null)
+  const activeRequestRef = useRef<{ chatId: string; storageKey: string; controller: AbortController; timedOut: boolean } | null>(null)
   const storageKey = useMemo(
     () => buildAssistantChatStorageKey(authenticatedUserId, currentCompany?.id ?? null),
     [authenticatedUserId, currentCompany?.id]
   )
-  const legacyWorkspaceStorageKey = currentCompany?.id
-    ? `leonety-assistant-chats:${currentCompany.id}`
-    : null
-  const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0] ?? null
+  const currentStorageKeyRef = useRef<string | null>(storageKey)
+  currentStorageKeyRef.current = storageKey
+  const scopeLoaded = Boolean(storageKey && loadedStorageKey === storageKey)
+  const visibleChats = scopeLoaded ? chats : []
+  const activeChat = scopeLoaded ? chats.find((chat) => chat.id === activeChatId) ?? chats[0] ?? null : null
   const messages = activeChat?.messages ?? []
-  const chatReady = Boolean(storageKey && loadedStorageKey === storageKey && activeChat)
+  const chatReady = Boolean(scopeLoaded && activeChat)
   useBodyScrollLock(open)
 
   const suggestedQuestions = useMemo(() => [
@@ -91,21 +93,23 @@ export function AiAssistantWidget() {
 
   useEffect(() => {
     if (!storageKey) {
+      activeRequestRef.current?.controller.abort()
+      activeRequestRef.current = null
       setChats([])
       setActiveChatId('')
       setLoadedStorageKey('')
+      setFailedRequest(null)
+      setLoading(false)
       return
     }
+    if (activeRequestRef.current && activeRequestRef.current.storageKey !== storageKey) {
+      activeRequestRef.current.controller.abort()
+      activeRequestRef.current = null
+      setLoading(false)
+      setFailedRequest(null)
+    }
     try {
-      const scopedStored = window.localStorage.getItem(storageKey)
-      const legacyStored = legacyWorkspaceStorageKey
-        ? window.localStorage.getItem(legacyWorkspaceStorageKey)
-        : null
-      const stored = scopedStored ?? legacyStored
-      const parsed = parseAssistantChatCache(stored)
-      if (legacyWorkspaceStorageKey && legacyStored !== null) {
-        window.localStorage.removeItem(legacyWorkspaceStorageKey)
-      }
+      const parsed = readScopedAssistantChatCache(window.localStorage, storageKey)
       if (parsed.length > 0) {
         setChats(parsed)
         setActiveChatId(parsed[0].id)
@@ -119,7 +123,7 @@ export function AiAssistantWidget() {
     setChats([firstChat])
     setActiveChatId(firstChat.id)
     setLoadedStorageKey(storageKey)
-  }, [legacyWorkspaceStorageKey, storageKey])
+  }, [storageKey])
 
   useEffect(() => {
     if (!storageKey || loadedStorageKey !== storageKey || chats.length === 0) return
@@ -198,7 +202,7 @@ export function AiAssistantWidget() {
     setInput('')
     setFailedRequest(null)
     setLoading(true)
-    const requestState = { chatId: requestChatId, controller: new AbortController(), timedOut: false }
+    const requestState = { chatId: requestChatId, storageKey: storageKey!, controller: new AbortController(), timedOut: false }
     activeRequestRef.current = requestState
     const requestTimeout = window.setTimeout(() => {
       requestState.timedOut = true
@@ -220,6 +224,8 @@ export function AiAssistantWidget() {
       })
       const payload = await response.json().catch(() => ({})) as { answer?: string; error?: string }
 
+      if (!isAssistantRequestInCurrentScope(requestState.storageKey, currentStorageKeyRef.current, activeRequestRef.current === requestState)) return
+
       if (!response.ok || !payload.answer?.trim()) {
         throw new Error(getAssistantErrorKey(response.status, payload.error))
       }
@@ -229,6 +235,7 @@ export function AiAssistantWidget() {
         [...nextMessages, makeMessage('assistant', payload.answer.trim())].slice(-ASSISTANT_MAX_CONTEXT_MESSAGES)
       )
     } catch (requestError) {
+      if (!isAssistantRequestInCurrentScope(requestState.storageKey, currentStorageKeyRef.current, activeRequestRef.current === requestState)) return
       if (requestError instanceof Error && requestError.name === 'AbortError') {
         if (requestState.timedOut) {
           setFailedRequest({ chatId: requestChatId, text: trimmed, errorKey: 'assistant.error.timeout' })
@@ -259,7 +266,7 @@ export function AiAssistantWidget() {
   }
 
   const clearActiveChat = () => {
-    if (!activeChatId) return
+    if (!activeChatId || !chatReady) return
     if (activeRequestRef.current?.chatId === activeChatId) {
       activeRequestRef.current.controller.abort()
       activeRequestRef.current = null
@@ -309,7 +316,7 @@ export function AiAssistantWidget() {
               </Button>
               <div className="mt-3 max-h-36 space-y-2 overflow-y-auto md:max-h-[28rem]">
                 <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('assistant.recentChats')}</p>
-                {chats.map((chat) => (
+                {visibleChats.map((chat) => (
                   <div key={chat.id} className={`rounded-lg border p-2 ${chat.id === activeChatId ? 'border-blue-200 bg-white' : 'border-transparent hover:bg-white'}`}>
                     {renamingChatId === chat.id ? (
                       <input
@@ -424,6 +431,7 @@ export function AiAssistantWidget() {
                   <button
                     type="button"
                     onClick={clearActiveChat}
+                    disabled={!chatReady}
                     className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

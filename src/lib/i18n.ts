@@ -7737,6 +7737,7 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.invalidResponse': 'The AI provider returned an unusable response. Please retry.',
     'assistant.error.unavailable': 'The AI provider is temporarily unavailable. Please try again shortly.',
     'assistant.error.generic': 'The assistant could not answer right now. Please try again.',
+    'assistant.error.dataUnavailable': "I couldn't retrieve the required Leonety data. Please try again.",
   },
   de: {
     'assistant.button': 'Assistent',
@@ -7763,6 +7764,7 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.invalidResponse': 'Der KI-Anbieter hat keine verwendbare Antwort geliefert. Bitte versuche es erneut.',
     'assistant.error.unavailable': 'Der KI-Anbieter ist vorübergehend nicht erreichbar. Bitte versuche es gleich noch einmal.',
     'assistant.error.generic': 'Der Assistent kann gerade nicht antworten. Bitte versuche es erneut.',
+    'assistant.error.dataUnavailable': 'Die benötigten Leonety-Daten konnten nicht geladen werden. Bitte versuche es erneut.',
   },
   ru: {
     'assistant.button': 'Ассистент',
@@ -7789,6 +7791,7 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.invalidResponse': 'Провайдер AI вернул непригодный ответ. Повторите запрос.',
     'assistant.error.unavailable': 'Провайдер AI временно недоступен. Попробуйте немного позже.',
     'assistant.error.generic': 'Ассистент сейчас не смог ответить. Попробуйте снова.',
+    'assistant.error.dataUnavailable': 'Не удалось получить необходимые данные Leonety. Попробуйте снова.',
   },
   tr: {
     'assistant.button': 'Asistan',
@@ -7815,6 +7818,7 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.invalidResponse': 'AI sağlayıcısı kullanılabilir bir yanıt vermedi. Lütfen yeniden deneyin.',
     'assistant.error.unavailable': 'AI sağlayıcısı geçici olarak kullanılamıyor. Lütfen kısa süre sonra tekrar deneyin.',
     'assistant.error.generic': 'Asistan şu anda yanıt veremedi. Lütfen tekrar deneyin.',
+    'assistant.error.dataUnavailable': 'Gerekli Leonety verileri alınamadı. Lütfen tekrar deneyin.',
   },
   uk: {
     'assistant.button': 'Асистент',
@@ -7841,6 +7845,7 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.invalidResponse': 'AI-провайдер повернув непридатну відповідь. Повторіть запит.',
     'assistant.error.unavailable': 'AI-провайдер тимчасово недоступний. Спробуйте трохи пізніше.',
     'assistant.error.generic': 'Асистент зараз не зміг відповісти. Спробуйте ще раз.',
+    'assistant.error.dataUnavailable': 'Не вдалося отримати потрібні дані Leonety. Спробуйте ще раз.',
   },
   pl: {
     'assistant.button': 'Asystent',
@@ -7867,6 +7872,7 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.invalidResponse': 'Dostawca AI zwrócił nieprawidłową odpowiedź. Ponów próbę.',
     'assistant.error.unavailable': 'Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.',
     'assistant.error.generic': 'Asystent nie może teraz odpowiedzieć. Spróbuj ponownie.',
+    'assistant.error.dataUnavailable': 'Nie udało się pobrać wymaganych danych Leonety. Spróbuj ponownie.',
   },
   fr: {
     'assistant.button': 'Assistant',
@@ -7893,6 +7899,7 @@ const assistantDictionaries: Record<Locale, Dictionary> = {
     'assistant.error.invalidResponse': 'Le fournisseur d’IA a renvoyé une réponse inutilisable. Réessayez.',
     'assistant.error.unavailable': 'Le fournisseur d’IA est temporairement indisponible. Réessayez dans quelques instants.',
     'assistant.error.generic': 'L’assistant ne peut pas répondre pour le moment. Réessayez.',
+    'assistant.error.dataUnavailable': 'Impossible de récupérer les données Leonety requises. Réessayez.',
   },
 }
 

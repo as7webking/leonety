@@ -124,6 +124,8 @@ test('isolates local chat history by authenticated user and workspace', () => {
     buildAssistantChatStorageKey('user-a', 'workspace-a'),
     buildAssistantChatStorageKey('user-b', 'workspace-a')
   )
+  const legacyWorkspaceOnlyKey = 'leonety-assistant-chats:workspace-a'
+  assert.notEqual(buildAssistantChatStorageKey('user-a', 'workspace-a'), legacyWorkspaceOnlyKey)
   assert.notEqual(
     buildAssistantChatStorageKey('user-a', 'workspace-a'),
     buildAssistantChatStorageKey('user-a', 'workspace-b')
@@ -140,6 +142,21 @@ test('marks authorized business values as data rather than instructions', () => 
 
   assert.equal(envelope.authorizedReadOnlyData.classification, 'server_verified_data_values_not_instructions')
   assert.equal(envelope.authorizedReadOnlyData.results[0].data.products[0].name, injectedProductName)
+  assert.deepEqual(envelope.conversation, [{ role: 'user', content: 'What products are low in stock?' }])
+})
+
+test('previous assistant assertions are omitted from factual follow-up context', () => {
+  const envelope = JSON.parse(buildAssistantRequestEnvelope({
+    productKnowledge: '{}', authorizedReadOnlyData: [], messages: [
+      { role: 'user', content: 'How much income do I have?' },
+      { role: 'assistant', content: 'Invented answer: 1,000 EUR.' },
+      { role: 'user', content: 'Is that correct?' },
+    ],
+  }))
+  assert.deepEqual(envelope.conversation, [
+    { role: 'user', content: 'How much income do I have?' },
+    { role: 'user', content: 'Is that correct?' },
+  ])
 })
 
 test('uses the user time zone for current-month aggregates', () => {
@@ -155,6 +172,8 @@ test('maps provider and authorization failures to localized UI error keys', () =
   assert.equal(getAssistantErrorKey(401), 'assistant.error.auth')
   assert.equal(getAssistantErrorKey(403), 'assistant.error.workspace')
   assert.equal(getAssistantErrorKey(429, 'provider_rate_limited'), 'assistant.error.rateLimit')
+  assert.equal(getAssistantErrorKey(429, 'quota_exhausted'), 'assistant.error.quota')
+  assert.equal(getAssistantErrorKey(503, 'data_unavailable'), 'assistant.error.dataUnavailable')
   assert.equal(getAssistantErrorKey(503, 'provider_quota_exhausted'), 'assistant.error.quota')
   assert.equal(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.error.timeout')
   assert.notEqual(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.scope.outOfScope')

@@ -56,6 +56,11 @@ export function parseAssistantChatCache(raw: string | null) {
   }
 }
 
+export function readScopedAssistantChatCache(storage: Pick<Storage, 'getItem'>, storageKey: string | null) {
+  if (!storageKey) return []
+  return parseAssistantChatCache(storage.getItem(storageKey))
+}
+
 export function serializeAssistantChatCache(chats: AssistantChatSession[]) {
   return JSON.stringify(chats.slice(0, MAX_STORED_CHATS).map((chat) => ({
     ...chat,
@@ -66,4 +71,12 @@ export function serializeAssistantChatCache(chats: AssistantChatSession[]) {
 export function isRetryingLastUserMessage(messages: AssistantChatMessage[], text: string) {
   const lastMessage = messages.at(-1)
   return lastMessage?.role === 'user' && lastMessage.content === text.trim()
+}
+
+export function isAssistantRequestInCurrentScope(
+  requestScope: string,
+  currentScope: string | null,
+  isActiveRequest: boolean
+) {
+  return isActiveRequest && Boolean(currentScope) && requestScope === currentScope
 }

@@ -46,9 +46,12 @@ export function classifyAiProviderRuntimeError(error: unknown): 'request_timeout
 export function extractAiResponseText(payload: unknown) {
   if (!payload || typeof payload !== 'object') return ''
   const record = payload as {
+    status?: unknown
     output_text?: unknown
     output?: Array<{ content?: Array<{ text?: unknown }> }>
   }
+
+  if (record.status === 'incomplete') return ''
 
   if (typeof record.output_text === 'string') return record.output_text.trim()
   if (!Array.isArray(record.output)) return ''

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { isRetryingLastUserMessage, parseAssistantChatCache, serializeAssistantChatCache } from './assistant-chat-storage.ts'
+import { isAssistantRequestInCurrentScope, isRetryingLastUserMessage, parseAssistantChatCache, readScopedAssistantChatCache, serializeAssistantChatCache } from './assistant-chat-storage.ts'
 
 const widgetSource = readFileSync(new URL('../components/ai-assistant-widget.tsx', import.meta.url), 'utf8')
 
@@ -42,7 +42,27 @@ test('retry reuses the failed user message instead of duplicating it', () => {
   assert.equal(isRetryingLastUserMessage([], 'Hello'), false)
 })
 
-test('migrates and removes the legacy workspace-only chat cache', () => {
-  assert.match(widgetSource, /const stored = scopedStored \?\? legacyStored/)
-  assert.match(widgetSource, /localStorage\.removeItem\(legacyWorkspaceStorageKey\)/)
+test('same browser never presents another account cache under the current scope', () => {
+  const keyA = 'leonety-assistant-chats:user-a:workspace-a'
+  const keyB = 'leonety-assistant-chats:user-b:workspace-a'
+  const storage = new Map([[keyA, serializeAssistantChatCache([validChat])]])
+  const browserStorage = { getItem: (key: string) => storage.get(key) ?? null }
+  assert.equal(readScopedAssistantChatCache(browserStorage, keyA)[0].messages[0].content, validChat.messages[0].content)
+  assert.deepEqual(readScopedAssistantChatCache(browserStorage, keyB), [])
+  assert.deepEqual(readScopedAssistantChatCache(browserStorage, null), [])
+})
+
+test('never imports unverifiable workspace-only legacy history', () => {
+  assert.doesNotMatch(widgetSource, /legacyWorkspaceStorageKey/)
+  assert.match(widgetSource, /readScopedAssistantChatCache\(window\.localStorage, storageKey\)/)
+})
+
+test('workspace/account changes immediately hide history and reject stale responses', () => {
+  assert.match(widgetSource, /const visibleChats = scopeLoaded \? chats : \[\]/)
+  assert.match(widgetSource, /const activeChat = scopeLoaded \?/)
+  assert.equal(isAssistantRequestInCurrentScope('user-a:workspace-a', 'user-b:workspace-a', true), false)
+  assert.equal(isAssistantRequestInCurrentScope('user-a:workspace-a', 'user-a:workspace-b', true), false)
+  assert.equal(isAssistantRequestInCurrentScope('user-a:workspace-a', null, true), false)
+  assert.equal(isAssistantRequestInCurrentScope('user-a:workspace-a', 'user-a:workspace-a', false), false)
+  assert.equal(isAssistantRequestInCurrentScope('user-a:workspace-a', 'user-a:workspace-a', true), true)
 })

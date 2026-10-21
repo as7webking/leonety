@@ -10,6 +10,10 @@ test('classifies provider authentication, rate-limit and availability failures',
   assert.equal(classifyAiProviderStatus(429, {
     error: { type: 'insufficient_quota', code: 'credit_balance_exhausted' },
   }), 'quota_exhausted')
+  assert.equal(classifyAiProviderStatus(429, {
+    error: { type: 'insufficient_quota', code: 'insufficient_quota' },
+  }), 'quota_exhausted')
+  assert.equal(classifyAiProviderStatus(429, { error: { code: 'rate_limit_exceeded', type: 'requests' } }), 'rate_limited')
   assert.equal(classifyAiProviderStatus(404, {
     error: { code: 'model_not_found', param: 'model' },
   }), 'invalid_model')
@@ -36,6 +40,7 @@ test('separates provider timeout from other network failures', () => {
 
 test('extracts valid Responses API text and rejects malformed output', () => {
   assert.equal(extractAiResponseText({ output_text: ' Hello ' }), 'Hello')
+  assert.equal(extractAiResponseText({ status: 'incomplete', output_text: 'Partial answer' }), '')
   assert.equal(extractAiResponseText({
     output: [{ content: [{ text: 'First' }, { text: 'Second' }] }],
   }), 'First\nSecond')

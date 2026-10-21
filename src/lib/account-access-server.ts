@@ -57,6 +57,7 @@ function getConfiguredAdminEmail() {
 export async function resolveAccountAccessForUser(
   userId: string,
   email: string | null | undefined,
+  options: { readOnly?: boolean } = {},
 ): Promise<ResolvedAccountAccess> {
   const fallbackAccess = getAccountAccess(email)
   const configuredAdminEmail = getConfiguredAdminEmail()
@@ -72,7 +73,7 @@ export async function resolveAccountAccessForUser(
   if (adminError) throw adminError
 
   const isConfiguredAdmin = Boolean(configuredAdminEmail && userEmail === configuredAdminEmail)
-  if (isConfiguredAdmin && !adminAccount && email) {
+  if (!options.readOnly && isConfiguredAdmin && !adminAccount && email) {
     const { error: configuredAdminError } = await adminSupabase
       .from('admin_accounts')
       .upsert({ user_id: userId, email })
