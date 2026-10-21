@@ -6,6 +6,7 @@ import { IncomingOrderAlert } from "./incoming-order-alert"
 import { OfflineModeProvider } from '@/contexts/offline-mode-context'
 import { OfflineStatusBar } from '@/components/offline-status-bar'
 import { ActivityHeartbeat } from '@/components/admin/activity-heartbeat'
+import { CurrencyFormatProvider } from '@/contexts/currency-format-context'
 
 interface AuthenticatedLayoutProps {
   children: ReactNode
@@ -14,6 +15,7 @@ interface AuthenticatedLayoutProps {
 export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   return (
     <CompanyProvider>
+      <CurrencyFormatProvider>
       <OfflineModeProvider>
         <ActivityHeartbeat />
         <div className="min-h-screen min-w-0 max-w-full bg-background">
@@ -22,6 +24,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
           <AiAssistantWidget />
         </div>
       </OfflineModeProvider>
+      </CurrencyFormatProvider>
     </CompanyProvider>
   )
 }

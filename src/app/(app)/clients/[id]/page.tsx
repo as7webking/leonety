@@ -13,6 +13,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCountryValue } from '@/lib/countries'
 import { formatCurrencyGroups, type ClientRecord } from '@/lib/client-crm'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { buildClientInvoicesHref } from '@/lib/client-invoice-navigation'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
@@ -64,6 +65,7 @@ function sumInvoices(invoices: InvoiceRow[], kind: 'paid' | 'unpaid') {
 }
 
 export default function ClientDetailPage() {
+  const { position: currencySymbolPosition } = useCurrencyFormat()
   const params = useParams<{ id: string }>()
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
@@ -235,8 +237,8 @@ export default function ClientDetailPage() {
       {tab === 'overview' && (
         <div className="space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label={t('clients.crm.outstanding')} value={formatCurrencyGroups(unpaid, getIntlLocale(locale), currentCompany.currency ?? 'EUR')} />
-            <Metric label={t('clients.crm.paidTotal')} value={formatCurrencyGroups(paid, getIntlLocale(locale), currentCompany.currency ?? 'EUR')} />
+            <Metric label={t('clients.crm.outstanding')} value={formatCurrencyGroups(unpaid, getIntlLocale(locale), currentCompany.currency ?? 'EUR', currencySymbolPosition)} />
+            <Metric label={t('clients.crm.paidTotal')} value={formatCurrencyGroups(paid, getIntlLocale(locale), currentCompany.currency ?? 'EUR', currencySymbolPosition)} />
             <Metric label={t('clients.crm.invoiceCount')} value={String(invoices.length)} />
             <Metric label={t('clients.crm.contractCount')} value={String(contracts.length)} />
           </div>
@@ -253,9 +255,9 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      {tab === 'invoices' && <InvoiceList invoices={invoices} clientId={client.id} locale={locale} t={t} />}
+      {tab === 'invoices' && <InvoiceList invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} />}
       {tab === 'contracts' && <ContractList contracts={contracts} locale={locale} t={t} />}
-      {tab === 'transactions' && <TransactionList transactions={transactions} locale={locale} t={t} />}
+      {tab === 'transactions' && <TransactionList transactions={transactions} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} />}
       {tab === 'contacts' && <Card><CardContent className="space-y-3 p-5 text-sm"><p>{client.name}</p><p className="break-all">{client.email || '—'}</p><p>{client.phone || '—'}</p><p>{address || '—'}</p></CardContent></Card>}
       {tab === 'notes' && <Card><CardContent className="whitespace-pre-wrap p-5 text-sm text-slate-700">{client.notes || t('clients.crm.noNotes')}</CardContent></Card>}
     </PageContainer>
@@ -270,9 +272,9 @@ function ActivityList({ items, t, locale }: { items: Array<{ id: string; date: s
   return <Card><CardHeader><CardTitle>{t('clients.crm.recentActivity')}</CardTitle></CardHeader><CardContent>{items.length === 0 ? <p className="text-sm text-slate-500">{t('clients.crm.noActivity')}</p> : <ol className="space-y-4">{items.map((item) => <li key={item.id} className="border-l-2 border-slate-200 pl-4"><p className="text-sm font-medium text-slate-900">{item.label}{item.detail ? ` · ${item.detail}` : ''}</p><p className="text-xs text-slate-500">{new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(new Date(item.date))}</p></li>)}</ol>}</CardContent></Card>
 }
 
-function InvoiceList({ invoices, clientId, locale, t }: { invoices: InvoiceRow[]; clientId: string; locale: Locale; t: (key: string) => string }) {
+function InvoiceList({ invoices, clientId, locale, t, currencySymbolPosition }: { invoices: InvoiceRow[]; clientId: string; locale: Locale; t: (key: string) => string; currencySymbolPosition: import('@/lib/currency').CurrencySymbolPosition }) {
   if (invoices.length === 0) return <div><EmptyState title={t('clients.crm.noInvoices')} description={t('clients.crm.noInvoicesDescription')} /><div className="-mt-8 hidden justify-center lg:flex"><Button asChild><Link href={buildClientInvoicesHref(clientId, { create: true })}>{t('clients.crm.createInvoice')}</Link></Button></div></div>
-  return <div className="grid gap-3">{invoices.map((invoice) => <Card key={invoice.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium text-slate-950">{invoice.invoice_number}</p><p className="text-sm text-slate-500">{new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(invoice.issue_date))} · {t(`invoices.status.${invoice.status}`)}</p></div><p className="font-semibold">{formatCurrencyGroups({ [invoice.currency]: Number(invoice.total) }, getIntlLocale(locale))}</p></CardContent></Card>)}</div>
+  return <div className="grid gap-3">{invoices.map((invoice) => <Card key={invoice.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium text-slate-950">{invoice.invoice_number}</p><p className="text-sm text-slate-500">{new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(invoice.issue_date))} · {t(`invoices.status.${invoice.status}`)}</p></div><p className="font-semibold">{formatCurrencyGroups({ [invoice.currency]: Number(invoice.total) }, getIntlLocale(locale), 'EUR', currencySymbolPosition)}</p></CardContent></Card>)}</div>
 }
 
 function ContractList({ contracts, locale, t }: { contracts: ContractRow[]; locale: Locale; t: (key: string) => string }) {
@@ -280,7 +282,7 @@ function ContractList({ contracts, locale, t }: { contracts: ContractRow[]; loca
   return <div className="grid gap-3">{contracts.map((contract) => <Card key={contract.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium text-slate-950">{contract.title}</p><p className="text-sm text-slate-500">{contract.reference} · {new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(contract.updated_at))}</p></div><Button asChild variant="outline" size="sm"><Link href="/app/contracts">{t('clients.crm.open')}</Link></Button></CardContent></Card>)}</div>
 }
 
-function TransactionList({ transactions, locale, t }: { transactions: ClientTransactionRow[]; locale: Locale; t: (key: string) => string }) {
+function TransactionList({ transactions, locale, t, currencySymbolPosition }: { transactions: ClientTransactionRow[]; locale: Locale; t: (key: string) => string; currencySymbolPosition: import('@/lib/currency').CurrencySymbolPosition }) {
   if (transactions.length === 0) return <EmptyState icon={ReceiptText} title={t('clients.crm.noLinkedTransactions')} description={t('clients.crm.transactionsRelationRequired')} />
-  return <div className="grid gap-3">{transactions.map((transaction) => <Card key={`${transaction.type}-${transaction.id}`}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate font-medium text-slate-950">{transaction.title || transaction.description || '—'}</p><p className="text-sm text-slate-500">{t(transaction.type === 'income' ? 'income.title' : 'expenses.title')} · {new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(transaction.date))}</p></div><p className="font-semibold">{formatCurrencyGroups({ [transaction.currency]: Number(transaction.amount) }, getIntlLocale(locale))}</p></CardContent></Card>)}</div>
+  return <div className="grid gap-3">{transactions.map((transaction) => <Card key={`${transaction.type}-${transaction.id}`}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate font-medium text-slate-950">{transaction.title || transaction.description || '—'}</p><p className="text-sm text-slate-500">{t(transaction.type === 'income' ? 'income.title' : 'expenses.title')} · {new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(transaction.date))}</p></div><p className="font-semibold">{formatCurrencyGroups({ [transaction.currency]: Number(transaction.amount) }, getIntlLocale(locale), 'EUR', currencySymbolPosition)}</p></CardContent></Card>)}</div>
 }

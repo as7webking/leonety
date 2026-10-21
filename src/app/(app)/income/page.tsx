@@ -10,7 +10,8 @@ import { useCompany } from '@/contexts/company-context'
 import { buildCsv, parseCsv } from '@/lib/csv'
 import { formatCategoryLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
-import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
 import { createTransactionFxSnapshot, getMoneyConversionPreview, getStoredWorkspaceAmount } from '@/lib/transaction-fx'
 import { useI18n } from '@/contexts/i18n-context'
@@ -92,6 +93,7 @@ function uniqueRecentValues(items: Income[], selector: (item: Income) => string 
 }
 
 export default function IncomePage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()

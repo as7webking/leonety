@@ -11,7 +11,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { createClient } from '@/lib/supabase-client'
-import { formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { normalizeCurrencyCode } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { buildProductEditorHref, rememberProductReturnScroll, restoreProductReturnScroll } from '@/lib/product-editor-navigation'
 
 interface ProductStock {
@@ -27,6 +28,7 @@ interface ProductStock {
 }
 
 export default function InventoryPage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())

@@ -10,7 +10,7 @@ import { EmployeeDocumentManager } from '@/components/employees/employee-documen
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
-import { formatCurrency } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { employeeProfileColumns, employeeProfileColumnsWithNumber, getEmployeeCustomCountry, isGermanyEmployeeProfile, type EmployeeProfile } from '@/lib/employee-profile'
 import { formatCountryValue } from '@/lib/countries'
 import { getIntlLocale } from '@/lib/i18n'
@@ -24,6 +24,7 @@ function Value({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function EmployeeDetailPage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const params = useParams<{ id: string }>()
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()

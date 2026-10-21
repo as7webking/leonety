@@ -1,11 +1,13 @@
 import { Logo } from '@/components/logo'
 import { formatCurrency } from '@/lib/currency'
+import type { CurrencySymbolPosition } from '@/lib/currency'
 import type { InvoiceDocumentModel, InvoiceDocumentPaymentMethod } from '@/lib/invoice-document'
 
 interface StandardInvoiceRendererProps {
   model: InvoiceDocumentModel
   intlLocale: string
   t: (key: string) => string
+  currencySymbolPosition?: CurrencySymbolPosition
 }
 
 function paymentMethodLabel(method: InvoiceDocumentPaymentMethod, t: (key: string) => string) {
@@ -18,9 +20,9 @@ function formatDocumentDate(value: string, intlLocale: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString(intlLocale)
 }
 
-export function StandardInvoiceRenderer({ model, intlLocale, t }: StandardInvoiceRendererProps) {
+export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPosition = 'automatic' }: StandardInvoiceRendererProps) {
   const allocationLines = model.payment.allocations.map((payment, index) => (
-    <p key={`${payment.method}-${index}`}>{paymentMethodLabel(payment.method, t)}: {formatCurrency(payment.amount, model.currency, intlLocale)}{payment.reference ? ` · ${payment.reference}` : ''}</p>
+    <p key={`${payment.method}-${index}`}>{paymentMethodLabel(payment.method, t)}: {formatCurrency(payment.amount, model.currency, intlLocale, currencySymbolPosition)}{payment.reference ? ` · ${payment.reference}` : ''}</p>
   ))
 
   return (
@@ -64,13 +66,13 @@ export function StandardInvoiceRenderer({ model, intlLocale, t }: StandardInvoic
 
       <table className="invoice-print-table w-full border-collapse text-sm">
         <thead><tr><th className="border p-2 text-left">{t('common.description')}</th><th className="border p-2 text-right">{t('invoices.quantity')}</th><th className="border p-2 text-right">{t('invoices.price')}</th><th className="border p-2 text-right">{t('invoices.tax')}</th><th className="border p-2 text-right">{t('invoices.lineTotal')}</th></tr></thead>
-        <tbody>{model.items.map((item) => <tr key={item.id ?? item.description}><td className="border p-2">{item.description}</td><td className="border p-2 text-right">{item.quantity}</td><td className="border p-2 text-right">{formatCurrency(item.unitPrice, model.currency, intlLocale)}</td><td className="border p-2 text-right">{item.taxRate}%</td><td className="border p-2 text-right">{formatCurrency(item.lineTotal, model.currency, intlLocale)}</td></tr>)}</tbody>
+        <tbody>{model.items.map((item) => <tr key={item.id ?? item.description}><td className="border p-2">{item.description}</td><td className="border p-2 text-right">{item.quantity}</td><td className="border p-2 text-right">{formatCurrency(item.unitPrice, model.currency, intlLocale, currencySymbolPosition)}</td><td className="border p-2 text-right">{item.taxRate}%</td><td className="border p-2 text-right">{formatCurrency(item.lineTotal, model.currency, intlLocale, currencySymbolPosition)}</td></tr>)}</tbody>
       </table>
 
       <div className="invoice-print-totals ml-auto mt-4 w-full max-w-xs space-y-2 text-sm">
-        <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(model.totals.subtotal, model.currency, intlLocale)}</span></div>
-        <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(model.totals.taxAmount, model.currency, intlLocale)}</span></div>
-        <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(model.totals.total, model.currency, intlLocale)}</span></div>
+        <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(model.totals.subtotal, model.currency, intlLocale, currencySymbolPosition)}</span></div>
+        <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(model.totals.taxAmount, model.currency, intlLocale, currencySymbolPosition)}</span></div>
+        <div className="flex justify-between border-t pt-2 text-base font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(model.totals.total, model.currency, intlLocale, currencySymbolPosition)}</span></div>
       </div>
 
       {model.payment.isPaid && (
@@ -78,7 +80,7 @@ export function StandardInvoiceRenderer({ model, intlLocale, t }: StandardInvoic
           <p className="font-semibold">{t('invoices.payment')}</p>
           {model.payment.splitPayment && model.payment.allocations.length > 0
             ? model.payment.groupAllocations ? <div className="mt-1 space-y-1">{allocationLines}</div> : allocationLines
-            : <><p>{t('invoices.paymentMethod')}: {paymentMethodLabel(model.payment.method, t)}</p><p>{t('invoices.amountPaid')}: {formatCurrency(model.payment.amountPaid, model.currency, intlLocale)}</p></>}
+            : <><p>{t('invoices.paymentMethod')}: {paymentMethodLabel(model.payment.method, t)}</p><p>{t('invoices.amountPaid')}: {formatCurrency(model.payment.amountPaid, model.currency, intlLocale, currencySymbolPosition)}</p></>}
           {model.payment.repeatBankDetails && model.seller.showDetails && model.payment.method === 'bank_transfer' && model.seller.iban && <p>IBAN: {model.seller.iban}</p>}
           {model.payment.repeatBankDetails && model.seller.showDetails && model.payment.method === 'bank_transfer' && model.seller.bic && <p>BIC: {model.seller.bic}</p>}
         </div>

@@ -27,6 +27,8 @@ export interface CurrencyOption {
   locale: string
 }
 
+export type CurrencySymbolPosition = 'automatic' | 'before' | 'after'
+
 const defaultRates: Record<SupportedCurrencyCode, number> = {
   USD: 1,
   EUR: 0.91,
@@ -112,16 +114,41 @@ export function convertToCurrency(
   return Number((base * toRate).toFixed(2))
 }
 
-export function formatCurrency(amount: number, currency: string, locale?: string) {
+export function formatCurrency(
+  amount: number,
+  currency: string,
+  locale?: string,
+  symbolPosition: CurrencySymbolPosition = 'automatic'
+) {
   const normalizedCurrency = normalizeCurrencyCode(currency)
   const currencyLocale = locale ?? getCurrencyOption(normalizedCurrency)?.locale ?? 'en-US'
 
-  return new Intl.NumberFormat(currencyLocale, {
+  const formatter = new Intl.NumberFormat(currencyLocale, {
     style: 'currency',
     currency: normalizedCurrency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount)
+  })
+  if (symbolPosition === 'automatic') return formatter.format(amount)
+
+  const parts = formatter.formatToParts(amount)
+  const currencyIndex = parts.findIndex((part) => part.type === 'currency')
+  if (currencyIndex < 0) return formatter.format(amount)
+
+  const currencyPart = parts[currencyIndex].value
+  const numberParts = parts.filter((part, index) => {
+    if (part.type === 'currency') return false
+    if (part.type !== 'literal') return true
+    return Math.abs(index - currencyIndex) > 1
+  })
+  const number = numberParts.map((part) => part.value).join('')
+  const sign = number.match(/^[\s\u061c\u200e\u200f]*[+\-−]/u)?.[0] ?? ''
+  const body = sign ? number.slice(sign.length) : number
+  const separator = symbolPosition === 'after' ? '\u00a0' : ''
+
+  return symbolPosition === 'before'
+    ? `${sign}${currencyPart}${separator}${body}`
+    : `${number}${separator}${currencyPart}`
 }
 
 export function getSavedAmountInWorkspaceCurrency(params: {

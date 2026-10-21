@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from 'react'
 import { FileImage, Printer, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/contexts/i18n-context'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
+import { getIntlLocale } from '@/lib/i18n'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { buildProductMenuDocument, type ProductMenuItem, type ProductMenuTemplate } from '@/lib/product-menu'
 
@@ -50,7 +52,8 @@ async function readReference(file: File) {
 }
 
 export function ProductMenuBuilderDialog({ companyName, products }: Props) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const { position: currencySymbolPosition } = useCurrencyFormat()
   const [open, setOpen] = useState(false)
   const [template, setTemplate] = useState<ProductMenuTemplate>('classic')
   const [showDescriptions, setShowDescriptions] = useState(true)
@@ -64,8 +67,8 @@ export function ProductMenuBuilderDialog({ companyName, products }: Props) {
 
   const documentHtml = useMemo(() => buildProductMenuDocument(products, {
     template, title: t('productMenu.menuTitle'), companyName, uncategorizedLabel: t('productMenu.uncategorized'),
-    showDescriptions, showImages, showArticles, customColors,
-  }), [companyName, customColors, products, showArticles, showDescriptions, showImages, t, template])
+    showDescriptions, showImages, showArticles, customColors, currencyLocale: getIntlLocale(locale), currencySymbolPosition,
+  }), [companyName, currencySymbolPosition, customColors, locale, products, showArticles, showDescriptions, showImages, t, template])
 
   const close = () => { setOpen(false); setError('') }
   const handleReference = async (file: File | null) => {

@@ -11,7 +11,8 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { formatCategoryLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
-import { currencyOptions, formatCurrency, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
 import { createTransactionFxSnapshot, getMoneyConversionPreview } from '@/lib/transaction-fx'
 import { parseCsv } from '@/lib/csv'
@@ -122,6 +123,7 @@ function readCanonicalDate(value: string | null) {
 }
 
 export default function TransactionsPage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
   const queryState = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
   const [supabase] = useState(() => createClient())

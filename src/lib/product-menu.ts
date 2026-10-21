@@ -1,3 +1,6 @@
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
+import { formatCurrency, type CurrencySymbolPosition } from './currency.ts'
+
 export type ProductMenuTemplate = 'classic' | 'modern' | 'minimal' | 'bold' | 'custom'
 
 export interface ProductMenuItem {
@@ -10,7 +13,6 @@ export interface ProductMenuItem {
   currency: string
   imageUrl: string | null
 }
-
 export interface ProductMenuOptions {
   template: ProductMenuTemplate
   title: string
@@ -20,6 +22,8 @@ export interface ProductMenuOptions {
   showImages: boolean
   showArticles: boolean
   customColors?: { background: string; foreground: string; accent: string }
+  currencyLocale?: string
+  currencySymbolPosition?: CurrencySymbolPosition
 }
 
 function escapeHtml(value: string) {
@@ -61,7 +65,7 @@ export function buildProductMenuDocument(items: ProductMenuItem[], options: Prod
       <div class="items">${products.map((product) => {
         const image = options.showImages ? safeImageUrl(product.imageUrl) : ''
         const description = options.showDescriptions ? plainDescription(product.description) : ''
-        const price = product.sellingPrice === null ? '' : new Intl.NumberFormat(undefined, { style:'currency', currency:product.currency }).format(product.sellingPrice)
+        const price = product.sellingPrice === null ? '' : formatCurrency(product.sellingPrice, product.currency, options.currencyLocale, options.currencySymbolPosition)
         return `<article class="item">${image ? `<img src="${image}" alt="">` : ''}<div class="copy"><div class="line"><h3>${escapeHtml(product.name)}</h3><strong>${escapeHtml(price)}</strong></div>${options.showArticles && product.sku ? `<p class="sku">${escapeHtml(product.sku)}</p>` : ''}${description ? `<p class="description">${escapeHtml(description)}</p>` : ''}</div></article>`
       }).join('')}</div>
     </section>`).join('')

@@ -11,7 +11,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
-import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { buildProductEditorHref, rememberProductReturnScroll, restoreProductReturnScroll } from '@/lib/product-editor-navigation'
 import { productListColumns } from '@/lib/performance-query-projections'
 import { createClient } from '@/lib/supabase-client'
@@ -359,6 +360,7 @@ async function compressImageToJpeg(
 }
 
 export default function ProductsPage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())

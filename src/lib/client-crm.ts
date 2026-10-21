@@ -1,4 +1,4 @@
-import { formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { formatCurrency, normalizeCurrencyCode, type CurrencySymbolPosition } from '@/lib/currency'
 
 export const clientStatuses = ['lead', 'interested', 'proposal_sent', 'client', 'inactive'] as const
 export type ClientStatus = typeof clientStatuses[number]
@@ -81,12 +81,12 @@ export function clientToForm(client: ClientRecord): ClientFormValues {
   }
 }
 
-export function formatCurrencyGroups(values: Record<string, number>, locale: string, fallbackCurrency = 'EUR') {
+export function formatCurrencyGroups(values: Record<string, number>, locale: string, fallbackCurrency = 'EUR', position: CurrencySymbolPosition = 'automatic') {
   const allEntries = Object.entries(values)
   const entries = allEntries.filter(([, amount]) => Math.abs(amount) >= 0.005)
-  if (entries.length === 0) return formatCurrency(0, allEntries[0]?.[0] ?? fallbackCurrency, locale)
+  if (entries.length === 0) return formatCurrency(0, allEntries[0]?.[0] ?? fallbackCurrency, locale, position)
   return entries
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([currency, amount]) => formatCurrency(amount, normalizeCurrencyCode(currency), locale))
+    .map(([currency, amount]) => formatCurrency(amount, normalizeCurrencyCode(currency), locale, position))
     .join(' / ')
 }

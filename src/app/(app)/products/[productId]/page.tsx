@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
-import { formatCurrency } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { createClient } from '@/lib/supabase-client'
 import { safeExternalHttpUrl } from '@/lib/external-url'
 import { getProductChannelPresentation } from '@/lib/integration-presentation'
@@ -24,6 +24,7 @@ interface ProductChannelSync {
 }
 
 export default function ProductDetailsPage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { t } = useI18n()

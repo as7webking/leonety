@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageContainer, PageHeader, EmptyState, LoadingSkeleton } from '@/components'
 import { createClient } from '@/lib/supabase-client'
-import { formatCurrency, getSavedAmountInWorkspaceCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { getSavedAmountInWorkspaceCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
@@ -91,6 +92,7 @@ function getPeriodRange(preset: PeriodPreset) {
 }
 
 export default function DashboardPage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()

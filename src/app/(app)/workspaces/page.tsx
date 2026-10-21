@@ -15,6 +15,7 @@ import { ArrowLeftRight, Plus, Trash2 } from 'lucide-react'
 import { AppSelect } from '@/components/app-select'
 import { useI18n } from '@/contexts/i18n-context'
 import { getIntlLocale } from '@/lib/i18n'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 
 type WorkspaceType = 'personal' | 'business'
 
@@ -37,6 +38,7 @@ const relatedTables: RelatedCount[] = [
 ]
 
 export default function WorkspacesPage() {
+  const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { locale, t } = useI18n()
@@ -410,7 +412,7 @@ export default function WorkspacesPage() {
                           <span className="break-words text-slate-600 sm:text-right">
                             {definition.workspaceLimit === null
                               ? t('workspaces.unlimited')
-                              : t('workspaces.workspaceLimitValue').replace('{count}', String(definition.workspaceLimit))} · {definition.monthlyPriceEur.toLocaleString(getIntlLocale(locale), { style: 'currency', currency: 'EUR' })}
+                              : t('workspaces.workspaceLimitValue').replace('{count}', String(definition.workspaceLimit))} · {formatCurrency(definition.monthlyPriceEur, 'EUR', getIntlLocale(locale))}
                           </span>
                         </div>
                       )

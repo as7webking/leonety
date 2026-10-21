@@ -13,7 +13,8 @@ import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { loadCompanyBranding } from '@/lib/company-branding'
-import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { createTransactionFxSnapshot, type TransactionFxSnapshot } from '@/lib/transaction-fx'
 import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
@@ -418,6 +419,7 @@ function stripTransactionFxSnapshot<T extends Record<string, unknown>>(payload: 
 }
 
 export default function InvoicesPage() {
+  const { format: formatCurrency, position: currencySymbolPosition } = useCurrencyFormat()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
@@ -1758,6 +1760,7 @@ export default function InvoicesPage() {
             model={buildInvoiceDocument(printingInvoice, true)}
             intlLocale={intlLocale}
             t={t}
+            currencySymbolPosition={currencySymbolPosition}
           />
         </div>
       )}
@@ -1770,6 +1773,7 @@ export default function InvoicesPage() {
               model={buildInvoiceDocument(invoice, false)}
               intlLocale={intlLocale}
               t={t}
+              currencySymbolPosition={currencySymbolPosition}
             />
           ))}
         </div>

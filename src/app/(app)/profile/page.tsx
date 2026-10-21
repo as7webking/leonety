@@ -10,7 +10,8 @@ import { profileUpdateSchema, formatValidationError } from '@/lib/validations'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { formatCategoryLabel, formatMonthLabel } from '@/lib/category-labels'
 import { loadCompanyBranding } from '@/lib/company-branding'
-import { currencyOptions, formatCurrency, normalizeCurrencyCode } from '@/lib/currency'
+import { currencyOptions, normalizeCurrencyCode, type CurrencySymbolPosition } from '@/lib/currency'
+import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { getIntlLocale } from '@/lib/i18n'
 import { addDaysToDateOnly, formatDateOnlyInput } from '@/lib/date-only'
 import { useKassenbuchPrintOrderPreference } from '@/hooks/use-kassenbuch-print-order'
@@ -77,6 +78,7 @@ interface PrintableTransaction {
 }
 
 export default function ProfilePage() {
+  const { format: formatCurrency, position: currencySymbolPosition, setPosition: setCurrencySymbolPosition } = useCurrencyFormat()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -993,6 +995,21 @@ export default function ProfilePage() {
             <div className="flex min-w-0 flex-col gap-2 border-b py-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm text-gray-600">{t('profile.language')}</span>
               <LanguageSwitcher />
+            </div>
+            <div className="grid min-w-0 grid-cols-1 gap-2 border-b py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] sm:items-center">
+              <div className="min-w-0">
+                <span className="text-sm text-gray-600">{t('profile.currencySymbolPosition')}</span>
+                <p className="text-xs text-gray-500">{t('profile.currencySymbolPositionDescription')}</p>
+              </div>
+              <AppSelect
+                value={currencySymbolPosition}
+                onChange={(value) => setCurrencySymbolPosition(value as CurrencySymbolPosition)}
+                ariaLabel={t('profile.currencySymbolPosition')}
+                options={(['automatic', 'before', 'after'] as const).map((position) => ({
+                  value: position,
+                  label: t(`profile.currencySymbol.${position}`),
+                }))}
+              />
             </div>
             <div className="flex min-w-0 items-start justify-between gap-4 border-b py-2">
               <div className="min-w-0">
