@@ -10,6 +10,9 @@ import {
   classifyAiProviderStatus,
   classifyAiProviderRuntimeError,
   extractAiResponseText,
+  getSafeIncompleteResponseCode,
+  getSafeProviderErrorFields,
+  isIncompleteAiResponse,
   shouldRetryAiProviderError,
 } from '@/lib/ai-provider-response'
 
@@ -66,26 +69,41 @@ async function generateOpenAiText({ instructions, input, maxOutputTokens = 900, 
             await new Promise((resolve) => setTimeout(resolve, 250))
             continue
           }
-          throw new AiProviderError(code)
+          throw new AiProviderError(code, {
+            httpStatus: response.status,
+            failureKind: code === 'request_timeout' ? 'timeout' : 'http',
+            ...getSafeProviderErrorFields(payload),
+          })
         }
 
+        if (isIncompleteAiResponse(payload)) {
+          const incompleteReason = getSafeIncompleteResponseCode(payload)
+          throw new AiProviderError('incomplete_response', {
+            httpStatus: response.status,
+            providerErrorType: 'incomplete_response',
+            ...(incompleteReason ? { providerErrorCode: incompleteReason } : {}),
+            incompleteResponse: true,
+          })
+        }
         const text = extractAiResponseText(payload)
-        if (!text) throw new AiProviderError('invalid_response')
+        if (!text) throw new AiProviderError('invalid_response', { httpStatus: response.status })
         return text
       } catch (error) {
         if (error instanceof AiProviderError) throw error
-        if (classifyAiProviderRuntimeError(error) === 'request_timeout') throw new AiProviderError('request_timeout')
+        const runtimeCode = classifyAiProviderRuntimeError(error)
+        if (runtimeCode === 'request_timeout') throw new AiProviderError('request_timeout', { failureKind: 'timeout' })
         if (attempt === 0) {
           await new Promise((resolve) => setTimeout(resolve, 250))
           continue
         }
-        throw new AiProviderError('provider_unavailable')
+        throw new AiProviderError('provider_unavailable', { failureKind: 'network' })
       }
     }
     throw new AiProviderError('provider_unavailable')
   } catch (error) {
     if (error instanceof AiProviderError) throw error
-    throw new AiProviderError(classifyAiProviderRuntimeError(error))
+    const code = classifyAiProviderRuntimeError(error)
+    throw new AiProviderError(code, { failureKind: code === 'request_timeout' ? 'timeout' : 'network' })
   } finally {
     clearTimeout(timeout)
   }
@@ -118,14 +136,31 @@ async function generateOpenAiVisionJson({ instructions, prompt, imageDataUrl, ma
       }),
     })
     const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new AiProviderError(classifyAiProviderStatus(response.status, payload))
+    if (!response.ok) {
+      const code = classifyAiProviderStatus(response.status, payload)
+      throw new AiProviderError(code, {
+        httpStatus: response.status,
+        failureKind: code === 'request_timeout' ? 'timeout' : 'http',
+        ...getSafeProviderErrorFields(payload),
+      })
+    }
 
+    if (isIncompleteAiResponse(payload)) {
+      const incompleteReason = getSafeIncompleteResponseCode(payload)
+      throw new AiProviderError('incomplete_response', {
+        httpStatus: response.status,
+        providerErrorType: 'incomplete_response',
+        ...(incompleteReason ? { providerErrorCode: incompleteReason } : {}),
+        incompleteResponse: true,
+      })
+    }
     const text = extractAiResponseText(payload)
-    if (!text) throw new AiProviderError('invalid_response')
+    if (!text) throw new AiProviderError('invalid_response', { httpStatus: response.status })
     return text
   } catch (error) {
     if (error instanceof AiProviderError) throw error
-    throw new AiProviderError(classifyAiProviderRuntimeError(error))
+    const code = classifyAiProviderRuntimeError(error)
+    throw new AiProviderError(code, { failureKind: code === 'request_timeout' ? 'timeout' : 'network' })
   } finally {
     clearTimeout(timeout)
   }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { classifyAiProviderRuntimeError, classifyAiProviderStatus, extractAiResponseText, shouldRetryAiProviderError } from './ai-provider-response.ts'
+import { classifyAiProviderRuntimeError, classifyAiProviderStatus, extractAiResponseText, getSafeIncompleteResponseCode, getSafeProviderErrorFields, isIncompleteAiResponse, shouldRetryAiProviderError } from './ai-provider-response.ts'
 
 test('classifies provider authentication, rate-limit and availability failures', () => {
   assert.equal(classifyAiProviderStatus(401), 'provider_auth_failed')
@@ -18,6 +18,7 @@ test('classifies provider authentication, rate-limit and availability failures',
     error: { code: 'model_not_found', param: 'model' },
   }), 'invalid_model')
   assert.equal(classifyAiProviderStatus(408), 'request_timeout')
+  assert.equal(classifyAiProviderStatus(504), 'request_timeout')
   assert.equal(classifyAiProviderStatus(500), 'provider_unavailable')
   assert.equal(classifyAiProviderStatus(503), 'provider_unavailable')
 })
@@ -46,4 +47,17 @@ test('extracts valid Responses API text and rejects malformed output', () => {
   }), 'First\nSecond')
   assert.equal(extractAiResponseText({ output: [{ content: [{ text: 42 }] }] }), '')
   assert.equal(extractAiResponseText(null), '')
+})
+
+test('identifies incomplete responses separately and extracts only safe provider codes', () => {
+  const payload = { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output_text: 'partial' }
+  assert.equal(isIncompleteAiResponse(payload), true)
+  assert.equal(getSafeIncompleteResponseCode(payload), 'max_output_tokens')
+  assert.equal(isIncompleteAiResponse({ status: 'completed' }), false)
+  assert.deepEqual(getSafeProviderErrorFields({ error: { type: 'invalid_request_error', code: 'model_not_found' } }), {
+    providerErrorType: 'invalid_request_error',
+    providerErrorCode: 'model_not_found',
+  })
+  assert.deepEqual(getSafeProviderErrorFields({ error: { type: 'bad value\nAuthorization: secret', code: 'api_key=secret' } }), {})
+  assert.equal(getSafeIncompleteResponseCode({ incomplete_details: { reason: 'unsafe reason with spaces' } }), undefined)
 })

@@ -283,6 +283,7 @@ export function getAssistantErrorKey(status: number, code?: string) {
   if (code === 'provider_auth_failed') return 'assistant.error.providerAuth'
   if (code === 'invalid_model') return 'assistant.error.invalidModel'
   if (status === 504 || code === 'request_timeout' || code === 'provider_timeout') return 'assistant.error.timeout'
+  if (code === 'incomplete_response') return 'assistant.error.incompleteResponse'
   if (status === 502 || code === 'invalid_response' || code === 'provider_invalid_response') return 'assistant.error.invalidResponse'
   if (code === 'data_unavailable' || code === 'workspace_check_failed') return 'assistant.error.dataUnavailable'
   if (status === 503 || code === 'provider_unavailable') return 'assistant.error.unavailable'

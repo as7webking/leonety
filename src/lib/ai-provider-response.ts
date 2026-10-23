@@ -8,7 +8,7 @@ export type AiProviderResponseErrorCode =
 
 export function classifyAiProviderStatus(status: number, payload?: unknown): AiProviderResponseErrorCode {
   if (status === 401 || status === 403) return 'provider_auth_failed'
-  if (status === 408) return 'request_timeout'
+  if (status === 408 || status === 504) return 'request_timeout'
 
   const error = payload && typeof payload === 'object'
     ? (payload as { error?: { code?: unknown; type?: unknown; param?: unknown } }).error
@@ -41,6 +41,33 @@ export function classifyAiProviderRuntimeError(error: unknown): 'request_timeout
   return error instanceof Error && error.name === 'AbortError'
     ? 'request_timeout'
     : 'provider_unavailable'
+}
+
+function safeProviderValue(value: unknown) {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9_.-]{1,64}$/.test(value)) return undefined
+  return value
+}
+
+export function getSafeProviderErrorFields(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return {}
+  const error = (payload as { error?: { code?: unknown; type?: unknown } }).error
+  if (!error || typeof error !== 'object') return {}
+  const providerErrorType = safeProviderValue(error.type)
+  const providerErrorCode = safeProviderValue(error.code)
+  return {
+    ...(providerErrorType ? { providerErrorType } : {}),
+    ...(providerErrorCode ? { providerErrorCode } : {}),
+  }
+}
+
+export function isIncompleteAiResponse(payload: unknown) {
+  return Boolean(payload && typeof payload === 'object' && (payload as { status?: unknown }).status === 'incomplete')
+}
+
+export function getSafeIncompleteResponseCode(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return undefined
+  const reason = (payload as { incomplete_details?: { reason?: unknown } }).incomplete_details?.reason
+  return safeProviderValue(reason)
 }
 
 export function extractAiResponseText(payload: unknown) {

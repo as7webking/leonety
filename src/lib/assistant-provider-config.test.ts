@@ -38,12 +38,17 @@ test('returns stable public error codes without exposing provider payloads', () 
     'provider_unavailable',
     'invalid_model',
     'request_timeout',
+    'incomplete_response',
     'invalid_response',
     'internal_error',
   ]) {
     assert.match(`${contractSource}\n${openAiSource}\n${routeSource}`, new RegExp(code))
   }
   assert.doesNotMatch(routeSource, /error\.message[),}]/)
+  for (const field of ['requestId', 'timestamp', 'httpStatus', 'providerErrorType', 'providerErrorCode', 'model', 'failureKind', 'incompleteResponse']) {
+    assert.match(routeSource, new RegExp(`${field}:`))
+  }
+  assert.match(routeSource, /logAiProviderDiagnostic\(requestId, error\.code, status, error\.diagnostics\)/)
 })
 
 test('authenticates before loading controlled workspace context or calling AI', () => {

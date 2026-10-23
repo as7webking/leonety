@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { AiProviderError, generateAiText, getAiConfigurationStatus } from '@/lib/ai-provider'
+import { AiProviderError, generateAiText, getAiConfigurationStatus, getAiModelName } from '@/lib/ai-provider'
 import {
   analyzeAssistantRequest,
   buildAssistantRequestEnvelope,
@@ -10,6 +10,7 @@ import {
 import { resolveAssistantCapability } from '@/lib/assistant-capabilities'
 import { formatAssistantDataAnswer, getAssistantDataFailureResponse, getUnsupportedAssistantResponse } from '@/lib/assistant-data-format'
 import { AssistantDataRetrievalError, AssistantWorkspaceAccessError, loadAuthorizedAssistantData } from '@/lib/assistant-data-server'
+import type { AiProviderDiagnostics, AiProviderErrorCode } from '@/lib/ai-provider-contract'
 import { createAssistantRateLimiter } from '@/lib/assistant-rate-limit'
 import { assistantRequestSchema } from '@/lib/assistant-request'
 import { defaultLocale, normalizeLocale } from '@/lib/i18n'
@@ -25,6 +26,33 @@ const checkRateLimit = createAssistantRateLimiter({
   maxRequests: RATE_LIMIT_MAX,
 })
 
+function getSafeDiagnosticModel() {
+  const model = getAiModelName()
+  return /^[a-zA-Z0-9_.-]{1,80}$/.test(model) ? model : 'unrecognized'
+}
+
+function logAiProviderDiagnostic(
+  requestId: string,
+  code: AiProviderErrorCode,
+  status: number,
+  diagnostics: AiProviderDiagnostics = {},
+  source?: string,
+) {
+  console.warn('[assistant]', {
+    requestId,
+    timestamp: new Date().toISOString(),
+    code,
+    httpStatus: diagnostics.httpStatus ?? null,
+    providerErrorType: diagnostics.providerErrorType ?? null,
+    providerErrorCode: diagnostics.providerErrorCode ?? null,
+    model: getSafeDiagnosticModel(),
+    failureKind: diagnostics.failureKind ?? null,
+    incompleteResponse: diagnostics.incompleteResponse ?? false,
+    ...(source ? { source } : {}),
+    status,
+  })
+}
+
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
 
@@ -37,7 +65,8 @@ export async function POST(request: Request) {
     }
 
     if (!checkRateLimit(authData.user.id)) {
-      return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
+      logAiProviderDiagnostic(requestId, 'rate_limited', 429, {}, 'leonety_rate_limit')
+      return NextResponse.json({ error: 'rate_limited', requestId }, { status: 429 })
     }
 
     const parsed = assistantRequestSchema.safeParse(await request.json().catch(() => ({})))
@@ -96,7 +125,10 @@ export async function POST(request: Request) {
 
     const aiStatus = getAiConfigurationStatus()
     if (!aiStatus.configured) {
-      return NextResponse.json({ error: aiStatus.error ?? 'configuration_missing' }, { status: 503 })
+      if (aiStatus.error === 'configuration_missing' || aiStatus.error === 'provider_unsupported') {
+        logAiProviderDiagnostic(requestId, aiStatus.error, 503)
+      }
+      return NextResponse.json({ error: aiStatus.error ?? 'configuration_missing', requestId }, { status: 503 })
     }
 
     const answer = await generateAiText({
@@ -141,16 +173,23 @@ export async function POST(request: Request) {
           ? 503
         : error.code === 'request_timeout'
           ? 504
-          : error.code === 'invalid_response'
+          : error.code === 'invalid_response' || error.code === 'incomplete_response'
             ? 502
             : 503
-      console.warn('[assistant]', { requestId, code: error.code, status })
+      logAiProviderDiagnostic(requestId, error.code, status, error.diagnostics)
       return NextResponse.json({ error: error.code, requestId }, { status })
     }
     console.error('[assistant]', {
       requestId,
+      timestamp: new Date().toISOString(),
       code: 'internal_error',
       errorType: error instanceof Error ? error.name : typeof error,
+      httpStatus: null,
+      providerErrorType: null,
+      providerErrorCode: null,
+      model: getSafeDiagnosticModel(),
+      failureKind: null,
+      incompleteResponse: false,
       status: 500,
     })
 

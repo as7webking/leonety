@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { analyzeAssistantRequest, buildAssistantChatStorageKey, buildAssistantRequestEnvelope, classifyAssistantScope, getAssistantErrorKey, getAssistantPeriodRange, getAssistantScopeResponse } from './assistant-context.ts'
@@ -178,10 +179,31 @@ test('maps provider and authorization failures to localized UI error keys', () =
   assert.equal(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.error.timeout')
   assert.notEqual(getAssistantErrorKey(504, 'provider_timeout'), 'assistant.scope.outOfScope')
   assert.equal(getAssistantErrorKey(502, 'provider_invalid_response'), 'assistant.error.invalidResponse')
+  assert.equal(getAssistantErrorKey(502, 'incomplete_response'), 'assistant.error.incompleteResponse')
   assert.equal(getAssistantErrorKey(503, 'configuration_missing'), 'assistant.error.configuration')
   assert.equal(getAssistantErrorKey(503, 'provider_unsupported'), 'assistant.error.configuration')
   assert.equal(getAssistantErrorKey(503, 'provider_auth_failed'), 'assistant.error.providerAuth')
   assert.equal(getAssistantErrorKey(503, 'invalid_model'), 'assistant.error.invalidModel')
   assert.equal(getAssistantErrorKey(503, 'provider_unavailable'), 'assistant.error.unavailable')
   assert.equal(getAssistantErrorKey(500, 'internal_error'), 'assistant.error.internal')
+})
+
+test('AI runtime error states have localized messages in every supported locale', () => {
+  const i18nSource = readFileSync(new URL('./i18n.ts', import.meta.url), 'utf8')
+  const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr']
+  const keys = [
+    'assistant.error.configuration',
+    'assistant.error.providerAuth',
+    'assistant.error.quota',
+    'assistant.error.rateLimit',
+    'assistant.error.invalidModel',
+    'assistant.error.timeout',
+    'assistant.error.unavailable',
+    'assistant.error.incompleteResponse',
+    'assistant.error.invalidResponse',
+    'assistant.error.internal',
+  ]
+  for (const key of keys) {
+    assert.ok(i18nSource.split(`'${key}':`).length - 1 >= locales.length, `translations missing for ${key}`)
+  }
 })

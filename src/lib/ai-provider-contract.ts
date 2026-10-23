@@ -30,10 +30,19 @@ export type AiProviderErrorCode =
   | 'provider_unavailable'
   | 'invalid_model'
   | 'request_timeout'
+  | 'incomplete_response'
   | 'invalid_response'
 
+export interface AiProviderDiagnostics {
+  httpStatus?: number
+  providerErrorType?: string
+  providerErrorCode?: string
+  failureKind?: 'timeout' | 'network' | 'http'
+  incompleteResponse?: boolean
+}
+
 export class AiProviderError extends Error {
-  constructor(public readonly code: AiProviderErrorCode) {
+  constructor(public readonly code: AiProviderErrorCode, public readonly diagnostics: AiProviderDiagnostics = {}) {
     super(code)
     this.name = 'AiProviderError'
   }
