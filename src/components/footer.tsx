@@ -27,13 +27,15 @@ export function Footer() {
 
   if (isAppPage) {
     return (
-      <footer className="border-t border-slate-200 bg-slate-50 py-4">
-        <div className="mx-auto flex w-[90%] max-w-7xl flex-col justify-between gap-2 text-xs text-slate-500 sm:flex-row">
-          <p>© 2026 Leonety. {t('footer.rights')}</p>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/privacy" className="hover:text-slate-900">{t('legal.privacy')}</Link>
-            <Link href="/terms" className="hover:text-slate-900">{t('legal.terms')}</Link>
-            <Link href="/impressum" className="hover:text-slate-900">{t('legal.impressum')}</Link>
+      <footer data-app-fixed-footer className="fixed inset-x-0 bottom-0 z-40 box-border h-[calc(var(--app-footer-content-height)+env(safe-area-inset-bottom))] border-t border-slate-200 bg-slate-50 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] print:hidden">
+        <div className="mx-auto grid h-[var(--app-footer-content-height)] w-[90%] max-w-7xl grid-rows-[1.25rem_1rem] content-center gap-1 text-[11px] leading-4 text-slate-500 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:text-xs">
+          <div className="order-2 flex min-w-0 items-center justify-center sm:order-1 sm:justify-start">
+            <p className="truncate">© 2026 Leonety. {t('footer.rights')}</p>
+          </div>
+          <div className="order-1 grid min-w-0 grid-cols-3 items-center gap-2 text-center sm:order-2 sm:flex sm:justify-end sm:gap-3">
+            <Link href="/privacy" className="truncate hover:text-slate-900">{t('legal.privacy')}</Link>
+            <Link href="/terms" className="truncate hover:text-slate-900">{t('legal.terms')}</Link>
+            <Link href="/impressum" className="truncate hover:text-slate-900">{t('legal.impressum')}</Link>
           </div>
         </div>
       </footer>

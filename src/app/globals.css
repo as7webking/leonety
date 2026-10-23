@@ -81,6 +81,7 @@
 }
 
 :root {
+  --app-footer-content-height: 3.5rem;
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
@@ -100,6 +101,12 @@
   --border: 214.3 31.8% 91.4%;
   --input: 214.3 31.8% 91.4%;
   --ring: 221.2 83.2% 53.3%;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --app-footer-content-height: 3rem;
+  }
 }
 
 .dark {
@@ -190,6 +197,10 @@ button, a, [role="button"] {
   overflow-x: clip;
   width: 100%;
   max-width: 100%;
+}
+
+body:has([data-app-shell]) [data-pwa-installer] {
+  bottom: calc(var(--app-footer-content-height) + 1rem + env(safe-area-inset-bottom));
 }
 
 /* Better scrolling performance */

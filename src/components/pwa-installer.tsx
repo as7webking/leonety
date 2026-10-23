@@ -105,7 +105,7 @@ export function PwaInstaller() {
   }
 
   return (
-    <div className="no-print fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-[70] mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-lg md:left-auto md:right-[max(1rem,env(safe-area-inset-right))]">
+    <div data-pwa-installer className="no-print fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-[70] mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-lg md:left-auto md:right-[max(1rem,env(safe-area-inset-right))]">
       <p className="font-medium text-slate-950">{t('pwa.installTitle')}</p>
       <p className="mt-1 text-sm text-slate-600">
         {isIos && !installPrompt ? t('pwa.iosInstructions') : t('pwa.installDescription')}

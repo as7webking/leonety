@@ -21,6 +21,8 @@ const layoutSource = read('../app/layout.tsx')
 const globalCss = read('../app/globals.css')
 const installerSource = read('../components/pwa-installer.tsx')
 const manifestSource = read('../../public/manifest.json')
+const footerSource = read('../components/footer.tsx')
+const shellSource = read('../components/app-shell/app-navigation-shell.tsx')
 
 test('shared authenticated layout primitives can shrink inside narrow viewports', () => {
   assert.match(cardSource, /min-w-0 max-w-full rounded-lg/)
@@ -50,6 +52,17 @@ test('assistant launcher stays within the safe viewport without widening the doc
   assert.match(assistantSource, /min-w-0 max-w-\[calc\(100%-2rem\)\]/)
   assert.match(assistantSource, /<span className="min-w-0 truncate">/)
   assert.doesNotMatch(assistantSource, /100vw/)
+})
+
+test('authenticated fixed footer reserves content space and clears assistant controls', () => {
+  assert.match(footerSource, /data-app-fixed-footer/)
+  assert.match(footerSource, /h-\[calc\(var\(--app-footer-content-height\)\+env\(safe-area-inset-bottom\)\)\]/)
+  assert.match(shellSource, /pb-\[calc\(var\(--app-footer-content-height\)\+env\(safe-area-inset-bottom\)\)\]/)
+  assert.match(assistantSource, /bottom-\[calc\(var\(--app-footer-content-height\)\+0\.75rem\+env\(safe-area-inset-bottom\)\)\]/)
+  assert.match(globalCss, /--app-footer-content-height:\s*3\.5rem/)
+  assert.match(globalCss, /--app-footer-content-height:\s*3rem/)
+  assert.match(globalCss, /body:has\(\[data-app-shell\]\) \[data-pwa-installer\]/)
+  assert.match(footerSource, /isAppPage/)
 })
 
 test('enables safe-area insets and keeps the PWA installer clear of device edges', () => {
