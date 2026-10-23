@@ -173,6 +173,9 @@ export function publicMailboxConnection(connection: MailboxConnectionRecord) {
     restrictionReason: connection.last_error_code === 'free_email_required' || connection.last_error_code === 'free_email_mismatch'
       ? connection.last_error_code
       : null,
+    reason: connection.last_error_code === 'missing_scope' || connection.last_error_code === 'authorization_revoked'
+      ? connection.last_error_code
+      : null,
     createdAt: connection.created_at,
     lastSuccessfulConnectionAt: connection.last_successful_connection_at,
   }

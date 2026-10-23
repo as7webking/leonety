@@ -153,8 +153,11 @@ export class GoogleMailboxProvider implements MailboxProvider {
   }
 
   async disconnect() {
-    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(this.token)}`, {
-      method: 'POST', signal: AbortSignal.timeout(8_000), cache: 'no-store',
+    await fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: this.token }),
+      signal: AbortSignal.timeout(8_000), cache: 'no-store',
     }).catch(() => undefined)
   }
 }

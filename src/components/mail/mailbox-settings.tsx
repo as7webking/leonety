@@ -19,6 +19,7 @@ interface Connection {
   displayName: string | null
   status: 'connected' | 'reconnect_required' | 'error' | 'disabled' | 'plan_restricted'
   restrictionReason: 'free_email_required' | 'free_email_mismatch' | null
+  reason: 'missing_scope' | 'authorization_revoked' | null
   createdAt: string
   lastSuccessfulConnectionAt: string | null
 }
@@ -260,6 +261,7 @@ export function MailboxSettings() {
             <p className="break-all font-medium">{connection.displayName || connection.email}</p>
             <p className="break-all text-sm text-muted-foreground">{connection.email} · {providerName(connection.provider)}</p>
             <p className="text-sm">{connection.restrictionReason ? t(`mail.error.${connection.restrictionReason}`) : t(`mail.status.${connection.status}`)}</p>
+            {connection.reason && <p className="text-sm text-amber-700">{t(connection.reason === 'missing_scope' ? 'mail.error.missing_scope' : 'mail.error.reconnect')}</p>}
             {connection.lastSuccessfulConnectionAt && <p className="text-xs text-muted-foreground">{t('mail.lastConnection')}: {new Intl.DateTimeFormat(intlLocaleMap[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(connection.lastSuccessfulConnectionAt))}</p>}
           </div>
           <div className="flex flex-wrap gap-2">

@@ -5,18 +5,12 @@ import { cookies } from 'next/headers'
 import { decryptSecret, encryptSecret } from '@/lib/credential-encryption'
 import type { MailboxProviderId } from './types'
 import { MAILBOX_REQUIRED_SCOPES } from './scopes'
+import { classifyOAuthFailure } from './oauth-errors'
+import { isValidMailboxOAuthState, type MailboxOAuthState } from './oauth-state'
 
 const STATE_COOKIE = 'leonety-mail-oauth-state'
 const GOOGLE_SCOPES = [...MAILBOX_REQUIRED_SCOPES.google]
 const MICROSOFT_SCOPES = ['openid', 'profile', 'email', 'offline_access', ...MAILBOX_REQUIRED_SCOPES.microsoft]
-
-interface OAuthState {
-  state: string
-  userId: string
-  companyId: string
-  provider: MailboxProviderId
-  expiresAt: number
-}
 
 export function mailboxCallbackUrl(provider: MailboxProviderId) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '')
@@ -26,14 +20,14 @@ export function mailboxCallbackUrl(provider: MailboxProviderId) {
   return `${url.origin}/api/mail/oauth/${provider}/callback`
 }
 
-export async function createMailboxOAuthState(input: Omit<OAuthState, 'state' | 'expiresAt'>) {
+export async function createMailboxOAuthState(input: Omit<MailboxOAuthState, 'state' | 'expiresAt'>) {
   const state = crypto.randomBytes(32).toString('base64url')
   const cookieStore = await cookies()
   cookieStore.set(STATE_COOKIE, encryptSecret(JSON.stringify({
     ...input,
     state,
     expiresAt: Date.now() + 10 * 60 * 1000,
-  } satisfies OAuthState)), {
+  } satisfies MailboxOAuthState)), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -49,8 +43,8 @@ export async function consumeMailboxOAuthState(provider: MailboxProviderId, rece
   cookieStore.delete(STATE_COOKIE)
   if (!encoded || !receivedState) return null
   try {
-    const state = JSON.parse(decryptSecret(encoded)) as OAuthState
-    if (state.state !== receivedState || state.provider !== provider || state.expiresAt < Date.now()) return null
+    const state = JSON.parse(decryptSecret(encoded)) as MailboxOAuthState
+    if (!isValidMailboxOAuthState(state, receivedState, provider)) return null
     return state
   } catch {
     return null
@@ -92,16 +86,23 @@ export async function exchangeOAuthCode(provider: 'google' | 'microsoft', code: 
     redirect_uri: redirectUri,
     grant_type: 'authorization_code',
   })
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: form,
-    signal: AbortSignal.timeout(12_000),
-    cache: 'no-store',
-  })
+  let response: Response
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form,
+      signal: AbortSignal.timeout(12_000),
+      cache: 'no-store',
+    })
+  } catch {
+    throw new Error('provider_unavailable')
+  }
   const body = await response.json().catch(() => null) as Record<string, unknown> | null
   if (!response.ok || typeof body?.access_token !== 'string') {
-    throw new Error(response.status === 429 ? 'provider_rate_limited' : response.status >= 500 ? 'provider_unavailable' : 'mailbox_oauth_failed')
+    const providerError = typeof body?.error === 'string' ? body.error : null
+    const code = classifyOAuthFailure(response.status, providerError)
+    throw new Error(code === 'rate_limited' ? 'provider_rate_limited' : code)
   }
   const scopeValue = typeof body.scope === 'string' ? body.scope : ''
   const refresh = typeof body.refresh_token === 'string' ? body.refresh_token : ''

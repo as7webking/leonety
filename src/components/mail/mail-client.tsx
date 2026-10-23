@@ -165,6 +165,14 @@ export function MailClient({ companyId }: { companyId: string }) {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [applyRoute])
 
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('mailConnected') !== '1') return
+    setNotice('mail.imap.saved')
+    url.searchParams.delete('mailConnected')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [])
+
   const writeRoute = useCallback((next: MailRouteState, replace = false, marker = false) => {
     const href = mailRouteHref(next)
     window.history[replace ? 'replaceState' : 'pushState'](marker ? { leonetyMailMessage: true } : {}, '', href)
@@ -462,7 +470,7 @@ function errorKey(error: unknown) {
   if (code === 'mailbox_load_failed') return 'mail.loadFailed'
   if (code === 'workspace_access_denied') return 'mail.error.workspace'
   if (code === 'invalid_message') return 'mail.error.mailbox_provider_error'
-  const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed']
+  const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'missing_scope', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed']
   return known.includes(code) ? `mail.error.${code}` : code.startsWith('mail.error.') ? code : 'mail.error.mailbox_provider_error'
 }
 
