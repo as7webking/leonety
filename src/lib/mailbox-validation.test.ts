@@ -6,7 +6,7 @@ import { getImapInputError, imapInputSchema } from './mailbox/validation.ts'
 const base = {
   companyId: '00000000-0000-4000-8000-000000000001', email: 'mail@example.com', displayName: '',
   imapHost: 'imap.example.com', imapPort: 993, smtpHost: 'smtp.example.com', smtpPort: 465,
-  username: 'mail@example.com', password: 'not-logged',
+  imapSecurity: 'tls', smtpSecurity: 'tls', username: 'mail@example.com', password: 'not-logged',
 }
 
 test('IMAP setup validation returns safe field-specific failures', () => {
@@ -21,6 +21,13 @@ test('IMAP setup validation returns safe field-specific failures', () => {
   const port = imapInputSchema.safeParse({ ...base, smtpPort: 25 })
   assert.equal(port.success, false)
   if (!port.success) assert.deepEqual(getImapInputError(port.error), { error: 'invalid_smtp_port', field: 'smtpPort' })
+
+  const securityMismatch = imapInputSchema.safeParse({ ...base, smtpPort: 587 })
+  assert.equal(securityMismatch.success, false)
+  if (!securityMismatch.success) assert.deepEqual(getImapInputError(securityMismatch.error), { error: 'unsupported_security_configuration', field: 'smtpSecurity' })
+
+  const startTls = imapInputSchema.safeParse({ ...base, smtpPort: 587, smtpSecurity: 'starttls' })
+  assert.equal(startTls.success, true)
 })
 
 test('password is never included in field validation diagnostics', () => {

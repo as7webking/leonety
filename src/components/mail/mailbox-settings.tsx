@@ -35,8 +35,8 @@ interface SettingsData {
 }
 
 const initialImap = {
-  email: '', displayName: '', imapHost: '', imapPort: 993 as const,
-  smtpHost: '', smtpPort: 465 as 465 | 587, username: '', password: '',
+  email: '', displayName: '', imapHost: '', imapPort: 993 as const, imapSecurity: 'tls' as const,
+  smtpHost: '', smtpPort: 465 as 465 | 587, smtpSecurity: 'tls' as 'tls' | 'starttls', username: '', password: '',
 }
 
 export function MailboxSettings() {
@@ -139,7 +139,10 @@ export function MailboxSettings() {
         body: JSON.stringify({ ...imap, companyId: currentCompany.id }),
       })
       const result = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(result?.error || 'mailbox_connection_test_failed')
+      if (!response.ok) {
+        if (result?.imap && result?.smtp) setTestResults(result)
+        throw new Error(result?.error || 'mailbox_connection_test_failed')
+      }
       setImap(initialImap); setTested(false); setTestResults(null); setShowImap(false)
       setNotice('mail.imap.saved'); await load()
     } catch (caught) { setError(errorKey(caught)) } finally { setBusy(false) }
@@ -232,11 +235,27 @@ export function MailboxSettings() {
               <Field disabled={busy} label={t('mail.imap.email')} value={imap.email} onChange={(value) => updateImap('email', value)} type="email" />
               <Field disabled={busy} label={t('mail.imap.displayName')} value={imap.displayName} onChange={(value) => updateImap('displayName', value)} />
               <Field disabled={busy} label={t('mail.imap.imapHost')} value={imap.imapHost} onChange={(value) => updateImap('imapHost', value)} placeholder="imap.example.com" />
-              <div className="min-w-0">
-                <label className="block text-sm">{t('mail.imap.port')}<select disabled={busy} className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={imap.smtpPort} onChange={(event) => updateImap('smtpPort', Number(event.target.value))}><option value={465}>{t('mail.imap.smtp465')}</option><option value={587}>{t('mail.imap.smtp587')}</option></select></label>
-                <p className="mt-1 text-xs text-muted-foreground">{t('mail.imap.imap993')}</p>
-              </div>
+              <SelectField disabled={busy} label={t('mail.imap.imapPort')} value={imap.imapPort} onChange={() => updateImap('imapPort', 993)}>
+                <option value={993}>993</option>
+              </SelectField>
+              <SelectField disabled={busy} label={t('mail.imap.imapSecurity')} value={imap.imapSecurity} onChange={() => updateImap('imapSecurity', 'tls')}>
+                <option value="tls">TLS</option>
+              </SelectField>
               <Field disabled={busy} label={t('mail.imap.smtpHost')} value={imap.smtpHost} onChange={(value) => updateImap('smtpHost', value)} placeholder="smtp.example.com" />
+              <SelectField disabled={busy} label={t('mail.imap.smtpPort')} value={imap.smtpPort} onChange={(value) => {
+                const port = Number(value) as 465 | 587
+                updateImap('smtpPort', port)
+                updateImap('smtpSecurity', port === 465 ? 'tls' : 'starttls')
+              }}>
+                <option value={465}>465</option><option value={587}>587</option>
+              </SelectField>
+              <SelectField disabled={busy} label={t('mail.imap.smtpSecurity')} value={imap.smtpSecurity} onChange={(value) => {
+                const security = value as 'tls' | 'starttls'
+                updateImap('smtpSecurity', security)
+                updateImap('smtpPort', security === 'tls' ? 465 : 587)
+              }}>
+                <option value="tls">TLS</option><option value="starttls">STARTTLS</option>
+              </SelectField>
               <Field disabled={busy} label={t('mail.imap.username')} value={imap.username} onChange={(value) => updateImap('username', value)} autoComplete="username" />
               <Field disabled={busy} label={t('mail.imap.password')} value={imap.password} onChange={(value) => updateImap('password', value)} type="password" autoComplete="new-password" />
             </div>
@@ -288,6 +307,12 @@ function Field({ label, value, onChange, type = 'text', placeholder, autoComplet
   label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string; autoComplete?: string; disabled?: boolean
 }) {
   return <label className="block min-w-0 text-sm">{label}<input disabled={disabled} type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoComplete={autoComplete} maxLength={512} className="mt-1 h-10 w-full min-w-0 rounded-md border bg-background px-3" /></label>
+}
+
+function SelectField({ label, value, onChange, disabled, children }: {
+  label: string; value: string | number; onChange: (value: string) => void; disabled?: boolean; children: React.ReactNode
+}) {
+  return <label className="block min-w-0 text-sm">{label}<select disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 h-10 w-full min-w-0 rounded-md border bg-background px-3">{children}</select></label>
 }
 
 function errorKey(error: unknown) {

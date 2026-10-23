@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { encryptMailboxConfig, getMailboxEntitlement, publicMailboxConnection, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace, createLimitedMailboxConnection } from '@/lib/mailbox/server'
-import { ImapSmtpMailboxProvider } from '@/lib/mailbox/imap-provider'
+import { testImapSmtpConfig } from '@/lib/mailbox/imap-provider'
 import { getImapInputError, imapInputSchema } from '@/lib/mailbox/validation'
 import { freeMailboxIdentityError, getVerifiedCanonicalAuthEmail } from '@/lib/mailbox/free-account'
 import { logMailboxFailure } from '@/lib/mailbox/diagnostics'
-import { MailboxProviderError, type MailboxConnectionRecord } from '@/lib/mailbox/types'
+import { MailboxProviderError } from '@/lib/mailbox/types'
+import { firstMailboxTestFailure } from '@/lib/mailbox/connection-diagnostics'
 
 export const runtime = 'nodejs'
 
@@ -70,16 +71,15 @@ export async function POST(request: Request) {
       smtpHost: input.smtpHost, smtpPort: input.smtpPort,
       username: input.username, password: input.password,
     }
+    const testResults = await testImapSmtpConfig(config)
+    const testFailure = firstMailboxTestFailure(testResults)
+    if (testFailure) {
+      return NextResponse.json({ ...testFailure, ...testResults }, {
+        status: 422,
+        headers: { 'Cache-Control': 'private, no-store' },
+      })
+    }
     const encryptedConfig = encryptMailboxConfig(config)
-    const testConnection = new ImapSmtpMailboxProvider({
-      id: 'validation', company_id: input.companyId, provider: 'imap',
-      provider_account_email: config.address, display_name: config.displayName || null,
-      provider_account_id: null, access_token_encrypted: null, refresh_token_encrypted: null,
-      access_token_expires_at: null, granted_scopes: [], credentials_encrypted: encryptedConfig,
-      status: 'connected', created_at: new Date().toISOString(),
-      last_successful_connection_at: null, last_error_code: null,
-    } satisfies MailboxConnectionRecord)
-    await testConnection.testConnection()
     const id = await createLimitedMailboxConnection({
       companyId: input.companyId, limit: entitlement.limit, provider: 'imap',
       email: config.address, displayName: config.displayName || null,
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ id, connected: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : ''
-    const diagnosticCodes = ['invalid_host', 'server_unreachable', 'connection_timeout', 'tls_certificate_failure', 'authentication_rejected', 'provider_unavailable']
+    const diagnosticCodes = ['invalid_host', 'server_unreachable', 'connection_timeout', 'tls_certificate_failure', 'authentication_rejected', 'imap_authentication_rejected', 'smtp_authentication_rejected', 'provider_unavailable']
     const error = message.includes('mailbox_limit_reached') ? 'mailbox_limit_reached'
       : caught instanceof MailboxProviderError && diagnosticCodes.includes(caught.code) ? caught.code
         : message.includes('mailbox_secret_not_encrypted') ? 'mailbox_configuration_missing'

@@ -117,7 +117,12 @@ async function openImap(config: ImapSmtpConfig) {
     greetingTimeout: CONNECT_TIMEOUT_MS,
     socketTimeout: OPERATION_TIMEOUT_MS,
   })
-  await withTimeout(client.connect())
+  try {
+    await withTimeout(client.connect())
+  } catch (error) {
+    client.close()
+    throw new MailboxProviderError(diagnosticCode(error, 'imap'))
+  }
   return client
 }
 
@@ -292,6 +297,8 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
         subject: cleanHeader(input.subject),
         text: input.text,
       }))
+    } catch (error) {
+      throw new MailboxProviderError(diagnosticCode(error, 'smtp'))
     } finally {
       transporter.close()
     }
@@ -311,6 +318,8 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
         inReplyTo: original.replyTo ?? undefined,
         references: original.references,
       }))
+    } catch (error) {
+      throw new MailboxProviderError(diagnosticCode(error, 'smtp'))
     } finally {
       transporter.close()
     }
@@ -330,7 +339,7 @@ export async function testImapSmtpConfig(config: ImapSmtpConfig) {
     } finally {
       await client.logout().catch(() => undefined)
     }
-  } catch (error) { imap = { ok: false, error: diagnosticCode(error) } }
+  } catch (error) { imap = { ok: false, error: diagnosticCode(error, 'imap') } }
   try {
     const transporter = await createSmtpTransport(config)
     try {
@@ -339,20 +348,21 @@ export async function testImapSmtpConfig(config: ImapSmtpConfig) {
     } finally {
       transporter.close()
     }
-  } catch (error) { smtp = { ok: false, error: diagnosticCode(error) } }
+  } catch (error) { smtp = { ok: false, error: diagnosticCode(error, 'smtp') } }
   return { imap, smtp }
 }
 
-function diagnosticCode(error: unknown): MailboxProviderError['code'] {
+function diagnosticCode(error: unknown, protocol?: 'imap' | 'smtp'): MailboxProviderError['code'] {
   if (error instanceof MailboxProviderError) return error.code
-  return classifyMailboxConnectionFailure(error)
+  return classifyMailboxConnectionFailure(error, protocol)
 }
 
 async function sentFolder(client: ImapFlow) {
   const folders = await client.list()
   const sent = folders.find((folder) => folder.specialUse?.toLowerCase() === '\\sent')
     ?? folders.find((folder) => /^(sent|sent items|sent messages)$/i.test(folder.name))
-  return sent?.path ?? 'Sent'
+  if (!sent) throw new MailboxProviderError('sent_folder_unavailable')
+  return sent.path
 }
 
 function parseImapId(value: string) {
