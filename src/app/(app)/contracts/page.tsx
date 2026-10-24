@@ -180,6 +180,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   const [supabase] = useState(() => createClient())
   const [contracts, setContracts] = useState<ContractRow[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
+  const [clientsWorkspaceId, setClientsWorkspaceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -211,6 +212,8 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
 
   const loadData = useCallback(async () => {
     if (!currentCompany) {
+      setClients([])
+      setClientsWorkspaceId(null)
       setLoading(false)
       return
     }
@@ -243,6 +246,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
 
     if (!clientResult.error) {
       setClients((clientResult.data ?? []) as ClientOption[])
+      setClientsWorkspaceId(currentCompany.id)
+    } else {
+      setClients([])
+      setClientsWorkspaceId(null)
     }
 
     setLoading(false)
@@ -332,14 +339,14 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
 
   useEffect(() => {
     const preselectedClientId = searchParams.get('clientId')
-    if (!preselectedClientId || clients.length === 0) return
+    if (!preselectedClientId || clientsWorkspaceId !== currentCompany?.id || clients.length === 0) return
     const client = clients.find((item) => item.id === preselectedClientId)
     if (!client) return
     startCreate()
     setClientId(client.id)
     fillPartyBFromClient(client)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients.length])
+  }, [clients, clientsWorkspaceId, currentCompany?.id, searchParams])
 
   const filteredContracts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase()
@@ -691,12 +698,6 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
             <CardHeader className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-xl">{t('contracts.savedContracts')}</CardTitle>
-                <Link href="/app/contracts/new">
-                  <Button size="sm">
-                    <Plus className="h-4 w-4" />
-                    {t('contracts.create')}
-                  </Button>
-                </Link>
               </div>
               <CardDescription>{t('contracts.legalNotice')}</CardDescription>
             </CardHeader>

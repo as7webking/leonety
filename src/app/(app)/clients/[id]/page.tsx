@@ -218,7 +218,7 @@ export default function ClientDetailPage() {
       <PageHeader title={client.client_company || client.name} description={client.client_company ? client.name : client.email || client.phone || t('clients.crm.clientRecord')}>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline"><Link href={buildClientInvoicesHref(client.id, { create: true })}><FileText className="h-4 w-4" />{t('clients.crm.createInvoice')}</Link></Button>
-          <Button asChild variant="outline"><Link href={`/app/contracts/new?clientId=${client.id}`}><FileSignature className="h-4 w-4" />{t('clients.crm.createContract')}</Link></Button>
+          <Button asChild variant="outline"><Link href={`/app/contracts/new?clientId=${encodeURIComponent(client.id)}`}><FileSignature className="h-4 w-4" />{t('clients.crm.createContract')}</Link></Button>
           <Button variant="outline" onClick={() => setEditing((value) => !value)}><Pencil className="h-4 w-4" />{t('common.edit')}</Button>
           {client.status !== 'inactive' && <Button variant="outline" onClick={() => void archive()}><Archive className="h-4 w-4" />{t('clients.crm.archive')}</Button>}
         </div>
