@@ -39,11 +39,45 @@ test('shared mobile rows keep controls left and date below actions without chang
   const styles = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
 
   assert.match(component, /finance-list-actions-without-selection/)
-  assert.match(component, /justify-start gap-1 lg:justify-end/)
+  assert.match(component, /justify-start gap-2 lg:flex-nowrap lg:justify-end/)
   assert.match(styles, /> :nth-child\(3\)[\s\S]*grid-row: 4/)
   assert.match(styles, /> :nth-child\(5\)[\s\S]*grid-row: 3/)
   assert.match(styles, /> :nth-child\(6\)[\s\S]*grid-row: 3/)
-  assert.match(styles, /@media \(min-width: 1024px\)[\s\S]*grid-template-columns: minmax\(0, 1\.5fr\)/)
+  assert.match(styles, /grid-template-columns: minmax\(0, 0\.8fr\) minmax\(0, 0\.8fr\) minmax\(0, 1fr\)/)
+  assert.match(styles, /@media \(min-width: 1024px\)[\s\S]*grid-template-columns: minmax\(0, 1\.5fr\)[\s\S]*minmax\(176px, max-content\)/)
+})
+
+test('income and expense rows constrain conversion details beside action columns', () => {
+  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /currencySnapshot\.noSnapshot/)
+    assert.match(source, /actions=\{<>[\s\S]*?aria-label=/)
+  }
+  assert.match(component, /min-w-0 max-w-full whitespace-normal break-words text-xs leading-4/)
+  assert.match(component, /aria-label/)
+  assert.match(component, /lg:flex-nowrap/)
+})
+
+test('finance toolbars separate utilities, filters and sorting without changing control availability', () => {
+  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /sortingLabel=\{t\('common\.sortBy'\)\}/)
+    assert.match(source, /sorting=\{/)
+    assert.match(source, /utilities=\{/)
+    assert.match(source, /filters=\{/)
+  }
+  assert.match(component, /aria-label=\{filtersLabel\}/)
+  assert.match(component, /sorting &&/)
+  assert.match(component, /sortingLabel\}/)
+})
+
+test('workspace selector truncates long names while preserving their full option label', () => {
+  const selector = readFileSync(new URL('../components/app-select.tsx', import.meta.url), 'utf8')
+  const workspace = readFileSync(new URL('../components/app-shell/workspace-selector-client.tsx', import.meta.url), 'utf8')
+  assert.match(selector, /<span className="truncate">\{selected\?\.label/)
+  assert.match(workspace, /label: `\$\{company\.name\} \(\$\{company\.type\}\)`/)
 })
 
 test('transactions use the dedicated localized empty-state title', () => {

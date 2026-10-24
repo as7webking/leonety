@@ -31,12 +31,14 @@ export function FinanceSearchInput({ value, onChange, label, placeholder }: Fina
 
 interface FinanceToolbarProps {
   filtersLabel: string
+  sortingLabel?: string
   utilitiesLabel: string
   filters?: ReactNode
+  sorting?: ReactNode
   utilities?: ReactNode
 }
 
-export function FinanceToolbar({ filtersLabel, utilitiesLabel, filters, utilities }: FinanceToolbarProps) {
+export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, filters, sorting, utilities }: FinanceToolbarProps) {
   return (
     <section className="mb-5 space-y-3" aria-label={filtersLabel}>
       <div className="grid grid-cols-2 gap-2 lg:hidden">
@@ -47,6 +49,15 @@ export function FinanceToolbar({ filtersLabel, utilitiesLabel, filters, utilitie
               {filtersLabel}
             </summary>
             <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full">{filters}</div>
+          </details>
+        )}
+        {sorting && (
+          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
+              <SlidersHorizontal className="h-4 w-4" />
+              {sortingLabel}
+            </summary>
+            <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full">{sorting}</div>
           </details>
         )}
         {utilities && (
@@ -69,6 +80,12 @@ export function FinanceToolbar({ filtersLabel, utilitiesLabel, filters, utilitie
         <div className="hidden min-w-0 flex-wrap items-center gap-2 lg:flex">
           <span className="mr-1 text-xs font-semibold uppercase text-slate-500">{filtersLabel}</span>
           {filters}
+        </div>
+      )}
+      {sorting && (
+        <div className="hidden min-w-0 flex-wrap items-center gap-2 lg:flex">
+          <span className="mr-1 text-xs font-semibold uppercase text-slate-500">{sortingLabel}</span>
+          {sorting}
         </div>
       )}
     </section>
@@ -123,9 +140,9 @@ export function FinanceListRow({ title, description, category, date, amount, amo
         {description && <p className="mt-1 break-words text-slate-500 lg:hidden">{description}</p>}
       </div>
       <div className="border-t border-slate-100 pt-2 text-sm text-slate-500 lg:border-0 lg:pt-0">{date}</div>
-      <div className="min-w-0 text-right"><div className="whitespace-nowrap font-semibold tabular-nums text-slate-950">{amount}</div>{amountDetail && <div className="mt-1 whitespace-nowrap text-xs tabular-nums text-slate-500">{amountDetail}</div>}</div>
+      <div className="min-w-0 max-w-full text-right"><div className="min-w-0 max-w-full whitespace-normal break-words font-semibold tabular-nums text-slate-950 [overflow-wrap:anywhere]">{amount}</div>{amountDetail && <div className="mt-1 min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}</div>
       <div className={cn('min-h-10 items-center justify-start lg:flex lg:justify-center', selection ? 'flex' : 'hidden')}>{selection}</div>
-      <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-1 lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
+      <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
     </article>
   )
 }
