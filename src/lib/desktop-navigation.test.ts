@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { isNavigationItemActive } from '../components/app-shell/navigation-items.ts'
+import { flatNavigationItems, getActiveNavigationHref, isNavigationItemActive } from '../components/app-shell/navigation-items.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { calculateAppSelectPosition } from './app-select-position.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
@@ -12,6 +13,41 @@ test('keeps parent navigation active for nested routes only', () => {
   assert.equal(isNavigationItemActive('/app/employees/new', '/app/employees'), true)
   assert.equal(isNavigationItemActive('/app/employees/id/edit', '/app/employees'), true)
   assert.equal(isNavigationItemActive('/app/employee-reports', '/app/employees'), false)
+})
+
+test('selects exactly one deepest matching item for representative application routes', () => {
+  const cases = [
+    ['/app/settings', '/app/settings'],
+    ['/app/settings/legal', '/app/settings'],
+    ['/app/settings/notifications', '/app/settings/notifications'],
+    ['/app/mail/messages/provider-id', '/app/mail'],
+    ['/app/products/123/edit', '/app/products'],
+    ['/app/products/categories', '/app/products'],
+    ['/app/inventory', '/app/inventory'],
+  ] as const
+
+  for (const [pathname, expected] of cases) {
+    assert.equal(getActiveNavigationHref(pathname), expected, pathname)
+    assert.equal(flatNavigationItems.filter((item) => isNavigationItemActive(pathname, item.href)).length, 1, pathname)
+  }
+})
+
+test('desktop and mobile navigation share exclusive active styling with distinct hover/focus states', () => {
+  const desktop = readFileSync(new URL('../components/app-shell/desktop-navigation-link.tsx', import.meta.url), 'utf8')
+  const mobile = readFileSync(new URL('../components/app-shell/mobile-drawer-client.tsx', import.meta.url), 'utf8')
+  const sidebar = readFileSync(new URL('../components/app-shell/app-sidebar.tsx', import.meta.url), 'utf8')
+
+  assert.match(sidebar, /getActiveNavigationHref\(pathname, items\)/)
+  assert.match(desktop, /activeHref === href/)
+  assert.match(desktop, /aria-current=\{active \? 'page' : undefined\}/)
+  assert.match(desktop, /bg-blue-50 text-blue-700[\s\S]*text-slate-700 hover:bg-slate-100/)
+  assert.match(desktop, /focus-visible:ring-slate-900/)
+  assert.match(mobile, /getActiveNavigationHref\(pathname, navigationItems\)/)
+  assert.equal((mobile.match(/aria-current=\{activeHref === item\.href \? 'page' : undefined\}/g) ?? []).length, 2)
+  assert.match(mobile, /bg-blue-50 text-blue-700[\s\S]*text-slate-700 hover:bg-slate-100/)
+  assert.match(mobile, /focus-visible:ring-slate-900/)
+  assert.match(sidebar, /min-h-0 flex-1 overflow-y-auto/)
+  assert.match(sidebar, /pb-\[calc\(var\(--app-footer-content-height\)\+env\(safe-area-inset-bottom\)\)\]/)
 })
 
 test('places a dropdown directly below its trigger when space is available', () => {

@@ -101,7 +101,19 @@ export function getNavigationForMode(mode: AppMode) {
 }
 
 export function isNavigationItemActive(pathname: string, href: string) {
-  const normalizedPathname = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
-  const normalizedHref = href.length > 1 ? href.replace(/\/+$/, '') : href
-  return normalizedPathname === normalizedHref || normalizedPathname.startsWith(`${normalizedHref}/`)
+  return getActiveNavigationHref(pathname) === normalizeNavigationPath(href)
+}
+
+export function getActiveNavigationHref(pathname: string, items: NavigationItem[] = flatNavigationItems) {
+  const normalizedPathname = normalizeNavigationPath(pathname)
+  const match = items
+    .map((item, index) => ({ href: normalizeNavigationPath(item.href), index }))
+    .filter(({ href }) => normalizedPathname === href || normalizedPathname.startsWith(`${href}/`))
+    .sort((left, right) => right.href.length - left.href.length || left.index - right.index)[0]
+
+  return match?.href
+}
+
+function normalizeNavigationPath(pathname: string) {
+  return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
 }

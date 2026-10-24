@@ -7,17 +7,21 @@ import { Logo } from '@/components/logo'
 import { T } from '@/components/t'
 import { ProfileMenuClient } from '@/components/app-shell/profile-menu-client'
 import { WorkspaceSelectorClient } from '@/components/app-shell/workspace-selector-client'
-import { getNavigationForMode } from '@/components/app-shell/navigation-items'
+import { getActiveNavigationHref, getNavigationForMode } from '@/components/app-shell/navigation-items'
 import { DesktopNavigationLink } from '@/components/app-shell/desktop-navigation-link'
 import { useCompany } from '@/contexts/company-context'
 import { normalizeAppMode } from '@/lib/app-mode'
+import { usePathname } from 'next/navigation'
 
 export function AppSidebar() {
   const { currentCompany } = useCompany()
   const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
+  const pathname = usePathname()
+  const items = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items)]
+  const activeHref = getActiveNavigationHref(pathname, items)
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white xl:flex xl:flex-col" aria-labelledby="app-sidebar-label">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white pb-[calc(var(--app-footer-content-height)+env(safe-area-inset-bottom))] xl:flex xl:flex-col" aria-labelledby="app-sidebar-label">
       <span id="app-sidebar-label" className="sr-only"><T k="nav.appNavigation" /></span>
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-5">
         <Link href="/app/dashboard" className="flex items-center gap-3">
@@ -36,7 +40,7 @@ export function AppSidebar() {
         <div className="space-y-1">
           {navigation.primary.map((item) => {
             const Icon = item.icon
-            return <DesktopNavigationLink key={item.href} href={item.href} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
+            return <DesktopNavigationLink key={item.href} href={item.href} activeHref={activeHref} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
           })}
         </div>
 
@@ -46,7 +50,7 @@ export function AppSidebar() {
               <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400"><T k={group.labelKey} /></p>
               {group.items.map((item) => {
                 const Icon = item.icon
-                return <DesktopNavigationLink key={item.href} href={item.href} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
+                return <DesktopNavigationLink key={item.href} href={item.href} activeHref={activeHref} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
               })}
             </section>
           ))}
