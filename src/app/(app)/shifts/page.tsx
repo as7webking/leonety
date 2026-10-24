@@ -255,7 +255,7 @@ export default function ShiftsPage() {
 
       <EmployeeSchedulePrint workspaceName={currentCompany.name} from={fromDate} to={toDate} employees={printableEmployees} shifts={printableShifts} intlLocale={intlLocale} t={t} />
       {preview.length > 0 && <ShiftPreview candidates={preview} selected={selectedPreviewKeys} setSelected={setSelectedPreviewKeys} locations={locations} intlLocale={intlLocale} t={t} onCancel={() => { setPreview([]); setSelectedPreviewKeys(new Set()) }} onConfirm={() => void confirmGeneration()} />}
-      <ConfirmDialog open={Boolean(deleteTarget)} title={t('common.confirmDelete')} description={t('shifts.deleteConfirm')} confirmLabel={t('common.deleteAnyway')} cancelLabel={t('common.cancel')} destructive onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()} />
+      <ConfirmDialog open={Boolean(deleteTarget)} title={t('common.confirmDelete')} description={t('shifts.deleteConfirm')} confirmLabel={t('common.deleteAnyway')} cancelLabel={t('common.cancel')} destructive onCancel={() => setDeleteTarget(null)} onConfirm={handleDelete} />
     </PageContainer>
   )
 }

@@ -120,7 +120,7 @@ export default function EmployeesPage() {
           ))}
         </div>
       )}
-      <ConfirmDialog open={Boolean(deleteTarget)} title={t('common.confirmDelete')} description={t('employees.deleteConfirm')} confirmLabel={t('common.deleteAnyway')} cancelLabel={t('common.cancel')} destructive onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()} />
+      <ConfirmDialog open={Boolean(deleteTarget)} title={t('common.confirmDelete')} description={t('employees.deleteConfirm')} confirmLabel={t('common.deleteAnyway')} cancelLabel={t('common.cancel')} destructive onCancel={() => setDeleteTarget(null)} onConfirm={handleDelete} />
     </PageContainer>
   )
 }

@@ -895,10 +895,10 @@ export default function ExpensesPage() {
         cancelLabel={t('common.cancel')}
         destructive
         onCancel={() => setDeleteId(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           const id = deleteId
+          if (id) await handleDelete(id)
           setDeleteId(null)
-          if (id) void handleDelete(id)
         }}
       />
     </PageContainer>
