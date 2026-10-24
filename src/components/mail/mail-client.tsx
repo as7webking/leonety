@@ -470,7 +470,7 @@ function errorKey(error: unknown) {
   if (code === 'mailbox_load_failed') return 'mail.loadFailed'
   if (code === 'workspace_access_denied') return 'mail.error.workspace'
   if (code === 'invalid_message') return 'mail.error.mailbox_provider_error'
-  const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'missing_scope', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed']
+  const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'missing_scope', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed', 'oauth_configuration', 'consent_denied', 'callback_failed', 'token_exchange_failed', 'token_storage_failed', 'mailbox_identity_failed', 'gmail_api_failed', 'token_refresh_failed']
   return known.includes(code) ? `mail.error.${code}` : code.startsWith('mail.error.') ? code : 'mail.error.mailbox_provider_error'
 }
 

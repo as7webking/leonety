@@ -101,6 +101,9 @@ export async function exchangeOAuthCode(provider: 'google' | 'microsoft', code: 
   const body = await response.json().catch(() => null) as Record<string, unknown> | null
   if (!response.ok || typeof body?.access_token !== 'string') {
     const providerError = typeof body?.error === 'string' ? body.error : null
+    if (provider === 'google' && ['invalid_client', 'unauthorized_client', 'redirect_uri_mismatch'].includes(providerError ?? '')) {
+      throw new Error('oauth_configuration')
+    }
     const code = classifyOAuthFailure(response.status, providerError)
     throw new Error(code === 'rate_limited' ? 'provider_rate_limited' : code)
   }

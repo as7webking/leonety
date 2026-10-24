@@ -68,7 +68,7 @@ export interface MailboxProvider {
 }
 
 export class MailboxProviderError extends Error {
-  constructor(readonly code: 'reconnect_required' | 'missing_scope' | 'rate_limited' | 'provider_unavailable' | 'provider_error' | 'invalid_host' | 'server_unreachable' | 'connection_timeout' | 'tls_certificate_failure' | 'authentication_rejected' | 'imap_authentication_rejected' | 'smtp_authentication_rejected' | 'sent_folder_unavailable' | 'invalid_message' | 'message_not_found') {
+  constructor(readonly code: 'reconnect_required' | 'missing_scope' | 'rate_limited' | 'provider_unavailable' | 'provider_error' | 'oauth_configuration' | 'gmail_api_failed' | 'token_refresh_failed' | 'token_storage_failed' | 'invalid_host' | 'server_unreachable' | 'connection_timeout' | 'tls_certificate_failure' | 'authentication_rejected' | 'imap_authentication_rejected' | 'smtp_authentication_rejected' | 'sent_folder_unavailable' | 'invalid_message' | 'message_not_found') {
     super(code)
     this.name = 'MailboxProviderError'
   }

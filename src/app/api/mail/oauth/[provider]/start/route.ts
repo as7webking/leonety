@@ -55,7 +55,11 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     const message = caught instanceof Error ? caught.message : 'mailbox_setup_failed'
     if (message === 'mailbox_configuration_missing') {
       const base = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || url.origin
-      return NextResponse.redirect(new URL('/app/settings/mailbox?mailError=configuration', base))
+      const failure = provider === 'google' ? 'oauth_configuration' : 'configuration'
+      return NextResponse.redirect(new URL(`/app/settings/mailbox?mailError=${failure}`, base))
+    }
+    if (provider === 'google') {
+      return NextResponse.redirect(new URL('/app/settings/mailbox?mailError=callback_failed', process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || url.origin))
     }
     return NextResponse.json({ error: 'mailbox_setup_failed' }, { status: 500 })
   }

@@ -6,7 +6,5 @@ export function classifyGoogleApiFailure(status: number, payload: unknown): Mail
     const text = JSON.stringify(payload ?? '').toLowerCase()
     if (text.includes('insufficientpermissions') || text.includes('insufficient_scope')) return 'missing_scope'
   }
-  if (status === 429) return 'rate_limited'
-  if (status >= 500) return 'provider_unavailable'
-  return 'provider_error'
+  return 'gmail_api_failed'
 }

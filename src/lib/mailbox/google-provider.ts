@@ -9,12 +9,17 @@ import { classifyGoogleApiFailure } from './google-errors'
 const API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
 async function request<T>(token: string, path: string, init?: RequestInit, missingAsNotFound = false): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
-    signal: AbortSignal.timeout(15_000),
-    cache: 'no-store',
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
+      signal: AbortSignal.timeout(15_000),
+      cache: 'no-store',
+    })
+  } catch {
+    throw new MailboxProviderError('gmail_api_failed')
+  }
   if (response.status === 401 || response.status === 403 || response.status === 429 || response.status >= 500) {
     const payload = response.status === 403 ? await response.clone().json().catch(() => null) : null
     throw new MailboxProviderError(classifyGoogleApiFailure(response.status, payload))
