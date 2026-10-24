@@ -13,6 +13,7 @@ import { getNavigationForMode } from '@/components/app-shell/navigation-items'
 import { useI18n } from '@/contexts/i18n-context'
 import { useCompany } from '@/contexts/company-context'
 import { normalizeAppMode } from '@/lib/app-mode'
+import { trapFocusWithin } from '@/lib/dialog-focus'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import {
   shouldCloseNavigationDrawer,
@@ -28,6 +29,7 @@ export function MobileDrawerClient() {
   const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
   const gestureRef = useRef<Pick<NavigationSwipe, 'startX' | 'startY'> | null>(null)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const drawerRef = useRef<HTMLElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   useBodyScrollLock(open)
 
@@ -79,7 +81,12 @@ export function MobileDrawerClient() {
     const previousFocus = document.activeElement as HTMLElement | null
     closeButtonRef.current?.focus()
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeDrawer()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeDrawer()
+      } else if (event.key === 'Tab' && drawerRef.current) {
+        trapFocusWithin(drawerRef.current, event)
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
@@ -128,6 +135,7 @@ export function MobileDrawerClient() {
           onClick={closeDrawer}
         />
         <aside
+          ref={drawerRef}
           className="absolute left-0 top-0 h-dvh w-[calc(100%-0.75rem)] max-w-80 touch-pan-y overflow-y-auto overscroll-contain bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
           aria-labelledby="mobile-app-navigation-label"
           aria-modal="true"
