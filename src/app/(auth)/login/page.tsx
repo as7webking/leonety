@@ -43,6 +43,8 @@ export default function LoginPage() {
     const errorKeys: Record<string, string> = {
       auth_provider_denied: 'auth.errorProviderDenied',
       auth_provider_error: 'auth.errorProvider',
+      auth_configuration_error: 'auth.errorConfiguration',
+      session_exchange_failed: 'auth.errorSessionExchangeFailed',
       auth_callback_failed: 'auth.errorCallbackFailed',
       auth_callback_missing_code: 'auth.errorMissingCode',
       session_missing: 'auth.errorSessionMissing',

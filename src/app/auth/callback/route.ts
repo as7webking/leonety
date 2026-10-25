@@ -37,9 +37,9 @@ export async function GET(request: Request) {
 
       if (exchangeError) {
         if (process.env.NODE_ENV !== 'production') {
-          console.warn('[auth.callback] Code exchange failed', { message: exchangeError.message })
+          console.warn('[auth.callback] Code exchange failed', { code: exchangeError.code ?? 'unknown' })
         }
-        return redirectToLoginWithError('auth_callback_failed')
+        return redirectToLoginWithError('session_exchange_failed')
       }
 
       const {
@@ -104,10 +104,11 @@ export async function GET(request: Request) {
 
       return NextResponse.redirect(new URL((count ?? 0) > 0 ? next : '/app/onboarding', getSiteUrl()))
     } catch (error) {
+      const configurationMissing = error instanceof Error && error.message === 'Missing required Supabase environment variables'
       console.error('[auth.callback] Unexpected callback failure', {
-        category: error instanceof Error ? error.name : 'unknown',
+        category: configurationMissing ? 'configuration_error' : error instanceof Error ? error.name : 'unknown',
       })
-      return redirectToLoginWithError('auth_callback_failed')
+      return redirectToLoginWithError(configurationMissing ? 'auth_configuration_error' : 'auth_callback_failed')
     }
   }
 
