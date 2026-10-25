@@ -231,9 +231,16 @@ export function MailboxSettings() {
           <p className="text-xs text-muted-foreground">{t('mail.defaultDeviceNote')}</p>
           {showImap && <div className="space-y-4 rounded-md border p-4">
             <div><h3 className="font-medium">{t('mail.imap.title')}</h3><p className="mt-1 text-sm text-muted-foreground">{t('mail.imap.description')}</p></div>
+            <h4 className="text-sm font-medium">{t('mail.imap.mailbox')}</h4>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-              <Field disabled={busy} label={t('mail.imap.email')} value={imap.email} onChange={(value) => updateImap('email', value)} type="email" />
+              <Field disabled={busy} label={t('mail.imap.email')} value={imap.email} onChange={(value) => updateImap('email', value)} type="email" autoComplete="email" />
               <Field disabled={busy} label={t('mail.imap.displayName')} value={imap.displayName} onChange={(value) => updateImap('displayName', value)} />
+              <Field disabled={busy} label={t('mail.imap.password')} value={imap.password} onChange={(value) => updateImap('password', value)} type="password" autoComplete="new-password" />
+            </div>
+            <p className="-mt-2 text-xs text-muted-foreground">{t('mail.imap.displayNameHelp')}</p>
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">{t('mail.imap.incoming')}</h4>
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
               <Field disabled={busy} label={t('mail.imap.imapHost')} value={imap.imapHost} onChange={(value) => updateImap('imapHost', value)} placeholder="imap.example.com" />
               <SelectField disabled={busy} label={t('mail.imap.imapPort')} value={imap.imapPort} onChange={() => updateImap('imapPort', 993)}>
                 <option value={993}>993</option>
@@ -241,6 +248,11 @@ export function MailboxSettings() {
               <SelectField disabled={busy} label={t('mail.imap.imapSecurity')} value={imap.imapSecurity} onChange={() => updateImap('imapSecurity', 'tls')}>
                 <option value="tls">TLS</option>
               </SelectField>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">{t('mail.imap.outgoing')}</h4>
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
               <Field disabled={busy} label={t('mail.imap.smtpHost')} value={imap.smtpHost} onChange={(value) => updateImap('smtpHost', value)} placeholder="smtp.example.com" />
               <SelectField disabled={busy} label={t('mail.imap.smtpPort')} value={imap.smtpPort} onChange={(value) => {
                 const port = Number(value) as 465 | 587
@@ -256,9 +268,15 @@ export function MailboxSettings() {
               }}>
                 <option value="tls">TLS</option><option value="starttls">STARTTLS</option>
               </SelectField>
-              <Field disabled={busy} label={t('mail.imap.username')} value={imap.username} onChange={(value) => updateImap('username', value)} autoComplete="username" />
-              <Field disabled={busy} label={t('mail.imap.password')} value={imap.password} onChange={(value) => updateImap('password', value)} type="password" autoComplete="new-password" />
+              </div>
             </div>
+            <details className="rounded-md border px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium">{t('mail.imap.advanced')}</summary>
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-muted-foreground">{t('mail.imap.usernameHelp')}</p>
+                <Field disabled={busy} label={t('mail.imap.customUsername')} value={imap.username} onChange={(value) => updateImap('username', value)} autoComplete="username" />
+              </div>
+            </details>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" disabled={busy || !canStartConnection} onClick={testImap}>{busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}{busy ? t('mail.testing') : t('mail.imap.test')}</Button>
               <Button type="button" disabled={busy || !tested || !canStartConnection} onClick={saveImap}>{busy ? t('mail.imap.saving') : t('mail.imap.save')}</Button>

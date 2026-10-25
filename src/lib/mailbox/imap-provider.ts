@@ -291,7 +291,7 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
     const transporter = await createSmtpTransport(this.config)
     try {
       await withTimeout(transporter.sendMail({
-        from: { name: this.config.displayName || this.config.address, address: this.config.address },
+        from: { name: cleanHeader(this.config.displayName || this.config.address), address: this.config.address },
         to: input.to,
         cc: input.cc,
         subject: cleanHeader(input.subject),
@@ -310,7 +310,7 @@ export class ImapSmtpMailboxProvider implements MailboxProvider {
     const transporter = await createSmtpTransport(this.config)
     try {
       await withTimeout(transporter.sendMail({
-        from: { name: this.config.displayName || this.config.address, address: this.config.address },
+        from: { name: cleanHeader(this.config.displayName || this.config.address), address: this.config.address },
         to: input.to.length ? input.to : [original.from.email],
         cc: input.cc,
         subject: cleanHeader(input.subject || (/^re:/i.test(original.subject) ? original.subject : `Re: ${original.subject}`)),

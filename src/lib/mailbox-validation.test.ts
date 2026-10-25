@@ -35,3 +35,22 @@ test('password is never included in field validation diagnostics', () => {
   assert.equal(invalid.success, false)
   if (!invalid.success) assert.doesNotMatch(JSON.stringify(getImapInputError(invalid.error)), /not-logged/)
 })
+
+test('email is the default login for both protocols, while an explicit legacy-style username is preserved', () => {
+  const defaultLogin = imapInputSchema.safeParse({ ...base, username: '' })
+  assert.equal(defaultLogin.success, true)
+  if (defaultLogin.success) assert.equal(defaultLogin.data.username, base.email)
+
+  const customLogin = imapInputSchema.safeParse({ ...base, username: 'account-42' })
+  assert.equal(customLogin.success, true)
+  if (customLogin.success) assert.equal(customLogin.data.username, 'account-42')
+})
+
+test('sender name rejects header control characters without echoing submitted values', () => {
+  const invalidName = imapInputSchema.safeParse({ ...base, displayName: 'Company\r\nBcc: attacker@example.com' })
+  assert.equal(invalidName.success, false)
+  if (!invalidName.success) assert.deepEqual(getImapInputError(invalidName.error), { error: 'invalid_display_name', field: 'displayName' })
+
+  const unicodeName = imapInputSchema.safeParse({ ...base, displayName: 'Ahmed Sultanline' })
+  assert.equal(unicodeName.success, true)
+})
