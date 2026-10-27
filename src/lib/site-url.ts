@@ -34,13 +34,23 @@ export function getSafeAppRedirectPath(next: string | null | undefined, fallback
     return fallback
   }
 
-  const normalized = legacyAppRoutes[next] ?? next
-
-  if (!normalized.startsWith('/app') && normalized !== '/login' && normalized !== '/reset-password') {
+  let parsed: URL
+  try {
+    parsed = new URL(next, 'https://leonety.invalid')
+  } catch {
     return fallback
   }
 
-  return normalized
+  if (parsed.origin !== 'https://leonety.invalid') return fallback
+
+  const normalizedPath = legacyAppRoutes[parsed.pathname] ?? parsed.pathname
+
+  const isAppPath = normalizedPath === '/app' || normalizedPath.startsWith('/app/')
+  if (!isAppPath && normalizedPath !== '/login' && normalizedPath !== '/reset-password') {
+    return fallback
+  }
+
+  return `${normalizedPath}${parsed.search}${parsed.hash}`
 }
 
 export function getAuthCallbackUrl(next = '/app/profile') {

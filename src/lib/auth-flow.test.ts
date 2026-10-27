@@ -9,6 +9,7 @@ const callbackSource = readFileSync(new URL('../app/auth/callback/route.ts', imp
 const proxySource = readFileSync(new URL('../proxy.ts', import.meta.url), 'utf8')
 const serverClientSource = readFileSync(new URL('./supabase-server.ts', import.meta.url), 'utf8')
 const profileSource = readFileSync(new URL('../app/(app)/profile/page.tsx', import.meta.url), 'utf8')
+const resetPasswordSource = readFileSync(new URL('../app/(auth)/reset-password/page.tsx', import.meta.url), 'utf8')
 
 test('Google and Facebook use the existing Supabase OAuth flow without mailbox scopes', () => {
   assert.match(loginSource, /type OAuthProvider = 'google' \| 'facebook'/)
@@ -16,6 +17,17 @@ test('Google and Facebook use the existing Supabase OAuth flow without mailbox s
   assert.match(loginSource, /getAuthCallbackUrl\(getSafeAppRedirectPath/)
   assert.match(loginSource, /provider === 'google' \? \{ prompt: 'select_account' \} : undefined/)
   assert.doesNotMatch(loginSource, /gmail\.modify|gmail\.readonly|googleapis\.com\/auth\/gmail/)
+})
+
+test('email/password signup, confirmation, login and password recovery keep the Supabase auth flow', () => {
+  assert.match(loginSource, /supabase\.auth\.signUp\(/)
+  assert.match(loginSource, /emailRedirectTo: getAuthCallbackUrl\('\/app\/profile'\)/)
+  assert.match(loginSource, /data\.user\.identities\.length === 0/)
+  assert.match(loginSource, /supabase\.auth\.resend\(\{[\s\S]*?type: 'signup'/)
+  assert.match(loginSource, /supabase\.auth\.signInWithPassword\(/)
+  assert.match(resetPasswordSource, /supabase\.auth\.resetPasswordForEmail\(/)
+  assert.match(resetPasswordSource, /redirectTo: getAuthCallbackUrl\('\/reset-password\?mode=update'\)/)
+  assert.match(resetPasswordSource, /supabase\.auth\.updateUser\(\{ password: newPassword \}\)/)
 })
 
 test('OAuth callback exchanges PKCE code, creates only a missing profile, and scopes workspace to auth user', () => {
@@ -41,9 +53,12 @@ test('OAuth callback preserves a safe intended app destination when returning an
 test('safe next path allows app routes and rejects external, protocol-relative and malformed destinations', () => {
   assert.equal(getSafeAppRedirectPath('/app/invoices?status=sent'), '/app/invoices?status=sent')
   assert.equal(getSafeAppRedirectPath('/app/transactions'), '/app/transactions')
+  assert.equal(getSafeAppRedirectPath('/reset-password?mode=update'), '/reset-password?mode=update')
+  assert.equal(getSafeAppRedirectPath('/dashboard?tab=recent'), '/app/dashboard?tab=recent')
   assert.equal(getSafeAppRedirectPath('https://attacker.example'), '/app/dashboard')
   assert.equal(getSafeAppRedirectPath('//attacker.example/path'), '/app/dashboard')
   assert.equal(getSafeAppRedirectPath('/\\\\attacker.example'), '/app/dashboard')
+  assert.equal(getSafeAppRedirectPath('/application'), '/app/dashboard')
   assert.equal(getSafeAppRedirectPath('/pricing'), '/app/dashboard')
 })
 
@@ -54,6 +69,12 @@ test('callback URL is Leonety /auth/callback with a separately encoded safe next
   assert.equal(new URL(getAuthCallbackUrl('https://attacker.example')).searchParams.get('next'), '/app/profile')
 })
 
+test('password recovery callback reaches the update form before workspace onboarding checks', () => {
+  assert.match(resetPasswordSource, /getAuthCallbackUrl\('\/reset-password\?mode=update'\)/)
+  assert.match(resetPasswordSource, /supabase\.auth\.updateUser\(\{ password: newPassword \}\)/)
+  assert.match(callbackSource, /intendedUrl\.pathname === '\/reset-password'[\s\S]*?searchParams\.get\('mode'\) === 'update'[\s\S]*?NextResponse\.redirect\(intendedUrl\)/)
+})
+
 test('provider denial, callback exchange, profile, workspace, onboarding and existing workspace paths remain distinct', () => {
   assert.match(callbackSource, /providerError === 'access_denied' \|\| providerErrorCode === 'user_cancelled'/)
   assert.match(callbackSource, /wasDenied \? 'auth_provider_denied' : 'auth_provider_error'/)
@@ -61,6 +82,8 @@ test('provider denial, callback exchange, profile, workspace, onboarding and exi
   assert.match(callbackSource, /if \(profileLookupError\)[\s\S]*?auth_profile_failed/)
   assert.match(callbackSource, /if \(companyLookupError\)[\s\S]*?auth_workspace_check_failed/)
   assert.match(callbackSource, /if \(!existingProfile\)[\s\S]*?profiles'\)\.insert/)
+  assert.match(callbackSource, /email: user\.email \?\? null/)
+  assert.match(callbackSource, /if \(profileInsertError\)[\s\S]*?concurrentlyCreatedProfile/)
   assert.match(callbackSource, /\(count \?\? 0\) > 0 \? next : '\/app\/onboarding'/)
   assert.doesNotMatch(callbackSource, /access_token|refresh_token|authorization code.*console\.(?:log|error)/i)
 })

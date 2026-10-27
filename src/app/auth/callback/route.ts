@@ -51,6 +51,11 @@ export async function GET(request: Request) {
         return redirectToLoginWithError('session_missing')
       }
 
+      const intendedUrl = new URL(next, getSiteUrl())
+      if (intendedUrl.pathname === '/reset-password' && intendedUrl.searchParams.get('mode') === 'update') {
+        return NextResponse.redirect(intendedUrl)
+      }
+
       const { data: existingProfile, error: profileLookupError } = await supabase
         .from('profiles')
         .select('id')
