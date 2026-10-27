@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, LoaderCircle, MailPlus, RefreshCw, Reply, Send } from 'lucide-react'
+import { ArrowLeft, LoaderCircle, MailPlus, RefreshCw, Reply, Send, Star } from 'lucide-react'
 import { useI18n } from '@/contexts/i18n-context'
 import { intlLocaleMap } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ interface Connection {
   email: string
   displayName: string | null
   status: 'connected' | 'reconnect_required' | 'error' | 'disabled' | 'plan_restricted'
+  lastSuccessfulConnectionAt: string | null
 }
 
 interface PageData {
@@ -30,6 +31,7 @@ interface PageData {
 export function MailClient({ companyId }: { companyId: string }) {
   const { t, locale } = useI18n()
   const [connections, setConnections] = useState<Connection[]>([])
+  const [defaultMailboxId, setDefaultMailboxId] = useState('')
   const [authUserId, setAuthUserId] = useState('')
   const [supabase] = useState(() => createClient())
   const authUserRef = useRef('')
@@ -69,6 +71,7 @@ export function MailClient({ companyId }: { companyId: string }) {
       if (authUserRef.current !== id) {
         authUserRef.current = id
         setMessage(null); setPage({ messages: [], nextCursor: null }); setConnections([])
+        setDefaultMailboxId('')
         setConnectionsLoadedFor(null); setConnectionsLoadedForUser('')
         setRequestedMessage(null); setComposeOpen(false); setComposeConnectionId('')
         setTo(''); setCc(''); setSubject(''); setText(''); setReplyingTo(null)
@@ -97,6 +100,11 @@ export function MailClient({ companyId }: { companyId: string }) {
     const available = body.connections as Connection[]
     const connected = available.filter((item) => item.status === 'connected')
     setConnections(available)
+    const key = mailboxDefaultStorageKey(requestUserId, requestCompanyId)
+    const preferred = readBrowserDefaultMailboxId(key)
+    const resolved = resolveDefaultMailboxId(preferred, available)
+    setDefaultMailboxId(resolved)
+    if (preferred !== resolved) writeBrowserDefaultMailboxId(key, resolved || null)
     setConnectionsLoadFailed(false)
     setConnectionId((current) => current === 'all' || connected.some((item) => item.id === current) ? current : 'all')
     setConnectionsLoadedFor(companyId)
@@ -348,7 +356,16 @@ export function MailClient({ companyId }: { companyId: string }) {
     if (!message) return
     const success = await performAction({ action: 'mark_read', connectionId: message.connectionId, folder: message.folder, messageId: message.providerMessageId, read: !message.isRead })
     if (success) {
-      setMessage({ ...message, isRead: !message.isRead })
+      const isRead = !message.isRead
+      setMessage({ ...message, isRead })
+      setPage((current) => ({
+        ...current,
+        messages: current.messages.map((item) =>
+          item.connectionId === message.connectionId && item.provider === message.provider && item.providerMessageId === message.providerMessageId
+            ? { ...item, isRead }
+            : item,
+        ),
+      }))
       if (filter === 'unread' && message.folder === 'inbox' && !message.isRead) {
         setPage((current) => ({ ...current, messages: current.messages.filter((item) => item.providerMessageId !== message.providerMessageId || item.connectionId !== message.connectionId) }))
       }
@@ -358,6 +375,13 @@ export function MailClient({ companyId }: { companyId: string }) {
   const formatDate = (value: string | null) => value
     ? new Intl.DateTimeFormat(intlLocaleMap[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
     : ''
+
+  const setDefaultMailbox = (id: string) => {
+    if (!authUserId) return
+    const key = mailboxDefaultStorageKey(authUserId, companyId)
+    if (writeBrowserDefaultMailboxId(key, id)) setDefaultMailboxId(id)
+    else setError('mail.error.default_save_failed')
+  }
 
   if (connectionsReady && !visibleConnections.length && !loading && !error) return <Card className="min-w-0 p-5">
     <p className="font-medium">{connections.length ? t('mail.mailboxesNeedAttention') : t('mail.noConnectedMailboxes')}</p>
@@ -394,6 +418,12 @@ export function MailClient({ companyId }: { companyId: string }) {
       <ul className="grid min-w-0 gap-2 sm:grid-cols-2">{connections.map((item) => <li key={item.id} className="min-w-0 rounded-md bg-muted/40 px-3 py-2 text-sm">
         <p className="break-all font-medium">{item.email}</p>
         <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-xs text-muted-foreground"><span>{providerName(item.provider)}</span><span>{t(`mail.status.${item.status}`)}</span></p>
+        {item.status === 'connected' && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {defaultMailboxId === item.id
+            ? <span className="inline-flex items-center gap-1 text-xs font-medium"><Star className="h-3.5 w-3.5" />{t('mail.defaultMailbox')}</span>
+            : <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setDefaultMailbox(item.id)}><Star className="mr-1 h-3.5 w-3.5" />{t('mail.setDefault')}</Button>}
+          {item.lastSuccessfulConnectionAt && <span className="text-xs text-muted-foreground">{t('mail.lastConnection')}: {formatDate(item.lastSuccessfulConnectionAt)}</span>}
+        </div>}
       </li>)}</ul>
     </section>}
     {page.failedMailboxCount ? <p className="text-sm text-amber-800">{t('mail.failedInboxes')}</p> : null}
@@ -470,7 +500,7 @@ function errorKey(error: unknown) {
   if (code === 'mailbox_load_failed') return 'mail.loadFailed'
   if (code === 'workspace_access_denied') return 'mail.error.workspace'
   if (code === 'invalid_message') return 'mail.error.mailbox_provider_error'
-  const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'missing_scope', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed', 'oauth_configuration', 'consent_denied', 'callback_failed', 'token_exchange_failed', 'token_storage_failed', 'mailbox_identity_failed', 'gmail_api_failed', 'token_refresh_failed']
+  const known = ['mailbox_limit_reached', 'mailbox_not_connected', 'mailbox_provider_error', 'reconnect_required', 'missing_scope', 'rate_limited', 'provider_unavailable', 'mailbox_load_failed', 'oauth_configuration', 'consent_denied', 'callback_failed', 'token_exchange_failed', 'token_storage_failed', 'mailbox_identity_failed', 'gmail_api_failed', 'token_refresh_failed', 'mailbox_test_failed', 'invalid_host', 'server_unreachable', 'connection_timeout', 'tls_certificate_failure', 'authentication_rejected', 'imap_authentication_rejected', 'smtp_authentication_rejected', 'unsupported_security_configuration', 'sent_folder_unavailable']
   return known.includes(code) ? `mail.error.${code}` : code.startsWith('mail.error.') ? code : 'mail.error.mailbox_provider_error'
 }
 

@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createMailboxProvider } from '@/lib/mailbox/provider'
 import { getMailboxConnection, getMailboxEntitlement, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace, updateMailboxConnection } from '@/lib/mailbox/server'
 import { MailboxProviderError } from '@/lib/mailbox/types'
+import { ImapSmtpMailboxProvider } from '@/lib/mailbox/imap-provider'
 
 export const runtime = 'nodejs'
 
@@ -21,18 +22,24 @@ export async function POST(request: Request, context: { params: Promise<{ connec
     const entitlement = await getMailboxEntitlement(parsed.data, user.id, user)
     await reconcileMailboxDowngrade(parsed.data, entitlement.limit)
     const connection = await getMailboxConnection(parsed.data, connectionId)
-    if (!connection || connection.status !== 'connected') return NextResponse.json({ error: 'mailbox_not_connected' }, { status: 409 })
-    const provider = await createMailboxProvider(connection)
+    if (!connection || connection.status === 'disabled' || connection.status === 'plan_restricted') return NextResponse.json({ error: 'mailbox_not_connected' }, { status: 409 })
+    if (connection.status !== 'connected' && !(connection.provider === 'imap' && ['reconnect_required', 'error'].includes(connection.status))) {
+      return NextResponse.json({ error: 'mailbox_not_connected' }, { status: 409 })
+    }
+    const provider = connection.provider === 'imap'
+      ? new ImapSmtpMailboxProvider(connection)
+      : await createMailboxProvider(connection)
     await provider.testConnection()
     await updateMailboxConnection(parsed.data, connectionId, {
-      last_successful_connection_at: new Date().toISOString(), last_error_code: null,
+      status: 'connected', last_successful_connection_at: new Date().toISOString(), last_error_code: null,
     })
     return NextResponse.json({ success: true })
   } catch (caught) {
     const code = caught instanceof MailboxProviderError ? caught.code : 'mailbox_test_failed'
-    if (code === 'reconnect_required' || code === 'missing_scope') {
+    if (['reconnect_required', 'missing_scope', 'invalid_host', 'server_unreachable', 'connection_timeout', 'tls_certificate_failure', 'authentication_rejected', 'imap_authentication_rejected', 'smtp_authentication_rejected', 'provider_unavailable'].includes(code)) {
       await updateMailboxConnection(parsed.data, connectionId, {
-        status: 'reconnect_required', last_error_code: code === 'missing_scope' ? 'missing_scope' : 'authorization_revoked',
+        status: code === 'reconnect_required' || code === 'missing_scope' ? 'reconnect_required' : 'error',
+        last_error_code: code === 'reconnect_required' ? 'authorization_revoked' : code,
       }).catch(() => undefined)
     }
     return NextResponse.json({ error: code }, { status: code === 'reconnect_required' ? 409 : 502 })

@@ -213,6 +213,7 @@ export function MailboxSettings() {
             <p className="font-medium">{t('mail.accountEmail')}</p>
             <p className="mt-1 break-all text-muted-foreground">{data?.canonicalVerifiedEmail || t('mail.accountEmailUnverified')}</p>
             <p className="mt-1 text-xs text-muted-foreground">{t('mail.accountEmailNote')}</p>
+            {data?.canonicalVerifiedEmail && !data.connections.some((connection) => connection.email.toLowerCase() === data.canonicalVerifiedEmail?.toLowerCase() && connection.status === 'connected') && <Button asChild size="sm" variant="outline" className="mt-3"><a href="#mailbox-connect-options">{t('mail.connectMailbox')}</a></Button>}
           </div>
           {data && <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4 text-sm">
             <span>{t('mail.limit')}: {data.activeCount} / {data.limit}</span>
@@ -223,7 +224,7 @@ export function MailboxSettings() {
           {data && !hasSlot && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
             <span>{t('mail.limitReached')}</span><Button asChild size="sm"><Link href="/upgrade">{t('mail.upgrade')}</Link></Button>
           </div>}
-          <div className="flex flex-wrap gap-2">
+          <div id="mailbox-connect-options" className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => connectOAuth('google')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectGoogle')}</Button>
             <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => connectOAuth('microsoft')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectMicrosoft')}</Button>
             <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => setShowImap((open) => !open)}><ShieldCheck className="mr-2 h-4 w-4" />{t('mail.connectOther')}</Button>
@@ -309,7 +310,7 @@ export function MailboxSettings() {
               ? <Button size="sm" variant="outline" disabled={busy || !hasSlot} onClick={() => updateConnection(connection, 'activate')}>{t('mail.activate')}</Button>
               : connection.status !== 'disabled' && <>
                 {connection.status !== 'connected' && connection.provider !== 'imap' && <Button size="sm" variant="outline" disabled={busy} onClick={() => connectOAuth(connection.provider as 'google' | 'microsoft')}>{t('mail.reconnect')}</Button>}
-                {connection.status === 'connected' && <Button size="sm" variant="outline" disabled={busy} onClick={() => testSaved(connection)}>{t('mail.test')}</Button>}
+                {(connection.status === 'connected' || (connection.provider === 'imap' && ['reconnect_required', 'error'].includes(connection.status))) && <Button size="sm" variant="outline" disabled={busy} onClick={() => testSaved(connection)}>{connection.status === 'connected' ? t('mail.test') : t('mail.reconnect')}</Button>}
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => updateConnection(connection, 'restrict')}>{t('mail.pause')}</Button>
               </>}
             {connection.status !== 'disabled' && <Button size="sm" variant="ghost" disabled={busy} onClick={() => disconnect(connection)}><Unplug className="mr-1 h-4 w-4" />{t('mail.disconnect')}</Button>}
