@@ -25,6 +25,23 @@ test('unsupported live financial facts fail closed instead of reaching the model
   assert.equal(resolveAssistantCapability([{ role: 'user', content: 'List transactions' }]).kind, 'unsupported')
 })
 
+test('qualified product counts do not reuse the total-product count', () => {
+  for (const prompt of [
+    'How many active products do I have?',
+    'Count archived products',
+    'How many products are in stock?',
+    'How many low stock products do I have?',
+    'Wie viele aktive Produkte habe ich?',
+    'Сколько активных товаров?',
+  ]) {
+    const decision = resolveAssistantCapability([{ role: 'user', content: prompt }])
+    assert.equal(decision.kind, 'unsupported', prompt)
+  }
+  assert.deepEqual(resolveAssistantCapability([{ role: 'user', content: 'How many products do I have exactly?' }]), {
+    kind: 'data', tools: ['product_count'], sourceMessage: 'How many products do I have exactly?',
+  })
+})
+
 test('factual follow-ups reclassify using user questions only and retrieve again', () => {
   const decision = resolveAssistantCapability([
     { role: 'user', content: 'How many products do I have?' },
