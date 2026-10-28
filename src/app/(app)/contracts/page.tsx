@@ -206,6 +206,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   const editorRef = useRef<HTMLDivElement | null>(null)
   const restoredDraftKeyRef = useRef<string | null>(null)
   const editorWorkspaceRef = useRef<string | null>(null)
+  const openedSearchContractRef = useRef<string | null>(null)
   const { draft: contractDraft, loading: contractDraftLoading, save: saveContractDraft, discard: discardContractDraft } = useLocalDraft<ContractLocalDraft>('contract', currentCompany?.id)
 
   const template = getContractTemplate(templateId)
@@ -409,7 +410,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     if (client) fillPartyBFromClient(client)
   }
 
-  function editContract(contract: ContractRow) {
+  const editContract = useCallback((contract: ContractRow) => {
     if (!isOnline) {
       setError(t('offline.requiresConnection'))
       return
@@ -428,7 +429,24 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     setMessage('')
     setError('')
     window.requestAnimationFrame(() => editorRef.current?.focus())
-  }
+  }, [isOnline, t])
+
+  useEffect(() => {
+    const requestedContractId = searchParams.get('contractId')?.trim() ?? ''
+    if (!requestedContractId) {
+      openedSearchContractRef.current = null
+      return
+    }
+    if (loading || !currentCompany) return
+
+    const requestKey = `${currentCompany.id}:${requestedContractId}`
+    if (openedSearchContractRef.current === requestKey) return
+    const contract = contracts.find((item) => item.id === requestedContractId)
+    if (!contract) return
+
+    openedSearchContractRef.current = requestKey
+    editContract(contract)
+  }, [contracts, currentCompany, editContract, loading, searchParams])
 
   function duplicateContract(contract: ContractRow) {
     if (!isOnline) {

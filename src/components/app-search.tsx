@@ -1,119 +1,55 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
-import { createClient } from '@/lib/supabase-client'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
-
-type SearchGroup = 'income' | 'expenses' | 'time' | 'clients' | 'invoices' | 'workspaces'
+import type { GlobalSearchGroup } from '@/lib/global-search'
 
 interface SearchResult {
   id: string
-  group: SearchGroup
+  group: GlobalSearchGroup
   title: string
-  titleKey?: string
   detail: string
-  detailKey?: string
-  detailParams?: Record<string, string>
   href: string
 }
 
-interface IncomeRow {
-  id: string
-  description: string | null
-  category: string | null
-  amount: number | string
-  date: string
-  company_id: string
-}
-
-interface ExpenseRow {
-  id: string
-  description: string | null
-  category: string | null
-  amount: number | string
-  date: string
-  company_id: string
-}
-
-interface TimeRow {
-  id: string
-  description: string | null
-  hours: number | string
-  date: string
-  company_id: string
-}
-
-interface ClientRow {
-  id: string
-  name: string
-  phone: string | null
-  interested_in: string | null
-  status: string
-  company_id: string
-}
-
-interface InvoiceRow {
-  id: string
-  invoice_number: string
-  status: string
-  total: number | string
-  currency: string
-  company_id: string
-}
-
-const groups: SearchGroup[] = ['income', 'expenses', 'time', 'clients', 'invoices', 'workspaces']
-
-const groupLabelKeys: Record<SearchGroup, string> = {
-  income: 'nav.income',
-  expenses: 'nav.expenses',
-  time: 'nav.time',
+const groups: GlobalSearchGroup[] = ['clients', 'invoices', 'products', 'employees', 'contracts']
+const groupLabelKeys: Record<GlobalSearchGroup, string> = {
   clients: 'nav.clients',
   invoices: 'nav.invoices',
-  workspaces: 'nav.workspaces',
-}
-
-function matchesQuery(values: Array<string | number | null | undefined>, query: string) {
-  const normalizedQuery = query.trim().toLowerCase()
-  return values.some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery))
-}
-
-function formatHours(hoursValue: number) {
-  const safeHoursValue = Math.max(0, Number(hoursValue) || 0)
-  const totalMinutes = Math.round(safeHoursValue * 60)
-  const days = Math.floor(totalMinutes / 1440)
-  const hours = Math.floor((totalMinutes % 1440) / 60)
-  const minutes = totalMinutes % 60
-
-  if (days > 0) {
-    const parts = [`${days}d`]
-    if (hours > 0) parts.push(`${hours}h`)
-    if (minutes > 0) parts.push(`${minutes}m`)
-    return parts.join(' ')
-  }
-
-  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+  products: 'nav.products',
+  employees: 'nav.employees',
+  contracts: 'nav.contracts',
 }
 
 export function AppSearch() {
-  const [supabase] = useState(() => createClient())
-  const { companies, currentCompany } = useCompany()
+  const { currentCompany } = useCompany()
   const { t } = useI18n()
+  const router = useRouter()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
+  const [resultsWorkspaceId, setResultsWorkspaceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
-
   const trimmedQuery = query.trim()
+  const workspaceId = currentCompany?.id ?? null
+  const visibleResults = useMemo(() => resultsWorkspaceId === workspaceId ? results : [], [results, resultsWorkspaceId, workspaceId])
+  const groupedResults = useMemo(
+    () => groups.map((group) => ({ group, items: visibleResults.filter((result) => result.group === group) }))
+      .filter((section) => section.items.length > 0),
+    [visibleResults]
+  )
+  const activeResult = activeIndex >= 0 ? visibleResults[activeIndex] : undefined
 
   const updateMenuPosition = useCallback(() => {
     const input = inputRef.current
@@ -127,17 +63,16 @@ export function AppSearch() {
     const availableBelow = viewportHeight - rect.bottom - padding
     const availableAbove = rect.top - padding
     const openAbove = availableBelow < 260 && availableAbove > availableBelow
-    const availableHeight = Math.max(140, openAbove ? availableAbove - offset : availableBelow - offset)
     const width = Math.min(Math.max(rect.width, 220), viewportWidth - padding * 2)
     const left = Math.min(Math.max(padding, rect.left), viewportWidth - width - padding)
-    const maxHeight = Math.min(384, availableHeight)
+    const maxHeight = Math.min(384, Math.max(80, Math.min(openAbove ? availableAbove : availableBelow, viewportHeight - padding * 2) - offset))
+    const desiredTop = openAbove ? rect.top - offset - maxHeight : rect.bottom + offset
+    const top = Math.max(padding, Math.min(desiredTop, viewportHeight - padding - maxHeight))
 
     setMenuStyle({
       position: 'fixed',
       left,
-      top: openAbove
-        ? Math.max(padding, rect.top - offset - maxHeight)
-        : Math.min(viewportHeight - padding, rect.bottom + offset),
+      top,
       width,
       maxHeight,
       zIndex: 150,
@@ -147,18 +82,14 @@ export function AppSearch() {
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node
-      if (!wrapperRef.current?.contains(target) && !menuRef.current?.contains(target)) {
-        setOpen(false)
-      }
+      if (!wrapperRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false)
     }
-
     document.addEventListener('pointerdown', handlePointerDown)
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [])
 
   useEffect(() => {
     if (!open) return
-
     window.addEventListener('resize', updateMenuPosition)
     window.addEventListener('scroll', updateMenuPosition, true)
     return () => {
@@ -168,214 +99,92 @@ export function AppSearch() {
   }, [open, updateMenuPosition])
 
   useLayoutEffect(() => {
-    if (!open) return
-    updateMenuPosition()
-  }, [open, updateMenuPosition, trimmedQuery, results.length, loading, error])
+    if (open) updateMenuPosition()
+  }, [open, updateMenuPosition, trimmedQuery, visibleResults.length, loading, error])
 
   useEffect(() => {
-    if (!currentCompany || trimmedQuery.length < 2) {
-      setResults([])
+    setResults([])
+    setResultsWorkspaceId(workspaceId)
+    setActiveIndex(-1)
+    setError(false)
+    if (!workspaceId || trimmedQuery.length < 2) {
       setLoading(false)
-      setError(false)
       return
     }
 
-    let active = true
-
-    const loadResults = async () => {
-      setLoading(true)
-      setError(false)
-
+    const controller = new AbortController()
+    setLoading(true)
+    setError(false)
+    const timeout = window.setTimeout(async () => {
       try {
-        const businessSearches = currentCompany.type === 'business'
-          ? [
-              supabase
-                .from('clients')
-                .select('id, name, phone, interested_in, status, company_id')
-                .eq('company_id', currentCompany.id)
-                .order('created_at', { ascending: false })
-                .limit(100),
-              supabase
-                .from('invoices')
-                .select('id, invoice_number, status, total, currency, company_id')
-                .eq('company_id', currentCompany.id)
-                .order('created_at', { ascending: false })
-                .limit(100),
-            ]
-          : [
-              Promise.resolve({ data: [], error: null }),
-              Promise.resolve({ data: [], error: null }),
-            ]
-
-        const [incomeRes, expenseRes, timeRes, clientRes, invoiceRes] = await Promise.all([
-          supabase
-            .from('incomes')
-            .select('id, description, category, amount, date, company_id')
-            .eq('company_id', currentCompany.id)
-            .order('date', { ascending: false })
-            .limit(100),
-          supabase
-            .from('expenses')
-            .select('id, description, category, amount, date, company_id')
-            .eq('company_id', currentCompany.id)
-            .order('date', { ascending: false })
-            .limit(100),
-          supabase
-            .from('time_entries')
-            .select('id, description, hours, date, company_id')
-            .eq('company_id', currentCompany.id)
-            .order('date', { ascending: false })
-            .limit(100),
-          businessSearches[0],
-          businessSearches[1],
-        ])
-
-        if (incomeRes.error) throw incomeRes.error
-        if (expenseRes.error) throw expenseRes.error
-        if (timeRes.error) throw timeRes.error
-        if (clientRes.error && clientRes.error.code !== '42P01') throw clientRes.error
-        if (invoiceRes.error && invoiceRes.error.code !== '42P01') throw invoiceRes.error
-
-        const nextResults: SearchResult[] = []
-
-        for (const company of companies) {
-          if (matchesQuery([company.name, company.type, company.currency], trimmedQuery)) {
-            nextResults.push({
-              id: `workspace-${company.id}`,
-              group: 'workspaces',
-              title: company.name,
-              detail: '',
-              detailKey: 'search.workspaceDetail',
-              detailParams: {
-                type: company.type,
-                currency: company.currency ? ` · ${company.currency}` : '',
-              },
-              href: '/app/dashboard',
-            })
-          }
-        }
-
-        for (const income of (incomeRes.data ?? []) as IncomeRow[]) {
-          if (matchesQuery([income.description, income.category, income.amount, income.date], trimmedQuery)) {
-            nextResults.push({
-              id: `income-${income.id}`,
-              group: 'income',
-              title: income.description || '',
-              titleKey: income.description ? undefined : 'search.incomeEntry',
-              detail: [income.category, income.amount, income.date].filter(Boolean).join(' · '),
-              href: '/app/income',
-            })
-          }
-        }
-
-        for (const expense of (expenseRes.data ?? []) as ExpenseRow[]) {
-          if (matchesQuery([expense.description, expense.category, expense.amount, expense.date], trimmedQuery)) {
-            nextResults.push({
-              id: `expense-${expense.id}`,
-              group: 'expenses',
-              title: expense.description || '',
-              titleKey: expense.description ? undefined : 'search.expenseEntry',
-              detail: [expense.category, expense.amount, expense.date].filter(Boolean).join(' · '),
-              href: '/app/expenses',
-            })
-          }
-        }
-
-        for (const entry of (timeRes.data ?? []) as TimeRow[]) {
-          const duration = formatHours(Number(entry.hours))
-          if (matchesQuery([entry.description, entry.date, entry.hours, duration], trimmedQuery)) {
-            nextResults.push({
-              id: `time-${entry.id}`,
-              group: 'time',
-              title: entry.description || '',
-              titleKey: entry.description ? undefined : 'search.timeEntry',
-              detail: `${duration} · ${entry.date}`,
-              href: '/app/time',
-            })
-          }
-        }
-
-        for (const client of (clientRes.data ?? []) as ClientRow[]) {
-          if (matchesQuery([client.name, client.phone, client.interested_in, client.status], trimmedQuery)) {
-            nextResults.push({
-              id: `client-${client.id}`,
-              group: 'clients',
-              title: client.name,
-              detail: [client.phone, client.interested_in, client.status].filter(Boolean).join(' · '),
-              href: '/app/clients',
-            })
-          }
-        }
-
-        for (const invoice of (invoiceRes.data ?? []) as InvoiceRow[]) {
-          if (matchesQuery([invoice.invoice_number, invoice.status, invoice.total, invoice.currency], trimmedQuery)) {
-            nextResults.push({
-              id: `invoice-${invoice.id}`,
-              group: 'invoices',
-              title: invoice.invoice_number,
-              detail: [invoice.status, `${invoice.total} ${invoice.currency}`].filter(Boolean).join(' · '),
-              href: '/app/invoices',
-            })
-          }
-        }
-
-        if (active) {
-          setResults(nextResults.slice(0, 20))
-        }
-      } catch (searchError) {
-        if (active) {
-          console.error('Search failed:', searchError)
-          setError(true)
+        const params = new URLSearchParams({ companyId: workspaceId, q: trimmedQuery })
+        const response = await fetch(`/api/global-search?${params.toString()}`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+        if (!response.ok) throw new Error('search_unavailable')
+        const payload = await response.json() as { results?: SearchResult[] }
+        if (!Array.isArray(payload.results)) throw new Error('search_unavailable')
+        setResults(payload.results)
+        setResultsWorkspaceId(workspaceId)
+      } catch {
+        if (!controller.signal.aborted) {
           setResults([])
+          setResultsWorkspaceId(workspaceId)
+          setError(true)
         }
       } finally {
-        if (active) {
-          setLoading(false)
-        }
+        if (!controller.signal.aborted) setLoading(false)
       }
-    }
-
-    const timeout = window.setTimeout(() => {
-      void loadResults()
     }, 250)
 
     return () => {
-      active = false
       window.clearTimeout(timeout)
+      controller.abort()
     }
-  }, [companies, currentCompany, supabase, trimmedQuery])
+  }, [trimmedQuery, workspaceId])
 
-  const renderDetail = (result: SearchResult) => {
-    if (!result.detailKey) return result.detail
-    return Object.entries(result.detailParams ?? {}).reduce(
-      (value, [key, replacement]) => value.replace(`{${key}}`, replacement),
-      t(result.detailKey),
-    )
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Escape') {
+      setOpen(false)
+      setActiveIndex(-1)
+      return
+    }
+    if (event.key === 'ArrowDown' && visibleResults.length) {
+      event.preventDefault()
+      setOpen(true)
+      setActiveIndex((current) => (current + 1) % visibleResults.length)
+    }
+    if (event.key === 'ArrowUp' && visibleResults.length) {
+      event.preventDefault()
+      setOpen(true)
+      setActiveIndex((current) => current <= 0 ? visibleResults.length - 1 : current - 1)
+    }
+    if (event.key === 'Enter' && activeResult) {
+      event.preventDefault()
+      router.push(activeResult.href)
+      setOpen(false)
+      setQuery('')
+    }
   }
-
-  const groupedResults = useMemo(
-    () => groups.map((group) => ({
-      group,
-      items: results.filter((result) => result.group === group),
-    })).filter((section) => section.items.length > 0),
-    [results]
-  )
 
   const menu = open && trimmedQuery.length > 0 && menuStyle && typeof document !== 'undefined' ? createPortal(
     <div
       ref={menuRef}
+      id="app-search-results"
       style={menuStyle}
       className="overflow-auto rounded-md border border-slate-200 bg-white shadow-lg"
       role="listbox"
+      aria-label={t('search.label')}
     >
       {trimmedQuery.length < 2 ? (
         <div className="px-4 py-3 text-sm text-slate-500">{t('search.minChars')}</div>
       ) : loading ? (
-        <div className="px-4 py-3 text-sm text-slate-500">{t('search.loading')}</div>
+        <div className="px-4 py-3 text-sm text-slate-500" role="status">{t('search.loading')}</div>
       ) : error ? (
-        <div className="px-4 py-3 text-sm text-red-700">{t('search.failed')}</div>
+        <div className="px-4 py-3 text-sm text-red-700" role="alert">{t('search.failed')}</div>
       ) : groupedResults.length === 0 ? (
-        <div className="px-4 py-3 text-sm text-slate-500">{t('search.noResults')}</div>
+        <div className="px-4 py-3 text-sm text-slate-500" role="status">{t('search.noResults')}</div>
       ) : (
         <div className="py-2">
           {groupedResults.map((section) => (
@@ -383,19 +192,29 @@ export function AppSearch() {
               <div className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {t(groupLabelKeys[section.group])}
               </div>
-              {section.items.map((result) => (
-                <Link
-                  key={result.id}
-                  href={result.href}
-                  className="block px-4 py-2 text-sm hover:bg-slate-50"
-                  onClick={() => setOpen(false)}
-                  role="option"
-                  aria-selected="false"
-                >
-                  <span className="block truncate font-medium text-slate-900">{result.titleKey ? t(result.titleKey) : result.title}</span>
-                  <span className="block truncate text-xs text-slate-500">{renderDetail(result)}</span>
-                </Link>
-              ))}
+              {section.items.map((result) => {
+                const index = visibleResults.findIndex((item) => item.group === result.group && item.id === result.id)
+                return (
+                  <a
+                    key={`${result.group}-${result.id}`}
+                    id={`app-search-option-${index}`}
+                    href={result.href}
+                    className={`block min-h-11 px-4 py-2 text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 ${index === activeIndex ? 'bg-slate-100' : ''}`}
+                    role="option"
+                    aria-selected={index === activeIndex}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      router.push(result.href)
+                      setOpen(false)
+                      setQuery('')
+                      setActiveIndex(-1)
+                    }}
+                  >
+                    <span className="block truncate font-medium text-slate-900">{result.title}</span>
+                    {result.detail && <span className="block truncate text-xs text-slate-500">{result.detail}</span>}
+                  </a>
+                )
+              })}
             </div>
           ))}
         </div>
@@ -413,11 +232,18 @@ export function AppSearch() {
           ref={inputRef}
           id="app-search"
           type="search"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open && trimmedQuery.length > 0}
+          aria-controls="app-search-results"
+          aria-activedescendant={activeIndex >= 0 ? `app-search-option-${activeIndex}` : undefined}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value)
+            setActiveIndex(-1)
             setOpen(true)
           }}
+          onKeyDown={handleKeyDown}
           onFocus={() => setOpen(true)}
           placeholder={t('search.placeholder')}
           className="w-full min-w-0 rounded-md border bg-background py-2 pl-9 pr-3 text-sm"
