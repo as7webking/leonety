@@ -282,12 +282,22 @@ current repository cannot reproduce the full production database from scratch.
   production bucket configuration is not verified.
 - **Purpose:** product images in the `product-images` storage bucket.
 - **Configuration:** public bucket with a 5 MB limit. The repository migration
-  `20261028120000_product_image_formats.sql` additively permits JPEG, PNG and WebP
+  `20261028120000.sql` additively permits JPEG, PNG and WebP
   so transparent product images can be retained. Production application is pending
   manual execution and verification.
 - **Policies:** workspace-folder owner select/insert/update on `storage.objects`.
 - **Concern:** bucket publicity and delete behavior should be verified against current
   product privacy requirements.
+
+### Notification center read state
+
+- **Evidence:** additive migration `20261028143000.sql` is pending; production
+  deployment is not verified.
+- **Purpose:** persist only per-user, per-workspace read/unread state. Notification
+  content remains derived from current invoices, products, product syncs, mailbox
+  connections, and store integrations.
+- **Security:** RLS is owner-scoped; browser table privileges are revoked. The
+  authenticated server route performs explicit workspace-owner checks.
 
 ## Employees And Scheduling
 

@@ -19,7 +19,7 @@ test('selects exactly one deepest matching item for representative application r
   const cases = [
     ['/app/settings', '/app/settings'],
     ['/app/settings/legal', '/app/settings'],
-    ['/app/settings/notifications', '/app/settings/notifications'],
+    ['/app/notifications', '/app/notifications'],
     ['/app/mail/messages/provider-id', '/app/mail'],
     ['/app/products/123/edit', '/app/products'],
     ['/app/products/categories', '/app/products'],

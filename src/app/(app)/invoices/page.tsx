@@ -21,6 +21,7 @@ import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
 import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, type InvoiceDocumentSnapshot } from '@/lib/invoice-document'
+import { getNotificationCenterText } from '@/lib/notification-center-i18n'
 import {
   deleteOfflineInvoiceDraft,
   listOfflineInvoiceDrafts,
@@ -452,6 +453,7 @@ export default function InvoicesPage() {
   const [invoiceLocalDrafts, setInvoiceLocalDrafts] = useState<OfflineInvoiceDraft[]>([])
   const quickClientLocalId = useRef<string | null>(null)
   const localDraftWriteRef = useRef<Promise<unknown> | null>(null)
+  const openedNotificationInvoiceRef = useRef('')
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [companyEmail, setCompanyEmail] = useState('')
@@ -462,6 +464,7 @@ export default function InvoicesPage() {
   const [supportsClientDetails, setSupportsClientDetails] = useState(true)
   const [clientPrintFields, setClientPrintFields] = useState<InvoiceClientPrintFields>(defaultClientPrintFields)
   const requestedClientId = searchParams.get('clientId')?.trim() ?? ''
+  const requestedInvoiceId = searchParams.get('invoiceId')?.trim() ?? ''
   const createForClientRequested = searchParams.get('create') === '1'
   const [formData, setFormData] = useState<InvoiceFormState>({
     client_id: '',
@@ -1073,7 +1076,7 @@ export default function InvoicesPage() {
     })
   }
 
-  const handleEdit = (invoice: InvoiceRecord) => {
+  const handleEdit = useCallback((invoice: InvoiceRecord) => {
     const invoiceItems = invoice.invoice_items && invoice.invoice_items.length > 0
       ? invoice.invoice_items
       : [newItem(getTaxRate('DE', 'standard'))]
@@ -1101,7 +1104,18 @@ export default function InvoicesPage() {
       items: invoiceItems,
     })
     setShowForm(true)
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!requestedInvoiceId || loading) return
+    const requestKey = `${currentCompany?.id ?? ''}:${requestedInvoiceId}`
+    if (openedNotificationInvoiceRef.current === requestKey) return
+    openedNotificationInvoiceRef.current = requestKey
+    const invoice = invoices.find((item) => item.id === requestedInvoiceId)
+    if (invoice) handleEdit(invoice)
+    else setErrorMessage(getNotificationCenterText(locale, 'invoice_not_found'))
+    router.replace('/app/invoices', { scroll: false })
+  }, [currentCompany?.id, handleEdit, invoices, loading, locale, requestedInvoiceId, router])
 
   const validateInvoice = () => {
     if (!formData.invoice_number.trim()) return t('invoices.validation.invoiceNumberRequired')
