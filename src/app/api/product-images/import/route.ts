@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { BusinessImageError, normalizeBusinessImage } from '@/lib/business-image-normalizer'
+import { normalizeProductImage, ProductImageValidationError } from '@/lib/product-image-normalizer'
 import { BUSINESS_IMAGE_MAX_INPUT_BYTES } from '@/lib/business-image-limits'
 import { fetchSafeRemoteImage, RemoteImageFetchError } from '@/lib/safe-remote-image'
 
@@ -43,12 +43,13 @@ export async function POST(request: Request) {
     }
 
     const remoteImage = await fetchSafeRemoteImage(imageUrl, BUSINESS_IMAGE_MAX_INPUT_BYTES)
-    const normalized = await normalizeBusinessImage(remoteImage)
-    const storagePath = `${companyId}/products/${crypto.randomUUID()}.jpg`
+    const normalized = await normalizeProductImage(remoteImage)
+    const extension = normalized.mimeType === 'image/jpeg' ? 'jpg' : normalized.mimeType === 'image/png' ? 'png' : 'webp'
+    const storagePath = `${companyId}/products/${crypto.randomUUID()}.${extension}`
     const { error: uploadError } = await supabase.storage
       .from('product-images')
       .upload(storagePath, normalized.buffer, {
-        contentType: 'image/jpeg',
+        contentType: normalized.mimeType,
         cacheControl: '31536000',
         upsert: false,
       })
@@ -62,13 +63,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       imageUrl: data.publicUrl,
       storagePath,
-      mimeType: 'image/jpeg',
+      mimeType: normalized.mimeType,
       size: normalized.size,
       width: normalized.width,
       height: normalized.height,
     })
   } catch (error) {
-    if (error instanceof BusinessImageError) return NextResponse.json({ error: error.code }, { status: 400 })
+    if (error instanceof ProductImageValidationError) return NextResponse.json({ error: error.code }, { status: 400 })
     if (error instanceof RemoteImageFetchError) {
       const status = error.code === 'timeout' ? 504 : 400
       return NextResponse.json({ error: error.code === 'too_large' ? 'image_too_large' : 'image_import_failed' }, { status })

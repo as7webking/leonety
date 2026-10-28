@@ -135,7 +135,7 @@ export default function InventoryPage() {
         <Card><CardContent className="flex items-center gap-3 p-5"><Boxes className="h-8 w-8 text-indigo-600" /><div><p className="text-sm text-slate-500">{t('inventory.potentialSalesValue')}</p><p className="text-xl font-semibold">{formatCurrency(potentialSalesValue, workspaceCurrency)}</p></div></CardContent></Card>
       </div>
 
-      <div className="mb-4 hidden gap-3 lg:grid lg:grid-cols-[minmax(280px,1fr)_220px]">
+      <div className="mb-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
         <label className="relative block">
           <span className="sr-only">{t('productUx.inventorySearch')}</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -145,7 +145,7 @@ export default function InventoryPage() {
       </div>
 
       {products.length === 0 ? (
-        <EmptyState title={t('products.empty')} description={t('products.emptyDescription')} action={{ label: t('products.add'), onClick: () => router.push('/app/products') }} />
+        <EmptyState title={t('products.empty')} description={t('products.emptyDescription')} action={{ label: t('products.add'), onClick: () => router.push('/app/products/new') }} />
       ) : visibleProducts.length === 0 ? (
         <EmptyState title={t('productUx.noInventoryMatches')} />
       ) : (
@@ -158,7 +158,7 @@ export default function InventoryPage() {
                   {visibleProducts.map((product) => {
                     const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
                     const editorHref = buildProductEditorHref(product.id, inventoryReturnPath)
-                    return <tr key={product.id} className="border-b last:border-0"><td className="p-3 font-medium">{product.name}</td><td className="p-3 text-slate-500">{product.sku || '—'}</td><td className={`p-3 text-right font-semibold ${lowStock ? 'text-amber-700' : ''}`}>{product.current_stock}</td><td className="p-3 text-right">{product.purchase_price === null ? '—' : formatCurrency(product.purchase_price, product.currency)}</td><td className="p-3 text-right">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</td><td className="p-3 text-right">{product.low_stock_threshold}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-xs ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span></td><td className="hidden p-3 lg:table-cell"><div className="flex gap-2"><Button asChild size="sm" variant="outline"><Link href={editorHref} onClick={() => rememberProductReturnScroll(inventoryReturnPath, window.scrollY)}><Edit className="h-4 w-4" />{t('productUx.editProduct')}</Link></Button><Button asChild size="sm" variant="ghost"><Link href="/app/stock-movements">{t('products.adjustStock')}</Link></Button></div></td></tr>
+                    return <tr key={product.id} className="border-b last:border-0"><td className="p-3 font-medium"><Link className="text-blue-700 hover:underline" href={`/app/products/${encodeURIComponent(product.id)}`}>{product.name}</Link></td><td className="p-3 text-slate-500">{product.sku || '—'}</td><td className={`p-3 text-right font-semibold ${lowStock ? 'text-amber-700' : ''}`}>{product.current_stock}</td><td className="p-3 text-right">{product.purchase_price === null ? '—' : formatCurrency(product.purchase_price, product.currency)}</td><td className="p-3 text-right">{product.selling_price === null ? '—' : formatCurrency(product.selling_price, product.currency)}</td><td className="p-3 text-right">{product.low_stock_threshold}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-xs ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span></td><td className="hidden p-3 lg:table-cell"><div className="flex gap-2"><Button asChild size="sm" variant="outline"><Link href={editorHref} onClick={() => rememberProductReturnScroll(inventoryReturnPath, window.scrollY)}><Edit className="h-4 w-4" />{t('productUx.editProduct')}</Link></Button><Button asChild size="sm" variant="ghost"><Link href={`/app/stock-movements?productId=${encodeURIComponent(product.id)}`}>{t('products.adjustStock')}</Link></Button></div></td></tr>
                   })}
                 </tbody>
               </table>

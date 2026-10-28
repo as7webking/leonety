@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireOwnedCompany } from '@/app/api/woocommerce/_utils'
-import { BusinessImageError, BUSINESS_IMAGE_MAX_INPUT_BYTES, normalizeBusinessImage } from '@/lib/business-image-normalizer'
+import { BUSINESS_IMAGE_MAX_INPUT_BYTES } from '@/lib/business-image-limits'
+import { normalizeProductImage, ProductImageValidationError } from '@/lib/product-image-normalizer'
 
 export const runtime = 'nodejs'
 
@@ -30,7 +31,6 @@ export async function POST(request: Request) {
   }
 
   const storage = access.adminSupabase.storage.from(bucket)
-  let normalized: Awaited<ReturnType<typeof normalizeBusinessImage>> | null = null
   let storageError = false
 
   try {
@@ -55,10 +55,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'image_too_large' }, { status: 400 })
     }
 
-    normalized = await normalizeBusinessImage(Buffer.from(await blob.arrayBuffer()))
-    const finalPath = `${companyId}/products/${crypto.randomUUID()}.jpg`
+    const normalized = await normalizeProductImage(Buffer.from(await blob.arrayBuffer()))
+    const extension = normalized.mimeType === 'image/jpeg' ? 'jpg' : normalized.mimeType === 'image/png' ? 'png' : 'webp'
+    const finalPath = `${companyId}/products/${crypto.randomUUID()}.${extension}`
     const { error: uploadError } = await storage.upload(finalPath, normalized.buffer, {
-      contentType: 'image/jpeg',
+      contentType: normalized.mimeType,
       cacheControl: '31536000',
       upsert: false,
     })
@@ -71,13 +72,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       imageUrl: publicData.publicUrl,
       storagePath: finalPath,
-      mimeType: 'image/jpeg',
+      mimeType: normalized.mimeType,
       size: normalized.size,
       width: normalized.width,
       height: normalized.height,
     })
   } catch (error) {
-    if (error instanceof BusinessImageError) return NextResponse.json({ error: error.code }, { status: 400 })
+    if (error instanceof ProductImageValidationError) return NextResponse.json({ error: error.code }, { status: 400 })
     storageError = true
     return NextResponse.json({ error: 'conversion_failed' }, { status: 500 })
   } finally {

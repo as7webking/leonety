@@ -59,7 +59,7 @@ export async function uploadProductImage({
     error?: string
   }
 
-  if (!response.ok || !result.imageUrl || result.mimeType !== 'image/jpeg' || !result.size || result.size >= BUSINESS_IMAGE_MAX_OUTPUT_BYTES) {
+  if (!response.ok || !result.imageUrl || !['image/jpeg', 'image/png', 'image/webp'].includes(result.mimeType ?? '') || !result.size || result.size >= BUSINESS_IMAGE_MAX_OUTPUT_BYTES) {
     throw new ProductImageUploadError(result.error || 'conversion_failed')
   }
 

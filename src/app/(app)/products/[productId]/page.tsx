@@ -12,7 +12,7 @@ import { useI18n } from '@/contexts/i18n-context'
 import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { createClient } from '@/lib/supabase-client'
 import { safeExternalHttpUrl } from '@/lib/external-url'
-import { getProductChannelPresentation } from '@/lib/integration-presentation'
+import { getProductChannelPresentation, getProductChannelTranslationKey } from '@/lib/integration-presentation'
 
 interface ProductChannelSync {
   channel: string
@@ -70,7 +70,7 @@ export default function ProductDetailsPage() {
       <Card><CardContent className="p-4">{typeof product.image_url === 'string' && product.image_url ? <img src={product.image_url} alt="" className="mx-auto aspect-square w-full max-w-lg rounded-md border object-contain" /> : <div className="flex aspect-square items-center justify-center rounded-md border bg-slate-50 text-slate-400"><Package className="h-10 w-10" /></div>}</CardContent></Card>
       <div className="space-y-4">
         <Card><CardContent className="grid gap-4 p-4 sm:grid-cols-2"><div><p className="text-xs text-slate-500">{t('products.sku')}</p><p className="break-all font-medium">{String(product.sku || '—')}</p></div><div><p className="text-xs text-slate-500">{t('products.barcode')}</p><p className="break-all font-medium">{String(product.barcode || '—')}</p></div><div><p className="text-xs text-slate-500">{t('products.sellingPrice')}</p><p className="font-semibold">{product.selling_price == null ? '—' : formatCurrency(Number(product.selling_price), String(product.currency ?? 'EUR'))}</p></div><div><p className="text-xs text-slate-500">{t('products.status')}</p><p className="font-medium">{t(`products.status.${String(product.status ?? 'active')}`)}</p></div><div className="sm:col-span-2"><p className="text-xs text-slate-500">{t('products.descriptionField')}</p><p className="whitespace-pre-wrap break-words">{String(product.description ?? '—')}</p></div></CardContent></Card>
-        <Card><CardContent className="flex items-start gap-3 p-4"><Warehouse className="mt-0.5 h-5 w-5 text-slate-500" /><div><p className="text-sm font-medium">{t('products.currentStock')}: {String(product.current_stock ?? 0)}</p><p className="text-xs text-slate-500">{t('products.stockManagedByMovements')}</p><Link className="mt-3 inline-block" href="/app/stock-movements"><Button variant="outline">{t('products.adjustStock')}</Button></Link></div></CardContent></Card>
+        <Card><CardContent className="flex items-start gap-3 p-4"><Warehouse className="mt-0.5 h-5 w-5 text-slate-500" /><div><p className="text-sm font-medium">{t('products.currentStock')}: {String(product.current_stock ?? 0)}</p><p className="text-xs text-slate-500">{t('products.stockManagedByMovements')}</p><Link className="mt-3 inline-block" href={`/app/stock-movements?productId=${encodeURIComponent(productId)}`}><Button variant="outline">{t('products.adjustStock')}</Button></Link></div></CardContent></Card>
         <Card><CardContent className="space-y-3 p-4">
           <h2 className="font-semibold">{t('products.channelsTitle')}</h2>
           {integrationError ? <p className="text-sm text-red-700">{t('products.channelStatus.loadError')}</p> : (channelSyncs.length > 0 ? channelSyncs : [{ channel: 'woocommerce', external_product_id: null, external_url: null, sync_status: 'not_synced' as const, last_synced_at: null, error_message: null }]).map((sync) => {
@@ -80,7 +80,7 @@ export default function ProductDetailsPage() {
               <p className="font-medium">{sync.channel.replaceAll('_', ' ')}</p>
               <p className="text-xs text-slate-500">{connectionStatusUnavailable ? t('products.channelStatus.loadError') : channelConnections[sync.channel] === 'connected' ? t('integrations.connected') : channelConnections[sync.channel] === 'error' ? t('common.error') : t('integrations.notConnected')}</p>
               <p className={`text-sm ${status === 'error' ? 'text-red-700' : status === 'published' ? 'text-green-700' : 'text-slate-600'}`}>
-                {t(`products.channelStatus.${status === 'error' ? 'syncError' : status === 'pending' ? 'pending' : status === 'published' ? 'published' : 'notPublished'}`)}
+                {t(`products.channelStatus.${getProductChannelTranslationKey(sync)}`)}
               </p>
               {sync.error_message && <p className="break-words text-xs text-red-700">{sync.error_message}</p>}
               {externalUrl && <a href={externalUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex max-w-full items-center gap-2 break-all text-sm font-medium text-blue-700 underline">

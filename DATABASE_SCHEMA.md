@@ -278,9 +278,13 @@ current repository cannot reproduce the full production database from scratch.
 
 ### Product image storage
 
-- **Evidence:** `CONFIRMED`; production deployment `UNKNOWN`.
+- **Evidence:** JPEG-only allowlist is declared in the consolidated migration;
+  production bucket configuration is not verified.
 - **Purpose:** product images in the `product-images` storage bucket.
-- **Configuration:** current SQL declares a public JPEG-only bucket with 5 MB limit.
+- **Configuration:** public bucket with a 5 MB limit. The repository migration
+  `20261028120000_product_image_formats.sql` additively permits JPEG, PNG and WebP
+  so transparent product images can be retained. Production application is pending
+  manual execution and verification.
 - **Policies:** workspace-folder owner select/insert/update on `storage.objects`.
 - **Concern:** bucket publicity and delete behavior should be verified against current
   product privacy requirements.

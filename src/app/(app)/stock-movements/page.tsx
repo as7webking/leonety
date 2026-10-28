@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowDownToLine, ArrowUpFromLine, BriefcaseBusiness, Building2, Plus } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
@@ -87,6 +87,7 @@ function canCreateExpense(purpose: MovementPurpose) {
 
 export default function StockMovementsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { t } = useI18n()
@@ -98,6 +99,7 @@ export default function StockMovementsPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const preselectedProductRef = useRef<string | null>(null)
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === form.product_id) ?? null,
@@ -156,6 +158,19 @@ export default function StockMovementsPage() {
     })
     return () => { cancelled = true }
   }, [loadData])
+
+  useEffect(() => {
+    const requestedProductId = searchParams.get('productId')
+    if (loading || !requestedProductId || requestedProductId === preselectedProductRef.current) return
+    preselectedProductRef.current = requestedProductId
+    if (!products.some((product) => product.id === requestedProductId)) return
+    const timer = window.setTimeout(() => {
+      setForm({ ...emptyForm, product_id: requestedProductId })
+      setShowForm(true)
+      router.replace('/app/stock-movements', { scroll: false })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [loading, products, router, searchParams])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()

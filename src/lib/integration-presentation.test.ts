@@ -17,9 +17,12 @@ test('publication counts require both successful status and external ID', () => 
 
 test('product channel presentation does not show stale failed mappings as published', () => {
   assert.equal(getProductChannelPresentation({ external_product_id: '9', sync_status: 'failed' }), 'error')
-  assert.equal(getProductChannelPresentation({ external_product_id: '9', sync_status: 'pending' }), 'pending')
+  assert.equal(getProductChannelPresentation({ external_product_id: null, sync_status: 'pending' }), 'pending')
+  assert.equal(getProductChannelPresentation({ external_product_id: '9', sync_status: 'pending' }), 'update_pending')
   assert.equal(getProductChannelPresentation({ external_product_id: null, sync_status: 'synced' }), 'not_published')
   assert.equal(getProductChannelPresentation({ external_product_id: '9', sync_status: 'synced' }), 'published')
+  const localeSource = readFileSync(resolve('src/lib/i18n.ts'), 'utf8')
+  assert.equal(localeSource.match(/'products\.channelStatus\.updatePending':/g)?.length, 7)
 })
 
 test('WooCommerce links use the returned permalink and failed syncs preserve the last mapping', () => {

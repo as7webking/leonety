@@ -24,7 +24,7 @@ export function getChannelPublicationCounts(totalProducts: number, records: Chan
 export function getProductChannelPresentation(sync: ChannelSyncRecord | null | undefined) {
   if (!sync) return 'not_published' as const
   if (sync.sync_status === 'failed') return 'error' as const
-  if (sync.sync_status === 'pending') return 'pending' as const
+  if (sync.sync_status === 'pending') return sync.external_product_id ? 'update_pending' as const : 'pending' as const
   if (sync.sync_status !== 'synced' || !sync.external_product_id) return 'not_published' as const
   return 'published' as const
 }

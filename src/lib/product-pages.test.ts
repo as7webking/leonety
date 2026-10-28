@@ -19,3 +19,21 @@ test('edit uses an updated_at compare-and-set and keeps conflicted drafts for ex
   assert.match(edit, /reviewLocalDraftAgainstLatest/)
   assert.match(edit, /discardLocalDraftAndReload/)
 })
+
+test('product image API stores the validated format and does not force a second JPEG conversion', () => {
+  const normalizeRoute = read('../app/api/product-images/normalize/route.ts')
+  const importRoute = read('../app/api/product-images/import/route.ts')
+  const migration = read('../../supabase/migrations/20261028120000_product_image_formats.sql')
+  for (const source of [normalizeRoute, importRoute]) {
+    assert.match(source, /normalizeProductImage\(/)
+    assert.match(source, /contentType: normalized\.mimeType/)
+    assert.match(source, /normalized\.mimeType === 'image\/png' \? 'png' : 'webp'/)
+  }
+  assert.match(migration, /array\['image\/jpeg', 'image\/png', 'image\/webp'\]/)
+})
+
+test('product list distinguishes failed integration status retrieval from disconnection', () => {
+  const list = read('../app/(app)/products/page.tsx')
+  assert.match(list, /response\.ok \? response\.json\(\) : \{ integrations: \[\], unavailable: true \}/)
+  assert.match(list, /nextConnections\[channel\.channel\] = \{ provider: channel\.channel, status: 'error'/)
+})

@@ -449,8 +449,8 @@ export default function ProductsPage() {
           .eq('company_id', currentCompany.id)
           .order('name'),
         fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
-          .then((response) => response.ok ? response.json() : { integrations: [] })
-          .catch(() => ({ integrations: [] })),
+          .then((response) => response.ok ? response.json() : { integrations: [], unavailable: true })
+          .catch(() => ({ integrations: [], unavailable: true })),
       ])
       const { data, error: loadError } = productResult
       if (loadError) {
@@ -478,6 +478,11 @@ export default function ProductsPage() {
         setError(syncResult.error.message)
       }
       const nextConnections = {} as Record<ProductChannel, StoreConnectionStatus>
+      if (integrationResult.unavailable) {
+        for (const channel of productChannels) {
+          nextConnections[channel.channel] = { provider: channel.channel, status: 'error', lastSyncAt: null }
+        }
+      }
       for (const integration of (integrationResult.integrations ?? []) as Array<{ provider?: ProductChannel; status?: StoreConnectionStatus['status']; lastSyncAt?: string | null }>) {
         if (!integration.provider) continue
         nextConnections[integration.provider] = {

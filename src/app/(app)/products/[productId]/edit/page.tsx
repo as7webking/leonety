@@ -17,7 +17,7 @@ import { getSafeProductReturnPath } from '@/lib/product-editor-navigation'
 import { deleteOfflineProductDraft, getOfflineProductDraft, saveOfflineProductDraft } from '@/lib/offline-drafts'
 import { createClient } from '@/lib/supabase-client'
 import { safeExternalHttpUrl } from '@/lib/external-url'
-import { getProductChannelPresentation } from '@/lib/integration-presentation'
+import { getProductChannelPresentation, getProductChannelTranslationKey } from '@/lib/integration-presentation'
 import { clearPendingWooReconciliation, getPendingWooReconciliation, savePendingWooReconciliation } from '@/lib/woocommerce-sync-safety'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
@@ -963,7 +963,7 @@ export default function ProductEditPage() {
                         <span className="min-w-0">
                           <span className="block font-medium">{t(channel.publishKey)}</span>
                           <span className="block text-xs">
-                            {connectionLabel} · {t(`products.channelStatus.${status === 'error' ? 'syncError' : status === 'pending' ? 'pending' : status === 'published' ? 'published' : 'notPublished'}`)}
+                            {connectionLabel} · {t(`products.channelStatus.${getProductChannelTranslationKey(sync)}`)}
                           </span>
                           {sync?.sync_status === 'failed' && <span className="mt-1 block text-xs text-red-600">{sync.error_message ?? t('products.channelStatus.syncError')}</span>}
                           {sync?.last_synced_at && <span className="mt-1 block text-xs text-slate-500">{t('products.channelStatus.lastSync')}: {new Date(sync.last_synced_at).toLocaleString()}</span>}

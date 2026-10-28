@@ -34,6 +34,10 @@ Status meanings:
 
 ### PENDING
 
+- Product image PNG/WebP storage support: `20261028120000_product_image_formats.sql`
+  adds `image/png` and `image/webp` to the existing `product-images` bucket MIME
+  allowlist while preserving other configured types. Do not mark APPLIED until
+  manually executed and verified in production.
 - Employee number formatting migration `20261008233000.sql`: production already has
   the employee number, settings, workspace-scoped uniqueness and RLS. Migration
   history remains unknown; review the counter-padding correction separately before

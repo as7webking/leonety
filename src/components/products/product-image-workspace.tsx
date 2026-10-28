@@ -119,6 +119,7 @@ async function rotateImageToObjectUrl(src: string, rotation: number) {
 
 function centeredCrop(details: ImageDetails, mode: CropMode): CropRect {
   const aspect = aspectForMode(mode, details)
+  if (mode === 'original') return { x: 0, y: 0, width: details.width, height: details.height }
   if (!aspect) {
     return {
       x: Math.round(details.width * 0.08),
@@ -239,11 +240,11 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
   const [details, setDetails] = useState<ImageDetails | null>(null)
   const [, forceImageLayoutUpdate] = useState(0)
   const [crop, setCrop] = useState<CropRect | null>(null)
-  const [cropMode, setCropMode] = useState<CropMode>('1_1')
+  const [cropMode, setCropMode] = useState<CropMode>('original')
   const [rotation, setRotation] = useState(0)
   const [qualityMode, setQualityMode] = useState<QualityMode>('balanced')
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>('image/jpeg')
-  const [outputSize, setOutputSize] = useState<OutputSizePreset>('1024')
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>('image/webp')
+  const [outputSize, setOutputSize] = useState<OutputSizePreset>('original')
   const [customSize, setCustomSize] = useState('1200')
   const [processing, setProcessing] = useState(false)
   const [lastOutput, setLastOutput] = useState<{ width: number; height: number; size: number } | null>(null)
@@ -274,12 +275,13 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
   const outputDimensions = useMemo(() => {
     if (!crop) return null
     const selected = outputSize === 'custom' ? Number(customSize) : outputSize === 'original' ? Math.max(crop.width, crop.height) : Number(outputSize)
-    const maxSide = clamp(Number.isFinite(selected) && selected > 0 ? selected : 1024, 64, 4096)
-    const scale = maxSide / Math.max(crop.width, crop.height)
+    const maximumAllowedSide = outputSize === 'original' ? 20_000 : 4096
+    const maxSide = clamp(Number.isFinite(selected) && selected > 0 ? selected : 1024, 64, maximumAllowedSide)
+    const scale = Math.min(1, maxSide / Math.max(crop.width, crop.height))
     return {
       width: Math.max(1, Math.round(crop.width * scale)),
       height: Math.max(1, Math.round(crop.height * scale)),
-      enlarging: maxSide > Math.max(crop.width, crop.height),
+      enlarging: false,
     }
   }, [crop, customSize, outputSize])
 
@@ -326,6 +328,12 @@ export function ProductImageWorkspace({ companyId, productName, value, onChange,
         height: image.naturalHeight,
         size: file.size,
         name: file.name,
+      }
+      if (imageDetails.width > 20_000 || imageDetails.height > 20_000 || imageDetails.width * imageDetails.height > 25_000_000) {
+        URL.revokeObjectURL(objectUrl)
+        objectUrlsRef.current = objectUrlsRef.current.filter((url) => url !== objectUrl)
+        onError?.(t('products.imageTooLarge'))
+        return
       }
       setSourceUrl(objectUrl)
       setSourceDetails(imageDetails)
