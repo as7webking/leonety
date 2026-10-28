@@ -140,7 +140,7 @@ export function FinanceListRow({ title, description, category, date, amount, amo
         {description && <p className="mt-1 break-words text-slate-500 lg:hidden">{description}</p>}
       </div>
       <div className="border-t border-slate-100 pt-2 text-sm text-slate-500 lg:border-0 lg:pt-0">{date}</div>
-      <div className="min-w-0 max-w-full text-right"><div className="min-w-0 max-w-full whitespace-normal break-words font-semibold tabular-nums text-slate-950 [overflow-wrap:anywhere]">{amount}</div>{amountDetail && <div className="mt-1 min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}</div>
+      <div className="grid min-w-0 max-w-full gap-1 text-left lg:text-right"><div className="min-w-0 max-w-full whitespace-normal break-words font-semibold leading-5 tabular-nums text-slate-950 [overflow-wrap:anywhere]">{amount}</div>{amountDetail && <div className="min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}</div>
       <div className={cn('min-h-10 items-center justify-start lg:flex lg:justify-center', selection ? 'flex' : 'hidden')}>{selection}</div>
       <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
     </article>

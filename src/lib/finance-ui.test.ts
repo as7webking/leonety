@@ -34,16 +34,17 @@ test('selectable finance modules place selection through the shared row slot', (
   }
 })
 
-test('shared mobile rows keep controls left and date below actions without changing desktop columns', () => {
+test('shared mobile rows give finance amounts a full-width line and preserve desktop columns', () => {
   const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
   const styles = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
 
   assert.match(component, /finance-list-actions-without-selection/)
   assert.match(component, /justify-start gap-2 lg:flex-nowrap lg:justify-end/)
-  assert.match(styles, /> :nth-child\(3\)[\s\S]*grid-row: 4/)
-  assert.match(styles, /> :nth-child\(5\)[\s\S]*grid-row: 3/)
-  assert.match(styles, /> :nth-child\(6\)[\s\S]*grid-row: 3/)
-  assert.match(styles, /grid-template-columns: minmax\(0, 0\.8fr\) minmax\(0, 0\.8fr\) minmax\(0, 1fr\)/)
+  assert.match(styles, /> :nth-child\(3\)[\s\S]*grid-row: 3/)
+  assert.match(styles, /> :nth-child\(4\)[\s\S]*grid-column: 1 \/ 3;[\s\S]*grid-row: 4/)
+  assert.match(styles, /> :nth-child\(5\)[\s\S]*grid-row: 5/)
+  assert.match(styles, /> :nth-child\(6\)[\s\S]*grid-row: 5/)
+  assert.match(styles, /grid-template-columns: minmax\(0, 1fr\) max-content/)
   assert.match(styles, /@media \(min-width: 1024px\)[\s\S]*grid-template-columns: minmax\(0, 1\.5fr\)[\s\S]*minmax\(176px, max-content\)/)
 })
 
