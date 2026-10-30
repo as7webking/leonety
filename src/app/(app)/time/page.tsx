@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, CheckCircle2, Clock, Edit, Pause, Play, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
@@ -71,6 +71,7 @@ function formatSupabaseError(error: unknown) {
 
 export default function TimePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { locale, t } = useI18n()
@@ -87,6 +88,7 @@ export default function TimePage() {
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
   const [importing, setImporting] = useState(false)
   const [startingTimer, setStartingTimer] = useState(false)
+  const consumedQuickStartRef = useRef(false)
   const [formData, setFormData] = useState<TimeEntryForm>({
     description: '',
     hours: 0,
@@ -269,7 +271,7 @@ export default function TimePage() {
     return () => window.clearInterval(interval)
   }, [])
 
-  const startNewTimer = async () => {
+  const startNewTimer = useCallback(async () => {
     if (startingTimer) {
       return
     }
@@ -353,7 +355,19 @@ export default function TimePage() {
     } finally {
       setStartingTimer(false)
     }
-  }
+  }, [activeTimers.length, currentCompany, newTimerDescription, startingTimer, supabase, t])
+
+  useEffect(() => {
+    const requested = searchParams.get('start') === '1'
+    if (!requested) {
+      consumedQuickStartRef.current = false
+      return
+    }
+    if (loading || !currentCompany || consumedQuickStartRef.current) return
+    consumedQuickStartRef.current = true
+    void startNewTimer()
+    router.replace('/app/time', { scroll: false })
+  }, [currentCompany, loading, router, searchParams, startNewTimer])
 
   const stopTimer = async (timerId: string) => {
     try {

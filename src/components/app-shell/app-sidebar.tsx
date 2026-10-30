@@ -32,7 +32,7 @@ export function AppSidebar() {
 
       <div className="space-y-4 border-b border-slate-200 p-4">
         <WorkspaceSelectorClient />
-        <AppSearch />
+        <AppSearch commandLauncher />
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-labelledby="app-sidebar-main-nav-label">

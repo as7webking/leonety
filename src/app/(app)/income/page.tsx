@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
@@ -95,6 +95,7 @@ function uniqueRecentValues(items: Income[], selector: (item: Income) => string 
 export default function IncomePage() {
   const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { isOnline } = useOfflineMode()
@@ -105,6 +106,7 @@ export default function IncomePage() {
   const [invoices, setInvoices] = useState<RelatedInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const consumedQuickCreateRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Income | null>(null)
   const [formData, setFormData] = useState<IncomeFormState>({
@@ -180,6 +182,18 @@ export default function IncomePage() {
       date: new Date().toISOString().split('T')[0],
     })
   }, [currentCompany?.currency, currentCompany?.id])
+
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') {
+      consumedQuickCreateRef.current = false
+      return
+    }
+    if (!currentCompany || consumedQuickCreateRef.current) return
+    consumedQuickCreateRef.current = true
+    setEditingEntry(null)
+    setShowForm(true)
+    router.replace('/app/income', { scroll: false })
+  }, [currentCompany, router, searchParams])
 
   useEffect(() => {
     if (!incomeDraft || incomeDraft.workspaceId !== currentCompany?.id || restoredDraftKeyRef.current === incomeDraft.key) return

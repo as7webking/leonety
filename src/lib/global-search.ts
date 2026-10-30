@@ -13,6 +13,28 @@ export function escapeGlobalSearchTerm(value: string) {
 }
 
 export type GlobalSearchGroup = 'clients' | 'invoices' | 'products' | 'employees' | 'contracts'
+export type QuickActionId = 'invoice' | 'client' | 'product' | 'income' | 'expense' | 'timer'
+
+export interface QuickActionDefinition {
+  id: QuickActionId
+  labelKey: string
+  href: string
+}
+
+export function getGlobalQuickActions(mode: 'personal' | 'business'): QuickActionDefinition[] {
+  const businessActions: QuickActionDefinition[] = mode === 'business' ? [
+    { id: 'invoice', labelKey: 'invoices.add', href: '/app/invoices?create=1' },
+    { id: 'client', labelKey: 'clients.crm.createClient', href: '/app/clients/new' },
+    { id: 'product', labelKey: 'products.add', href: '/app/products/new' },
+  ] : []
+
+  return [
+    ...businessActions,
+    { id: 'income', labelKey: 'income.add', href: '/app/income?create=1' },
+    { id: 'expense', labelKey: 'expenses.add', href: '/app/expenses?create=1' },
+    { id: 'timer', labelKey: 'time.startTimer', href: '/app/time?start=1' },
+  ]
+}
 
 export function globalSearchHref(group: GlobalSearchGroup, id: string) {
   const encodedId = encodeURIComponent(id)

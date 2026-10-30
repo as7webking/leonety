@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { ArrowRightLeft, Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
@@ -67,6 +67,7 @@ function uniqueRecentValues(items: Expense[], selector: (item: Expense) => strin
 export default function ExpensesPage() {
   const { format: formatCurrency } = useCurrencyFormat()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
   const { isOnline } = useOfflineMode()
@@ -75,6 +76,7 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const consumedQuickCreateRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Expense | null>(null)
   const [formData, setFormData] = useState<ExpenseFormState>({
@@ -138,6 +140,18 @@ export default function ExpensesPage() {
       date: new Date().toISOString().split('T')[0],
     })
   }, [currentCompany?.currency, currentCompany?.id])
+
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') {
+      consumedQuickCreateRef.current = false
+      return
+    }
+    if (!currentCompany || consumedQuickCreateRef.current) return
+    consumedQuickCreateRef.current = true
+    setEditingEntry(null)
+    setShowForm(true)
+    router.replace('/app/expenses', { scroll: false })
+  }, [currentCompany, router, searchParams])
 
   useEffect(() => {
     if (!expenseDraft || expenseDraft.workspaceId !== currentCompany?.id || restoredDraftKeyRef.current === expenseDraft.key) return

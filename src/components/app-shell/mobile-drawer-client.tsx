@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Menu, Search, X } from 'lucide-react'
-import { AppSearch } from '@/components/app-search'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Logo } from '@/components/logo'
 import { ProfileMenuClient } from '@/components/app-shell/profile-menu-client'
@@ -22,7 +21,6 @@ import {
 
 export function MobileDrawerClient() {
   const [open, setOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
   const pathname = usePathname()
   const { t } = useI18n()
   const { currentCompany } = useCompany()
@@ -36,7 +34,6 @@ export function MobileDrawerClient() {
   useBodyScrollLock(open)
 
   const openDrawer = useCallback(() => {
-    setSearchOpen(false)
     setOpen(true)
   }, [])
 
@@ -61,7 +58,6 @@ export function MobileDrawerClient() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       setOpen(false)
-      setSearchOpen(false)
     })
     return () => window.cancelAnimationFrame(frame)
   }, [pathname])
@@ -71,7 +67,6 @@ export function MobileDrawerClient() {
     const handleDesktop = (event: MediaQueryListEvent) => {
       if (event.matches) {
         setOpen(false)
-        setSearchOpen(false)
       }
     }
     desktop.addEventListener('change', handleDesktop)
@@ -108,7 +103,7 @@ export function MobileDrawerClient() {
           <button
             type="button"
             className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
-            onClick={() => setSearchOpen((value) => !value)}
+            onClick={() => window.dispatchEvent(new Event('leonety:open-command'))}
             aria-label={t('search.label')}
           >
             <Search className="h-5 w-5" />
@@ -124,12 +119,6 @@ export function MobileDrawerClient() {
           </button>
         </div>
       </header>
-
-      {searchOpen && (
-        <div className="fixed inset-x-0 top-[calc(4rem+env(safe-area-inset-top))] z-40 max-w-full border-b border-slate-200 bg-white py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] xl:hidden">
-          <AppSearch />
-        </div>
-      )}
 
       {open && <div className="fixed inset-0 z-[70] max-w-full overflow-hidden xl:hidden">
         <div

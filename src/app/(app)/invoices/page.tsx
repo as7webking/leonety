@@ -466,6 +466,8 @@ export default function InvoicesPage() {
   const requestedClientId = searchParams.get('clientId')?.trim() ?? ''
   const requestedInvoiceId = searchParams.get('invoiceId')?.trim() ?? ''
   const createForClientRequested = searchParams.get('create') === '1'
+  const requestedGenericCreate = createForClientRequested && !requestedClientId
+  const consumedQuickCreateRef = useRef(false)
   const [formData, setFormData] = useState<InvoiceFormState>({
     client_id: '',
     invoice_number: makeInvoiceNumber(),
@@ -724,7 +726,7 @@ export default function InvoicesPage() {
     }
   }, [editingInvoice, invoiceLocalDraftId, invoices])
 
-  const openCreateForm = (clientId = '') => {
+  const openCreateForm = useCallback((clientId = '') => {
     const defaultTaxRate = getTaxRate('DE', 'standard')
     const canSaveOnline = isOnline && navigator.onLine
     setEditingInvoice(null)
@@ -752,7 +754,7 @@ export default function InvoicesPage() {
     setSourceContractId('')
     setSourceContractClientId('')
     setShowForm(true)
-  }
+  }, [currentCompany?.currency, currentCompany?.id, invoices, isOnline])
 
   const reviewLocalInvoiceDraft = async (draft: OfflineInvoiceDraft) => {
     if (showForm && invoiceLocalDraftId && invoiceLocalDraftId !== draft.localId) {
@@ -943,6 +945,17 @@ export default function InvoicesPage() {
   useEffect(() => {
     void loadInvoices()
   }, [loadInvoices])
+
+  useEffect(() => {
+    if (!requestedGenericCreate) {
+      consumedQuickCreateRef.current = false
+      return
+    }
+    if (loading || !currentCompany || consumedQuickCreateRef.current) return
+    consumedQuickCreateRef.current = true
+    openCreateForm()
+    router.replace('/app/invoices', { scroll: false })
+  }, [currentCompany, loading, openCreateForm, requestedGenericCreate, router])
 
   useEffect(() => {
     const clientId = searchParams.get('clientId') ?? ''
