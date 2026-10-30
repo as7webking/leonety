@@ -104,10 +104,10 @@ interface FinanceListShellProps {
 
 export function FinanceListShell({ titleLabel, categoryLabel, dateLabel, amountLabel, selectionLabel, actionsLabel, children }: FinanceListShellProps) {
   return (
-    <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-      <div className="finance-list-grid hidden border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 lg:grid">
+    <div className={cn('overflow-hidden rounded-md border border-slate-200 bg-white', selectionLabel ? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection')}>
+      <div className={cn('finance-list-grid hidden border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 lg:grid', selectionLabel ? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection')}>
         <span>{titleLabel}</span><span>{categoryLabel}</span><span>{dateLabel}</span>
-        <span className="text-right">{amountLabel}</span><span className="text-center">{selectionLabel}</span>
+        <span className="text-right">{amountLabel}</span>{selectionLabel && <span className="text-center">{selectionLabel}</span>}
         <span className="text-right">{actionsLabel}</span>
       </div>
       <div className="divide-y divide-slate-200">{children}</div>
@@ -130,7 +130,7 @@ interface FinanceListRowProps {
 
 export function FinanceListRow({ title, description, category, date, amount, amountDetail, badge, selection, actions, className }: FinanceListRowProps) {
   return (
-    <article className={cn('finance-list-grid min-w-0 gap-y-3 px-4 py-4', className)}>
+    <article className={cn('finance-list-grid min-w-0 gap-y-3 px-4 py-4', selection ? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection', className)}>
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">{badge}<p className="min-w-0 break-words font-medium text-slate-950">{title}</p></div>
         {description && <p className="mt-1 hidden break-words text-sm text-slate-500 lg:block">{description}</p>}
@@ -141,7 +141,7 @@ export function FinanceListRow({ title, description, category, date, amount, amo
       </div>
       <div className="border-t border-slate-100 pt-2 text-sm text-slate-500 lg:border-0 lg:pt-0">{date}</div>
       <div className="grid min-w-0 max-w-full gap-1 text-left lg:text-right"><div className="min-w-0 max-w-full whitespace-normal break-words font-semibold leading-5 tabular-nums text-slate-950 [overflow-wrap:anywhere]">{amount}</div>{amountDetail && <div className="min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}</div>
-      <div className={cn('min-h-10 items-center justify-start lg:flex lg:justify-center', selection ? 'flex' : 'hidden')}>{selection}</div>
+      {selection && <div className="flex min-h-10 items-center justify-start lg:justify-center">{selection}</div>}
       <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
     </article>
   )

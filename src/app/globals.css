@@ -48,6 +48,10 @@
       align-items: center;
     }
 
+    .finance-list-grid-no-selection {
+      grid-template-columns: minmax(0, 1.5fr) minmax(110px, 0.8fr) minmax(96px, 120px) minmax(120px, 140px) minmax(176px, max-content);
+    }
+
     .finance-list-grid > :nth-child(n) {
       grid-column: auto;
       grid-row: auto;

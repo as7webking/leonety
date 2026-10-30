@@ -11,11 +11,17 @@ const transactions = readFileSync(new URL('../app/(app)/transactions/page.tsx', 
 const invoices = readFileSync(new URL('../app/(app)/invoices/page.tsx', import.meta.url), 'utf8')
 
 test('shared finance lists keep Amount, Select and Actions in the agreed order', () => {
-  const header = financeList.match(/<div className="finance-list-grid hidden[\s\S]*?<\/div>/)?.[0] ?? ''
+  const header = financeList.match(/<div className=\{cn\('finance-list-grid hidden[\s\S]*?<\/div>/)?.[0] ?? ''
   assert.ok(header.indexOf('{amountLabel}') < header.indexOf('{selectionLabel}'))
   assert.ok(header.indexOf('{selectionLabel}') < header.indexOf('{actionsLabel}'))
   assert.match(financeList, /whitespace-normal break-words font-semibold[\s\S]*?\{amountDetail &&[\s\S]*?whitespace-normal break-words text-xs/)
   assert.match(globalStyles, /minmax\(120px, 140px\) 52px minmax\(176px, max-content\)/)
+})
+
+test('lists without row selection do not reserve a blank desktop selection column', () => {
+  assert.match(financeList, /selectionLabel \? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection'/)
+  assert.match(globalStyles, /\.finance-list-grid-no-selection\s*\{\s*grid-template-columns: minmax\(0, 1\.5fr\) minmax\(110px, 0\.8fr\) minmax\(96px, 120px\) minmax\(120px, 140px\) minmax\(176px, max-content\)/)
+  assert.match(financeList, /!selection && 'finance-list-actions-without-selection'/)
 })
 
 test('Income and All Transactions use the shared, touch-sized accessible row selection', () => {
