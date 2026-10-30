@@ -158,8 +158,10 @@ interface FinanceSelectionBarProps {
 export function FinanceSelectionBar({ checked, onCheckedChange, selectVisibleLabel, selectedLabel, children }: FinanceSelectionBarProps) {
   return (
     <div className="mb-4 flex min-w-0 flex-wrap items-center justify-end gap-3 rounded-md border border-slate-200 bg-white p-3">
-      <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700">
-        <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} className="h-4 w-4" />
+      <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white">
+          <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" />
+        </span>
         {selectVisibleLabel}
       </label>
       <span className="text-sm text-slate-500">{selectedLabel}</span>

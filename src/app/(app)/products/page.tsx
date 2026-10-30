@@ -1246,9 +1246,11 @@ export default function ProductsPage() {
       {visibleProducts.length > 0 && (
         <Card className="mb-5">
           <CardContent className="space-y-4 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <input type="checkbox" checked={visibleProducts.every((product) => selectedProductIds.has(product.id))} onChange={toggleAllVisibleProducts} />
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium">
+                <span className="flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 bg-white">
+                  <input type="checkbox" checked={visibleProducts.every((product) => selectedProductIds.has(product.id))} onChange={toggleAllVisibleProducts} aria-label={t('products.selectVisible')} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" />
+                </span>
                 {t('products.selectVisible')}
               </label>
               <span className="text-sm text-slate-500">{selectedProducts.length} {t('products.selected')}</span>
@@ -1527,13 +1529,16 @@ export default function ProductsPage() {
           <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:hidden">
             {visibleProducts.map((product) => {
               const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
+              const selected = selectedProductIds.has(product.id)
               const descriptionPreview = decodeHtmlText(product.description ?? '')
               const providerNames = (syncs[product.id] ?? []).map((sync) => sync.channel.replace('_', ' '))
               return (
-                <Card key={product.id} className={`${lowStock ? 'border-amber-300' : ''} ${editing?.id === product.id ? 'ring-2 ring-blue-200' : ''}`}>
+                <Card key={product.id} className={`${selected ? 'border-blue-300 bg-blue-50/40' : ''} ${lowStock ? 'border-amber-300' : ''} ${editing?.id === product.id ? 'ring-2 ring-blue-200' : ''}`}>
                   <CardContent className="p-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} className="mt-1 shrink-0" aria-label={`${t('transactions.select')} ${product.name}`} />
+                      <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-slate-200">
+                        <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} aria-label={`${t('transactions.select')} ${product.name}`} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" />
+                      </label>
                       {product.image_url ? <img src={product.image_url} alt="" loading="lazy" decoding="async" className="h-16 w-16 shrink-0 rounded-md border object-cover" /> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-slate-50 text-xs text-slate-400">{t('products.imagePreview')}</div>}
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-start justify-between gap-2"><h2 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug" title={product.name}>{product.name}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${lowStock ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{lowStock ? t('products.lowStock') : t(`products.status.${product.status}`)}</span></div>
@@ -1563,27 +1568,27 @@ export default function ProductsPage() {
               <table className="w-full table-fixed text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
                   <tr>
-                    <th className="w-10 p-3"><span className="sr-only">{t('transactions.select')}</span></th>
                     <th className="w-[24%] p-3">{t('products.name')}</th>
                     <th className="w-[13%] p-3">{t('products.sku')}</th>
                     <th className="w-[12%] p-3 text-right">{t('products.sellingPrice')}</th>
                     <th className="w-[8%] p-3 text-right">{t('products.currentStock')}</th>
                     <th className="w-[12%] p-3">{t('products.status')}</th>
                     <th className="w-[15%] p-3">{t('productUx.channelsColumn')}</th>
+                    <th className="w-14 p-3 text-center"><span className="sr-only">{t('transactions.select')}</span></th>
                     <th className="w-44 p-3 text-right">{t('productUx.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleProducts.map((product) => {
                     const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
+                    const selected = selectedProductIds.has(product.id)
                     const productSyncs = syncs[product.id] ?? []
                     const providerNames = productSyncs.map((sync) => {
                       const config = productChannels.find((item) => item.channel === sync.channel)
                       return config ? t(config.labelKey) : sync.channel.replaceAll('_', ' ')
                     })
                     return (
-                      <tr key={product.id} className="border-b border-slate-100 align-middle last:border-0 hover:bg-slate-50/70">
-                        <td className="p-3 align-top"><input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} aria-label={`${t('transactions.select')} ${product.name}`} /></td>
+                      <tr key={product.id} className={`border-b border-slate-100 align-middle last:border-0 hover:bg-slate-50/70 ${selected ? 'bg-blue-50/50' : ''}`}>
                         <td className="p-3">
                           <div className="flex min-w-0 items-center gap-3">
                             {product.image_url ? <img src={product.image_url} alt="" loading="lazy" decoding="async" className="h-11 w-11 shrink-0 rounded-md border object-cover" /> : <div className="h-11 w-11 shrink-0 rounded-md border bg-slate-100" />}
@@ -1602,6 +1607,11 @@ export default function ProductsPage() {
                             {providerNames.length > 0 ? providerNames.map((name) => <span key={name} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{name}</span>) : <span className="text-slate-400">—</span>}
                             {renderSyncBadge(product)}
                           </div>
+                        </td>
+                        <td className="p-1 text-center">
+                          <label className="mx-auto flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-slate-200">
+                            <input type="checkbox" checked={selectedProductIds.has(product.id)} onChange={() => toggleProductSelection(product.id)} aria-label={`${t('transactions.select')} ${product.name}`} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" />
+                          </label>
                         </td>
                         <td className="p-3">
                           <div className="flex flex-wrap justify-end gap-1">

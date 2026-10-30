@@ -2211,8 +2211,10 @@ export default function InvoicesPage() {
                 />
               </label>
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <input type="checkbox" checked={allVisibleInvoicesSelected} onChange={toggleVisibleInvoices} />
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white">
+                    <input type="checkbox" checked={allVisibleInvoicesSelected} onChange={toggleVisibleInvoices} aria-label={t('invoices.selectVisible')} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" />
+                  </span>
                   {t('invoices.selectVisible')}
                 </label>
                 <Button type="button" variant="outline" size="sm" onClick={selectAllMatching} disabled={filteredInvoices.length === 0}>
@@ -2240,16 +2242,9 @@ export default function InvoicesPage() {
           {filteredInvoices.length === 0 ? (
             <EmptyState title={t('invoices.noInvoices')} description={t('invoices.noInvoicesDescription')} />
           ) : filteredInvoices.map((invoice) => (
-            <Card key={invoice.id}>
+            <Card key={invoice.id} className={selectedInvoiceIds.has(invoice.id) ? 'border-blue-300 bg-blue-50/40' : ''}>
               <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedInvoiceIds.has(invoice.id)}
-                    onChange={() => toggleInvoiceSelection(invoice.id)}
-                    aria-label={t('invoices.selectInvoice')}
-                    className="mt-1 h-4 w-4"
-                  />
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-950">{invoice.invoice_number}</p>
                     <p className="text-sm text-slate-500">
@@ -2257,17 +2252,26 @@ export default function InvoicesPage() {
                       {invoice.due_date ? ` · ${t('invoices.dueDate')} ${invoice.due_date}` : ''}
                     </p>
                     <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{formatInvoiceStatus(invoice.status, t)}</span>
+                    <p className="mt-2 font-semibold tabular-nums">{formatCurrency(invoice.total, invoice.currency)}</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="mr-2 font-semibold">{formatCurrency(invoice.total, invoice.currency)}</span>
-                  <Button type="button" variant="outline" size="sm" onClick={() => handlePrint(invoice)}>
-                    <Printer className="h-4 w-4" />
-                    {t('common.print')}
-                  </Button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white">
+                    <input
+                      type="checkbox"
+                      checked={selectedInvoiceIds.has(invoice.id)}
+                      onChange={() => toggleInvoiceSelection(invoice.id)}
+                      aria-label={`${t('invoices.selectInvoice')} ${invoice.invoice_number}`}
+                      className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                    />
+                  </label>
                   <Button type="button" variant="outline" size="sm" onClick={() => handleEdit(invoice)}>
                     <Edit className="h-4 w-4" />
                     {t('common.edit')}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => handlePrint(invoice)}>
+                    <Printer className="h-4 w-4" />
+                    {t('common.print')}
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setDeleteInvoice(invoice)}>
                     <Trash2 className="h-4 w-4" />

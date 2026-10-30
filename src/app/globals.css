@@ -43,7 +43,7 @@
 
   @media (min-width: 1024px) {
     .finance-list-grid {
-      grid-template-columns: minmax(0, 1.5fr) minmax(110px, 0.8fr) minmax(96px, 120px) minmax(120px, 140px) 48px minmax(176px, max-content);
+      grid-template-columns: minmax(0, 1.5fr) minmax(110px, 0.8fr) minmax(96px, 120px) minmax(120px, 140px) 52px minmax(176px, max-content);
       column-gap: 0.75rem;
       align-items: center;
     }
