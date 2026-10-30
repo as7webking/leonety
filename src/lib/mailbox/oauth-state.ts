@@ -5,6 +5,7 @@ export interface MailboxOAuthState {
   userId: string
   companyId: string
   provider: MailboxProviderId
+  expectedAccountEmail?: string
   expiresAt: number
 }
 

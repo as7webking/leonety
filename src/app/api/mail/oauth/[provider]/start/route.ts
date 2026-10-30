@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getMailboxEntitlement, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace } from '@/lib/mailbox/server'
 import { createMailboxOAuthState, getOAuthScopes, mailboxCallbackUrl, mailboxOAuthConfig } from '@/lib/mailbox/oauth'
+import { getVerifiedCanonicalAuthEmail } from '@/lib/mailbox/free-account'
 import type { MailboxProviderId } from '@/lib/mailbox/types'
 
 export const runtime = 'nodejs'
@@ -14,6 +15,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
   const provider = rawProvider as MailboxProviderId
   const url = new URL(request.url)
   const companyId = url.searchParams.get('companyId') ?? ''
+  const accountEmailFlow = url.searchParams.get('identity') === 'account'
   const auth = await createServerSupabaseClient()
   const { data: { user }, error } = await auth.auth.getUser()
   if (error || !user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
@@ -22,6 +24,10 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     if (!owned) return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
     const entitlement = await getMailboxEntitlement(companyId, user.id, user)
     const base = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || url.origin
+    const canonicalEmail = accountEmailFlow ? getVerifiedCanonicalAuthEmail(user) : null
+    if (accountEmailFlow && !canonicalEmail) {
+      return NextResponse.redirect(new URL('/app/settings/mailbox?mailError=account_email_unverified', base))
+    }
     if (!entitlement.freeEmailReady) {
       return NextResponse.redirect(new URL('/app/settings/mailbox?mailError=free_email_required', base))
     }
@@ -36,7 +42,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     const oauthProvider = provider as 'google' | 'microsoft'
     const { clientId } = mailboxOAuthConfig(oauthProvider)
     const redirectUri = mailboxCallbackUrl(provider)
-    const state = await createMailboxOAuthState({ userId: user.id, companyId, provider })
+    const state = await createMailboxOAuthState({ userId: user.id, companyId, provider, ...(canonicalEmail ? { expectedAccountEmail: canonicalEmail } : {}) })
     const scopes = getOAuthScopes(oauthProvider)
     const authorize = oauthProvider === 'google'
       ? new URL('https://accounts.google.com/o/oauth2/v2/auth')

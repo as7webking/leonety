@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createLimitedMailboxConnection, decryptMailboxSecret, getMailboxEntitlement, requireOwnedMailboxWorkspace, listMailboxConnections, reconcileMailboxDowngrade } from '@/lib/mailbox/server'
 import { consumeMailboxOAuthState, exchangeOAuthCode } from '@/lib/mailbox/oauth'
 import type { MailboxProviderId } from '@/lib/mailbox/types'
-import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
+import { freeMailboxIdentityError, mailboxEmailsMatch } from '@/lib/mailbox/free-account'
 import { hasRequiredMailboxScopes } from '@/lib/mailbox/scopes'
 import { logMailboxFailure } from '@/lib/mailbox/diagnostics'
 import { classifyGmailConnectFailure, classifyGmailProviderError } from '@/lib/mailbox/gmail-failure'
@@ -49,6 +49,9 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     if (!hasRequiredMailboxScopes(oauthProvider, tokens.scopes)) return fail('missing_scope')
     stage = 'mailbox_identity'
     const identity = await getProviderIdentity(oauthProvider, tokens.accessToken)
+    if (state.expectedAccountEmail && !mailboxEmailsMatch(state.expectedAccountEmail, identity.email)) {
+      return fail('account_email_mismatch')
+    }
     const identityRestriction = freeMailboxIdentityError(entitlement.plan, user, identity.email)
     if (identityRestriction) return fail(identityRestriction)
     stage = 'existing_connection_lookup'

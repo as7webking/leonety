@@ -10,6 +10,10 @@ const connectionsRoute = readFileSync(resolve(process.cwd(), 'src/app/api/mail/c
 const actionsRoute = readFileSync(resolve(process.cwd(), 'src/app/api/mail/actions/route.ts'), 'utf8')
 const server = readFileSync(resolve(process.cwd(), 'src/lib/mailbox/server.ts'), 'utf8')
 const plan = readFileSync(resolve(process.cwd(), 'src/lib/mailbox-plan.ts'), 'utf8')
+const oauthStart = readFileSync(resolve(process.cwd(), 'src/app/api/mail/oauth/[provider]/start/route.ts'), 'utf8')
+const oauthCallback = readFileSync(resolve(process.cwd(), 'src/app/api/mail/oauth/[provider]/callback/route.ts'), 'utf8')
+const imapConnect = readFileSync(resolve(process.cwd(), 'src/app/api/mail/connections/route.ts'), 'utf8')
+const imapTest = readFileSync(resolve(process.cwd(), 'src/app/api/mail/connections/test/route.ts'), 'utf8')
 
 test('Mail shows default and last successful connection, with a selectable default', () => {
   assert.match(client, /defaultMailboxId === item\.id[\s\S]*?mail\.defaultMailbox/)
@@ -18,10 +22,20 @@ test('Mail shows default and last successful connection, with a selectable defau
 })
 
 test('verified Leonety email CTA points to provider choices without implying mailbox access', () => {
-  assert.match(settings, /data\.canonicalVerifiedEmail[\s\S]*?mail\.connectMailbox/)
-  assert.match(settings, /href="#mailbox-connect-options"/)
+  assert.match(settings, /data\.canonicalVerifiedEmail[\s\S]*?mail\.accountEmailNotConnected[\s\S]*?mail\.connectMailbox/)
+  assert.match(settings, /beginAccountEmailConnection/)
+  assert.match(settings, /accountEmailConnection && <Button asChild[\s\S]*?\/app\/mail\?mailbox=/)
   assert.match(settings, /id="mailbox-connect-options"/)
   assert.match(settings, /mail\.accountEmailNote/)
+  assert.match(settings, /mail\.openInbox/)
+})
+
+test('account-email OAuth intent is bound to server-verified identity and checked before connection persistence', () => {
+  assert.match(oauthStart, /getVerifiedCanonicalAuthEmail\(user\)/)
+  assert.match(oauthStart, /expectedAccountEmail: canonicalEmail/)
+  assert.match(oauthCallback, /state\.expectedAccountEmail[\s\S]*?mailboxEmailsMatch[\s\S]*?return fail\('account_email_mismatch'\)/)
+  assert.match(imapConnect, /input\.accountEmailOnly[\s\S]*?mailboxEmailMatchesCanonical\(user, input\.email\)/)
+  assert.match(imapTest, /input\.accountEmailOnly[\s\S]*?mailboxEmailMatchesCanonical\(user, input\.email\)/)
 })
 
 test('saved IMAP connection can be tested and reactivated after a transient connection error', () => {

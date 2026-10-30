@@ -55,6 +55,7 @@ export function MailboxSettings() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [showImap, setShowImap] = useState(false)
+  const [connectingAccountEmail, setConnectingAccountEmail] = useState(false)
   const [imap, setImap] = useState(initialImap)
   const [tested, setTested] = useState(false)
   const [testResults, setTestResults] = useState<{ imap: { ok: boolean; error?: string }; smtp: { ok: boolean; error?: string } } | null>(null)
@@ -85,7 +86,7 @@ export function MailboxSettings() {
       if (authUserRef.current === nextId) return
       authUserRef.current = nextId
       setAuthUserId(nextId); setData(null); setDefaultMailboxId(''); setError('')
-      setImap(initialImap); setShowImap(false); setTested(false); setTestResults(null)
+      setImap(initialImap); setShowImap(false); setTested(false); setTestResults(null); setConnectingAccountEmail(false)
     })
     const initialVersion = authEventVersion.current
     void supabase.auth.getUser().then(({ data: authData }) => {
@@ -112,7 +113,19 @@ export function MailboxSettings() {
 
   const connectOAuth = (provider: 'google' | 'microsoft') => {
     if (!currentCompany?.id) return
-    window.location.href = `/api/mail/oauth/${provider}/start?companyId=${encodeURIComponent(currentCompany.id)}`
+    const url = new URL(`/api/mail/oauth/${provider}/start`, window.location.origin)
+    url.searchParams.set('companyId', currentCompany.id)
+    if (connectingAccountEmail) url.searchParams.set('identity', 'account')
+    window.location.href = url.toString()
+  }
+
+  const beginAccountEmailConnection = () => {
+    const email = data?.canonicalVerifiedEmail
+    if (!email) return
+    setConnectingAccountEmail(true)
+    setTested(false); setTestResults(null)
+    setImap((current) => ({ ...current, email }))
+    document.getElementById('mailbox-connect-options')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   const testImap = async () => {
@@ -121,7 +134,7 @@ export function MailboxSettings() {
     try {
       const response = await fetch('/api/mail/connections/test', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...imap, companyId: currentCompany.id }),
+        body: JSON.stringify({ ...imap, companyId: currentCompany.id, accountEmailOnly: connectingAccountEmail }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'mailbox_connection_test_failed')
@@ -136,14 +149,14 @@ export function MailboxSettings() {
     try {
       const response = await fetch('/api/mail/connections', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...imap, companyId: currentCompany.id }),
+        body: JSON.stringify({ ...imap, companyId: currentCompany.id, accountEmailOnly: connectingAccountEmail }),
       })
       const result = await response.json().catch(() => null)
       if (!response.ok) {
         if (result?.imap && result?.smtp) setTestResults(result)
         throw new Error(result?.error || 'mailbox_connection_test_failed')
       }
-      setImap(initialImap); setTested(false); setTestResults(null); setShowImap(false)
+      setImap(initialImap); setTested(false); setTestResults(null); setShowImap(false); setConnectingAccountEmail(false)
       setNotice('mail.imap.saved'); await load()
     } catch (caught) { setError(errorKey(caught)) } finally { setBusy(false) }
   }
@@ -201,6 +214,9 @@ export function MailboxSettings() {
 
   const hasSlot = data?.canConnect ?? true
   const canStartConnection = Boolean(data && hasSlot && (data.plan !== 'free' || data.freeEmailReady))
+  const accountEmailConnection = data?.canonicalVerifiedEmail
+    ? data.connections.find((connection) => connection.email.trim().toLowerCase() === data.canonicalVerifiedEmail && connection.status === 'connected')
+    : undefined
   return (
     <div className="space-y-5">
       <Card>
@@ -213,7 +229,9 @@ export function MailboxSettings() {
             <p className="font-medium">{t('mail.accountEmail')}</p>
             <p className="mt-1 break-all text-muted-foreground">{data?.canonicalVerifiedEmail || t('mail.accountEmailUnverified')}</p>
             <p className="mt-1 text-xs text-muted-foreground">{t('mail.accountEmailNote')}</p>
-            {data?.canonicalVerifiedEmail && !data.connections.some((connection) => connection.email.toLowerCase() === data.canonicalVerifiedEmail?.toLowerCase() && connection.status === 'connected') && <Button asChild size="sm" variant="outline" className="mt-3"><a href="#mailbox-connect-options">{t('mail.connectMailbox')}</a></Button>}
+            {data?.canonicalVerifiedEmail && <p role="status" className="mt-2 text-sm font-medium">{accountEmailConnection ? t('mail.accountEmailConnected') : t('mail.accountEmailNotConnected')}</p>}
+            {accountEmailConnection && <Button asChild size="sm" variant="outline" className="mt-3"><Link href={`/app/mail?mailbox=${encodeURIComponent(accountEmailConnection.id)}`}>{t('mail.openInbox')}</Link></Button>}
+            {data?.canonicalVerifiedEmail && !accountEmailConnection && <Button type="button" size="sm" variant="outline" className="mt-3" disabled={!canStartConnection || busy} onClick={beginAccountEmailConnection}>{t('mail.connectMailbox')}</Button>}
           </div>
           {data && <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-4 text-sm">
             <span>{t('mail.limit')}: {data.activeCount} / {data.limit}</span>
@@ -227,14 +245,21 @@ export function MailboxSettings() {
           <div id="mailbox-connect-options" className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => connectOAuth('google')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectGoogle')}</Button>
             <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => connectOAuth('microsoft')}><Mail className="mr-2 h-4 w-4" />{t('mail.connectMicrosoft')}</Button>
-            <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => setShowImap((open) => !open)}><ShieldCheck className="mr-2 h-4 w-4" />{t('mail.connectOther')}</Button>
+            <Button type="button" variant="outline" disabled={!canStartConnection || busy} onClick={() => {
+              if (connectingAccountEmail && data?.canonicalVerifiedEmail) {
+                setTested(false); setTestResults(null)
+                setImap((current) => ({ ...current, email: data.canonicalVerifiedEmail! }))
+              }
+              setShowImap((open) => !open)
+            }}><ShieldCheck className="mr-2 h-4 w-4" />{t('mail.connectOther')}</Button>
+            {connectingAccountEmail && <Button type="button" variant="ghost" disabled={busy} onClick={() => setConnectingAccountEmail(false)}>{t('common.cancel')}</Button>}
           </div>
           <p className="text-xs text-muted-foreground">{t('mail.defaultDeviceNote')}</p>
           {showImap && <div className="space-y-4 rounded-md border p-4">
             <div><h3 className="font-medium">{t('mail.imap.title')}</h3><p className="mt-1 text-sm text-muted-foreground">{t('mail.imap.description')}</p></div>
             <h4 className="text-sm font-medium">{t('mail.imap.mailbox')}</h4>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-              <Field disabled={busy} label={t('mail.imap.email')} value={imap.email} onChange={(value) => updateImap('email', value)} type="email" autoComplete="email" />
+              <Field disabled={busy} readOnly={connectingAccountEmail} label={t('mail.imap.email')} value={imap.email} onChange={(value) => updateImap('email', value)} type="email" autoComplete="email" />
               <Field disabled={busy} label={t('mail.imap.displayName')} value={imap.displayName} onChange={(value) => updateImap('displayName', value)} />
               <Field disabled={busy} label={t('mail.imap.password')} value={imap.password} onChange={(value) => updateImap('password', value)} type="password" autoComplete="new-password" />
             </div>
@@ -303,6 +328,7 @@ export function MailboxSettings() {
             {connection.lastSuccessfulConnectionAt && <p className="text-xs text-muted-foreground">{t('mail.lastConnection')}: {new Intl.DateTimeFormat(intlLocaleMap[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(connection.lastSuccessfulConnectionAt))}</p>}
           </div>
           <div className="flex flex-wrap gap-2">
+            {connection.status === 'connected' && <Button asChild size="sm" variant="outline"><Link href={`/app/mail?mailbox=${encodeURIComponent(connection.id)}`}>{t('mail.openInbox')}</Link></Button>}
             {connection.status === 'connected' && <Button size="sm" variant={defaultMailboxId === connection.id ? 'secondary' : 'outline'} disabled={busy || defaultMailboxId === connection.id} onClick={() => setDefault(connection.id)}>
               <Star className="mr-1 h-4 w-4" />{defaultMailboxId === connection.id ? t('mail.defaultMailbox') : t('mail.setDefault')}
             </Button>}
@@ -322,10 +348,10 @@ export function MailboxSettings() {
   )
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder, autoComplete, disabled }: {
-  label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string; autoComplete?: string; disabled?: boolean
+function Field({ label, value, onChange, type = 'text', placeholder, autoComplete, disabled, readOnly }: {
+  label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string; autoComplete?: string; disabled?: boolean; readOnly?: boolean
 }) {
-  return <label className="block min-w-0 text-sm">{label}<input disabled={disabled} type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoComplete={autoComplete} maxLength={512} className="mt-1 h-10 w-full min-w-0 rounded-md border bg-background px-3" /></label>
+  return <label className="block min-w-0 text-sm">{label}<input disabled={disabled} readOnly={readOnly} type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoComplete={autoComplete} maxLength={512} className={`mt-1 h-10 w-full min-w-0 rounded-md border bg-background px-3 ${readOnly ? 'bg-slate-50' : ''}`} /></label>
 }
 
 function SelectField({ label, value, onChange, disabled, children }: {

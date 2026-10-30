@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getMailboxEntitlement, reconcileMailboxDowngrade, requireOwnedMailboxWorkspace } from '@/lib/mailbox/server'
 import { getImapInputError, imapInputSchema } from '@/lib/mailbox/validation'
 import { testImapSmtpConfig } from '@/lib/mailbox/imap-provider'
-import { freeMailboxIdentityError } from '@/lib/mailbox/free-account'
+import { freeMailboxIdentityError, getVerifiedCanonicalAuthEmail, mailboxEmailMatchesCanonical } from '@/lib/mailbox/free-account'
 
 export const runtime = 'nodejs'
 
@@ -16,6 +16,11 @@ export async function POST(request: Request) {
   const input = parsed.data
   if (!(await requireOwnedMailboxWorkspace(input.companyId, user.id))) {
     return NextResponse.json({ error: 'workspace_access_denied' }, { status: 403 })
+  }
+  if (input.accountEmailOnly) {
+    const canonicalEmail = getVerifiedCanonicalAuthEmail(user)
+    if (!canonicalEmail) return NextResponse.json({ error: 'account_email_unverified' }, { status: 403 })
+    if (!mailboxEmailMatchesCanonical(user, input.email)) return NextResponse.json({ error: 'account_email_mismatch' }, { status: 403 })
   }
   const entitlement = await getMailboxEntitlement(input.companyId, user.id, user)
   const identityRestriction = freeMailboxIdentityError(entitlement.plan, user, input.email)

@@ -12,6 +12,15 @@ export function getVerifiedCanonicalAuthEmail(identity: AuthEmailIdentity): stri
   return email
 }
 
+export function mailboxEmailMatchesCanonical(identity: AuthEmailIdentity, mailboxEmail: string): boolean {
+  const canonicalEmail = getVerifiedCanonicalAuthEmail(identity)
+  return Boolean(canonicalEmail && mailboxEmailsMatch(canonicalEmail, mailboxEmail))
+}
+
+export function mailboxEmailsMatch(expectedEmail: string, actualEmail: string): boolean {
+  return expectedEmail.trim().toLowerCase() === actualEmail.trim().toLowerCase()
+}
+
 export function freeMailboxIdentityError(
   plan: AppPlan,
   identity: AuthEmailIdentity,

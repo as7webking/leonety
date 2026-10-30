@@ -11,6 +11,7 @@ export const imapInputSchema = z.object({
   smtpPort: z.union([z.literal(465), z.literal(587)]),
   smtpSecurity: z.enum(['tls', 'starttls']),
   username: z.string().trim().max(320).optional().default(''),
+  accountEmailOnly: z.boolean().optional().default(false),
   password: z.string().min(1).max(512),
 }).superRefine((input, context) => {
   const expectedSecurity = input.smtpPort === 465 ? 'tls' : 'starttls'
