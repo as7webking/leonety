@@ -8,3 +8,8 @@ export function getContractsCreateRedirect(clientId: unknown) {
   if (isValidContractClientId(clientId)) query.set('clientId', clientId)
   return `/app/contracts?${query.toString()}`
 }
+
+export function buildClientContractHref(contractId: string, clientId: string) {
+  const query = new URLSearchParams({ contractId, clientId })
+  return `/app/contracts?${query.toString()}`
+}

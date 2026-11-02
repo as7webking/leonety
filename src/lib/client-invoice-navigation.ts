@@ -4,6 +4,11 @@ export function buildClientInvoicesHref(clientId: string, options: { create?: bo
   return `/app/invoices?${params.toString()}`
 }
 
+export function buildClientInvoiceHref(clientId: string, invoiceId: string) {
+  const params = new URLSearchParams({ clientId, invoiceId })
+  return `/app/invoices?${params.toString()}`
+}
+
 export function filterInvoicesForClient<T extends { client_id: string | null }>(
   invoices: T[],
   clientId: string

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { buildClientInvoicesHref, filterInvoicesForClient } from './client-invoice-navigation.ts'
+import { buildClientInvoiceHref, buildClientInvoicesHref, filterInvoicesForClient } from './client-invoice-navigation.ts'
 
 test('builds a restorable client invoice filter from the stable client id', () => {
   assert.equal(
@@ -16,6 +16,13 @@ test('keeps create intent separate from list filtering', () => {
     '/app/invoices?clientId=client-a&create=1'
   )
   assert.notEqual(buildClientInvoicesHref('client-a'), buildClientInvoicesHref('client-b'))
+})
+
+test('opens a specific invoice while preserving its client context', () => {
+  assert.equal(
+    buildClientInvoiceHref('client/a', 'invoice?1'),
+    '/app/invoices?clientId=client%2Fa&invoiceId=invoice%3F1'
+  )
 })
 
 test('scopes zero, one or many invoices by client id rather than client name', () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-const { getContractsCreateRedirect, isValidContractClientId } = await import(new URL('./contract-client-routing.ts', import.meta.url).href)
+const { buildClientContractHref, getContractsCreateRedirect, isValidContractClientId } = await import(new URL('./contract-client-routing.ts', import.meta.url).href)
 const { trapFocusWithin } = await import(new URL('./dialog-focus.ts', import.meta.url).href)
 
 const confirmDialog = readFileSync(new URL('../components/confirm-dialog.tsx', import.meta.url), 'utf8')
@@ -90,6 +90,13 @@ test('contract redirect preserves only a valid client UUID, safely URL-encoded',
   assert.match(contractsPage, /clientsWorkspaceId !== currentCompany\?\.id/)
   assert.match(contractsPage, /fillPartyBFromClient\(client\)/)
   assert.match(contractsPage, /\.from\('clients'\)[\s\S]*?\.eq\('company_id', currentCompany\.id\)/)
+})
+
+test('client contract details use stable provider route ids with preserved client context', () => {
+  assert.equal(
+    buildClientContractHref('contract/1', 'client?2'),
+    '/app/contracts?contractId=contract%2F1&clientId=client%3F2'
+  )
 })
 
 test('contracts list retains one page-level create action', () => {
