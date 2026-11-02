@@ -13,6 +13,18 @@ test('product create, detail and edit have dedicated App Router pages', () => {
   assert.match(list, /\/app\/products\/\$\{encodeURIComponent\(product\.id\)\}/)
 })
 
+test('product detail is a six-section workspace backed by workspace-scoped canonical data', () => {
+  const detail = read('../app/(app)/products/[productId]/page.tsx')
+  for (const tab of ['general', 'images', 'pricing', 'inventory', 'history', 'channels']) {
+    assert.match(detail, new RegExp(`'${tab}'`))
+  }
+  assert.match(detail, /from\('stock_movements'\)[\s\S]*?\.eq\('company_id', currentCompany\.id\)[\s\S]*?\.eq\('product_id', productId\)/)
+  assert.match(detail, /safeExternalHttpUrl\(sync\.external_url\)/)
+  assert.match(detail, /editHref\('image'\)/)
+  assert.match(detail, /editHref\('integration'\)/)
+  assert.doesNotMatch(detail, /woocommerce'.*not_synced[\s\S]{0,20}channelSyncs\.length === 0/)
+})
+
 test('edit uses an updated_at compare-and-set and keeps conflicted drafts for explicit resolution', () => {
   const edit = read('../app/(app)/products/[productId]/edit/page.tsx')
   assert.match(edit, /eq\('updated_at', product\.updated_at\)/)

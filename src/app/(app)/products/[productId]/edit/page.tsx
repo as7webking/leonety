@@ -242,7 +242,9 @@ export default function ProductEditPage() {
   const [categoriesAvailable, setCategoriesAvailable] = useState(true)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [renamedCategoryName, setRenamedCategoryName] = useState('')
-  const [editorSection, setEditorSection] = useState<ProductEditorSection>('general')
+  const requestedSection = searchParams.get('section')
+  const initialSection = productEditorSections.find((section) => section === requestedSection) ?? 'general'
+  const [editorSection, setEditorSection] = useState<ProductEditorSection>(initialSection)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')

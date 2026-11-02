@@ -33,6 +33,7 @@ import { transactionFxDictionaries } from '@/lib/transaction-fx-i18n'
 import { employeeNumberDictionaries } from '@/lib/employee-number-i18n'
 import { mailboxDictionaries } from '@/lib/mailbox-i18n'
 import { productCategoriesDictionaries, productCategoriesWooDictionaries } from '@/lib/product-categories-i18n'
+import { productWorkspaceDictionaries } from '@/lib/product-workspace-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -9241,6 +9242,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], employeeScheduleDictionaries[locale])
   Object.assign(dictionaries[locale], adminUsersDictionaries[locale])
   Object.assign(dictionaries[locale], employeeNumberDictionaries[locale])
+  Object.assign(dictionaries[locale], productWorkspaceDictionaries[locale])
 }
 
 Object.assign(dictionaries.uk, ukrainianAuthenticatedFixes)
