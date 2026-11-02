@@ -25,6 +25,8 @@ import { matchesFinanceSearch } from '@/lib/finance-ui'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useLocalDraft } from '@/hooks/use-local-draft'
+import { SavedTableViews } from '@/components/saved-table-views'
+import type { ExpenseTableViewState } from '@/lib/saved-table-views'
 
 interface Expense extends ExpenseForm {
   id: string
@@ -70,7 +72,7 @@ export default function ExpensesPage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
-  const { isOnline } = useOfflineMode()
+  const { isOnline, userId } = useOfflineMode()
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -113,6 +115,14 @@ export default function ExpensesPage() {
   const formWorkspaceRef = useRef<string | null>(null)
   const { draft: expenseDraft, loading: expenseDraftLoading, save: saveExpenseDraft, discard: discardExpenseDraft } = useLocalDraft<ExpenseLocalDraft>('expense', currentCompany?.id)
   const categoryOptions = ['Food', 'Utilities', 'Rent', 'Other']
+  const applySavedExpenseView = useCallback((view: ExpenseTableViewState) => {
+    setSearchQuery(view.searchQuery)
+    setGroupReportsByMonth(view.groupReportsByMonth)
+    setFilterFromDate(view.filterFromDate)
+    setFilterToDate(view.filterToDate)
+    setSortBy(view.sortBy)
+    setSortDirection(view.sortDirection)
+  }, [])
   const titleSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.title || expense.description), [expenses])
   const conversionPreview = getMoneyConversionPreview(formData.amount, latestRate, currentCompany?.currency ?? 'USD')
   const descriptionSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.description), [expenses])
@@ -691,6 +701,14 @@ export default function ExpensesPage() {
           {showForm ? t('common.cancel') : t('expenses.add')}
         </Button>
       </PageHeader>
+      <SavedTableViews
+        kind="expenses"
+        userId={userId}
+        workspaceId={currentCompany.id}
+        state={{ searchQuery, groupReportsByMonth, filterFromDate, filterToDate, sortBy, sortDirection }}
+        applyDefault={!searchParams.toString()}
+        onApply={applySavedExpenseView}
+      />
       <FinanceToolbar
         filtersLabel={t('finance.filters')}
         utilitiesLabel={t('finance.utilities')}

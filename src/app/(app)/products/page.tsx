@@ -25,6 +25,9 @@ import type { SupportedComparisonProvider } from '@/lib/product-channel-comparis
 import { ProductImageUploadError, uploadProductImage } from '@/lib/product-image-upload'
 import { getProductChannelPresentation, getProductChannelTranslationKey } from '@/lib/integration-presentation'
 import { clearPendingWooReconciliation, getPendingWooReconciliation, savePendingWooReconciliation } from '@/lib/woocommerce-sync-safety'
+import { SavedTableViews } from '@/components/saved-table-views'
+import type { ProductTableViewState } from '@/lib/saved-table-views'
+import { useOfflineMode } from '@/contexts/offline-mode-context'
 
 const productStatuses = ['active', 'inactive', 'archived'] as const
 type ProductStatus = typeof productStatuses[number]
@@ -365,6 +368,7 @@ export default function ProductsPage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const { userId } = useOfflineMode()
   const { t } = useI18n()
   const dataMemoryKey = currentCompany ? `products:${currentCompany.id}` : ''
   const viewMemoryKey = currentCompany ? `products-view:${currentCompany.id}` : ''
@@ -414,6 +418,16 @@ export default function ProductsPage() {
   const firstEditorInputRef = useRef<HTMLInputElement | null>(null)
   const productImageInputRef = useRef<HTMLInputElement | null>(null)
   const restoredScrollRef = useRef(false)
+  const applySavedProductView = useCallback((view: ProductTableViewState) => {
+    setQuery(view.query)
+    setDebouncedQuery(view.query)
+    setStatusFilter(view.statusFilter)
+    setCategoryFilter(view.categoryFilter)
+    setStockFilter(view.stockFilter)
+    setProviderFilter(view.providerFilter)
+    setImageFilter(view.imageFilter)
+    setSortBy(view.sortBy)
+  }, [])
 
   useBodyScrollLock(showForm || Boolean(viewingProduct))
 
@@ -1073,6 +1087,15 @@ export default function ProductsPage() {
       <PageHeader title={t('products.title')} description={`${t('products.description')} · ${currentCompany.name}`}>
         <Button className="hidden lg:inline-flex" onClick={() => router.push('/app/products/new')}><PackagePlus className="h-4 w-4" />{t('products.add')}</Button>
       </PageHeader>
+
+      <SavedTableViews
+        kind="products"
+        userId={userId}
+        workspaceId={currentCompany.id}
+        state={{ query, statusFilter, categoryFilter, stockFilter, providerFilter, imageFilter, sortBy }}
+        applyDefault={searchParams.size === 0}
+        onApply={applySavedProductView}
+      />
       {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
       {wooPreviewLoading && <p role="status" className="mb-3 text-sm text-slate-600">{t('products.wooPreviewLoading')}</p>}
       {wooPreviewError && <p role="alert" className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{wooPreviewError}</p>}

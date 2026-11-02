@@ -20,6 +20,8 @@ import { formatCountryValue } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
+import { SavedTableViews } from '@/components/saved-table-views'
+import type { InvoiceTableViewState } from '@/lib/saved-table-views'
 import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, type InvoiceDocumentSnapshot } from '@/lib/invoice-document'
 import { getNotificationCenterText } from '@/lib/notification-center-i18n'
 import {
@@ -490,6 +492,10 @@ export default function InvoicesPage() {
     if (statusFilter === 'unpaid') return invoice.status === 'draft' || invoice.status === 'sent' || invoice.status === 'overdue'
     return invoice.status === statusFilter
   }), [invoices, requestedClientId, statusFilter])
+  const applySavedInvoiceView = useCallback((view: InvoiceTableViewState) => {
+    setStatusFilter(view.statusFilter)
+    setSelectedInvoiceIds(new Set())
+  }, [])
   const filteredClient = useMemo(
     () => requestedClientId ? clients.find((client) => client.id === requestedClientId) ?? null : null,
     [clients, requestedClientId]
@@ -1770,6 +1776,15 @@ export default function InvoicesPage() {
           {showForm ? t('common.cancel') : t('invoices.add')}
         </Button>
       </PageHeader>
+
+      <SavedTableViews
+        kind="invoices"
+        userId={userId}
+        workspaceId={currentCompany.id}
+        state={{ statusFilter }}
+        applyDefault={!searchParams.toString()}
+        onApply={applySavedInvoiceView}
+      />
 
       {filteredClient && (
         <div className="mb-5 hidden items-center justify-between gap-4 border-y border-slate-200 bg-slate-50 px-3 py-3 lg:flex">
