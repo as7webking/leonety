@@ -11,12 +11,13 @@ import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
 import { AppSelect } from '@/components/app-select'
-import { Boxes, Building2, CalendarDays, Filter, Package, Users, X } from 'lucide-react'
+import { AlertTriangle, Boxes, Building2, CalendarDays, Filter, Package, Users, X } from 'lucide-react'
 import { getIntlLocale } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 import { dashboardFinancialColumns, dashboardLegacyFinancialColumns, dashboardTimeEntryColumns, isMissingDashboardSnapshotColumns } from '@/lib/performance-query-projections'
+import type { DashboardAttentionItem } from '@/lib/dashboard-attention'
 
 interface Income {
   id: string
@@ -68,6 +69,7 @@ interface DashboardViewMemory {
 }
 
 type PeriodPreset = 'all' | 'this_month' | 'last_month' | 'this_year' | 'custom'
+type AttentionState = { scope: string; status: 'loaded' | 'partial' | 'error'; items: DashboardAttentionItem[] }
 
 function toDateInputValue(date: Date) {
   const year = date.getFullYear()
@@ -106,6 +108,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(() => !initialDataMemory)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshFailed, setRefreshFailed] = useState(false)
+  const [attention, setAttention] = useState<AttentionState>({ scope: '', status: 'loaded', items: [] })
   const [accountEmail, setAccountEmail] = useState<string | null | undefined>(undefined)
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>(() => initialViewMemory?.periodPreset ?? 'this_month')
   const [filterFromDate, setFilterFromDate] = useState(() => initialViewMemory?.filterFromDate ?? getPeriodRange('this_month')?.from ?? '')
@@ -190,6 +193,23 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard()
   }, [loadDashboard])
+
+  useEffect(() => {
+    if (!currentCompany) return
+    let cancelled = false
+    const companyId = currentCompany.id
+    void fetch(`/api/dashboard/attention?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('attention_unavailable')
+        const payload = await response.json() as { status?: string; items?: DashboardAttentionItem[] }
+        if (!Array.isArray(payload.items) || !['ok', 'partial'].includes(payload.status ?? '')) throw new Error('attention_invalid_response')
+        if (!cancelled) setAttention({ scope: companyId, status: payload.status === 'partial' ? 'partial' : 'loaded', items: payload.items })
+      })
+      .catch(() => {
+        if (!cancelled) setAttention({ scope: companyId, status: 'error', items: [] })
+      })
+    return () => { cancelled = true }
+  }, [currentCompany])
 
   useEffect(() => {
     const loadAccountEmail = async () => {
@@ -442,6 +462,34 @@ export default function DashboardPage() {
           <p className="text-lg font-semibold">{formatHours(totalHours)}</p>
         </div>
       </div>
+
+      {currentCompany.type === 'business' && <section aria-labelledby="dashboard-attention-title" className="mt-8 rounded-lg border border-amber-200 bg-white p-4 sm:p-5">
+        <div className="mb-3 flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+          <div>
+            <h2 id="dashboard-attention-title" className="font-semibold">{t('dashboard.attention.title')}</h2>
+            <p className="text-sm text-slate-600">{t('dashboard.attention.description')}</p>
+          </div>
+        </div>
+        {attention.scope !== currentCompany.id ? <p role="status" className="text-sm text-slate-600">{t('dashboard.attention.loading')}</p>
+          : attention.status === 'error' ? <p role="alert" className="text-sm text-red-700">{t('dashboard.attention.error')}</p>
+            : <>
+              {attention.status === 'partial' && <p role="status" className="mb-3 text-sm text-amber-800">{t('dashboard.attention.partial')}</p>}
+              {attention.items.length === 0 && attention.status === 'loaded' && <p className="text-sm text-slate-600">{t('dashboard.attention.none')}</p>}
+              {attention.items.length > 0 && <ul className="divide-y divide-slate-100">
+                {attention.items.map((item) => {
+                  const action = item.type === 'overdue_invoices' || item.type === 'low_stock_products' ? 'view' : 'fix'
+                  return <li key={item.type} className="flex min-w-0 flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-medium">{t(`dashboard.attention.${item.type}`)} <span className="text-slate-500">({item.count.toLocaleString(locale)})</span></p>
+                      <p className="break-words text-sm text-slate-600">{t(`dashboard.attention.${item.type}.message`).replace('{count}', item.count.toLocaleString(locale))}</p>
+                    </div>
+                    <Link href={item.href} className="shrink-0"><Button variant="outline">{t(`dashboard.attention.${action}`)}</Button></Link>
+                  </li>
+                })}
+              </ul>}
+            </>}
+      </section>}
 
       {currentCompany.type === 'business' && (
         <div className="mt-8">
