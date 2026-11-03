@@ -98,6 +98,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const attentionCompanyId = currentCompany?.id
   const dataMemoryKey = currentCompany ? `dashboard:${currentCompany.id}` : ''
   const viewMemoryKey = currentCompany ? `dashboard-view:${currentCompany.id}` : ''
   const initialDataMemory = dataMemoryKey ? getAppDataMemory<DashboardMemory>(dataMemoryKey) : undefined
@@ -195,21 +196,40 @@ export default function DashboardPage() {
   }, [loadDashboard])
 
   useEffect(() => {
-    if (!currentCompany) return
+    if (!attentionCompanyId) return
     let cancelled = false
-    const companyId = currentCompany.id
-    void fetch(`/api/dashboard/attention?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('attention_unavailable')
-        const payload = await response.json() as { status?: string; items?: DashboardAttentionItem[] }
-        if (!Array.isArray(payload.items) || !['ok', 'partial'].includes(payload.status ?? '')) throw new Error('attention_invalid_response')
-        if (!cancelled) setAttention({ scope: companyId, status: payload.status === 'partial' ? 'partial' : 'loaded', items: payload.items })
-      })
-      .catch(() => {
-        if (!cancelled) setAttention({ scope: companyId, status: 'error', items: [] })
-      })
-    return () => { cancelled = true }
-  }, [currentCompany])
+    let inFlight = false
+    let lastStartedAt = 0
+    const companyId = attentionCompanyId
+    const refreshAttention = () => {
+      if (cancelled || inFlight || Date.now() - lastStartedAt < 1500) return
+      inFlight = true
+      lastStartedAt = Date.now()
+      void fetch(`/api/dashboard/attention?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('attention_unavailable')
+          const payload = await response.json() as { status?: string; items?: DashboardAttentionItem[] }
+          if (!Array.isArray(payload.items) || !['ok', 'partial'].includes(payload.status ?? '')) throw new Error('attention_invalid_response')
+          if (!cancelled) setAttention({ scope: companyId, status: payload.status === 'partial' ? 'partial' : 'loaded', items: payload.items })
+        })
+        .catch(() => {
+          if (!cancelled) setAttention({ scope: companyId, status: 'error', items: [] })
+        })
+        .finally(() => { inFlight = false })
+    }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshAttention()
+    }
+
+    refreshAttention()
+    window.addEventListener('focus', refreshAttention)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', refreshAttention)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [attentionCompanyId])
 
   useEffect(() => {
     const loadAccountEmail = async () => {

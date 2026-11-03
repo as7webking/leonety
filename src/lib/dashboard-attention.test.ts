@@ -49,6 +49,14 @@ test('dashboard renders loading, empty, partial and retrieval-error states disti
   assert.match(dashboard, /attention\.items\.length === 0 && attention\.status === 'loaded'/)
 })
 
+test('attention data refreshes on return to the app without polling or duplicate in-flight requests', () => {
+  const dashboard = read('../app/(app)/dashboard/page.tsx')
+  assert.match(dashboard, /window\.addEventListener\('focus', refreshAttention\)/)
+  assert.match(dashboard, /document\.addEventListener\('visibilitychange', refreshWhenVisible\)/)
+  assert.match(dashboard, /if \(cancelled \|\| inFlight \|\| Date\.now\(\) - lastStartedAt < 1500\) return/)
+  assert.doesNotMatch(dashboard, /setInterval\s*\(/)
+})
+
 test('dashboard attention messages are translated for all supported locales', () => {
   const keys = Object.keys(dashboardAttentionDictionaries.en)
   for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
