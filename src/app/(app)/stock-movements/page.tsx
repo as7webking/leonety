@@ -261,13 +261,20 @@ export default function StockMovementsPage() {
         .then(() => null)
     }
 
-    await fetch('/api/woocommerce/products/stock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId: currentCompany.id, productId: form.product_id }),
-    }).catch(() => null)
+    let stockSyncFailed = false
+    try {
+      const stockSyncResponse = await fetch('/api/woocommerce/products/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: currentCompany.id, productId: form.product_id }),
+      })
+      stockSyncFailed = !stockSyncResponse.ok
+    } catch {
+      stockSyncFailed = true
+    }
 
     setMessage(t('stock.created'))
+    if (stockSyncFailed) setError(t('stock.syncFailedAfterMovement'))
     setForm(emptyForm)
     setShowForm(false)
     setSaving(false)

@@ -200,7 +200,14 @@ export default function WooCommerceSettingsPage() {
     if (!response.ok) {
       setError(payload.error ?? t('woocommerce.importFailed'))
     } else {
-      setMessage(t('woocommerce.importSuccess').replace('{count}', String(payload.imported ?? 0)))
+      setMessage(t('woocommerce.importSummary')
+        .replace('{created}', String(payload.created ?? 0))
+        .replace('{skipped}', String(payload.skipped ?? 0))
+        .replace('{conflicts}', String(payload.conflicts ?? 0))
+        .replace('{failed}', String(payload.failed ?? 0)))
+      if (payload.reconciliationRequired?.length) {
+        setError(t('woocommerce.importNeedsReconciliation').replace('{count}', String(payload.reconciliationRequired.length)))
+      }
     }
 
     setImporting(false)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { decryptSecret } from '@/lib/credential-encryption'
 import { wooRequest, type WooConnection } from '@/lib/woocommerce'
+import { getWooImportDecision } from '@/lib/woocommerce-import-safety'
 
 export const runtime = 'nodejs'
 
@@ -91,31 +92,40 @@ export async function POST(request: Request) {
       consumer_secret: decryptSecret(wooConnection.consumer_secret),
     })
     let created = 0
-    let updated = 0
+    let skipped = 0
+    let conflicts = 0
     let failed = 0
+    const reconciliationRequired: Array<{ productId: string; externalProductId: string }> = []
 
     for (const wooProduct of products) {
       try {
         const categoryName = wooProduct.categories?.[0]?.name ?? null
-        await createCategoryIfPossible(auth.adminSupabase, companyId, categoryName).catch(() => undefined)
-
-        const { data: syncRow } = await auth.adminSupabase
+        const { data: syncRow, error: syncError } = await auth.adminSupabase
           .from('product_syncs')
           .select('product_id, external_product_id')
           .eq('company_id', companyId)
           .eq('channel', 'woocommerce')
           .eq('external_product_id', String(wooProduct.id))
           .maybeSingle<ProductSyncRow>()
+        if (syncError) throw syncError
 
         const sku = wooProduct.sku?.trim() || null
-        const existingProductQuery = syncRow?.product_id
-          ? auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('id', syncRow.product_id).maybeSingle()
-          : sku
-            ? auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('sku', sku).maybeSingle()
-            : Promise.resolve({ data: null, error: null })
-
-        const { data: existingProduct, error: existingError } = await existingProductQuery
+        const { data: existingProduct, error: existingError } = sku && !syncRow
+          ? await auth.adminSupabase.from('products').select('id').eq('company_id', companyId).eq('sku', sku).maybeSingle()
+          : { data: null, error: null }
         if (existingError) throw existingError
+
+        const decision = getWooImportDecision({ hasMapping: Boolean(syncRow), hasSkuMatch: Boolean(existingProduct) })
+        if (decision === 'skip_linked') {
+          skipped += 1
+          continue
+        }
+        if (decision === 'skip_conflict') {
+          conflicts += 1
+          continue
+        }
+
+        await createCategoryIfPossible(auth.adminSupabase, companyId, categoryName).catch(() => undefined)
 
         const payload = {
           company_id: companyId,
@@ -131,13 +141,11 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         }
 
-        const productResult = existingProduct?.id
-          ? await auth.adminSupabase.from('products').update(payload).eq('id', existingProduct.id).select('id').single()
-          : await auth.adminSupabase.from('products').insert(payload).select('id').single()
+        const productResult = await auth.adminSupabase.from('products').insert(payload).select('id').single()
 
         if (productResult.error) throw productResult.error
 
-        await auth.adminSupabase
+        const { error: mappingError } = await auth.adminSupabase
           .from('product_syncs')
           .upsert({
             company_id: companyId,
@@ -148,18 +156,24 @@ export async function POST(request: Request) {
             last_synced_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }, { onConflict: 'company_id,product_id,channel' })
-
-        if (existingProduct?.id) {
-          updated += 1
-        } else {
-          created += 1
+        if (mappingError) {
+          const cleanup = await auth.adminSupabase.from('products').delete()
+            .eq('company_id', companyId)
+            .eq('id', productResult.data.id)
+            .select('id')
+          if (cleanup.error || !cleanup.data?.length) {
+            reconciliationRequired.push({ productId: productResult.data.id, externalProductId: String(wooProduct.id) })
+          }
+          throw new Error('product_import_mapping_failed')
         }
+
+        created += 1
       } catch {
         failed += 1
       }
     }
 
-    return NextResponse.json({ imported: created + updated, created, updated, failed })
+    return NextResponse.json({ imported: created, created, skipped, conflicts, failed, reconciliationRequired })
   } catch (error) {
     return NextResponse.json({ error: formatApiError(error) }, { status: 500 })
   }
