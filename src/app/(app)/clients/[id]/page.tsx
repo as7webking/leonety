@@ -80,6 +80,9 @@ export default function ClientDetailPage() {
   const [tab, setTab] = useState<DetailTab>('overview')
   const [error, setError] = useState('')
   const [relatedDataError, setRelatedDataError] = useState(false)
+  const [invoiceLoadFailed, setInvoiceLoadFailed] = useState(false)
+  const [contractLoadFailed, setContractLoadFailed] = useState(false)
+  const [activityLoadFailed, setActivityLoadFailed] = useState(false)
   const requestId = useRef(0)
 
   const loadClient = useCallback(async () => {
@@ -92,6 +95,9 @@ export default function ClientDetailPage() {
     setLoading(true)
     setError('')
     setRelatedDataError(false)
+    setInvoiceLoadFailed(false)
+    setContractLoadFailed(false)
+    setActivityLoadFailed(false)
 
     const results = await Promise.all([
       supabase
@@ -151,6 +157,9 @@ export default function ClientDetailPage() {
 
     const relatedErrors = [invoiceResult.error, contractResult.error, incomeResult.error, expenseResult.error]
       .some((result) => Boolean(result))
+    setInvoiceLoadFailed(Boolean(invoiceResult.error))
+    setContractLoadFailed(Boolean(contractResult.error))
+    setActivityLoadFailed(relatedErrors)
     if (relatedErrors) {
       setRelatedDataError(true)
       setError(t('clients.crm.relatedDataLoadFailed'))
@@ -170,6 +179,7 @@ export default function ClientDetailPage() {
         for (const invoice of invoiceRows) invoice.paid_amount = paymentTotals.get(invoice.id)
       } else {
         setRelatedDataError(true)
+        setInvoiceLoadFailed(true)
         setError(t('clients.crm.relatedDataLoadFailed'))
       }
     }
@@ -279,14 +289,14 @@ export default function ClientDetailPage() {
               {client.tax_number && <p>{t('clients.taxNumber')}: {client.tax_number}</p>}
               <p>{t('clients.status')}: {t(`clients.status.${client.status}`)}</p>
             </CardContent></Card>
-            <ActivityList items={activity.slice(0, 8)} t={t} locale={locale} />
+            {activityLoadFailed ? <RelatedDataUnavailable t={t} /> : <ActivityList items={activity.slice(0, 8)} t={t} locale={locale} />}
           </div>
         </div>
       )}
 
-      {tab === 'invoices' && <InvoiceList invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} />}
-      {tab === 'contracts' && <ContractList contracts={contracts} clientId={client.id} locale={locale} t={t} />}
-      {tab === 'activity' && <ActivityList items={activity} t={t} locale={locale} />}
+      {tab === 'invoices' && (invoiceLoadFailed ? <RelatedDataUnavailable t={t} /> : <InvoiceList invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} />)}
+      {tab === 'contracts' && (contractLoadFailed ? <RelatedDataUnavailable t={t} /> : <ContractList contracts={contracts} clientId={client.id} locale={locale} t={t} />)}
+      {tab === 'activity' && (activityLoadFailed ? <RelatedDataUnavailable t={t} /> : <ActivityList items={activity} t={t} locale={locale} />)}
       {tab === 'contacts' && <Card><CardContent className="space-y-3 p-5 text-sm"><p>{client.name}</p><p className="break-all">{client.email || '—'}</p><p>{client.phone || '—'}</p><p>{address || '—'}</p></CardContent></Card>}
       {tab === 'notes' && <Card><CardContent className="whitespace-pre-wrap p-5 text-sm text-slate-700">{client.notes || t('clients.crm.noNotes')}</CardContent></Card>}
     </PageContainer>
@@ -295,6 +305,10 @@ export default function ClientDetailPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <Card><CardContent className="p-4"><p className="text-sm text-slate-500">{label}</p><p className="mt-1 break-words text-xl font-semibold text-slate-950">{value}</p></CardContent></Card>
+}
+
+function RelatedDataUnavailable({ t }: { t: (key: string) => string }) {
+  return <p role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{t('clients.crm.relatedDataLoadFailed')}</p>
 }
 
 function OutstandingInvoices({ invoices, clientId, locale, t, currencySymbolPosition }: { invoices: InvoiceRow[]; clientId: string; locale: Locale; t: (key: string) => string; currencySymbolPosition: import('@/lib/currency').CurrencySymbolPosition }) {
