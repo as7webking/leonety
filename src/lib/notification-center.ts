@@ -31,6 +31,7 @@ interface ProductSource {
 interface SyncSource {
   product_id: string
   updated_at: string
+  last_synced_at: string | null
 }
 
 interface MailboxSource {
@@ -39,6 +40,8 @@ interface MailboxSource {
   provider_account_email: string
   status: string
   updated_at: string
+  last_error_code: string | null
+  last_successful_connection_at: string | null
 }
 
 interface IntegrationSource {
@@ -46,15 +49,11 @@ interface IntegrationSource {
   provider: string
   store_name: string | null
   updated_at: string
+  last_sync_at: string | null
 }
 
 function eventId(type: NotificationEventType, entityId: string, version: string) {
   return `${type}:${entityId}:${Buffer.from(version).toString('base64url') || '0'}`
-}
-
-function timestampVersion(value: string | null | undefined) {
-  const parsed = value ? Date.parse(value) : 0
-  return Number.isFinite(parsed) ? Math.max(0, parsed).toString(36) : '0'
 }
 
 export function buildNotificationEvents(input: {
@@ -92,7 +91,7 @@ export function buildNotificationEvents(input: {
     const stock = Number(product.current_stock)
     const threshold = Number(product.low_stock_threshold)
     if (!Number.isFinite(stock) || !Number.isFinite(threshold) || stock > threshold) continue
-    const id = eventId('low_stock', product.id, `${stock}:${threshold}`)
+    const id = eventId('low_stock', product.id, String(threshold))
     events.push({
       id,
       workspaceId: input.workspaceId,
@@ -109,7 +108,7 @@ export function buildNotificationEvents(input: {
   for (const sync of input.failedWooSyncs) {
     const productName = productNames.get(sync.product_id)
     if (!productName) continue
-    const id = eventId('product_sync_failed', sync.product_id, timestampVersion(sync.updated_at))
+    const id = eventId('product_sync_failed', sync.product_id, sync.last_synced_at ?? 'never-synced')
     events.push({
       id,
       workspaceId: input.workspaceId,
@@ -124,7 +123,11 @@ export function buildNotificationEvents(input: {
   }
 
   for (const mailbox of input.mailboxes) {
-    const id = eventId('mailbox_reconnect', mailbox.id, `${mailbox.status}:${timestampVersion(mailbox.updated_at)}`)
+    const id = eventId(
+      'mailbox_reconnect',
+      mailbox.id,
+      `${mailbox.status}:${mailbox.last_error_code ?? 'unknown'}:${mailbox.last_successful_connection_at ?? 'never-connected'}`
+    )
     events.push({
       id,
       workspaceId: input.workspaceId,
@@ -140,7 +143,7 @@ export function buildNotificationEvents(input: {
 
   for (const integration of input.integrations) {
     const name = integration.store_name?.trim() || integration.provider
-    const id = eventId('integration_error', integration.id, timestampVersion(integration.updated_at))
+    const id = eventId('integration_error', integration.id, integration.last_sync_at ?? 'never-synced')
     events.push({
       id,
       workspaceId: input.workspaceId,

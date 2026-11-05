@@ -17,9 +17,9 @@ test('notification events derive only from active workspace records and link to 
       { id: '22222222-2222-4222-8222-222222222222', name: 'Low item', current_stock: 1, low_stock_threshold: 2, updated_at: '2026-10-20T09:00:00Z' },
       { id: '33333333-3333-4333-8333-333333333333', name: 'Healthy item', current_stock: 8, low_stock_threshold: 2, updated_at: '2026-10-20T09:00:00Z' },
     ],
-    failedWooSyncs: [{ product_id: '22222222-2222-4222-8222-222222222222', updated_at: '2026-10-21T09:00:00Z' }],
-    mailboxes: [{ id: '44444444-4444-4444-8444-444444444444', provider: 'google', provider_account_email: 'mail@example.com', status: 'reconnect_required', updated_at: '2026-10-22T09:00:00Z' }],
-    integrations: [{ id: '55555555-5555-4555-8555-555555555555', provider: 'shopify', store_name: 'Shop', updated_at: '2026-10-23T09:00:00Z' }],
+    failedWooSyncs: [{ product_id: '22222222-2222-4222-8222-222222222222', updated_at: '2026-10-21T09:00:00Z', last_synced_at: '2026-10-20T09:00:00Z' }],
+    mailboxes: [{ id: '44444444-4444-4444-8444-444444444444', provider: 'google', provider_account_email: 'mail@example.com', status: 'reconnect_required', updated_at: '2026-10-22T09:00:00Z', last_error_code: 'authorization_revoked', last_successful_connection_at: '2026-10-19T09:00:00Z' }],
+    integrations: [{ id: '55555555-5555-4555-8555-555555555555', provider: 'shopify', store_name: 'Shop', updated_at: '2026-10-23T09:00:00Z', last_sync_at: '2026-10-18T09:00:00Z' }],
   })
 
   assert.equal(events.length, 5)
@@ -46,8 +46,36 @@ test('notification identities preserve read state for the same source event and 
   const read = buildNotificationEvents({ ...input, readKeys: new Set([first[0].id]) })
   const changed = buildNotificationEvents({ ...input, products: [{ ...input.products[0], current_stock: 0 }] })
   assert.equal(read[0].read, true)
-  assert.notEqual(changed[0].id, first[0].id)
+  assert.equal(changed[0].id, first[0].id)
   assert.equal(buildNotificationEvents({ ...input, products: [input.products[0], input.products[0]] }).length, 1)
+  assert.equal(buildNotificationEvents({ ...input, products: [{ ...input.products[0], current_stock: 3 }] }).length, 0)
+})
+
+test('retry timestamps do not duplicate active failures, while a successful recovery starts a fresh event epoch', () => {
+  const base = {
+    workspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    invoices: [],
+    clients: [],
+    products: [],
+    failedWooSyncs: [{ product_id: '22222222-2222-4222-8222-222222222222', updated_at: '2026-10-20T09:00:00Z', last_synced_at: '2026-10-19T09:00:00Z' }],
+    mailboxes: [{ id: '44444444-4444-4444-8444-444444444444', provider: 'google', provider_account_email: 'mail@example.com', status: 'error', updated_at: '2026-10-20T09:00:00Z', last_error_code: 'provider_unavailable', last_successful_connection_at: '2026-10-19T09:00:00Z' }],
+    integrations: [{ id: '55555555-5555-4555-8555-555555555555', provider: 'shopify', store_name: 'Shop', updated_at: '2026-10-20T09:00:00Z', last_sync_at: '2026-10-19T09:00:00Z' }],
+  }
+  const first = buildNotificationEvents(base)
+  const retried = buildNotificationEvents({
+    ...base,
+    failedWooSyncs: [{ ...base.failedWooSyncs[0], updated_at: '2026-10-20T10:00:00Z' }],
+    mailboxes: [{ ...base.mailboxes[0], updated_at: '2026-10-20T10:00:00Z' }],
+    integrations: [{ ...base.integrations[0], updated_at: '2026-10-20T10:00:00Z' }],
+  })
+  assert.deepEqual(retried.map((event) => event.id), first.map((event) => event.id))
+  const recoveredThenFailed = buildNotificationEvents({
+    ...base,
+    failedWooSyncs: [{ ...base.failedWooSyncs[0], last_synced_at: '2026-10-20T11:00:00Z' }],
+    mailboxes: [{ ...base.mailboxes[0], last_successful_connection_at: '2026-10-20T11:00:00Z' }],
+    integrations: [{ ...base.integrations[0], last_sync_at: '2026-10-20T11:00:00Z' }],
+  })
+  assert.ok(recoveredThenFailed.every((event, index) => event.id !== first[index].id))
 })
 
 test('notification data API requires current user workspace ownership and keeps source failures distinct from empty', () => {
@@ -78,4 +106,17 @@ test('notification navigation uses the center while push-device settings remain 
   assert.match(center, /href="\/app\/settings\/notifications"/)
   assert.match(invoices, /searchParams\.get\('invoiceId'\)/)
   assert.match(invoices, /handleEdit\(invoice\)/)
+})
+
+test('notification UI hides prior workspace data until the new workspace result is loaded', () => {
+  const page = read('../app/(app)/notifications/page.tsx')
+  assert.match(page, /notificationsWorkspaceId === companyId \? notifications : \[\]/)
+  assert.match(page, /workspaceDataLoading = companyLoading \|\| \(Boolean\(companyId\) && notificationsWorkspaceId !== companyId\)/)
+  assert.match(page, /setNotificationsWorkspaceId\(companyId\)/)
+})
+
+test('date-only invoice due dates render without inventing a time of day', () => {
+  const page = read('../app/(app)/notifications/page.tsx')
+  assert.match(page, /notification\.type === 'invoice_overdue'.*\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/)
+  assert.match(page, /dateOnly \? \{\} : \{ timeStyle: 'short' as const \}/)
 })

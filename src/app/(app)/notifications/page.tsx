@@ -26,6 +26,7 @@ export default function NotificationsPage() {
   const { locale, t } = useI18n()
   const companyId = currentCompany?.id ?? ''
   const [notifications, setNotifications] = useState<NotificationEvent[]>([])
+  const [notificationsWorkspaceId, setNotificationsWorkspaceId] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -39,11 +40,15 @@ export default function NotificationsPage() {
     setLoading(true)
     setLoadError('')
     setNotifications([])
+    setNotificationsWorkspaceId(companyId)
     try {
       const response = await fetch(`/api/notification-center?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
       const payload = await response.json().catch(() => ({})) as { notifications?: NotificationEvent[]; error?: string }
       if (!response.ok) throw new Error(payload.error === 'migration_required' ? 'migrationRequired' : 'loadError')
-      if (request === requestId.current) setNotifications(payload.notifications ?? [])
+      if (request === requestId.current) {
+        setNotifications(payload.notifications ?? [])
+        setNotificationsWorkspaceId(companyId)
+      }
     } catch (error) {
       if (request === requestId.current) setLoadError(error instanceof Error && error.message === 'migrationRequired' ? 'migrationRequired' : 'loadError')
     } finally {
@@ -55,10 +60,15 @@ export default function NotificationsPage() {
     if (companyId) void load()
   }, [companyId, load])
 
-  const unreadCount = useMemo(() => notifications.filter((notification) => !notification.read).length, [notifications])
+  const scopedNotifications = useMemo(
+    () => notificationsWorkspaceId === companyId ? notifications : [],
+    [companyId, notifications, notificationsWorkspaceId]
+  )
+  const workspaceDataLoading = companyLoading || (Boolean(companyId) && notificationsWorkspaceId !== companyId)
+  const unreadCount = useMemo(() => scopedNotifications.filter((notification) => !notification.read).length, [scopedNotifications])
   const visibleNotifications = useMemo(
-    () => filter === 'unread' ? notifications.filter((notification) => !notification.read) : notifications,
-    [filter, notifications]
+    () => filter === 'unread' ? scopedNotifications.filter((notification) => !notification.read) : scopedNotifications,
+    [filter, scopedNotifications]
   )
 
   const updateReadState = async (action: 'read' | 'unread' | 'read_all', notificationId?: string) => {
@@ -81,7 +91,7 @@ export default function NotificationsPage() {
     }
   }
 
-  if (companyLoading) return <PageContainer><PageHeader title={getNotificationCenterText(locale, 'title')} /><LoadingSkeleton /></PageContainer>
+  if (workspaceDataLoading) return <PageContainer><PageHeader title={getNotificationCenterText(locale, 'title')} /><LoadingSkeleton /></PageContainer>
   if (!currentCompany) return <PageContainer>
     <PageHeader title={getNotificationCenterText(locale, 'title')} />
     <p className="rounded-md border border-slate-200 p-5 text-sm text-slate-600">{t('common.noWorkspaceSelected')}</p>
@@ -128,7 +138,17 @@ export default function NotificationsPage() {
             const Icon = notificationIcons[notification.type]
             const message = getNotificationCenterText(locale, notification.messageKey, notification.label)
             const title = getNotificationCenterText(locale, notification.titleKey)
-            const formattedDate = new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(notification.timestamp))
+            const dateOnly = notification.type === 'invoice_overdue' && /^\d{4}-\d{2}-\d{2}$/.test(notification.timestamp)
+            const date = dateOnly
+              ? (() => {
+                const [year, month, day] = notification.timestamp.split('-').map(Number)
+                return new Date(year, month - 1, day)
+              })()
+              : new Date(notification.timestamp)
+            const formattedDate = new Intl.DateTimeFormat(getIntlLocale(locale), {
+              dateStyle: 'medium',
+              ...(dateOnly ? {} : { timeStyle: 'short' as const }),
+            }).format(date)
             return (
               <li key={notification.id} className={`flex min-w-0 items-start gap-3 p-4 ${notification.read ? '' : 'bg-blue-50/60'}`}>
                 <span className={`mt-0.5 rounded-full p-2 ${notification.read ? 'bg-slate-100 text-slate-600' : 'bg-blue-100 text-blue-700'}`}><Icon className="h-4 w-4" /></span>

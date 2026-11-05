@@ -65,7 +65,7 @@ async function loadEvents(admin: ReturnType<typeof createSupabaseAdminClient>, c
       .order('id')
       .range(from, to)),
     readAllPages((from, to) => admin.from('product_syncs')
-      .select('product_id, updated_at')
+      .select('product_id, updated_at, last_synced_at')
       .eq('company_id', companyId)
       .eq('channel', 'woocommerce')
       .eq('sync_status', 'failed')
@@ -73,14 +73,14 @@ async function loadEvents(admin: ReturnType<typeof createSupabaseAdminClient>, c
       .order('product_id')
       .range(from, to)),
     readAllPages((from, to) => admin.from('mailbox_connections')
-      .select('id, provider, provider_account_email, status, updated_at')
+      .select('id, provider, provider_account_email, status, updated_at, last_error_code, last_successful_connection_at')
       .eq('company_id', companyId)
       .in('status', ['reconnect_required', 'error'])
       .order('updated_at', { ascending: false })
       .order('id')
       .range(from, to)),
     readAllPages((from, to) => admin.from('store_integrations')
-      .select('id, provider, store_name, updated_at')
+      .select('id, provider, store_name, updated_at, last_sync_at')
       .eq('company_id', companyId)
       .eq('status', 'error')
       .order('updated_at', { ascending: false })
