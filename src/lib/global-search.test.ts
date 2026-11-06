@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it } from 'node:test'
+import { fileURLToPath } from 'node:url'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { escapeGlobalSearchTerm, getGlobalQuickActions, globalSearchHref, normalizeGlobalSearchQuery } from './global-search.ts'
 
 const routeSource = readFileSync(new URL('../app/api/global-search/route.ts', import.meta.url), 'utf8')
 const componentSource = readFileSync(new URL('../components/app-search.tsx', import.meta.url), 'utf8')
 const mobileShellSource = readFileSync(new URL('../components/app-shell/mobile-drawer-client.tsx', import.meta.url), 'utf8')
+const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 
 describe('global search helpers', () => {
   it('normalizes bounded queries and rejects too-short or control-character input', () => {
@@ -69,5 +72,30 @@ describe('global search helpers', () => {
     assert.match(readFileSync(new URL('../app/(app)/income/page.tsx', import.meta.url), 'utf8'), /searchParams\.get\('create'\)/)
     assert.match(readFileSync(new URL('../app/(app)/expenses/page.tsx', import.meta.url), 'utf8'), /searchParams\.get\('create'\)/)
     assert.match(readFileSync(new URL('../app/(app)/time/page.tsx', import.meta.url), 'utf8'), /searchParams\.get\('start'\)/)
+  })
+
+  it('keeps every quick action on an existing application route', () => {
+    const destinations = [
+      ['/app/invoices?create=1', 'src/app/(app)/invoices/page.tsx'],
+      ['/app/clients/new', 'src/app/(app)/clients/new/page.tsx'],
+      ['/app/products/new', 'src/app/(app)/products/new/page.tsx'],
+      ['/app/income?create=1', 'src/app/(app)/income/page.tsx'],
+      ['/app/expenses?create=1', 'src/app/(app)/expenses/page.tsx'],
+      ['/app/time?start=1', 'src/app/(app)/time/page.tsx'],
+    ] as const
+
+    for (const [, route] of destinations) assert.ok(existsSync(resolve(repositoryRoot, route)), `missing quick action route: ${route}`)
+    for (const [href] of destinations) assert.ok(getGlobalQuickActions('personal').some((action) => action.href === href)
+      || getGlobalQuickActions('business').some((action) => action.href === href))
+  })
+
+  it('preserves launcher keyboard dismissal, focus restoration, mobile entry, and search states', () => {
+    assert.match(componentSource, /requestAnimationFrame\(\(\) => previousFocusRef\.current\?\.focus\(\)\)/)
+    assert.match(componentSource, /event\.key === 'Escape'/)
+    assert.match(componentSource, /event\.key === 'Tab'[\s\S]*?trapFocusWithin\(dialog, event\)/)
+    assert.match(mobileShellSource, /leonety:open-command/)
+    assert.match(componentSource, /role="status"[\s\S]*?t\('search\.loading'\)/)
+    assert.match(componentSource, /role="alert"[\s\S]*?t\('search\.failed'\)/)
+    assert.match(componentSource, /t\('search\.noResults'\)/)
   })
 })
