@@ -1359,8 +1359,8 @@ function ContractDocumentContent({
       </section>
       {document.closing && <p className="mt-8 whitespace-pre-wrap leading-7">{document.closing}</p>}
       <section className="mt-12 grid grid-cols-2 gap-10 text-sm">
-        <SignatureBlock title={t('contracts.partyA')} t={t} />
-        <SignatureBlock title={t('contracts.partyB')} t={t} />
+        <SignatureBlock title={t('contracts.serviceProvider')} t={t} />
+        <SignatureBlock title={t('contracts.clientCustomer')} t={t} />
       </section>
       <footer className="mt-10 border-t pt-4 text-xs text-slate-600">
         {legalNotice}
@@ -1369,11 +1369,15 @@ function ContractDocumentContent({
   )
 }
 
-function PartyPrint({ party }: { party: ContractPartySnapshot }) {
+function PrintableContract(props: ComponentProps<typeof ContractDocumentContent>) {
+  return <div className="print-area"><ContractDocumentContent {...props} /></div>
+}
+
+function PartyPrint({ party, labels, formatCountry }: { party: ContractPartySnapshot; labels: Parameters<typeof getContractPartyLines>[1]; formatCountry: (value: string) => string }) {
   return (
     <div className="space-y-1">
-      {[party.company, party.name, party.representative, party.address, party.email, party.phone, party.taxId].filter(Boolean).map((line) => (
-        <p key={line}>{line}</p>
+      {getContractPartyLines({ ...party, country: formatCountry(party.country) }, labels).map(({ label, value }) => (
+        <p key={`${label}-${value}`} className="break-words"><span className="font-medium">{label}:</span> {value}</p>
       ))}
     </div>
   )
