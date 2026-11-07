@@ -762,31 +762,79 @@ html {
 
   .print-area.print-invoice .invoice-print-header {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    gap: 16px !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 24px !important;
     align-items: start !important;
-    margin-bottom: 18px !important;
+    margin-bottom: 20px !important;
   }
 
   .print-area.print-invoice .invoice-print-brand {
     display: grid !important;
-    grid-template-columns: 52px minmax(0, 1fr) !important;
-    gap: 12px !important;
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    gap: 10px !important;
     align-items: start !important;
+    text-align: right !important;
+  }
+
+  .print-area.print-invoice .invoice-print-client {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .print-area.print-invoice .invoice-print-document {
+    display: flex !important;
+    min-height: 273mm !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
   }
 
   .print-area.print-invoice .invoice-print-meta {
-    text-align: right !important;
-    white-space: nowrap !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: baseline !important;
+    gap: 8px 20px !important;
+    margin: 0 0 14px !important;
+    padding: 8px 0 !important;
+    border-top: 1px solid #cbd5e1 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
   }
 
-  .print-area.print-invoice .invoice-print-client,
+  .print-area.print-invoice .invoice-print-meta > :first-child {
+    margin-right: auto !important;
+    font-weight: 700 !important;
+  }
+
   .print-area.print-invoice .invoice-print-payment {
     border: 1px solid #cbd5e1 !important;
     border-radius: 0 !important;
     padding: 12px !important;
     margin: 0 0 14px 0 !important;
     background: #fff !important;
+  }
+
+  .print-area.print-invoice .invoice-print-footer {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) !important;
+    gap: 16px !important;
+    align-items: end !important;
+    margin-top: auto !important;
+    padding-top: 8px !important;
+    border-top: 1px solid #94a3b8 !important;
+    font-size: 8px !important;
+    line-height: 1.35 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-area.print-invoice .invoice-print-footer p {
+    margin: 0 0 2px !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .print-area.print-invoice .invoice-print-footer-legal {
+    text-align: right !important;
   }
 
   .print-area.print-invoice table {

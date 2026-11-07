@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
+import { accountingUxDictionaries } from './accounting-ux-i18n.ts'
+// @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot } from './invoice-document.ts'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { invoiceSnapshotDictionaries } from './invoice-snapshot-i18n.ts'
@@ -69,7 +71,7 @@ test('single and batch print use one Standard renderer and retain Standard CSS h
 
   assert.equal((page.match(/<StandardInvoiceRenderer/g) ?? []).length, 2)
   assert.doesNotMatch(page, /invoice-print-header/)
-  for (const className of ['invoice-print-header', 'invoice-print-brand', 'invoice-print-client', 'invoice-print-table', 'invoice-print-totals', 'invoice-print-payment']) {
+  for (const className of ['invoice-print-header', 'invoice-print-brand', 'invoice-print-client', 'invoice-print-table', 'invoice-print-totals', 'invoice-print-payment', 'invoice-print-footer']) {
     assert.match(renderer, new RegExp(className))
   }
   assert.doesNotMatch(renderer, /calculateItems|quantity\s*\*\s*unitPrice/)
@@ -77,9 +79,12 @@ test('single and batch print use one Standard renderer and retain Standard CSS h
 })
 
 test('invoice renderer prints available seller legal details without changing totals or inventing buyer VAT data', async () => {
-  const renderer = await readFile(new URL('components/invoices/standard-invoice-renderer.tsx', root), 'utf8')
-  const modelSource = await readFile(new URL('./invoice-document.ts', import.meta.url), 'utf8')
-  const page = await readFile(new URL('app/(app)/invoices/page.tsx', root), 'utf8')
+  const [renderer, modelSource, page, styles] = await Promise.all([
+    readFile(new URL('components/invoices/standard-invoice-renderer.tsx', root), 'utf8'),
+    readFile(new URL('./invoice-document.ts', import.meta.url), 'utf8'),
+    readFile(new URL('app/(app)/invoices/page.tsx', root), 'utf8'),
+    readFile(new URL('app/globals.css', root), 'utf8'),
+  ])
 
   for (const field of ['vatId', 'representative', 'commercialRegister', 'registerCourt', 'registrationNumber', 'professionalRegulatoryInfo', 'additionalLegalText', 'iban', 'bic']) {
     assert.match(renderer, new RegExp(`model\\.seller\\.${field}`))
@@ -88,8 +93,14 @@ test('invoice renderer prints available seller legal details without changing to
   assert.doesNotMatch(renderer, /model\.buyer\.vatId/)
   assert.match(renderer, /model\.seller\.address && <p/)
   assert.match(renderer, /model\.seller\.vatId && <p/)
-  assert.match(renderer, /model\.seller\.iban && <p/)
+  assert.match(renderer, /model\.seller\.iban && <p><strong>IBAN:/)
+  assert.match(renderer, /invoice-print-client[\s\S]*invoice-print-brand/)
+  assert.match(renderer, /invoice-print-totals[\s\S]*invoice-print-footer/)
+  assert.match(renderer, /model\.items\.map[\s\S]*item\.description/)
+  assert.doesNotMatch(renderer, /repeatBankDetails[\s\S]*IBAN/)
   assert.doesNotMatch(renderer, /showDetails && model\.seller\.(?:address|taxNumber|vatId|iban|bic)/)
+  assert.match(styles, /\.invoice-print-document\s*\{[\s\S]*?min-height:\s*273mm/)
+  assert.match(styles, /\.invoice-print-footer\s*\{[\s\S]*?margin-top:\s*auto/)
   assert.match(page, /\.from\('companies'\)[\s\S]*?\.eq\('id', companyId\)/)
   assert.match(modelSource, /These are canonical persisted invoice values\. Renderers must never recalculate them\./)
 })
@@ -114,5 +125,6 @@ test('invoice snapshots are captured only on initial issue or draft finalization
 test('legacy invoice snapshot warning is translated in all seven supported locales', () => {
   for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
     assert.ok(invoiceSnapshotDictionaries[locale]['invoices.legacySnapshotWarning'])
+    assert.ok(accountingUxDictionaries[locale]['invoices.documentTitle'])
   }
 })

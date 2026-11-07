@@ -101,3 +101,17 @@ export const accountingUxDictionaries: Record<Locale, Dictionary> = {
     'clients.lifecycleActive': 'Actif', 'clients.lifecyclePotential': 'Potentiel', 'clients.lifecycleInactive': 'Inactif', 'clients.validation.companyRequired': 'Le nom de l’entreprise est requis.', 'clients.crm.contactPersonOptional': 'Personne de contact (facultatif)',
   },
 }
+
+const invoiceDocumentTitles: Record<Locale, string> = {
+  en: 'Invoice',
+  de: 'Rechnung',
+  ru: 'Счёт',
+  tr: 'Fatura',
+  uk: 'Рахунок',
+  pl: 'Faktura',
+  fr: 'Facture',
+}
+
+for (const locale of Object.keys(invoiceDocumentTitles) as Locale[]) {
+  accountingUxDictionaries[locale]['invoices.documentTitle'] = invoiceDocumentTitles[locale]
+}
