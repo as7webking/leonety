@@ -151,10 +151,18 @@ function sanitizeParty(value: unknown) {
   return {
     name: text(party.name),
     company: text(party.company),
+    legalForm: text(party.legalForm),
     address: text(party.address),
+    street: text(party.street),
+    houseNumber: text(party.houseNumber),
+    postalCode: text(party.postalCode),
+    city: text(party.city),
+    region: text(party.region),
     email: text(party.email),
     phone: text(party.phone),
     representative: text(party.representative),
+    professionalRegulatoryInfo: text(party.professionalRegulatoryInfo),
+    additionalLegalText: text(party.additionalLegalText),
     country: text(party.country),
   }
 }

@@ -42,6 +42,8 @@ function buildContractPrompt(input: ContractGenerationInput) {
       'Write the entire contract in the requested language.',
       'Use clear numbered clauses.',
       'Do not invent missing company facts, tax IDs, addresses, prices, dates or legal citations.',
+      'Party identity and legal particulars are rendered separately from structured Leonety snapshots. Do not create or describe party identities, addresses, representatives or identifiers in clauses.',
+      'Do not merge a tax number with a VAT ID or invent tax/registration identifiers.',
       'Use [TO BE COMPLETED] where important information is missing.',
       'Do not present the draft as legal advice.',
       'Do not include signatures that pretend to be already signed.',
@@ -59,8 +61,6 @@ function buildContractPrompt(input: ContractGenerationInput) {
     userInput: {
       title: sanitizeText(input.title, 240),
       jurisdiction: sanitizeText(input.jurisdiction, 240),
-      partyA: input.partyA,
-      partyB: input.partyB,
       terms: input.terms,
     },
   })

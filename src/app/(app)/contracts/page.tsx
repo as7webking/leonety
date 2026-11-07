@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -18,20 +18,22 @@ import {
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { CountrySelector } from '@/components/country-selector'
+import { formatCountryValue } from '@/lib/countries'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
-import { formatCountryValue } from '@/lib/countries'
-import type { Locale } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase-client'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useLocalDraft } from '@/hooks/use-local-draft'
 import {
   contractLanguages,
+  contractPartyFields,
   contractStatuses,
   contractTemplates,
   createContractReference,
+  createClientPartySnapshot,
+  createCompanyPartySnapshot,
   createEmptyDocument,
   emptyContractTerms,
   emptyPartySnapshot,
@@ -39,6 +41,10 @@ import {
   getLanguageName,
   isContractLanguage,
   isContractStatus,
+  getContractPartyLines,
+  normalizeContractPartySnapshot,
+  refreshClientPartySnapshot,
+  refreshCompanyPartySnapshot,
   type ContractClause,
   type ContractLanguage,
   type ContractPartySnapshot,
@@ -60,6 +66,24 @@ interface ClientOption {
   city?: string | null
   country?: string | null
   tax_number?: string | null
+}
+
+interface CompanyLegalDetails {
+  legal_name: string | null
+  legal_representative: string | null
+  legal_street: string | null
+  legal_house_number: string | null
+  legal_postal_code: string | null
+  legal_city: string | null
+  legal_country_code: string | null
+  legal_email: string | null
+  legal_phone: string | null
+  vat_id: string | null
+  commercial_register: string | null
+  register_court: string | null
+  registration_number: string | null
+  professional_regulatory_info: string | null
+  additional_legal_text: string | null
 }
 
 interface ContractRow {
@@ -115,11 +139,7 @@ function normalizeDocument(value: unknown, fallbackTitle: string): GeneratedCont
 }
 
 function normalizeParty(value: unknown): ContractPartySnapshot {
-  const record = value && typeof value === 'object' ? value as Partial<ContractPartySnapshot> : {}
-  return {
-    ...emptyPartySnapshot,
-    ...record,
-  }
+  return normalizeContractPartySnapshot(value)
 }
 
 function normalizeTerms(value: unknown): ContractTerms {
@@ -128,14 +148,6 @@ function normalizeTerms(value: unknown): ContractTerms {
     ...emptyContractTerms,
     ...record,
   }
-}
-
-function formatClientAddress(client: ClientOption, locale: Locale) {
-  return [
-    [client.street, client.house_number].filter(Boolean).join(' '),
-    [client.postal_code, client.city].filter(Boolean).join(' '),
-    formatCountryValue(client.country, locale),
-  ].filter(Boolean).join(', ')
 }
 
 function createClause() {
@@ -181,6 +193,9 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   const [contracts, setContracts] = useState<ContractRow[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [clientsWorkspaceId, setClientsWorkspaceId] = useState<string | null>(null)
+  const [companyLegal, setCompanyLegal] = useState<CompanyLegalDetails | null>(null)
+  const [legalWorkspaceId, setLegalWorkspaceId] = useState<string | null>(null)
+  const [legalLoadFailed, setLegalLoadFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -198,11 +213,14 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   const [templateId, setTemplateId] = useState<ContractTemplateId>('general_service')
   const [contractLanguage, setContractLanguage] = useState<ContractLanguage>(isContractLanguage(locale) ? locale : 'en')
   const [title, setTitle] = useState('')
+  const [reference, setReference] = useState(() => createContractReference())
   const [status, setStatus] = useState<ContractStatus>('draft')
   const [partyA, setPartyA] = useState<ContractPartySnapshot>(emptyPartySnapshot)
   const [partyB, setPartyB] = useState<ContractPartySnapshot>(emptyPartySnapshot)
   const [terms, setTerms] = useState<ContractTerms>(emptyContractTerms)
   const [document, setDocument] = useState<GeneratedContractDocument>(createEmptyDocument())
+  const [viewingContract, setViewingContract] = useState<ContractRow | null>(null)
+  const [refreshProposal, setRefreshProposal] = useState<{ partyA: ContractPartySnapshot; partyB: ContractPartySnapshot; linkedClientId?: string } | null>(null)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const restoredDraftKeyRef = useRef<string | null>(null)
   const editorWorkspaceRef = useRef<string | null>(null)
@@ -265,6 +283,30 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   }, [loadData])
 
   useEffect(() => {
+    const companyId = currentCompany?.id
+    setCompanyLegal(null)
+    setLegalWorkspaceId(null)
+    setLegalLoadFailed(false)
+    if (!companyId) return
+
+    const controller = new AbortController()
+    void fetch(`/api/workspaces/legal?companyId=${encodeURIComponent(companyId)}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    }).then(async (response) => {
+      const payload = await response.json().catch(() => ({})) as { legal?: CompanyLegalDetails }
+      if (!response.ok || !payload.legal) throw new Error('legal_load_failed')
+      setCompanyLegal(payload.legal)
+      setLegalWorkspaceId(companyId)
+    }).catch((loadError) => {
+      if (loadError instanceof Error && loadError.name === 'AbortError') return
+      setLegalLoadFailed(true)
+      setLegalWorkspaceId(companyId)
+    })
+    return () => controller.abort()
+  }, [currentCompany?.id])
+
+  useEffect(() => {
     if (pageMode === 'create') {
       setEditorVisible(true)
     }
@@ -283,8 +325,24 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     setPartyB(emptyPartySnapshot)
     setTerms({ ...emptyContractTerms, currency: currentCompany?.currency ?? 'EUR' })
     setDocument(createEmptyDocument())
+    setViewingContract(null)
+    setRefreshProposal(null)
     setEditorVisible(pageMode === 'create')
   }, [currentCompany, pageMode])
+
+  useEffect(() => {
+    if (!currentCompany || legalWorkspaceId !== currentCompany.id || editingId || viewingContract || !editorVisible) return
+    const profileParty = createCompanyPartySnapshot(companyLegal ?? {}, currentCompany.name)
+    setPartyA((current) => {
+      const next = { ...current }
+      for (const [key, value] of Object.entries(profileParty)) {
+        const field = key as keyof ContractPartySnapshot
+        const isGenericWorkspaceName = (field === 'name' || field === 'company') && current[field] === currentCompany.name
+        if (!current[field] || isGenericWorkspaceName) next[field] = value
+      }
+      return next
+    })
+  }, [companyLegal, currentCompany, editingId, editorVisible, legalWorkspaceId, viewingContract])
 
   useEffect(() => {
     if (pageMode !== 'create' || !contractDraft || contractDraft.workspaceId !== currentCompany?.id || restoredDraftKeyRef.current === contractDraft.key) return
@@ -376,11 +434,14 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     setTemplateId('general_service')
     setContractLanguage(isContractLanguage(locale) ? locale : 'en')
     setTitle('')
+    setReference(createContractReference())
     setStatus('draft')
     setPartyA(currentCompany ? { ...emptyPartySnapshot, name: currentCompany.name, company: currentCompany.name } : emptyPartySnapshot)
     setPartyB(emptyPartySnapshot)
     setTerms({ ...emptyContractTerms, currency: currentCompany?.currency ?? 'EUR' })
     setDocument(createEmptyDocument())
+    setViewingContract(null)
+    setRefreshProposal(null)
   }
 
   function startCreate() {
@@ -392,22 +453,44 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   }
 
   function fillPartyBFromClient(client: ClientOption) {
-    setPartyB({
+    setPartyB(createClientPartySnapshot({
       name: client.name,
-      company: client.client_company ?? '',
-      address: formatClientAddress(client, locale),
-      email: client.email ?? '',
-      phone: client.phone ?? '',
-      taxId: client.tax_number ?? '',
-      representative: '',
-      country: client.country ?? '',
-    })
+      company: client.client_company,
+      street: client.street,
+      houseNumber: client.house_number,
+      postalCode: client.postal_code,
+      city: client.city,
+      country: client.country,
+      email: client.email,
+      phone: client.phone,
+      taxNumber: client.tax_number,
+    }))
   }
 
   function handleClientChange(nextClientId: string) {
-    setClientId(nextClientId)
     const client = clients.find((item) => item.id === nextClientId)
-    if (client) fillPartyBFromClient(client)
+    if (client && editingId) {
+      const proposal = createClientPartySnapshot({
+        name: client.name,
+        company: client.client_company,
+        street: client.street,
+        houseNumber: client.house_number,
+        postalCode: client.postal_code,
+        city: client.city,
+        country: client.country,
+        email: client.email,
+        phone: client.phone,
+        taxNumber: client.tax_number,
+      })
+      setRefreshProposal({ partyA, partyB: proposal, linkedClientId: nextClientId })
+    } else if (editingId) {
+      setRefreshProposal({ partyA, partyB: emptyPartySnapshot, linkedClientId: '' })
+    } else if (client) {
+      setClientId(nextClientId)
+      fillPartyBFromClient(client)
+    } else {
+      setClientId(nextClientId)
+    }
   }
 
   const editContract = useCallback((contract: ContractRow) => {
@@ -415,12 +498,21 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
       setError(t('offline.requiresConnection'))
       return
     }
+    if (contract.status === 'finalized') {
+      setViewingContract(contract)
+      setEditorVisible(false)
+      setRefreshProposal(null)
+      return
+    }
+    setViewingContract(null)
+    setRefreshProposal(null)
     setEditingId(contract.id)
     setEditorVisible(true)
     setClientId(contract.client_id ?? '')
     setTemplateId(contract.template_type)
     setContractLanguage(contract.language)
     setTitle(contract.title)
+    setReference(contract.reference)
     setStatus(contract.status)
     setPartyA(contract.party_a_snapshot)
     setPartyB(contract.party_b_snapshot)
@@ -454,11 +546,14 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
       return
     }
     setEditingId(null)
+    setViewingContract(null)
+    setRefreshProposal(null)
     setEditorVisible(true)
     setClientId(contract.client_id ?? '')
     setTemplateId(contract.template_type)
     setContractLanguage(contract.language)
     setTitle(`${contract.title} ${t('common.copy')}`)
+    setReference(createContractReference())
     setStatus('draft')
     setPartyA(contract.party_a_snapshot)
     setPartyB(contract.party_b_snapshot)
@@ -470,6 +565,60 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     setMessage(t('contracts.duplicateReady'))
     setError('')
     window.requestAnimationFrame(() => editorRef.current?.focus())
+  }
+
+  function createNewVersion(contract: ContractRow) {
+    if (!isOnline) {
+      setError(t('offline.requiresConnection'))
+      return
+    }
+    setViewingContract(null)
+    setRefreshProposal(null)
+    setEditingId(null)
+    setEditorVisible(true)
+    setClientId(contract.client_id ?? '')
+    setTemplateId(contract.template_type)
+    setContractLanguage(contract.language)
+    setTitle(`${contract.title} ${t('contracts.versionDraftSuffix')}`.trim())
+    setReference(createContractReference())
+    setStatus('draft')
+    setPartyA(contract.party_a_snapshot)
+    setPartyB(contract.party_b_snapshot)
+    setTerms(contract.terms_snapshot)
+    setDocument({ ...contract.generated_document, title: `${contract.generated_document.title || contract.title} ${t('contracts.versionDraftSuffix')}`.trim() })
+    setMessage(t('contracts.versionDraftReady'))
+    setError('')
+    window.requestAnimationFrame(() => editorRef.current?.focus())
+  }
+
+  function proposePartyRefresh() {
+    if (!companyLegal || !currentCompany) return
+    const nextPartyA = refreshCompanyPartySnapshot(partyA, createCompanyPartySnapshot(companyLegal, currentCompany.name))
+    const linkedClient = clients.find((item) => item.id === (refreshProposal?.linkedClientId ?? clientId))
+    const nextPartyB = linkedClient
+      ? refreshClientPartySnapshot(partyB, createClientPartySnapshot({
+          name: linkedClient.name,
+          company: linkedClient.client_company,
+          street: linkedClient.street,
+          houseNumber: linkedClient.house_number,
+          postalCode: linkedClient.postal_code,
+          city: linkedClient.city,
+          country: linkedClient.country,
+          email: linkedClient.email,
+          phone: linkedClient.phone,
+          taxNumber: linkedClient.tax_number,
+        }))
+      : partyB
+    setRefreshProposal({ partyA: nextPartyA, partyB: nextPartyB })
+  }
+
+  function applyPartyRefresh() {
+    if (!refreshProposal) return
+    setPartyA(refreshProposal.partyA)
+    setPartyB(refreshProposal.partyB)
+    if (refreshProposal.linkedClientId !== undefined) setClientId(refreshProposal.linkedClientId)
+    setRefreshProposal(null)
+    setMessage(t('contracts.partyDetailsRefreshed'))
   }
 
   function updateClause(clauseId: string, patch: Partial<ContractClause>) {
@@ -571,6 +720,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
 
   async function handleSave(nextStatus: ContractStatus = status) {
     if (!currentCompany || saving) return
+    if (editingId && contracts.some((contract) => contract.id === editingId && contract.status === 'finalized')) {
+      setError(t('contracts.finalizedReadOnly'))
+      return
+    }
     if (!title.trim()) {
       setError(t('contracts.titleRequired'))
       return
@@ -601,7 +754,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
     const payload = {
       company_id: currentCompany.id,
       client_id: clientId || null,
-      reference: editingId ? undefined : createContractReference(),
+      reference: editingId ? undefined : reference,
       template_type: templateId,
       language: contractLanguage,
       title: title.trim(),
@@ -626,7 +779,12 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
       const saved = parseContractRow(data as Record<string, unknown>)
       setContracts((current) => [saved, ...current.filter((contract) => contract.id !== saved.id)])
       setEditingId(saved.id)
+      setReference(saved.reference)
       setStatus(saved.status)
+      if (saved.status === 'finalized') {
+        setViewingContract(saved)
+        setEditorVisible(false)
+      }
 
       await supabase.from('contract_versions').insert({
         contract_id: saved.id,
@@ -677,6 +835,38 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   function printContract() {
     window.print()
   }
+
+  const partyLabels = {
+    name: t('contracts.party.name'),
+    company: t('contracts.party.company'),
+    legalForm: t('contracts.party.legalForm'),
+    representative: t('contracts.party.representative'),
+    street: t('contracts.party.street'),
+    houseNumber: t('contracts.party.houseNumber'),
+    postalCode: t('contracts.party.postalCode'),
+    city: t('contracts.party.city'),
+    region: t('contracts.party.region'),
+    address: t('contracts.party.address'),
+    country: t('contracts.party.country'),
+    email: t('contracts.party.email'),
+    phone: t('contracts.party.phone'),
+    taxNumber: t('contracts.party.taxNumber'),
+    vatId: t('contracts.party.vatId'),
+    commercialRegister: t('contracts.party.commercialRegister'),
+    registerCourt: t('contracts.party.registerCourt'),
+    registrationNumber: t('contracts.party.registrationNumber'),
+    professionalRegulatoryInfo: t('contracts.party.professionalRegulatoryInfo'),
+    additionalLegalText: t('contracts.party.additionalLegalText'),
+    legacyTaxId: t('contracts.party.legacyTaxId'),
+  }
+  const displayedContract = viewingContract
+  const displayedReference = displayedContract?.reference ?? reference
+  const displayedTitle = displayedContract
+    ? displayedContract.generated_document.title || displayedContract.title
+    : document.title || title
+  const displayedPartyA = displayedContract?.party_a_snapshot ?? partyA
+  const displayedPartyB = displayedContract?.party_b_snapshot ?? partyB
+  const displayedDocument = displayedContract?.generated_document ?? document
 
   if (companyLoading || loading) {
     return <PageContainer><PageHeader title={t('contracts.title')} /><LoadingSkeleton /></PageContainer>
@@ -777,7 +967,10 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => editContract(contract)}>
+                      <Button size="sm" variant="outline" onClick={() => { setViewingContract(contract); setEditorVisible(false); setRefreshProposal(null) }}>
+                        {t('contracts.view')}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => contract.status === 'finalized' ? createNewVersion(contract) : editContract(contract)}>
                         {contract.status === 'finalized' ? t('contracts.newVersion') : t('common.edit')}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => duplicateContract(contract)}>
@@ -790,7 +983,12 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
                           {t('contracts.createInvoice')}
                         </Button>
                       </Link>
-                      <Button size="sm" variant="outline" onClick={printContract}>
+                      <Button size="sm" variant="outline" onClick={() => {
+                        setViewingContract(contract)
+                        setEditorVisible(false)
+                        setRefreshProposal(null)
+                        window.requestAnimationFrame(() => window.print())
+                      }}>
                         <Printer className="h-4 w-4" />
                         {t('common.print')}
                       </Button>
@@ -806,7 +1004,36 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
           </Card>
           )}
 
-          {(pageMode === 'create' || editorVisible) && (
+          {viewingContract && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl">{viewingContract.title}</CardTitle>
+                <CardDescription>{viewingContract.reference} · {t(`contracts.status.${viewingContract.status}`)}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {viewingContract.status === 'finalized' && <Button type="button" variant="outline" onClick={() => createNewVersion(viewingContract)}>{t('contracts.newVersion')}</Button>}
+                  {viewingContract.status === 'draft' && <Button type="button" variant="outline" onClick={() => editContract(viewingContract)}>{t('common.edit')}</Button>}
+                  <Button type="button" variant="outline" onClick={printContract}><Printer className="h-4 w-4" />{t('contracts.exportPdf')}</Button>
+                  <Button type="button" variant="ghost" onClick={() => setViewingContract(null)}>{t('contracts.closePreview')}</Button>
+                </div>
+                <ContractDocumentContent
+                  reference={viewingContract.reference}
+                  title={viewingContract.generated_document.title || viewingContract.title}
+                  partyA={viewingContract.party_a_snapshot}
+                  partyB={viewingContract.party_b_snapshot}
+                  terms={viewingContract.terms_snapshot}
+                  document={viewingContract.generated_document}
+                  legalNotice={t('contracts.legalNotice')}
+                  labels={partyLabels}
+                  formatCountry={(value) => formatCountryValue(value, locale)}
+                  t={t}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {!viewingContract && (pageMode === 'create' || editorVisible) && (
           <Card ref={editorRef} tabIndex={-1} className="outline-none">
             <CardHeader>
               <CardTitle className="text-xl">{editingId ? t('contracts.edit') : t('contracts.create')}</CardTitle>
@@ -847,7 +1074,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('contracts.client')}</span>
                   <AppSelect
-                    value={clientId}
+                    value={refreshProposal?.linkedClientId ?? clientId}
                     onChange={handleClientChange}
                     options={[{ value: '', label: t('contracts.manualParty') }, ...clients.map((client) => ({ value: client.id, label: client.name }))]}
                   />
@@ -868,9 +1095,37 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
               </div>
 
               <section className="grid gap-4 lg:grid-cols-2">
-                <PartyEditor title={t('contracts.partyA')} party={partyA} onChange={setPartyA} t={t} />
-                <PartyEditor title={t('contracts.partyB')} party={partyB} onChange={setPartyB} t={t} />
+                <PartyEditor title={t('contracts.serviceProvider')} party={partyA} onChange={setPartyA} t={t} />
+                <PartyEditor title={t('contracts.clientCustomer')} party={partyB} onChange={setPartyB} t={t} />
               </section>
+
+              {legalLoadFailed && <p role="status" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('contracts.partySourceUnavailable')}</p>}
+
+              {editingId && status === 'draft' && (
+                <section className="space-y-3 rounded-md border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-slate-600">{t('contracts.refreshPartyDetailsDescription')}</p>
+                    <Button type="button" size="sm" variant="outline" onClick={proposePartyRefresh} disabled={!companyLegal || legalLoadFailed}>{t('contracts.refreshPartyDetails')}</Button>
+                  </div>
+                  {refreshProposal && (
+                    <div className="space-y-3" aria-live="polite">
+                      <h4 className="font-medium">{t('contracts.refreshPartyDetailsReview')}</h4>
+                      {([['partyA', partyA, refreshProposal.partyA], ['partyB', partyB, refreshProposal.partyB]] as const).map(([key, current, next]) => {
+                        const changed = contractPartyFields.filter((field) => current[field] !== next[field])
+                        if (changed.length === 0) return null
+                        return <div key={key} className="space-y-2 text-sm">
+                          <strong>{key === 'partyA' ? t('contracts.serviceProvider') : t('contracts.clientCustomer')}</strong>
+                          {changed.map((field) => <p key={field} className="break-words"><span className="font-medium">{t(`contracts.party.${field}`)}:</span> {current[field] || t('contracts.valueEmpty')} → {next[field] || t('contracts.valueEmpty')}</p>)}
+                        </div>
+                      })}
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" onClick={applyPartyRefresh}>{t('contracts.applyPartyRefresh')}</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setRefreshProposal(null)}>{t('common.cancel')}</Button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
 
               <section>
                 <h3 className="mb-3 text-lg font-semibold">{t('contracts.terms')}</h3>
@@ -959,6 +1214,22 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
                 </label>
               </section>
 
+              <section className="space-y-3">
+                <h3 className="text-lg font-semibold">{t('contracts.preview')}</h3>
+                <ContractDocumentContent
+                  reference={editingId ? contracts.find((contract) => contract.id === editingId)?.reference ?? reference : reference}
+                  title={document.title || title}
+                  partyA={partyA}
+                  partyB={partyB}
+                  terms={terms}
+                  document={document}
+                  legalNotice={t('contracts.legalNotice')}
+                  labels={partyLabels}
+                  formatCountry={(value) => formatCountryValue(value, locale)}
+                  t={t}
+                />
+              </section>
+
               <div className="sticky bottom-0 -mx-6 flex flex-wrap items-center justify-end gap-2 border-t bg-white/95 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
                 <Button type="button" variant="outline" onClick={printContract}>
                   <Printer className="h-4 w-4" />
@@ -979,12 +1250,15 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
       </div>
 
       <PrintableContract
-        reference={editingId ? contracts.find((contract) => contract.id === editingId)?.reference ?? createContractReference() : createContractReference()}
-        title={document.title || title}
-        partyA={partyA}
-        partyB={partyB}
-        document={document}
+        reference={displayedReference}
+        title={displayedTitle}
+        partyA={displayedPartyA}
+        partyB={displayedPartyB}
+        terms={displayedContract?.terms_snapshot ?? terms}
+        document={displayedDocument}
         legalNotice={t('contracts.legalNotice')}
+        labels={partyLabels}
+        formatCountry={(value) => formatCountryValue(value, locale)}
         t={t}
       />
     </PageContainer>
@@ -1007,59 +1281,72 @@ function PartyEditor({
   t: (key: string) => string
 }) {
   const update = (key: keyof ContractPartySnapshot, value: string) => onChange({ ...party, [key]: value })
+  const fields: Array<keyof ContractPartySnapshot> = [...contractPartyFields.filter((field) => field !== 'country'), 'taxId']
 
   return (
     <div className="rounded-md border border-slate-200 p-4">
       <h3 className="mb-3 text-lg font-semibold">{title}</h3>
       <div className="grid gap-3 sm:grid-cols-2">
-        {(['name', 'company', 'email', 'phone', 'taxId', 'representative'] as Array<keyof ContractPartySnapshot>).map((field) => (
+        {fields.map((field) => (
           <label key={field} className="space-y-1">
-            <span className="text-sm font-medium">{t(`contracts.party.${field}`)}</span>
-            <input value={party[field]} onChange={(event) => update(field, event.target.value)} className="w-full rounded-md border px-3 py-2 text-sm" />
+            <span className="text-sm font-medium">{t(field === 'taxId' ? 'contracts.party.legacyTaxId' : `contracts.party.${field}`)}</span>
+            {field === 'address' ? (
+              <textarea value={party[field]} onChange={(event) => update(field, event.target.value)} className="min-h-20 w-full rounded-md border px-3 py-2 text-sm" />
+            ) : (
+              <input value={party[field]} onChange={(event) => update(field, event.target.value)} className="w-full rounded-md border px-3 py-2 text-sm" />
+            )}
           </label>
         ))}
         <CountrySelector label={t('contracts.party.country')} value={party.country} onChange={(value) => update('country', value)} />
-        <label className="space-y-1 sm:col-span-2">
-          <span className="text-sm font-medium">{t('contracts.party.address')}</span>
-          <textarea value={party.address} onChange={(event) => update('address', event.target.value)} className="min-h-20 w-full rounded-md border px-3 py-2 text-sm" />
-        </label>
       </div>
     </div>
   )
 }
 
-function PrintableContract({
+function ContractDocumentContent({
   reference,
   title,
   partyA,
   partyB,
+  terms,
   document,
   legalNotice,
+  labels,
+  formatCountry,
   t,
 }: {
   reference: string
   title: string
   partyA: ContractPartySnapshot
   partyB: ContractPartySnapshot
+  terms: ContractTerms
   document: GeneratedContractDocument
   legalNotice: string
+  labels: Parameters<typeof getContractPartyLines>[1]
+  formatCountry: (value: string) => string
   t: (key: string) => string
 }) {
   return (
-    <article className="hidden print:block print:mx-auto print:w-[90%] print:bg-white print:text-black">
+    <article className="rounded-md border bg-white p-5 text-slate-950 sm:p-8 print:border-0 print:p-0">
       <header className="mb-8 border-b pb-4">
         <p className="text-sm uppercase tracking-wide">{reference}</p>
         <h1 className="mt-2 text-3xl font-bold">{title || document.title}</h1>
       </header>
-      <section className="mb-8 grid grid-cols-2 gap-8 text-sm">
+      <section className="mb-8 grid grid-cols-1 gap-6 text-sm sm:grid-cols-2 sm:gap-8 print:grid-cols-2 print:gap-8">
         <div>
-          <h2 className="mb-2 text-base font-semibold">{t('contracts.partyA')}</h2>
-          <PartyPrint party={partyA} />
+          <h2 className="mb-2 text-base font-semibold">{t('contracts.serviceProvider')}</h2>
+          <PartyPrint party={partyA} labels={labels} formatCountry={formatCountry} />
         </div>
         <div>
-          <h2 className="mb-2 text-base font-semibold">{t('contracts.partyB')}</h2>
-          <PartyPrint party={partyB} />
+          <h2 className="mb-2 text-base font-semibold">{t('contracts.clientCustomer')}</h2>
+          <PartyPrint party={partyB} labels={labels} formatCountry={formatCountry} />
         </div>
+      </section>
+      <section className="mb-8 space-y-2 text-sm">
+        <h2 className="text-base font-semibold">{t('contracts.terms')}</h2>
+        {Object.entries(terms).filter(([, value]) => Boolean(value.trim())).map(([key, value]) => (
+          <p key={key} className="whitespace-pre-wrap break-words"><span className="font-medium">{t(`contracts.field.${key}`)}:</span> {value}</p>
+        ))}
       </section>
       {document.introduction && <p className="mb-6 whitespace-pre-wrap leading-7">{document.introduction}</p>}
       <section className="space-y-6">

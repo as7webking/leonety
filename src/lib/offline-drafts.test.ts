@@ -87,14 +87,19 @@ test('contract drafts exclude tax identifiers and force local draft status', () 
   const contract = sanitizeOfflineDraftPayload('contract', {
     title: 'Service agreement',
     status: 'finalized',
-    partyA: { name: 'Company A', taxId: 'sensitive-a' },
-    partyB: { name: 'Company B', taxId: 'sensitive-b' },
+    partyA: { name: 'Company A', street: 'Long Street', taxId: 'sensitive-a', taxNumber: 'sensitive-tax', vatId: 'sensitive-vat' },
+    partyB: { name: 'Company B', address: 'Line 1\nLine 2', taxId: 'sensitive-b', registrationNumber: 'sensitive-registration' },
     document: { title: 'Agreement', clauses: [] },
     oauthToken: 'must-not-survive',
   })
   assert.equal(contract.status, 'draft')
   assert.equal('taxId' in (contract.partyA as Record<string, unknown>), false)
   assert.equal('taxId' in (contract.partyB as Record<string, unknown>), false)
+  assert.equal((contract.partyA as Record<string, unknown>).street, 'Long Street')
+  assert.equal((contract.partyB as Record<string, unknown>).address, 'Line 1\nLine 2')
+  assert.equal('taxNumber' in (contract.partyA as Record<string, unknown>), false)
+  assert.equal('vatId' in (contract.partyA as Record<string, unknown>), false)
+  assert.equal('registrationNumber' in (contract.partyB as Record<string, unknown>), false)
   assert.equal('oauthToken' in contract, false)
 })
 
