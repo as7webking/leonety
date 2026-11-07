@@ -31,6 +31,14 @@ export interface InvoiceDocumentModel {
     address: string
     email: string
     taxNumber: string
+    vatId?: string
+    phone?: string
+    representative?: string
+    commercialRegister?: string
+    registerCourt?: string
+    registrationNumber?: string
+    professionalRegulatoryInfo?: string
+    additionalLegalText?: string
     iban: string
     bic: string
     showDetails: boolean

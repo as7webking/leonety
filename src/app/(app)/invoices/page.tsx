@@ -107,6 +107,24 @@ interface ClientOption {
   tax_number: string | null
 }
 
+interface CompanyInvoiceLegalDetails {
+  legal_name: string | null
+  legal_representative: string | null
+  legal_street: string | null
+  legal_house_number: string | null
+  legal_postal_code: string | null
+  legal_city: string | null
+  legal_country_code: string | null
+  legal_email: string | null
+  legal_phone: string | null
+  vat_id: string | null
+  commercial_register: string | null
+  register_court: string | null
+  registration_number: string | null
+  professional_regulatory_info: string | null
+  additional_legal_text: string | null
+}
+
 interface ProductOption {
   id: string
   name: string
@@ -462,6 +480,8 @@ export default function InvoicesPage() {
   const [companyIban, setCompanyIban] = useState('')
   const [companyBic, setCompanyBic] = useState('')
   const [companyTaxNumber, setCompanyTaxNumber] = useState('')
+  const [companyLegalDetails, setCompanyLegalDetails] = useState<CompanyInvoiceLegalDetails | null>(null)
+  const [companyLegalLoaded, setCompanyLegalLoaded] = useState(false)
   const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
   const [supportsClientDetails, setSupportsClientDetails] = useState(true)
   const [clientPrintFields, setClientPrintFields] = useState<InvoiceClientPrintFields>(defaultClientPrintFields)
@@ -510,13 +530,26 @@ export default function InvoicesPage() {
 
   const buildInvoiceDocument = (invoice: InvoiceRecord, repeatBankDetails: boolean) => {
     const paymentMeta = loadInvoicePaymentMeta(invoice.id)
+    const legalAddress = [
+      [companyLegalDetails?.legal_street, companyLegalDetails?.legal_house_number].filter(Boolean).join(' '),
+      [companyLegalDetails?.legal_postal_code, companyLegalDetails?.legal_city].filter(Boolean).join(' '),
+      companyLegalDetails?.legal_country_code ? formatCountryValue(companyLegalDetails.legal_country_code, locale) : '',
+    ].filter(Boolean)
     return createInvoiceDocumentModel(invoice, {
       seller: {
-        name: currentCompany?.name ?? '',
+        name: companyLegalDetails?.legal_name?.trim() || currentCompany?.name || '',
         logo: companyLogo,
-        address: companyAddress,
-        email: companyEmail,
+        address: legalAddress.length > 0 ? legalAddress.join('\n') : companyAddress,
+        email: companyLegalDetails?.legal_email?.trim() || companyEmail,
         taxNumber: companyTaxNumber,
+        vatId: companyLegalDetails?.vat_id?.trim() ?? '',
+        phone: companyLegalDetails?.legal_phone?.trim() ?? '',
+        representative: companyLegalDetails?.legal_representative?.trim() ?? '',
+        commercialRegister: companyLegalDetails?.commercial_register?.trim() ?? '',
+        registerCourt: companyLegalDetails?.register_court?.trim() ?? '',
+        registrationNumber: companyLegalDetails?.registration_number?.trim() ?? '',
+        professionalRegulatoryInfo: companyLegalDetails?.professional_regulatory_info?.trim() ?? '',
+        additionalLegalText: companyLegalDetails?.additional_legal_text?.trim() ?? '',
         iban: companyIban,
         bic: companyBic,
         showDetails: includeCompanyAddress,
@@ -559,6 +592,30 @@ export default function InvoicesPage() {
     setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
     setClientPrintFields(loadClientPrintFields(currentCompany.id))
   }, [currentCompany])
+
+  useEffect(() => {
+    const companyId = currentCompany?.id
+    setCompanyLegalDetails(null)
+    setCompanyLegalLoaded(!companyId)
+    if (!companyId) return
+
+    let active = true
+    void supabase.from('companies')
+      .select('legal_name, legal_representative, legal_street, legal_house_number, legal_postal_code, legal_city, legal_country_code, legal_email, legal_phone, vat_id, commercial_register, register_court, registration_number, professional_regulatory_info, additional_legal_text')
+      .eq('id', companyId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          console.error('[invoice-document] company legal details unavailable', { code: error.code })
+          setCompanyLegalLoaded(true)
+          return
+        }
+        setCompanyLegalDetails(data as CompanyInvoiceLegalDetails | null)
+        setCompanyLegalLoaded(true)
+      })
+    return () => { active = false }
+  }, [currentCompany?.id, supabase])
 
   const handleIncludeCompanyAddressChange = (checked: boolean) => {
     setIncludeCompanyAddress(checked)
@@ -1233,6 +1290,10 @@ export default function InvoicesPage() {
       setErrorMessage('Create or select a workspace first.')
       return
     }
+    if (formData.status !== 'draft' && !editingInvoice?.document_snapshot && !companyLegalLoaded) {
+      setErrorMessage(t('workspaceLegal.loading'))
+      return
+    }
     if (!editingInvoice && invoiceDraftWorkspaceId !== currentCompany.id) {
       setErrorMessage(t('offline.invoice.workspaceMismatch'))
       return
@@ -1387,6 +1448,14 @@ export default function InvoicesPage() {
           address: companyAddress,
           email: companyEmail,
           taxNumber: companyTaxNumber,
+          vatId: companyLegalDetails?.vat_id?.trim() ?? '',
+          phone: companyLegalDetails?.legal_phone?.trim() ?? '',
+          representative: companyLegalDetails?.legal_representative?.trim() ?? '',
+          commercialRegister: companyLegalDetails?.commercial_register?.trim() ?? '',
+          registerCourt: companyLegalDetails?.register_court?.trim() ?? '',
+          registrationNumber: companyLegalDetails?.registration_number?.trim() ?? '',
+          professionalRegulatoryInfo: companyLegalDetails?.professional_regulatory_info?.trim() ?? '',
+          additionalLegalText: companyLegalDetails?.additional_legal_text?.trim() ?? '',
           iban: companyIban,
           bic: companyBic,
           showDetails: includeCompanyAddress,

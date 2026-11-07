@@ -33,7 +33,7 @@ test('finalized snapshots preserve seller and buyer presentation while totals re
     clients: { name: 'Old buyer', client_company: 'Old GmbH', email: 'old@example.test', phone: null, tax_number: null },
   }
   const presentation = {
-    seller: { name: 'Old seller', logo: 'old-logo', address: 'Old address', email: 'old-seller@example.test', taxNumber: 'OLD-VAT', iban: 'OLD-IBAN', bic: '', showDetails: true },
+    seller: { name: 'Old seller', logo: 'old-logo', address: 'Old address', email: 'old-seller@example.test', taxNumber: 'OLD-TAX', vatId: 'DE123456789', representative: 'Old representative', commercialRegister: 'HRB', registerCourt: 'Berlin', registrationNumber: '12345', iban: 'OLD-IBAN', bic: '', showDetails: true },
     buyerAddressLines: ['Old street', 'Old city'],
     buyerVisibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true },
     payment: { method: 'bank_transfer' as const, amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: true, repeatBankDetails: true },
@@ -45,12 +45,15 @@ test('finalized snapshots preserve seller and buyer presentation while totals re
     clients: { ...invoice.clients, name: 'New buyer', client_company: 'New GmbH', email: 'new@example.test' },
   }, {
     ...presentation,
-    seller: { ...presentation.seller, name: 'New seller', address: 'New address', taxNumber: 'NEW-VAT' },
+    seller: { ...presentation.seller, name: 'New seller', address: 'New address', taxNumber: 'NEW-TAX', vatId: 'DE987654321', registrationNumber: '99999' },
     buyerAddressLines: ['New street', 'New city'],
   })
 
   assert.equal(laterModel.seller.name, 'Old seller')
   assert.equal(laterModel.seller.address, 'Old address')
+  assert.equal(laterModel.seller.taxNumber, 'OLD-TAX')
+  assert.equal(laterModel.seller.vatId, 'DE123456789')
+  assert.equal(laterModel.seller.registrationNumber, '12345')
   assert.equal(laterModel.buyer.name, 'Old buyer')
   assert.deepEqual(laterModel.buyer.addressLines, ['Old street', 'Old city'])
   assert.equal(laterModel.templateId, 'standard')
@@ -71,6 +74,24 @@ test('single and batch print use one Standard renderer and retain Standard CSS h
   }
   assert.doesNotMatch(renderer, /calculateItems|quantity\s*\*\s*unitPrice/)
   assert.doesNotMatch(renderer, /XRechnung|ZUGFeRD|EN16931/)
+})
+
+test('invoice renderer prints available seller legal details without changing totals or inventing buyer VAT data', async () => {
+  const renderer = await readFile(new URL('components/invoices/standard-invoice-renderer.tsx', root), 'utf8')
+  const modelSource = await readFile(new URL('./invoice-document.ts', import.meta.url), 'utf8')
+  const page = await readFile(new URL('app/(app)/invoices/page.tsx', root), 'utf8')
+
+  for (const field of ['vatId', 'representative', 'commercialRegister', 'registerCourt', 'registrationNumber', 'professionalRegulatoryInfo', 'additionalLegalText', 'iban', 'bic']) {
+    assert.match(renderer, new RegExp(`model\\.seller\\.${field}`))
+  }
+  assert.match(renderer, /model\.buyer\.taxNumber/)
+  assert.doesNotMatch(renderer, /model\.buyer\.vatId/)
+  assert.match(renderer, /model\.seller\.address && <p/)
+  assert.match(renderer, /model\.seller\.vatId && <p/)
+  assert.match(renderer, /model\.seller\.iban && <p/)
+  assert.doesNotMatch(renderer, /showDetails && model\.seller\.(?:address|taxNumber|vatId|iban|bic)/)
+  assert.match(page, /\.from\('companies'\)[\s\S]*?\.eq\('id', companyId\)/)
+  assert.match(modelSource, /These are canonical persisted invoice values\. Renderers must never recalculate them\./)
 })
 
 test('invoice snapshots are captured only on initial issue or draft finalization and old records are disclosed', async () => {
