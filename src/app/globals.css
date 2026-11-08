@@ -815,10 +815,7 @@ html {
   }
 
   .print-area.print-invoice .invoice-print-footer {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) !important;
-    gap: 16px !important;
-    align-items: end !important;
+    display: block !important;
     margin-top: auto !important;
     padding-top: 8px !important;
     border-top: 1px solid #94a3b8 !important;
@@ -835,6 +832,7 @@ html {
 
   .print-area.print-invoice .invoice-print-footer-legal {
     text-align: right !important;
+    overflow-wrap: anywhere !important;
   }
 
   .print-area.print-invoice table {

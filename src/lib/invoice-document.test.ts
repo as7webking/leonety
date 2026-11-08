@@ -63,6 +63,34 @@ test('finalized snapshots preserve seller and buyer presentation while totals re
   assert.equal(laterModel.items[0].lineTotal, 123.45)
 })
 
+test('older invoice snapshots retain captured seller details and fill missing print details from current settings', () => {
+  const invoice = {
+    id: 'invoice-legacy', invoice_number: '26-002', status: 'sent' as const, issue_date: '2026-10-06', due_date: null,
+    currency: 'EUR', notes: null, subtotal: 100, tax_amount: 19, total: 119,
+    document_snapshot: {
+      schemaVersion: 1 as const, capturedAt: '2026-10-06T10:00:00.000Z', templateId: 'standard' as const,
+      seller: { name: 'Captured seller', logo: '', address: 'Captured address', email: '', taxNumber: '', iban: '', bic: '', showDetails: true },
+      buyer: { name: 'Captured buyer', company: null, email: null, phone: null, addressLines: [], taxNumber: null, visibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true } },
+    },
+  }
+  const model = createInvoiceDocumentModel(invoice, {
+    seller: { name: 'Current seller', logo: '', address: 'Current address', email: 'office@example.test', taxNumber: '12/345/67890', vatId: 'DE123456789', phone: '+49 123 456', iban: 'DE89370400440532013000', bic: 'COBADEFFXXX', showDetails: false },
+    buyerAddressLines: [],
+    buyerVisibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true },
+    payment: { method: 'bank_transfer', amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: true, repeatBankDetails: true },
+  })
+
+  assert.equal(model.seller.name, 'Captured seller')
+  assert.equal(model.seller.address, 'Captured address')
+  assert.equal(model.seller.email, 'office@example.test')
+  assert.equal(model.seller.taxNumber, '12/345/67890')
+  assert.equal(model.seller.vatId, 'DE123456789')
+  assert.equal(model.seller.phone, '+49 123 456')
+  assert.equal(model.seller.iban, 'DE89370400440532013000')
+  assert.equal(model.seller.bic, 'COBADEFFXXX')
+  assert.deepEqual(model.totals, { subtotal: 100, taxAmount: 19, total: 119 })
+})
+
 test('single and batch print use one Standard renderer and retain Standard CSS hooks', async () => {
   const [page, renderer] = await Promise.all([
     readFile(new URL('app/(app)/invoices/page.tsx', root), 'utf8'),
@@ -93,12 +121,13 @@ test('invoice renderer prints available seller legal details without changing to
   assert.doesNotMatch(renderer, /model\.buyer\.vatId/)
   assert.match(renderer, /model\.seller\.address && <p/)
   assert.match(renderer, /model\.seller\.vatId && <p/)
-  assert.match(renderer, /model\.seller\.iban && <p><strong>IBAN:/)
+  assert.match(renderer, /invoice-print-footer-legal">[\s\S]*model\.seller\.iban && <p><strong>IBAN:/)
   assert.match(renderer, /invoice-print-client[\s\S]*invoice-print-brand/)
   assert.match(renderer, /invoice-print-totals[\s\S]*invoice-print-footer/)
   assert.match(renderer, /model\.items\.map[\s\S]*item\.description/)
   assert.doesNotMatch(renderer, /repeatBankDetails[\s\S]*IBAN/)
-  assert.doesNotMatch(renderer, /showDetails && model\.seller\.(?:address|taxNumber|vatId|iban|bic)/)
+  assert.doesNotMatch(renderer, /showDetails && model\.seller\.(?:address|email|phone|taxNumber|vatId|iban|bic)/)
+  assert.match(renderer, /invoice-print-footer-legal\">[\s\S]*model\.seller\.email[\s\S]*model\.seller\.phone/)
   assert.match(styles, /\.invoice-print-document\s*\{[\s\S]*?min-height:\s*273mm/)
   assert.match(styles, /\.invoice-print-footer\s*\{[\s\S]*?margin-top:\s*auto/)
   assert.match(styles, /\.print-area\.print-invoice\s*\{[\s\S]*?width:\s*168mm/)

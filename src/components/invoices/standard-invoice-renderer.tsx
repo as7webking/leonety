@@ -49,8 +49,8 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
           <div className="invoice-print-company">
             <h2 className="text-xl font-semibold">{model.seller.name}</h2>
             {model.seller.address && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{model.seller.address}</p>}
-            {model.seller.showDetails && model.seller.email && <p className="text-xs text-slate-600">{model.seller.email}</p>}
-            {model.seller.showDetails && model.seller.phone && <p className="text-xs text-slate-600">{model.seller.phone}</p>}
+            {model.seller.email && <p className="text-xs text-slate-600">{model.seller.email}</p>}
+            {model.seller.phone && <p className="text-xs text-slate-600">{model.seller.phone}</p>}
           </div>
         </div>
       </div>
@@ -85,11 +85,11 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
       )}
 
       <footer className="invoice-print-footer">
-        <div className="invoice-print-footer-bank">
+        <div className="invoice-print-footer-legal">
+          {model.seller.email && <p>{model.seller.email}</p>}
+          {model.seller.phone && <p>{model.seller.phone}</p>}
           {model.seller.iban && <p><strong>IBAN:</strong> {model.seller.iban}</p>}
           {model.seller.bic && <p><strong>BIC:</strong> {model.seller.bic}</p>}
-        </div>
-        <div className="invoice-print-footer-legal">
           {model.seller.taxNumber && model.seller.taxNumber !== model.seller.vatId && <p>{t('contracts.party.taxNumber')}: {model.seller.taxNumber}</p>}
           {model.seller.vatId && <p>{t('workspaceLegal.vatId')}: {model.seller.vatId}</p>}
           {model.seller.representative && <p>{t('workspaceLegal.representative')}: {model.seller.representative}</p>}

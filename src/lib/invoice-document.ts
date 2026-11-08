@@ -129,6 +129,18 @@ export function createInvoiceDocumentModel(
   presentation: InvoiceDocumentPresentation,
 ): InvoiceDocumentModel {
   const snapshot = invoice.document_snapshot
+  const snapshotSeller = snapshot?.seller
+  const seller = { ...(snapshotSeller ?? presentation.seller) }
+
+  // Keep captured seller data authoritative, but fill fields older snapshots
+  // did not capture from the current workspace profile for complete printing.
+  for (const field of ['email', 'taxNumber', 'vatId', 'phone', 'iban', 'bic'] as const) {
+    if (!seller[field]?.trim()) {
+      const currentValue = presentation.seller[field]
+      if (currentValue?.trim()) seller[field] = currentValue
+    }
+  }
+
   return {
     id: invoice.id,
     templateId: snapshot?.templateId ?? 'standard',
@@ -138,7 +150,7 @@ export function createInvoiceDocumentModel(
     dueDate: invoice.due_date,
     currency: invoice.currency,
     notes: invoice.notes,
-    seller: { ...(snapshot?.seller ?? presentation.seller) },
+    seller,
     buyer: {
       ...(snapshot?.buyer ?? {
         name: invoice.clients?.name ?? '',
