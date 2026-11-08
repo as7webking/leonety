@@ -91,6 +91,28 @@ test('older invoice snapshots retain captured seller details and fill missing pr
   assert.deepEqual(model.totals, { subtotal: 100, taxAmount: 19, total: 119 })
 })
 
+test('current print preference overrides the historical snapshot visibility flag', () => {
+  const invoice = {
+    id: 'invoice-legacy', invoice_number: '26-003', status: 'sent' as const, issue_date: '2026-10-06', due_date: null,
+    currency: 'EUR', notes: null, subtotal: 10, tax_amount: 0, total: 10,
+    document_snapshot: {
+      schemaVersion: 1 as const, capturedAt: '2026-10-06T10:00:00.000Z', templateId: 'standard' as const,
+      seller: { name: 'Seller', logo: '', address: 'Old address', email: 'old@example.test', taxNumber: 'OLD-TAX', iban: 'OLD-IBAN', bic: '', showDetails: true },
+      buyer: { name: 'Buyer', company: null, email: null, phone: null, addressLines: [], taxNumber: null, visibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true } },
+    },
+  }
+  const model = createInvoiceDocumentModel(invoice, {
+    seller: { name: 'Seller', logo: '', address: '', email: '', taxNumber: '', iban: '', bic: '', showDetails: false },
+    buyerAddressLines: [],
+    buyerVisibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true },
+    payment: { method: 'bank_transfer', amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: true, repeatBankDetails: true },
+  })
+
+  assert.equal(model.seller.showDetails, false)
+  assert.equal(model.seller.email, 'old@example.test')
+  assert.equal(model.seller.iban, 'OLD-IBAN')
+})
+
 test('single and batch print use one Standard renderer and retain Standard CSS hooks', async () => {
   const [page, renderer] = await Promise.all([
     readFile(new URL('app/(app)/invoices/page.tsx', root), 'utf8'),
@@ -126,8 +148,10 @@ test('invoice renderer prints available seller legal details without changing to
   assert.match(renderer, /invoice-print-totals[\s\S]*invoice-print-footer/)
   assert.match(renderer, /model\.items\.map[\s\S]*item\.description/)
   assert.doesNotMatch(renderer, /repeatBankDetails[\s\S]*IBAN/)
-  assert.doesNotMatch(renderer, /showDetails && model\.seller\.(?:address|email|phone|taxNumber|vatId|iban|bic)/)
+  assert.match(renderer, /showDetails && model\.seller\.address/)
   assert.match(renderer, /invoice-print-footer-legal\">[\s\S]*model\.seller\.email[\s\S]*model\.seller\.phone/)
+  assert.match(renderer, /model\.seller\.showDetails && model\.seller\.address/)
+  assert.match(renderer, /model\.seller\.showDetails && <>[\s\S]*model\.seller\.iban[\s\S]*model\.seller\.taxNumber/)
   assert.match(styles, /\.invoice-print-document\s*\{[\s\S]*?min-height:\s*273mm/)
   assert.match(styles, /\.invoice-print-footer\s*\{[\s\S]*?margin-top:\s*auto/)
   assert.match(styles, /\.print-area\.print-invoice\s*\{[\s\S]*?width:\s*168mm/)

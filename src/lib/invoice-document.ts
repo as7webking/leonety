@@ -130,7 +130,11 @@ export function createInvoiceDocumentModel(
 ): InvoiceDocumentModel {
   const snapshot = invoice.document_snapshot
   const snapshotSeller = snapshot?.seller
-  const seller = { ...(snapshotSeller ?? presentation.seller) }
+  const seller = {
+    ...(snapshotSeller ?? presentation.seller),
+    // This is a current print preference, not historical invoice data.
+    showDetails: presentation.seller.showDetails,
+  }
 
   // Keep captured seller data authoritative, but fill fields older snapshots
   // did not capture from the current workspace profile for complete printing.
