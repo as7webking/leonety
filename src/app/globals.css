@@ -738,7 +738,7 @@ html {
 
   .print-area.print-invoice {
     display: block !important;
-    width: 90% !important;
+    width: 168mm !important;
     max-width: 168mm !important;
     margin: 0 auto !important;
     padding: 0 !important;

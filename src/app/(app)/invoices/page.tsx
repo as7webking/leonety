@@ -480,6 +480,7 @@ export default function InvoicesPage() {
   const [companyIban, setCompanyIban] = useState('')
   const [companyBic, setCompanyBic] = useState('')
   const [companyTaxNumber, setCompanyTaxNumber] = useState('')
+  const [companyBrandingLoaded, setCompanyBrandingLoaded] = useState(false)
   const [companyLegalDetails, setCompanyLegalDetails] = useState<CompanyInvoiceLegalDetails | null>(null)
   const [companyLegalLoaded, setCompanyLegalLoaded] = useState(false)
   const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
@@ -528,32 +529,37 @@ export default function InvoicesPage() {
   const calculated = useMemo(() => calculateItems(formData.items), [formData.items])
   const vatOptions = useMemo(() => getVatOptions(formData.tax_country, t), [formData.tax_country, t])
 
-  const buildInvoiceDocument = (invoice: InvoiceRecord, repeatBankDetails: boolean) => {
-    const paymentMeta = loadInvoicePaymentMeta(invoice.id)
+  const sellerPresentation = useMemo(() => {
     const legalAddress = [
       [companyLegalDetails?.legal_street, companyLegalDetails?.legal_house_number].filter(Boolean).join(' '),
       [companyLegalDetails?.legal_postal_code, companyLegalDetails?.legal_city].filter(Boolean).join(' '),
       companyLegalDetails?.legal_country_code ? formatCountryValue(companyLegalDetails.legal_country_code, locale) : '',
     ].filter(Boolean)
+
+    return {
+      name: companyLegalDetails?.legal_name?.trim() || currentCompany?.name || '',
+      logo: companyLogo,
+      address: legalAddress.length > 0 ? legalAddress.join('\n') : companyAddress,
+      email: companyLegalDetails?.legal_email?.trim() || companyEmail,
+      taxNumber: companyTaxNumber,
+      vatId: companyLegalDetails?.vat_id?.trim() ?? '',
+      phone: companyLegalDetails?.legal_phone?.trim() ?? '',
+      representative: companyLegalDetails?.legal_representative?.trim() ?? '',
+      commercialRegister: companyLegalDetails?.commercial_register?.trim() ?? '',
+      registerCourt: companyLegalDetails?.register_court?.trim() ?? '',
+      registrationNumber: companyLegalDetails?.registration_number?.trim() ?? '',
+      professionalRegulatoryInfo: companyLegalDetails?.professional_regulatory_info?.trim() ?? '',
+      additionalLegalText: companyLegalDetails?.additional_legal_text?.trim() ?? '',
+      iban: companyIban,
+      bic: companyBic,
+      showDetails: includeCompanyAddress,
+    }
+  }, [companyAddress, companyBic, companyEmail, companyIban, companyLegalDetails, companyLogo, companyTaxNumber, currentCompany?.name, includeCompanyAddress, locale])
+
+  const buildInvoiceDocument = (invoice: InvoiceRecord, repeatBankDetails: boolean) => {
+    const paymentMeta = loadInvoicePaymentMeta(invoice.id)
     return createInvoiceDocumentModel(invoice, {
-      seller: {
-        name: companyLegalDetails?.legal_name?.trim() || currentCompany?.name || '',
-        logo: companyLogo,
-        address: legalAddress.length > 0 ? legalAddress.join('\n') : companyAddress,
-        email: companyLegalDetails?.legal_email?.trim() || companyEmail,
-        taxNumber: companyTaxNumber,
-        vatId: companyLegalDetails?.vat_id?.trim() ?? '',
-        phone: companyLegalDetails?.legal_phone?.trim() ?? '',
-        representative: companyLegalDetails?.legal_representative?.trim() ?? '',
-        commercialRegister: companyLegalDetails?.commercial_register?.trim() ?? '',
-        registerCourt: companyLegalDetails?.register_court?.trim() ?? '',
-        registrationNumber: companyLegalDetails?.registration_number?.trim() ?? '',
-        professionalRegulatoryInfo: companyLegalDetails?.professional_regulatory_info?.trim() ?? '',
-        additionalLegalText: companyLegalDetails?.additional_legal_text?.trim() ?? '',
-        iban: companyIban,
-        bic: companyBic,
-        showDetails: includeCompanyAddress,
-      },
+      seller: sellerPresentation,
       buyerAddressLines: getClientAddressLines(invoice.clients, locale),
       buyerVisibleFields: clientPrintFields,
       payment: {
@@ -581,7 +587,11 @@ export default function InvoicesPage() {
   useBodyScrollLock(Boolean(deleteInvoice))
 
   useEffect(() => {
-    if (!currentCompany) return
+    if (!currentCompany) {
+      setCompanyBrandingLoaded(false)
+      return
+    }
+    setCompanyBrandingLoaded(false)
     const branding = loadCompanyBranding(currentCompany.id)
     setCompanyLogo(branding.logo)
     setCompanyAddress(branding.address)
@@ -591,6 +601,7 @@ export default function InvoicesPage() {
     setCompanyTaxNumber(branding.taxNumber)
     setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
     setClientPrintFields(loadClientPrintFields(currentCompany.id))
+    setCompanyBrandingLoaded(true)
   }, [currentCompany])
 
   useEffect(() => {
@@ -1290,7 +1301,7 @@ export default function InvoicesPage() {
       setErrorMessage('Create or select a workspace first.')
       return
     }
-    if (formData.status !== 'draft' && !editingInvoice?.document_snapshot && !companyLegalLoaded) {
+    if (formData.status !== 'draft' && !editingInvoice?.document_snapshot && (!companyLegalLoaded || !companyBrandingLoaded)) {
       setErrorMessage(t('workspaceLegal.loading'))
       return
     }
@@ -1442,24 +1453,7 @@ export default function InvoicesPage() {
         invoice_items: totals.items,
         clients: snapshotClient,
       }, {
-        seller: {
-          name: currentCompany.name,
-          logo: companyLogo,
-          address: companyAddress,
-          email: companyEmail,
-          taxNumber: companyTaxNumber,
-          vatId: companyLegalDetails?.vat_id?.trim() ?? '',
-          phone: companyLegalDetails?.legal_phone?.trim() ?? '',
-          representative: companyLegalDetails?.legal_representative?.trim() ?? '',
-          commercialRegister: companyLegalDetails?.commercial_register?.trim() ?? '',
-          registerCourt: companyLegalDetails?.register_court?.trim() ?? '',
-          registrationNumber: companyLegalDetails?.registration_number?.trim() ?? '',
-          professionalRegulatoryInfo: companyLegalDetails?.professional_regulatory_info?.trim() ?? '',
-          additionalLegalText: companyLegalDetails?.additional_legal_text?.trim() ?? '',
-          iban: companyIban,
-          bic: companyBic,
-          showDetails: includeCompanyAddress,
-        },
+        seller: sellerPresentation,
         buyerAddressLines: getClientAddressLines(snapshotClient, locale),
         buyerVisibleFields: clientPrintFields,
         payment: {
