@@ -74,6 +74,13 @@ current repository cannot reproduce the full production database from scratch.
 - **Legal fields:** all 15 fields selected by
   `src/app/api/workspaces/legal/route.ts` are present in production. They are not
   represented by the current repository migration; no production repair is needed.
+- **Prepared optional invoice fields:** `legal_form`, `tax_number`, `account_holder`,
+  `bank_name`, `iban`, `bic`, and `payment_terms` are proposed by
+  `supabase/migrations/20261109100000.sql`; they are not applied. `tax_number` is
+  separate from `vat_id`. Existing IBAN/BIC browser-local storage remains a legacy
+  source until a separately reviewed application update uses these workspace fields.
+  Production presence/type for `companies.tax_number` was not included in the
+  supplied catalog result and must be checked before applying the migration.
 
 ### `app_access`
 
@@ -116,6 +123,9 @@ current repository cannot reproduce the full production database from scratch.
 - **Important columns:** application queries include `company_id`, `name`, `email`,
   `phone`, company/address/tax/contact/status fields and timestamps. Consolidated SQL
   conditionally adds `source`, `external_id`, `first_contact_at`, `import_metadata`.
+- **Prepared optional field:** `vat_id` is distinct from `tax_number` and is proposed
+  by `supabase/migrations/20261109100000.sql`; production currently reports it
+  missing.
 - **Foreign keys:** `company_id` -> `companies.id` is expected.
 - **Indexes:** consolidated SQL conditionally adds `(company_id, source, external_id)`.
 - **RLS:** `UNKNOWN` because base DDL is absent.
@@ -187,6 +197,9 @@ current repository cannot reproduce the full production database from scratch.
 - **Important columns:** application expects company/client identifiers, invoice
   number, status, dates, currency, canonical totals and payment state. Consolidated
   SQL adds `contract_id`.
+- **Prepared optional field:** invoice-specific `payment_terms` is proposed by
+  `supabase/migrations/20261109100000.sql`; it supplements, and does not replace,
+  `due_date`.
 - **Foreign keys:** expected links to `companies`, `clients`; optional contract link.
 - **Indexes:** company/contract index declared.
 - **RLS:** `UNKNOWN` because base DDL is absent.
@@ -194,9 +207,14 @@ current repository cannot reproduce the full production database from scratch.
 - **Snapshot:** nullable `document_snapshot` JSONB exists in production, with
   protection/requirement triggers. Local migration-history status remains `UNKNOWN`;
   do not apply another snapshot migration based only on repository history.
-  It stores seller/buyer presentation and template identity only; canonical totals
-  and line items remain in their existing invoice records. No historical backfill
-  is safe without verified source data.
+  Current snapshots store seller/buyer presentation and template identity only;
+  canonical totals and line items remain in their existing invoice records. No
+  historical backfill is safe without verified source data.
+- **Future snapshot rule:** after the prepared presentation migration is applied, a
+  separately reviewed application update may capture seller, buyer, line items and
+  payment presentation in a new snapshot schema version only when a draft is first
+  issued. It must preserve the existing snapshot immutability trigger and must not
+  backfill or rewrite existing finalized invoices.
 
 ### `invoice_items`
 
@@ -204,6 +222,10 @@ current repository cannot reproduce the full production database from scratch.
 - **Purpose:** canonical invoice line items.
 - **Important columns:** invoice relation, description, quantity, unit price and tax
   values are expected by the invoice application.
+- **Prepared optional field:** `unit` is proposed by
+  `supabase/migrations/20261109100000.sql` for display only. Discounts remain
+  unsupported because no established discount storage/calculation semantics were
+  found.
 - **DDL/RLS/indexes:** `UNKNOWN`; no current repository migration creates it.
 - **Modules:** invoice editor, calculations, rendering.
 

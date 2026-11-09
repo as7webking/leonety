@@ -14,6 +14,8 @@ Status meanings:
 - `APPLIED`: production application and verification are explicitly confirmed.
 - `READY TO APPLY`: reviewed migration is ready for a manual production change.
 - `PENDING`: designed or implemented but not ready for production application.
+- `PREPARED`: additive proposal created from supplied schema evidence; not applied
+  and not production-verified after application.
 - `BLOCKED`: must not be applied until the stated problem is resolved.
 - `SUPERSEDED`: replaced by a later migration and not intended for application.
 - `UNKNOWN`: repository evidence does not prove production deployment.
@@ -71,6 +73,18 @@ Status meanings:
   schema source. Do not reconstruct production by replaying the consolidated file.
 - Prepare one reviewed additive repair only after read-only production inspection
   establishes the actual differences.
+
+### PREPARED - NOT APPLIED
+
+- Invoice party and payment presentation fields:
+  `supabase/migrations/20261109100000.sql`. Prepared from the production catalog
+  result supplied on 2026-11-09. Adds nullable company legal/bank fields, a distinct
+  client VAT ID, invoice-specific payment terms, and an optional invoice-item unit.
+  `companies.tax_number` was not included in the inspection output; its
+  `ADD COLUMN IF NOT EXISTS` is guarded but its existing type/presence must be
+  inspected before applying. No historical rows are backfilled; RLS, grants, totals,
+  VAT, and discount behavior are unchanged. Do not mark APPLIED until manually
+  executed and verified.
 
 ### NO ACTION REQUIRED
 
@@ -613,6 +627,32 @@ These are production catalog findings, not migration-history claims:
 - **Notes/dependencies:** current server authorization uses the service-role client;
   no current client component directly queries `admin_accounts`. The migration does
   not alter `auth.users` and deliberately creates no browser policy.
+
+### 2026-11-09 - Invoice party and payment presentation fields
+
+- **Status:** `PREPARED`; not applied to production.
+- **Migration filename:** `supabase/migrations/20261109100000.sql`
+- **Purpose:** persist optional seller legal/bank details, distinguish customer VAT
+  ID from customer tax number, preserve invoice payment terms, and store an optional
+  display unit for each invoice line.
+- **Main objects:** nullable columns on `companies`, `clients`, `invoices`, and
+  `invoice_items`.
+- **Production evidence:** the supplied read-only result marked `legal_form`,
+  `account_holder`, `bank_name`, `iban`, `bic`, company/invoice `payment_terms`,
+  client `vat_id`, and invoice-item `unit` missing. `companies.tax_number` was not
+  included in the result and remains to be verified. Existing `document_snapshot`
+  is JSONB and already has immutable snapshot protections.
+- **Verification status:** migration prepared only. It has not been executed; no
+  production mutation or historical backfill was performed.
+- **Snapshot strategy:** no new snapshot column or trigger change is proposed. A
+  future application change may use a new snapshot schema version for newly issued
+  invoices, capturing seller, buyer, saved line items and payment presentation at
+  the moment the invoice first becomes non-draft. Existing snapshots and finalized
+  invoices must not be rewritten, and the existing immutability protection remains
+  in force.
+- **Limitations:** discounts are intentionally excluded because no established
+  discount storage/calculation semantics were found. No account credentials are
+  stored. Existing workspace RLS policies are not modified by this additive change.
 
 ## Future Database Workflow
 
