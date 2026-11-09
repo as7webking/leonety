@@ -16,6 +16,7 @@ export interface ClientRecord {
   city: string | null
   country: string | null
   tax_number: string | null
+  vat_id: string | null
   interested_in: string | null
   notes: string | null
   source: string | null
@@ -39,6 +40,7 @@ export interface ClientFormValues {
   city: string
   country: string
   tax_number: string
+  vat_id: string
   interested_in: string
   notes: string
   status: ClientStatus
@@ -56,6 +58,7 @@ export const emptyClientForm: ClientFormValues = {
   city: '',
   country: '',
   tax_number: '',
+  vat_id: '',
   interested_in: '',
   notes: '',
   status: 'lead',
@@ -75,6 +78,7 @@ export function clientToForm(client: ClientRecord): ClientFormValues {
     city: client.city ?? '',
     country: client.country ?? '',
     tax_number: client.tax_number ?? '',
+    vat_id: client.vat_id ?? '',
     interested_in: client.interested_in ?? '',
     notes: client.notes ?? '',
     status: client.status,

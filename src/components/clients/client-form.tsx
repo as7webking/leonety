@@ -99,6 +99,7 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
       city: form.city.trim() || null,
       country: form.country.trim() || null,
       tax_number: form.tax_number.trim() || null,
+      vat_id: form.vat_id.trim() || null,
       interested_in: form.interested_in.trim() || null,
       notes: form.notes.trim() || null,
       status: form.status,
@@ -197,8 +198,12 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
         </label>
         <CountrySelector label={t('clients.country')} value={form.country} onChange={(value) => setField('country', value)} />
         <label className="min-w-0 space-y-1">
-          <span className="text-sm font-medium text-slate-800">{t('clients.taxNumber')}</span>
+          <span className="text-sm font-medium text-slate-800">{t('contracts.party.taxNumber')}</span>
           <input value={form.tax_number} onChange={(event) => setField('tax_number', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" />
+        </label>
+        <label className="min-w-0 space-y-1">
+          <span className="text-sm font-medium text-slate-800">{t('contracts.party.vatId')}</span>
+          <input value={form.vat_id} onChange={(event) => setField('vat_id', event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-base" />
         </label>
         <label className="space-y-1">
           <span className="text-sm font-medium text-slate-800">{t('clients.status')}</span>

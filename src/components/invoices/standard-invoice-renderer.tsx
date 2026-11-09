@@ -35,7 +35,8 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
           {model.buyer.visibleFields.address && model.buyer.addressLines.map((line) => <p key={line}>{line}</p>)}
           {model.buyer.visibleFields.email && model.buyer.email && <p>{model.buyer.email}</p>}
           {model.buyer.visibleFields.phone && model.buyer.phone && <p>{model.buyer.phone}</p>}
-          {model.buyer.visibleFields.taxNumber && model.buyer.taxNumber && <p>{t('clients.taxNumber')}: {model.buyer.taxNumber}</p>}
+          {model.buyer.visibleFields.taxNumber && model.buyer.taxNumber && <p>{t('contracts.party.taxNumber')}: {model.buyer.taxNumber}</p>}
+          {model.buyer.visibleFields.vatId && model.buyer.vatId && <p>{t('contracts.party.vatId')}: {model.buyer.vatId}</p>}
         </section>
 
         <div className="invoice-print-brand">
@@ -48,6 +49,7 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
           )}
           <div className="invoice-print-company">
             <h2 className="text-xl font-semibold">{model.seller.name}</h2>
+            {model.seller.showDetails && model.seller.legalForm && <p className="text-xs text-slate-600">{model.seller.legalForm}</p>}
             {model.seller.showDetails && model.seller.address && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{model.seller.address}</p>}
             {model.seller.showDetails && model.seller.email && <p className="text-xs text-slate-600">{model.seller.email}</p>}
             {model.seller.showDetails && model.seller.phone && <p className="text-xs text-slate-600">{model.seller.phone}</p>}
@@ -64,8 +66,10 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
 
       <table className="invoice-print-table w-full border-collapse text-sm">
         <thead><tr><th className="border p-2 text-left">{t('common.description')}</th><th className="border p-2 text-right">{t('invoices.quantity')}</th><th className="border p-2 text-right">{t('invoices.price')}</th><th className="border p-2 text-right">{t('invoices.tax')}</th><th className="border p-2 text-right">{t('invoices.lineTotal')}</th></tr></thead>
-        <tbody>{model.items.map((item) => <tr key={item.id ?? item.description}><td className="border p-2">{item.description}</td><td className="border p-2 text-right">{item.quantity}</td><td className="border p-2 text-right">{formatCurrency(item.unitPrice, model.currency, intlLocale, currencySymbolPosition)}</td><td className="border p-2 text-right">{item.taxRate}%</td><td className="border p-2 text-right">{formatCurrency(item.lineTotal, model.currency, intlLocale, currencySymbolPosition)}</td></tr>)}</tbody>
+        <tbody>{model.items.map((item, index) => <tr key={item.id ?? `${item.description}-${index}`}><td className="invoice-print-description border p-2">{item.description}</td><td className="border p-2 text-right">{item.quantity}{item.unit ? ` ${item.unit}` : ''}</td><td className="border p-2 text-right">{formatCurrency(item.unitPrice, model.currency, intlLocale, currencySymbolPosition)}</td><td className="border p-2 text-right">{item.taxRate}%</td><td className="border p-2 text-right">{formatCurrency(item.lineTotal, model.currency, intlLocale, currencySymbolPosition)}</td></tr>)}</tbody>
       </table>
+
+      {model.paymentTerms && <section className="invoice-print-payment-terms mt-4 whitespace-pre-line text-sm"><h2 className="font-semibold">{t('invoiceSettings.paymentTerms')}</h2><p>{model.paymentTerms}</p></section>}
 
       {model.notes && <section className="invoice-print-notes mt-4 whitespace-pre-line text-sm"><p>{t('clients.notes')}: {model.notes}</p></section>}
 
@@ -89,9 +93,11 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
           {model.seller.showDetails && <>
             {model.seller.email && <p>{model.seller.email}</p>}
             {model.seller.phone && <p>{model.seller.phone}</p>}
+            {model.seller.accountHolder && <p>{t('invoiceSettings.accountHolder')}: {model.seller.accountHolder}</p>}
+            {model.seller.bankName && <p>{t('invoiceSettings.bankName')}: {model.seller.bankName}</p>}
             {model.seller.iban && <p><strong>IBAN:</strong> {model.seller.iban}</p>}
             {model.seller.bic && <p><strong>BIC:</strong> {model.seller.bic}</p>}
-            {model.seller.taxNumber && model.seller.taxNumber !== model.seller.vatId && <p>{t('contracts.party.taxNumber')}: {model.seller.taxNumber}</p>}
+            {model.seller.taxNumber && <p>{t('contracts.party.taxNumber')}: {model.seller.taxNumber}</p>}
             {model.seller.vatId && <p>{t('workspaceLegal.vatId')}: {model.seller.vatId}</p>}
             {model.seller.representative && <p>{t('workspaceLegal.representative')}: {model.seller.representative}</p>}
             {model.seller.commercialRegister && <p>{t('workspaceLegal.commercialRegister')}: {model.seller.commercialRegister}{model.seller.registrationNumber ? ` ${model.seller.registrationNumber}` : ''}</p>}

@@ -870,6 +870,18 @@ html {
     padding: 7px 8px !important;
   }
 
+  .print-area.print-invoice .invoice-print-description {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .print-area.print-invoice .invoice-print-payment-terms {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
   .print-area.print-invoice img {
     display: block !important;
     width: 44px !important;

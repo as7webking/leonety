@@ -11,6 +11,7 @@ import { formatCountryValue } from '@/lib/countries'
 
 type LegalSettings = {
   legal_name: string
+  legal_form: string
   legal_representative: string
   legal_street: string
   legal_house_number: string
@@ -20,6 +21,12 @@ type LegalSettings = {
   legal_email: string
   legal_phone: string
   vat_id: string
+  tax_number: string
+  account_holder: string
+  bank_name: string
+  iban: string
+  bic: string
+  payment_terms: string
   commercial_register: string
   register_court: string
   registration_number: string
@@ -28,9 +35,9 @@ type LegalSettings = {
 }
 
 const emptyLegalSettings: LegalSettings = {
-  legal_name: '', legal_representative: '', legal_street: '', legal_house_number: '',
+  legal_name: '', legal_form: '', legal_representative: '', legal_street: '', legal_house_number: '',
   legal_postal_code: '', legal_city: '', legal_country_code: '', legal_email: '',
-  legal_phone: '', vat_id: '', commercial_register: '', register_court: '',
+  legal_phone: '', vat_id: '', tax_number: '', account_holder: '', bank_name: '', iban: '', bic: '', payment_terms: '', commercial_register: '', register_court: '',
   registration_number: '', professional_regulatory_info: '', additional_legal_text: '',
 }
 
@@ -180,6 +187,7 @@ export function WorkspaceLegalSettings() {
 
               <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                 {field('legal_name', t('workspaceLegal.legalName'), { autoComplete: 'organization' })}
+                {field('legal_form', t('contracts.party.legalForm'))}
                 {field('legal_representative', t('workspaceLegal.representative'))}
                 {field('legal_street', t('workspaceLegal.street'), { autoComplete: 'address-line1' })}
                 {field('legal_house_number', t('workspaceLegal.houseNumber'), { autoComplete: 'address-line2' })}
@@ -193,12 +201,21 @@ export function WorkspaceLegalSettings() {
                 {field('legal_email', t('workspaceLegal.email'), { type: 'email', autoComplete: 'email' })}
                 {field('legal_phone', t('workspaceLegal.phone'), { type: 'tel', autoComplete: 'tel' })}
                 {field('vat_id', t('workspaceLegal.vatId'))}
+                {field('tax_number', t('contracts.party.taxNumber'))}
+                {field('account_holder', t('invoiceSettings.accountHolder'))}
+                {field('bank_name', t('invoiceSettings.bankName'))}
+                {field('iban', 'IBAN')}
+                {field('bic', 'BIC / SWIFT')}
                 {field('commercial_register', t('workspaceLegal.commercialRegister'))}
                 {field('register_court', t('workspaceLegal.registerCourt'))}
                 {field('registration_number', t('workspaceLegal.registrationNumber'))}
               </div>
 
               <div className="grid min-w-0 grid-cols-1 gap-4">
+                <label className="min-w-0 space-y-1">
+                  <span className="block break-words text-sm font-medium text-slate-800">{t('invoiceSettings.defaultPaymentTerms')}</span>
+                  <textarea value={form.payment_terms} onChange={(event) => update('payment_terms', event.target.value)} className={`${inputClass} min-h-20 resize-y`} maxLength={2000} />
+                </label>
                 <label className="min-w-0 space-y-1">
                   <span className="block break-words text-sm font-medium text-slate-800">{t('workspaceLegal.regulatoryInformation')}</span>
                   <textarea value={form.professional_regulatory_info} onChange={(event) => update('professional_regulatory_info', event.target.value)} className={`${inputClass} min-h-28 resize-y`} />
@@ -236,10 +253,18 @@ export function WorkspaceLegalSettings() {
               <article className="min-w-0 space-y-5 break-words text-sm leading-6 text-slate-800">
                 {(saved.legal_name || saved.legal_representative) && <section>
                   {saved.legal_name && <h2 className="text-lg font-semibold text-slate-950">{saved.legal_name}</h2>}
+                  {saved.legal_form && <p>{t('contracts.party.legalForm')}: {saved.legal_form}</p>}
                   {saved.legal_representative && <p><span className="font-medium">{t('workspaceLegal.representative')}:</span> {saved.legal_representative}</p>}
                 </section>}
                 {addressLines.length > 0 && <section><h3 className="font-semibold text-slate-950">{t('workspaceLegal.address')}</h3>{addressLines.map((line) => <p key={line}>{line}</p>)}</section>}
                 {(saved.legal_email || saved.legal_phone) && <section><h3 className="font-semibold text-slate-950">{t('workspaceLegal.contact')}</h3>{saved.legal_email && <p><span className="font-medium">{t('workspaceLegal.email')}:</span> {saved.legal_email}</p>}{saved.legal_phone && <p><span className="font-medium">{t('workspaceLegal.phone')}:</span> {saved.legal_phone}</p>}</section>}
+                {(saved.tax_number || saved.account_holder || saved.bank_name || saved.iban || saved.bic || saved.payment_terms) && <section><h3 className="font-semibold text-slate-950">{t('invoiceSettings.paymentDetails')}</h3>
+                  {saved.tax_number && <p>{t('contracts.party.taxNumber')}: {saved.tax_number}</p>}
+                  {saved.account_holder && <p>{t('invoiceSettings.accountHolder')}: {saved.account_holder}</p>}
+                  {saved.bank_name && <p>{t('invoiceSettings.bankName')}: {saved.bank_name}</p>}
+                  {saved.iban && <p>IBAN: {saved.iban}</p>}{saved.bic && <p>BIC / SWIFT: {saved.bic}</p>}
+                  {saved.payment_terms && <p>{t('invoiceSettings.defaultPaymentTerms')}: {saved.payment_terms}</p>}
+                </section>}
                 {registerRows.length > 0 && <section><h3 className="font-semibold text-slate-950">{t('workspaceLegal.registerInformation')}</h3>{registerRows.map(([label, value]) => <p key={label}><span className="font-medium">{t(label)}:</span> {value}</p>)}</section>}
                 {saved.professional_regulatory_info && <section><h3 className="font-semibold text-slate-950">{t('workspaceLegal.regulatoryInformation')}</h3><p className="whitespace-pre-wrap">{saved.professional_regulatory_info}</p></section>}
                 {saved.additional_legal_text && <section><h3 className="font-semibold text-slate-950">{t('workspaceLegal.additionalLegalText')}</h3><p className="whitespace-pre-wrap">{saved.additional_legal_text}</p></section>}

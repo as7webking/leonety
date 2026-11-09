@@ -105,10 +105,12 @@ interface ClientOption {
   city: string | null
   country: string | null
   tax_number: string | null
+  vat_id: string | null
 }
 
 interface CompanyInvoiceLegalDetails {
   legal_name: string | null
+  legal_form: string | null
   legal_representative: string | null
   legal_street: string | null
   legal_house_number: string | null
@@ -118,6 +120,12 @@ interface CompanyInvoiceLegalDetails {
   legal_email: string | null
   legal_phone: string | null
   vat_id: string | null
+  tax_number: string | null
+  account_holder: string | null
+  bank_name: string | null
+  iban: string | null
+  bic: string | null
+  payment_terms: string | null
   commercial_register: string | null
   register_court: string | null
   registration_number: string | null
@@ -141,6 +149,7 @@ interface InvoiceItem {
   unit_price: number
   tax_rate: number
   line_total: number
+  unit?: string | null
 }
 
 interface InvoiceRecord {
@@ -156,6 +165,7 @@ interface InvoiceRecord {
   total: number
   status: InvoiceStatus
   notes: string | null
+  payment_terms: string | null
   created_at: string
   document_snapshot?: InvoiceDocumentSnapshot | null
   clients?: ClientOption | null
@@ -181,6 +191,7 @@ interface InvoiceFormState {
   currency: string
   status: InvoiceStatus
   notes: string
+  payment_terms: string
   tax_country: TaxCountryCode
   tax_type: TaxType
   payment_method: PaymentMethod
@@ -214,6 +225,7 @@ interface InvoiceClientPrintFields {
   phone: boolean
   address: boolean
   taxNumber: boolean
+  vatId: boolean
 }
 
 const defaultClientPrintFields: InvoiceClientPrintFields = {
@@ -222,6 +234,7 @@ const defaultClientPrintFields: InvoiceClientPrintFields = {
   phone: true,
   address: true,
   taxNumber: true,
+  vatId: true,
 }
 
 function getInvoicePaymentKey(invoiceId: string) {
@@ -276,6 +289,7 @@ function loadClientPrintFields(companyId: string | null | undefined): InvoiceCli
       phone: typeof parsed.phone === 'boolean' ? parsed.phone : true,
       address: typeof parsed.address === 'boolean' ? parsed.address : true,
       taxNumber: typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : true,
+      vatId: typeof parsed.vatId === 'boolean' ? parsed.vatId : true,
     }
   } catch {
     return defaultClientPrintFields
@@ -293,6 +307,7 @@ const newItem = (taxRate = 19): InvoiceItem => ({
   unit_price: 0,
   tax_rate: taxRate,
   line_total: 0,
+  unit: '',
 })
 
 const newPaymentAllocation = (method: PaymentMethod = 'cash'): InvoicePaymentAllocation => ({
@@ -475,11 +490,8 @@ export default function InvoicesPage() {
   const localDraftWriteRef = useRef<Promise<unknown> | null>(null)
   const openedNotificationInvoiceRef = useRef('')
   const [companyLogo, setCompanyLogo] = useState('')
-  const [companyAddress, setCompanyAddress] = useState('')
-  const [companyEmail, setCompanyEmail] = useState('')
   const [companyIban, setCompanyIban] = useState('')
   const [companyBic, setCompanyBic] = useState('')
-  const [companyTaxNumber, setCompanyTaxNumber] = useState('')
   const [companyBrandingLoaded, setCompanyBrandingLoaded] = useState(false)
   const [companyLegalDetails, setCompanyLegalDetails] = useState<CompanyInvoiceLegalDetails | null>(null)
   const [companyLegalLoaded, setCompanyLegalLoaded] = useState(false)
@@ -499,6 +511,7 @@ export default function InvoicesPage() {
     currency: 'USD',
     status: 'sent',
     notes: '',
+    payment_terms: '',
     tax_country: 'DE',
     tax_type: 'standard',
     payment_method: 'bank_transfer',
@@ -538,10 +551,11 @@ export default function InvoicesPage() {
 
     return {
       name: companyLegalDetails?.legal_name?.trim() || currentCompany?.name || '',
+      legalForm: companyLegalDetails?.legal_form?.trim() ?? '',
       logo: companyLogo,
-      address: legalAddress.length > 0 ? legalAddress.join('\n') : companyAddress,
-      email: companyLegalDetails?.legal_email?.trim() || companyEmail,
-      taxNumber: companyTaxNumber,
+      address: legalAddress.join('\n'),
+      email: companyLegalDetails?.legal_email?.trim() ?? '',
+      taxNumber: companyLegalDetails?.tax_number?.trim() ?? '',
       vatId: companyLegalDetails?.vat_id?.trim() ?? '',
       phone: companyLegalDetails?.legal_phone?.trim() ?? '',
       representative: companyLegalDetails?.legal_representative?.trim() ?? '',
@@ -552,9 +566,11 @@ export default function InvoicesPage() {
       additionalLegalText: companyLegalDetails?.additional_legal_text?.trim() ?? '',
       iban: companyIban,
       bic: companyBic,
+      accountHolder: companyLegalDetails?.account_holder?.trim() ?? '',
+      bankName: companyLegalDetails?.bank_name?.trim() ?? '',
       showDetails: includeCompanyAddress,
     }
-  }, [companyAddress, companyBic, companyEmail, companyIban, companyLegalDetails, companyLogo, companyTaxNumber, currentCompany?.name, includeCompanyAddress, locale])
+  }, [companyBic, companyIban, companyLegalDetails, companyLogo, currentCompany?.name, includeCompanyAddress, locale])
 
   const buildInvoiceDocument = (invoice: InvoiceRecord, repeatBankDetails: boolean) => {
     const paymentMeta = loadInvoicePaymentMeta(invoice.id)
@@ -562,6 +578,7 @@ export default function InvoicesPage() {
       seller: sellerPresentation,
       buyerAddressLines: getClientAddressLines(invoice.clients, locale),
       buyerVisibleFields: clientPrintFields,
+      paymentTerms: invoice.payment_terms ?? null,
       payment: {
         method: paymentMeta.method,
         amountPaid: Number(paymentMeta.amountPaid || invoice.total),
@@ -594,11 +611,6 @@ export default function InvoicesPage() {
     setCompanyBrandingLoaded(false)
     const branding = loadCompanyBranding(currentCompany.id)
     setCompanyLogo(branding.logo)
-    setCompanyAddress(branding.address)
-    setCompanyEmail(branding.email)
-    setCompanyIban(branding.iban)
-    setCompanyBic(branding.bic)
-    setCompanyTaxNumber(branding.taxNumber)
     setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
     setClientPrintFields(loadClientPrintFields(currentCompany.id))
     setCompanyBrandingLoaded(true)
@@ -607,26 +619,33 @@ export default function InvoicesPage() {
   useEffect(() => {
     const companyId = currentCompany?.id
     setCompanyLegalDetails(null)
+    setCompanyIban('')
+    setCompanyBic('')
     setCompanyLegalLoaded(!companyId)
     if (!companyId) return
 
     let active = true
-    void supabase.from('companies')
-      .select('legal_name, legal_representative, legal_street, legal_house_number, legal_postal_code, legal_city, legal_country_code, legal_email, legal_phone, vat_id, commercial_register, register_court, registration_number, professional_regulatory_info, additional_legal_text')
-      .eq('id', companyId)
-      .maybeSingle()
-      .then(({ data, error }) => {
+    void fetch(`/api/workspaces/legal?companyId=${encodeURIComponent(companyId)}`, { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({})) as { legal?: CompanyInvoiceLegalDetails }
         if (!active) return
-        if (error) {
-          console.error('[invoice-document] company legal details unavailable', { code: error.code })
+        if (!response.ok || !payload.legal) {
+          console.error('[invoice-document] company legal details unavailable')
           setCompanyLegalLoaded(true)
           return
         }
-        setCompanyLegalDetails(data as CompanyInvoiceLegalDetails | null)
+        const legal = payload.legal
+        setCompanyLegalDetails(legal)
+        setCompanyIban(legal.iban ?? '')
+        setCompanyBic(legal.bic ?? '')
+        setCompanyLegalLoaded(true)
+      })
+      .catch(() => {
+        if (!active) return
         setCompanyLegalLoaded(true)
       })
     return () => { active = false }
-  }, [currentCompany?.id, supabase])
+  }, [currentCompany?.id])
 
   const handleIncludeCompanyAddressChange = (checked: boolean) => {
     setIncludeCompanyAddress(checked)
@@ -660,6 +679,7 @@ export default function InvoicesPage() {
       currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
       status: 'sent',
       notes: '',
+      payment_terms: '',
       tax_country: 'DE',
       tax_type: 'standard',
       payment_method: 'bank_transfer',
@@ -694,12 +714,13 @@ export default function InvoicesPage() {
       || quickClient.phone.trim()
       || quickClient.interested_in.trim()
       || formData.notes.trim()
+      || formData.payment_terms.trim()
       || formData.issue_date !== today()
       || formData.due_date
       || formData.tax_country !== 'DE'
       || formData.tax_type !== 'standard'
       || normalizeCurrencyCode(formData.currency) !== normalizeCurrencyCode(currentCompany?.currency ?? 'USD')
-      || formData.items.some((item) => item.description.trim() || item.unit_price !== 0 || item.quantity !== 1)
+      || formData.items.some((item) => item.description.trim() || item.unit_price !== 0 || item.quantity !== 1 || item.unit?.trim())
     )
     if (!hasDraftContent) return
     const selectedClient = clients.find((client) => client.id === formData.client_id)
@@ -721,6 +742,7 @@ export default function InvoicesPage() {
         quantity: item.quantity,
         unit_price: item.unit_price,
         tax_rate: item.tax_rate,
+        unit: item.unit ?? '',
       })),
       issueDate: formData.issue_date,
       dueDate: formData.due_date,
@@ -728,6 +750,7 @@ export default function InvoicesPage() {
       taxCountry: formData.tax_country,
       taxType: formData.tax_type,
       notes: formData.notes,
+      paymentTerms: formData.payment_terms,
     }
     const draftWorkspaceId = invoiceDraftWorkspaceId
     const write = saveOfflineInvoiceDraft(userId, draftWorkspaceId, invoiceLocalDraftId, payload)
@@ -816,6 +839,7 @@ export default function InvoicesPage() {
       currency: normalizeCurrencyCode(currentCompany?.currency ?? 'USD'),
       status: 'sent',
       notes: '',
+      payment_terms: companyLegalDetails?.payment_terms ?? '',
       tax_country: 'DE',
       tax_type: 'standard',
       payment_method: 'bank_transfer',
@@ -828,7 +852,7 @@ export default function InvoicesPage() {
     setSourceContractId('')
     setSourceContractClientId('')
     setShowForm(true)
-  }, [currentCompany?.currency, currentCompany?.id, invoices, isOnline])
+  }, [companyLegalDetails?.payment_terms, currentCompany?.currency, currentCompany?.id, invoices, isOnline])
 
   const reviewLocalInvoiceDraft = async (draft: OfflineInvoiceDraft) => {
     if (showForm && invoiceLocalDraftId && invoiceLocalDraftId !== draft.localId) {
@@ -859,6 +883,7 @@ export default function InvoicesPage() {
       currency: normalizeCurrencyCode(payload.currency || currentCompany?.currency || 'USD'),
       status: 'sent',
       notes: payload.notes,
+      payment_terms: payload.paymentTerms ?? '',
       tax_country: (taxCountries.some(({ code }) => code === payload.taxCountry) ? payload.taxCountry : 'DE') as TaxCountryCode,
       tax_type: payload.taxType === 'reduced' || payload.taxType === 'none' ? payload.taxType : 'standard',
       payment_method: 'bank_transfer',
@@ -871,6 +896,7 @@ export default function InvoicesPage() {
         quantity: item.quantity,
         unit_price: item.unit_price,
         tax_rate: item.tax_rate,
+        unit: item.unit ?? '',
         line_total: 0,
       }))).items,
     })
@@ -915,7 +941,7 @@ export default function InvoicesPage() {
 
       const baseExtendedInvoiceQuery = supabase
         .from('invoices')
-        .select('*, clients(id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number), invoice_items(*)')
+        .select('*, clients(id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, vat_id), invoice_items(*)')
         .eq('company_id', currentCompany.id)
         .order('created_at', { ascending: false })
       const extendedInvoiceQuery = requestedClientId
@@ -923,7 +949,7 @@ export default function InvoicesPage() {
         : baseExtendedInvoiceQuery
       const extendedClientQuery = supabase
         .from('clients')
-        .select('id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number')
+        .select('id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, vat_id')
         .eq('company_id', currentCompany.id)
         .order('name', { ascending: true })
 
@@ -949,17 +975,17 @@ export default function InvoicesPage() {
         ;[invoiceRes, clientRes] = await Promise.all([
           (requestedClientId ? supabase
             .from('invoices')
-            .select('*, clients(id, name, email, phone, client_company), invoice_items(*)')
+            .select('*, clients(id, name, email, phone, client_company, vat_id), invoice_items(*)')
             .eq('company_id', currentCompany.id)
             .eq('client_id', requestedClientId)
             .order('created_at', { ascending: false }) : supabase
             .from('invoices')
-            .select('*, clients(id, name, email, phone, client_company), invoice_items(*)')
+            .select('*, clients(id, name, email, phone, client_company, vat_id), invoice_items(*)')
             .eq('company_id', currentCompany.id)
             .order('created_at', { ascending: false })),
           supabase
             .from('clients')
-            .select('id, name, email, phone, client_company')
+            .select('id, name, email, phone, client_company, vat_id')
             .eq('company_id', currentCompany.id)
             .order('name', { ascending: true }),
         ])
@@ -982,6 +1008,7 @@ export default function InvoicesPage() {
             city: invoice.clients.city ?? null,
             country: invoice.clients.country ?? null,
             tax_number: invoice.clients.tax_number ?? null,
+            vat_id: invoice.clients.vat_id ?? null,
           }
           : null,
         subtotal: Number(invoice.subtotal),
@@ -1003,6 +1030,7 @@ export default function InvoicesPage() {
         city: client.city ?? null,
         country: client.country ?? null,
         tax_number: client.tax_number ?? null,
+        vat_id: client.vat_id ?? null,
       })))
       setProducts(((productRes.data ?? []) as ProductOption[]).map((product) => ({
         ...product,
@@ -1118,6 +1146,7 @@ export default function InvoicesPage() {
           contract.reference ? `${t('contracts.reference')}: ${contract.reference}` : '',
           paymentSchedule ? `${t('contracts.field.paymentSchedule')}: ${paymentSchedule}` : '',
         ].filter(Boolean).join('\n'),
+        payment_terms: companyLegalDetails?.payment_terms ?? '',
         tax_country: 'DE',
         tax_type: 'standard',
         payment_method: 'bank_transfer',
@@ -1137,7 +1166,7 @@ export default function InvoicesPage() {
     }
 
     void loadContractPrefill()
-  }, [currentCompany, invoices, isOnline, prefilledContractId, searchParams, supabase, t])
+  }, [companyLegalDetails?.payment_terms, currentCompany, invoices, isOnline, prefilledContractId, searchParams, supabase, t])
 
   const updateItem = (index: number, updates: Partial<InvoiceItem>) => {
     setFormData((prev) => ({
@@ -1182,6 +1211,7 @@ export default function InvoicesPage() {
       currency: normalizeCurrencyCode(invoice.currency),
       status: invoice.status,
       notes: invoice.notes ?? '',
+      payment_terms: invoice.payment_terms ?? '',
       tax_country: 'DE',
       tax_type: 'standard',
       payment_method: paymentMeta.method,
@@ -1376,6 +1406,7 @@ export default function InvoicesPage() {
           city: null,
           country: null,
           tax_number: null,
+          vat_id: null,
         }
         setClients((current) => [...current, snapshotClient!].sort((left, right) => left.name.localeCompare(right.name)))
       } catch {
@@ -1429,6 +1460,7 @@ export default function InvoicesPage() {
       total: totals.total,
       status: formData.status,
       notes: formData.notes.trim() || null,
+      payment_terms: formData.payment_terms.trim() || null,
       updated_at: new Date().toISOString(),
     }
     if (sourceContractId) {
@@ -1447,6 +1479,7 @@ export default function InvoicesPage() {
         due_date: formData.due_date || null,
         currency: normalizeCurrencyCode(formData.currency),
         notes: formData.notes.trim() || null,
+        payment_terms: formData.payment_terms.trim() || null,
         subtotal: totals.subtotal,
         tax_amount: totals.taxAmount,
         total: totals.total,
@@ -1456,6 +1489,7 @@ export default function InvoicesPage() {
         seller: sellerPresentation,
         buyerAddressLines: getClientAddressLines(snapshotClient, locale),
         buyerVisibleFields: clientPrintFields,
+        paymentTerms: formData.payment_terms.trim() || null,
         payment: {
           method: formData.payment_method,
           amountPaid: Number(formData.amount_paid || totals.total),
@@ -1495,7 +1529,7 @@ export default function InvoicesPage() {
         if (error?.code === '23505' && localDraftIdForSave) {
           const existing = await supabase
             .from('invoices')
-            .select('id, company_id, client_id, currency, subtotal, tax_amount, total, status, issue_date, due_date, notes')
+            .select('id, company_id, client_id, currency, subtotal, tax_amount, total, status, issue_date, due_date, notes, payment_terms')
             .eq('id', localDraftIdForSave)
             .eq('company_id', currentCompany.id)
             .maybeSingle()
@@ -1509,10 +1543,11 @@ export default function InvoicesPage() {
               && existing.data.issue_date === formData.issue_date
               && (existing.data.due_date ?? null) === (formData.due_date || null)
               && (existing.data.notes ?? null) === (formData.notes.trim() || null)
+              && (existing.data.payment_terms ?? null) === (formData.payment_terms.trim() || null)
             if (sameInvoice) {
               const existingItems = await supabase
                 .from('invoice_items')
-                .select('description, quantity, unit_price, tax_rate, line_total')
+                .select('description, quantity, unit_price, tax_rate, line_total, unit')
                 .eq('invoice_id', localDraftIdForSave)
               if (existingItems.error) return { invoiceId: undefined, error: existingItems.error }
               const itemsMatch = existingItems.data?.length === totals.items.length
@@ -1524,6 +1559,7 @@ export default function InvoicesPage() {
                     && Number(saved.unit_price) === item.unit_price
                     && Number(saved.tax_rate) === item.tax_rate
                     && Number(saved.line_total) === item.line_total
+                    && (saved.unit ?? '') === (item.unit?.trim() ?? '')
                 })
               if ((existingItems.data?.length ?? 0) === 0 || itemsMatch) {
                 invoiceItemsAlreadySaved = itemsMatch
@@ -1563,6 +1599,7 @@ export default function InvoicesPage() {
         unit_price: item.unit_price,
         tax_rate: item.tax_rate,
         line_total: item.line_total,
+        unit: item.unit?.trim() || null,
       }))
 
       if (!invoiceItemsAlreadySaved) {
@@ -1996,6 +2033,10 @@ export default function InvoicesPage() {
                   <span className="text-sm font-medium">{t('invoices.dueDate')}</span>
                   <input type="date" value={formData.due_date} onChange={(event) => setFormData({ ...formData, due_date: event.target.value })} className="w-full rounded-md border px-3 py-2" />
                 </label>
+                <label className="min-w-0 space-y-1 md:col-span-2">
+                  <span className="text-sm font-medium">{t('invoiceSettings.paymentTerms')}</span>
+                  <textarea value={formData.payment_terms} onChange={(event) => setFormData({ ...formData, payment_terms: event.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" />
+                </label>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('common.currency')}</span>
                   <AppSelect
@@ -2130,6 +2171,10 @@ export default function InvoicesPage() {
                 </div>
               )}
 
+              {(!companyIban || !companyLegalDetails?.bic || !companyLegalDetails?.account_holder || !companyLegalDetails?.bank_name || !companyLegalDetails?.tax_number) && (
+                <p role="status" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('invoiceSettings.missingPaymentDetails')}</p>
+              )}
+
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium">{t('invoices.items')}</h3>
@@ -2138,7 +2183,7 @@ export default function InvoicesPage() {
                 {formData.items.map((item, index) => {
                   const normalizedLine = calculateItems([item]).items[0]
                   return (
-                    <div key={index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_150px_120px_170px_120px_auto]">
+                    <div key={index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_130px_110px_150px_130px_120px_auto]">
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-600">{t('invoices.product')}</span>
                         {products.length > 0 && (
@@ -2185,6 +2230,10 @@ export default function InvoicesPage() {
                             -
                           </button>
                         </div>
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-medium text-slate-600">{t('invoiceSettings.unit')}</span>
+                        <input value={item.unit ?? ''} onChange={(event) => updateItem(index, { unit: event.target.value })} className="w-full min-w-0 rounded-md border px-3 py-2 text-sm" maxLength={40} />
                       </label>
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-600">{t('invoices.price')}</span>

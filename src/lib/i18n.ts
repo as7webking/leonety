@@ -7296,6 +7296,20 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], contractPartyDictionaries[locale])
 }
 
+const invoiceSettingsDictionaries: Record<Locale, Dictionary> = {
+  en: { 'invoiceSettings.accountHolder': 'Account holder', 'invoiceSettings.bankName': 'Bank name', 'invoiceSettings.defaultPaymentTerms': 'Default payment terms', 'invoiceSettings.paymentTerms': 'Payment terms', 'invoiceSettings.paymentDetails': 'Payment details', 'invoiceSettings.unit': 'Unit', 'invoiceSettings.missingPaymentDetails': 'Some seller payment details are missing. Add them in workspace legal settings before issuing this invoice.' },
+  de: { 'invoiceSettings.accountHolder': 'Kontoinhaber', 'invoiceSettings.bankName': 'Bankname', 'invoiceSettings.defaultPaymentTerms': 'Standard-Zahlungsbedingungen', 'invoiceSettings.paymentTerms': 'Zahlungsbedingungen', 'invoiceSettings.paymentDetails': 'Zahlungsangaben', 'invoiceSettings.unit': 'Einheit', 'invoiceSettings.missingPaymentDetails': 'Einige Zahlungsangaben des Verkäufers fehlen. Ergänze sie vor dem Ausstellen in den rechtlichen Workspace-Einstellungen.' },
+  ru: { 'invoiceSettings.accountHolder': 'Владелец счёта', 'invoiceSettings.bankName': 'Название банка', 'invoiceSettings.defaultPaymentTerms': 'Условия оплаты по умолчанию', 'invoiceSettings.paymentTerms': 'Условия оплаты', 'invoiceSettings.paymentDetails': 'Платёжные данные', 'invoiceSettings.unit': 'Единица', 'invoiceSettings.missingPaymentDetails': 'Не хватает некоторых платёжных данных продавца. Добавьте их в юридических настройках workspace перед выставлением счёта.' },
+  tr: { 'invoiceSettings.accountHolder': 'Hesap sahibi', 'invoiceSettings.bankName': 'Banka adı', 'invoiceSettings.defaultPaymentTerms': 'Varsayılan ödeme koşulları', 'invoiceSettings.paymentTerms': 'Ödeme koşulları', 'invoiceSettings.paymentDetails': 'Ödeme bilgileri', 'invoiceSettings.unit': 'Birim', 'invoiceSettings.missingPaymentDetails': 'Satıcının bazı ödeme bilgileri eksik. Faturayı düzenlemeden önce çalışma alanı yasal ayarlarına ekleyin.' },
+  uk: { 'invoiceSettings.accountHolder': 'Власник рахунку', 'invoiceSettings.bankName': 'Назва банку', 'invoiceSettings.defaultPaymentTerms': 'Стандартні умови оплати', 'invoiceSettings.paymentTerms': 'Умови оплати', 'invoiceSettings.paymentDetails': 'Платіжні дані', 'invoiceSettings.unit': 'Одиниця', 'invoiceSettings.missingPaymentDetails': 'Не вистачає деяких платіжних даних продавця. Додайте їх у юридичних налаштуваннях workspace перед виставленням рахунку.' },
+  pl: { 'invoiceSettings.accountHolder': 'Posiadacz rachunku', 'invoiceSettings.bankName': 'Nazwa banku', 'invoiceSettings.defaultPaymentTerms': 'Domyślne warunki płatności', 'invoiceSettings.paymentTerms': 'Warunki płatności', 'invoiceSettings.paymentDetails': 'Dane płatności', 'invoiceSettings.unit': 'Jednostka', 'invoiceSettings.missingPaymentDetails': 'Brakuje niektórych danych płatniczych sprzedawcy. Uzupełnij je w ustawieniach prawnych workspace przed wystawieniem faktury.' },
+  fr: { 'invoiceSettings.accountHolder': 'Titulaire du compte', 'invoiceSettings.bankName': 'Nom de la banque', 'invoiceSettings.defaultPaymentTerms': 'Conditions de paiement par défaut', 'invoiceSettings.paymentTerms': 'Conditions de paiement', 'invoiceSettings.paymentDetails': 'Informations de paiement', 'invoiceSettings.unit': 'Unité', 'invoiceSettings.missingPaymentDetails': 'Certaines coordonnées de paiement du vendeur manquent. Ajoutez-les dans les paramètres juridiques du workspace avant d’émettre la facture.' },
+}
+
+for (const locale of locales) {
+  Object.assign(dictionaries[locale], invoiceSettingsDictionaries[locale])
+}
+
 const productionHardeningDictionaries: Record<Locale, Dictionary> = {
   en: {
     'billing.accessUntil': 'Your subscription will remain active until {date}.',

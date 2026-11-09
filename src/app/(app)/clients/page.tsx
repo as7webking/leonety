@@ -228,8 +228,8 @@ export default function ClientsPage() {
     setLoading(true)
     setError('')
     const search = sanitizeSearch(debouncedQuery)
-    const extendedColumns = 'id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, interested_in, notes, source, external_id, first_contact_at, last_activity_at, status, created_at, updated_at'
-    const basicColumns = 'id, company_id, name, email, phone, client_company, interested_in, notes, status, created_at, updated_at'
+    const extendedColumns = 'id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, vat_id, interested_in, notes, source, external_id, first_contact_at, last_activity_at, status, created_at, updated_at'
+    const basicColumns = 'id, company_id, name, email, phone, client_company, vat_id, interested_in, notes, status, created_at, updated_at'
 
     const countGroup = async (group: ClientStatusGroup, searchValue: string, extended = true): Promise<number> => {
       let request = supabase.from('clients').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id)
@@ -291,6 +291,7 @@ export default function ClientsPage() {
         city: null,
         country: null,
         tax_number: null,
+        vat_id: null,
         source: null,
         external_id: null,
         first_contact_at: null,

@@ -8,6 +8,7 @@ export interface InvoiceDocumentItem {
   unitPrice: number
   taxRate: number
   lineTotal: number
+  unit?: string | null
 }
 
 export interface InvoiceDocumentPaymentAllocation {
@@ -25,8 +26,10 @@ export interface InvoiceDocumentModel {
   dueDate: string | null
   currency: string
   notes: string | null
+  paymentTerms: string | null
   seller: {
     name: string
+    legalForm?: string
     logo: string
     address: string
     email: string
@@ -41,6 +44,8 @@ export interface InvoiceDocumentModel {
     additionalLegalText?: string
     iban: string
     bic: string
+    accountHolder?: string
+    bankName?: string
     showDetails: boolean
   }
   buyer: {
@@ -50,12 +55,14 @@ export interface InvoiceDocumentModel {
     phone: string | null
     addressLines: string[]
     taxNumber: string | null
+    vatId?: string | null
     visibleFields: {
       company: boolean
       email: boolean
       phone: boolean
       address: boolean
       taxNumber: boolean
+      vatId?: boolean
     }
   }
   items: InvoiceDocumentItem[]
@@ -75,13 +82,23 @@ export interface InvoiceDocumentModel {
   }
 }
 
-export interface InvoiceDocumentSnapshot {
-  schemaVersion: 1
+type InvoiceDocumentSnapshotBase = {
   capturedAt: string
   templateId: 'standard'
   seller: InvoiceDocumentModel['seller']
   buyer: InvoiceDocumentModel['buyer']
 }
+
+export type InvoiceDocumentSnapshot = InvoiceDocumentSnapshotBase & (
+  | { schemaVersion: 1 }
+  | {
+    schemaVersion: 2
+    items: InvoiceDocumentItem[]
+    totals: InvoiceDocumentModel['totals']
+    payment: InvoiceDocumentModel['payment']
+    paymentTerms: string | null
+  }
+)
 
 interface InvoiceDocumentSource {
   id: string
@@ -91,6 +108,7 @@ interface InvoiceDocumentSource {
   due_date: string | null
   currency: string
   notes: string | null
+  payment_terms?: string | null
   subtotal: number
   tax_amount: number
   total: number
@@ -102,6 +120,7 @@ interface InvoiceDocumentSource {
     unit_price: number
     tax_rate: number
     line_total: number
+    unit?: string | null
   }>
   clients?: {
     name: string
@@ -109,6 +128,7 @@ interface InvoiceDocumentSource {
     email: string | null
     phone: string | null
     tax_number: string | null
+    vat_id?: string | null
     street?: string | null
     house_number?: string | null
     postal_code?: string | null
@@ -122,6 +142,7 @@ interface InvoiceDocumentPresentation {
   buyerAddressLines: string[]
   buyerVisibleFields: InvoiceDocumentModel['buyer']['visibleFields']
   payment: Omit<InvoiceDocumentModel['payment'], 'isPaid'>
+  paymentTerms?: string | null
 }
 
 export function createInvoiceDocumentModel(
@@ -136,15 +157,6 @@ export function createInvoiceDocumentModel(
     showDetails: presentation.seller.showDetails,
   }
 
-  // Keep captured seller data authoritative, but fill fields older snapshots
-  // did not capture from the current workspace profile for complete printing.
-  for (const field of ['email', 'taxNumber', 'vatId', 'phone', 'iban', 'bic'] as const) {
-    if (!seller[field]?.trim()) {
-      const currentValue = presentation.seller[field]
-      if (currentValue?.trim()) seller[field] = currentValue
-    }
-  }
-
   return {
     id: invoice.id,
     templateId: snapshot?.templateId ?? 'standard',
@@ -154,6 +166,9 @@ export function createInvoiceDocumentModel(
     dueDate: invoice.due_date,
     currency: invoice.currency,
     notes: invoice.notes,
+    paymentTerms: snapshot?.schemaVersion === 2
+      ? snapshot.paymentTerms ?? null
+      : presentation.paymentTerms ?? null,
     seller,
     buyer: {
       ...(snapshot?.buyer ?? {
@@ -163,28 +178,30 @@ export function createInvoiceDocumentModel(
         phone: invoice.clients?.phone ?? null,
         addressLines: [...presentation.buyerAddressLines],
         taxNumber: invoice.clients?.tax_number ?? null,
+        vatId: invoice.clients?.vat_id ?? null,
         visibleFields: { ...presentation.buyerVisibleFields },
       }),
       addressLines: [...(snapshot?.buyer.addressLines ?? presentation.buyerAddressLines)],
       visibleFields: { ...(snapshot?.buyer.visibleFields ?? presentation.buyerVisibleFields) },
     },
-    items: (invoice.invoice_items ?? []).map((item) => ({
+    items: snapshot?.schemaVersion === 2 ? snapshot.items.map((item) => ({ ...item })) : (invoice.invoice_items ?? []).map((item) => ({
       id: item.id,
       description: item.description,
       quantity: item.quantity,
       unitPrice: item.unit_price,
       taxRate: item.tax_rate,
       lineTotal: item.line_total,
+      unit: item.unit ?? null,
     })),
     // These are canonical persisted invoice values. Renderers must never recalculate them.
     totals: {
-      subtotal: invoice.subtotal,
-      taxAmount: invoice.tax_amount,
-      total: invoice.total,
+      subtotal: snapshot?.schemaVersion === 2 ? snapshot.totals.subtotal : invoice.subtotal,
+      taxAmount: snapshot?.schemaVersion === 2 ? snapshot.totals.taxAmount : invoice.tax_amount,
+      total: snapshot?.schemaVersion === 2 ? snapshot.totals.total : invoice.total,
     },
     payment: {
-      ...presentation.payment,
-      allocations: presentation.payment.allocations.map((allocation) => ({ ...allocation })),
+      ...(snapshot?.schemaVersion === 2 ? snapshot.payment : presentation.payment),
+      allocations: (snapshot?.schemaVersion === 2 ? snapshot.payment.allocations : presentation.payment.allocations).map((allocation) => ({ ...allocation })),
       isPaid: invoice.status === 'paid',
     },
   }
@@ -195,7 +212,7 @@ export function createInvoiceDocumentSnapshot(
   capturedAt: string,
 ): InvoiceDocumentSnapshot {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     capturedAt,
     templateId: model.templateId,
     seller: { ...model.seller },
@@ -204,5 +221,12 @@ export function createInvoiceDocumentSnapshot(
       addressLines: [...model.buyer.addressLines],
       visibleFields: { ...model.buyer.visibleFields },
     },
+    items: model.items.map((item) => ({ ...item })),
+    totals: { ...model.totals },
+    payment: {
+      ...model.payment,
+      allocations: model.payment.allocations.map((allocation) => ({ ...allocation })),
+    },
+    paymentTerms: model.paymentTerms,
   }
 }

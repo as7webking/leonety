@@ -102,7 +102,7 @@ export default function ClientDetailPage() {
     const results = await Promise.all([
       supabase
         .from('clients')
-        .select('id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, interested_in, notes, source, external_id, first_contact_at, last_activity_at, status, created_at, updated_at')
+        .select('id, company_id, name, email, phone, client_company, street, house_number, postal_code, city, country, tax_number, vat_id, interested_in, notes, source, external_id, first_contact_at, last_activity_at, status, created_at, updated_at')
         .eq('company_id', currentCompany.id)
         .eq('id', params.id)
         .maybeSingle(),
@@ -140,7 +140,7 @@ export default function ClientDetailPage() {
     if (clientResult.error && ['42703', 'PGRST204', 'PGRST205'].includes(clientResult.error.code ?? '')) {
       clientResult = await supabase
         .from('clients')
-        .select('id, company_id, name, email, phone, client_company, interested_in, notes, status, created_at, updated_at')
+        .select('id, company_id, name, email, phone, client_company, vat_id, interested_in, notes, status, created_at, updated_at')
         .eq('company_id', currentCompany.id)
         .eq('id', params.id)
         .maybeSingle() as typeof clientResult
@@ -191,6 +191,7 @@ export default function ClientDetailPage() {
       city: null,
       country: null,
       tax_number: null,
+      vat_id: null,
       source: null,
       external_id: null,
       first_contact_at: null,
@@ -286,7 +287,8 @@ export default function ClientDetailPage() {
               {client.email && <p className="flex min-w-0 gap-2"><Mail className="h-4 w-4 shrink-0" /><span className="break-all">{client.email}</span></p>}
               {client.phone && <p className="flex gap-2"><Phone className="h-4 w-4 shrink-0" /><span>{client.phone}</span></p>}
               {address && <p>{address}</p>}
-              {client.tax_number && <p>{t('clients.taxNumber')}: {client.tax_number}</p>}
+              {client.tax_number && <p>{t('contracts.party.taxNumber')}: {client.tax_number}</p>}
+              {client.vat_id && <p>{t('contracts.party.vatId')}: {client.vat_id}</p>}
               <p>{t('clients.status')}: {t(`clients.status.${client.status}`)}</p>
             </CardContent></Card>
             {activityLoadFailed ? <RelatedDataUnavailable t={t} /> : <ActivityList items={activity.slice(0, 8)} t={t} locale={locale} />}

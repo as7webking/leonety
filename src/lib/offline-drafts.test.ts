@@ -37,13 +37,14 @@ test('invoice local payload allowlists drafting fields and excludes finalization
     clientId: 'client-1',
     clientName: 'Selected client',
     quickClient: { id: 'local-client-1', name: 'Manual client', phone: '123', interestedIn: 'service', taxId: 'excluded' },
-    items: [{ description: 'Consulting', quantity: 2, unit_price: 30, tax_rate: 19, line_total: 71.4, invoice_id: 'excluded' }],
+    items: [{ description: 'Consulting', quantity: 2, unit_price: 30, tax_rate: 19, unit: 'hours', line_total: 71.4, invoice_id: 'excluded' }],
     issueDate: '2026-10-11',
     dueDate: '',
     currency: 'EUR',
     taxCountry: 'DE',
     taxType: 'standard',
     notes: 'Draft note',
+    paymentTerms: 'Pay in 14 days',
     invoice_number: 'MUST-NOT-BE-STORED',
     status: 'paid',
     payments: [{ amount: 60 }],
@@ -52,6 +53,8 @@ test('invoice local payload allowlists drafting fields and excludes finalization
   })
   assert.equal(invoice.clientId, 'client-1')
   assert.equal(invoice.items[0].description, 'Consulting')
+  assert.equal(invoice.items[0].unit, 'hours')
+  assert.equal(invoice.paymentTerms, 'Pay in 14 days')
   assert.equal('line_total' in invoice.items[0], false)
   assert.equal('invoice_number' in invoice, false)
   assert.equal('status' in invoice, false)

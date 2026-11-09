@@ -21,9 +21,6 @@ export function WorkspaceSettingsPanel() {
   const [logo, setLogo] = useState('')
   const [address, setAddress] = useState('')
   const [email, setEmail] = useState('')
-  const [iban, setIban] = useState('')
-  const [bic, setBic] = useState('')
-  const [taxNumber, setTaxNumber] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState(false)
@@ -37,9 +34,6 @@ export function WorkspaceSettingsPanel() {
     setLogo(branding.logo)
     setAddress(branding.address)
     setEmail(branding.email)
-    setIban(branding.iban)
-    setBic(branding.bic)
-    setTaxNumber(branding.taxNumber)
     setMessage('')
     setError(false)
   }, [currentCompany])
@@ -50,9 +44,6 @@ export function WorkspaceSettingsPanel() {
       logo,
       address,
       email,
-      iban,
-      bic,
-      taxNumber,
       ...overrides,
     })
   }
@@ -205,9 +196,6 @@ export function WorkspaceSettingsPanel() {
 
               <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>label]:min-w-0 [&_input]:min-w-0 [&_input]:max-w-full">
                 <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyEmail')}</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyIban')}</span><input value={iban} onChange={(event) => setIban(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyBic')}</span><input value={bic} onChange={(event) => setBic(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="space-y-1"><span className="text-sm font-medium">{t('profile.companyTaxNumber')}</span><input value={taxNumber} onChange={(event) => setTaxNumber(event.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2" /></label>
               </div>
             </div>
           )}

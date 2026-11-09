@@ -29,13 +29,14 @@ export interface OfflineInvoiceDraftPayload {
   clientId: string
   clientName: string
   quickClient: { id: string; name: string; phone: string; interestedIn: string }
-  items: Array<{ id: string; description: string; quantity: number; unit_price: number; tax_rate: number }>
+  items: Array<{ id: string; description: string; quantity: number; unit_price: number; tax_rate: number; unit?: string }>
   issueDate: string
   dueDate: string
   currency: string
   taxCountry: string
   taxType: string
   notes: string
+  paymentTerms?: string
 }
 
 const DATABASE_NAME = 'leonety-offline-v1'
@@ -251,6 +252,7 @@ export function sanitizeOfflineInvoiceDraftPayload(value: unknown): OfflineInvoi
         quantity: finiteNumber(item.quantity, 1),
         unit_price: finiteNumber(item.unit_price, 0),
         tax_rate: finiteNumber(item.tax_rate, 0),
+        unit: text(item.unit).slice(0, 40),
       }
     }),
     issueDate: text(payload.issueDate),
@@ -259,6 +261,7 @@ export function sanitizeOfflineInvoiceDraftPayload(value: unknown): OfflineInvoi
     taxCountry: text(payload.taxCountry).slice(0, 8),
     taxType: text(payload.taxType).slice(0, 24),
     notes: text(payload.notes).slice(0, 10000),
+    paymentTerms: text(payload.paymentTerms).slice(0, 2000),
   }
 }
 
