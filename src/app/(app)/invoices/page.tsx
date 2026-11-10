@@ -12,6 +12,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
+import { trapFocusWithin } from '@/lib/dialog-focus'
 import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
 import { useCurrencyFormat } from '@/contexts/currency-format-context'
@@ -35,6 +36,7 @@ import {
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type InvoiceStatusFilter = 'all' | 'paid' | 'unpaid' | 'overdue' | 'cancelled'
 const visibleInvoiceStatuses = ['sent', 'cancelled', 'paid'] as const
+type InvoicePrintTemplate = 'business' | 'minimal'
 
 const taxCountries = [
   { code: 'AL', label: 'Albania', standardRate: 20, reducedRate: 6 },
@@ -472,6 +474,9 @@ export default function InvoicesPage() {
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null)
   const [printingInvoice, setPrintingInvoice] = useState<InvoiceRecord | null>(null)
   const [combinedPrintInvoices, setCombinedPrintInvoices] = useState<InvoiceRecord[]>([])
+  const [printTemplateDialogOpen, setPrintTemplateDialogOpen] = useState(false)
+  const [printTemplate, setPrintTemplate] = useState<InvoicePrintTemplate>('business')
+  const printDialogRef = useRef<HTMLElement | null>(null)
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
   const [deleteInvoice, setDeleteInvoice] = useState<InvoiceRecord | null>(null)
@@ -601,7 +606,29 @@ export default function InvoicesPage() {
     return window.confirm(t('invoices.legacySnapshotWarning'))
   }
 
-  useBodyScrollLock(Boolean(deleteInvoice))
+  useBodyScrollLock(Boolean(deleteInvoice || printTemplateDialogOpen))
+
+  useEffect(() => {
+    if (!printTemplateDialogOpen) return
+    const dialog = printDialogRef.current
+    const opener = document.activeElement as HTMLElement | null
+    dialog?.querySelector<HTMLElement>('button')?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setPrintTemplateDialogOpen(false)
+        setPrintingInvoice(null)
+        setCombinedPrintInvoices([])
+      } else if (event.key === 'Tab' && dialog) {
+        trapFocusWithin(dialog, event)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      if (opener?.isConnected) opener.focus()
+    }
+  }, [printTemplateDialogOpen])
 
   useEffect(() => {
     if (!currentCompany) {
@@ -1773,6 +1800,11 @@ export default function InvoicesPage() {
     if (!confirmLegacyPresentation([invoice])) return
     setPrintingInvoice(invoice)
     setCombinedPrintInvoices([])
+    setPrintTemplateDialogOpen(true)
+  }
+
+  const runPrint = () => {
+    setPrintTemplateDialogOpen(false)
     window.setTimeout(() => {
       const previousTitle = document.title
       document.title = ' '
@@ -1821,15 +1853,34 @@ export default function InvoicesPage() {
 
     setPrintingInvoice(null)
     setCombinedPrintInvoices(selectedInvoices)
-    window.setTimeout(() => {
-      const previousTitle = document.title
-      document.title = ' '
-      window.print()
-      window.setTimeout(() => {
-        document.title = previousTitle
-      }, 500)
-    }, 50)
+    setPrintTemplateDialogOpen(true)
   }
+
+  const cancelPrintSetup = () => {
+    setPrintTemplateDialogOpen(false)
+    setPrintingInvoice(null)
+    setCombinedPrintInvoices([])
+  }
+
+  const printTemplateDialog = printTemplateDialogOpen ? (
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/40 px-4 py-[max(1rem,env(safe-area-inset-top))] sm:py-12">
+      <section ref={printDialogRef} role="dialog" aria-modal="true" aria-labelledby="invoice-print-template-title" className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+        <h2 id="invoice-print-template-title" className="text-lg font-semibold text-slate-950">{t('invoices.printTemplateTitle')}</h2>
+        <p className="mt-2 text-sm text-slate-600">{t('invoices.printTemplateDescription')}</p>
+        <label className="mt-4 block space-y-1">
+          <span className="text-sm font-medium">{t('invoices.printTemplateLabel')}</span>
+          <AppSelect ariaLabel={t('invoices.printTemplateLabel')} value={printTemplate} onChange={(value) => setPrintTemplate(value as InvoicePrintTemplate)} options={[
+            { value: 'business', label: t('invoices.printTemplateBusiness') },
+            { value: 'minimal', label: t('invoices.printTemplateMinimal') },
+          ]} />
+        </label>
+        <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+          <Button type="button" variant="outline" onClick={cancelPrintSetup}>{t('common.cancel')}</Button>
+          <Button type="button" onClick={runPrint}><Printer className="h-4 w-4" />{t('invoices.print')}</Button>
+        </div>
+      </section>
+    </div>
+  ) : null
 
   if (companyLoading || loading) {
     return (
@@ -1870,6 +1921,17 @@ export default function InvoicesPage() {
 
   return (
     <PageContainer>
+      {printTemplateDialog}
+      {printingInvoice && (
+        <div className="print-area print-invoice hidden">
+          <StandardInvoiceRenderer model={buildInvoiceDocument(printingInvoice, true)} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />
+        </div>
+      )}
+      {combinedPrintInvoices.length > 0 && (
+        <div className="print-area print-invoice print-invoice-batch hidden">
+          {combinedPrintInvoices.map((invoice) => <StandardInvoiceRenderer key={invoice.id} model={buildInvoiceDocument(invoice, false)} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />)}
+        </div>
+      )}
       <PageHeader title={t('invoices.title')} description={`${t('invoices.description')} · ${currentCompany.name}`}>
         <Button onClick={() => showForm ? void closeInvoiceForm() : openCreateForm(filteredClient?.id ?? '')}>
           <FileText className="h-4 w-4" />
@@ -1896,30 +1958,6 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {printingInvoice && (
-        <div className="print-area print-invoice hidden">
-          <StandardInvoiceRenderer
-            model={buildInvoiceDocument(printingInvoice, true)}
-            intlLocale={intlLocale}
-            t={t}
-            currencySymbolPosition={currencySymbolPosition}
-          />
-        </div>
-      )}
-
-      {combinedPrintInvoices.length > 0 && (
-        <div className="print-area print-invoice print-invoice-batch hidden">
-          {combinedPrintInvoices.map((invoice) => (
-            <StandardInvoiceRenderer
-              key={invoice.id}
-              model={buildInvoiceDocument(invoice, false)}
-              intlLocale={intlLocale}
-              t={t}
-              currencySymbolPosition={currencySymbolPosition}
-            />
-          ))}
-        </div>
-      )}
       {message && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{message}</div>}
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
 

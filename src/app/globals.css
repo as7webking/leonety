@@ -831,8 +831,65 @@ html {
   }
 
   .print-area.print-invoice .invoice-print-footer-legal {
-    text-align: right !important;
+    text-align: center !important;
     overflow-wrap: anywhere !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-business h1,
+  .print-area.print-invoice .invoice-print-template-business .invoice-print-meta strong,
+  .print-area.print-invoice .invoice-print-template-business th {
+    color: #2468a8 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-business h1 {
+    text-transform: uppercase;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .print-area.print-invoice .invoice-print-template-business th,
+  .print-area.print-invoice .invoice-print-template-business td {
+    border-color: #b9cde3 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-business .invoice-print-footer {
+    color: #2468a8 !important;
+    border-top-color: #8da9c8 !important;
+    font-weight: 600 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-minimal h1,
+  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-meta strong,
+  .print-area.print-invoice .invoice-print-template-minimal th {
+    color: #111 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-minimal th,
+  .print-area.print-invoice .invoice-print-template-minimal td {
+    border-color: #d1d5db !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-client {
+    grid-column: 2 !important;
+    text-align: right !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-brand {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    grid-template-columns: minmax(0, 1fr) 44px !important;
+    text-align: left !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-logo,
+  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-logo-fallback {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-company {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
   }
 
   .print-area.print-invoice table {
