@@ -783,6 +783,13 @@ html {
     background: transparent !important;
   }
 
+  .print-area.print-invoice .invoice-print-issuer {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    text-align: right !important;
+    overflow-wrap: anywhere !important;
+  }
+
   .print-area.print-invoice .invoice-print-document {
     display: flex !important;
     min-height: 273mm !important;
@@ -871,7 +878,13 @@ html {
 
   .print-area.print-invoice .invoice-print-template-minimal .invoice-print-client {
     grid-column: 2 !important;
+    grid-row: 1 !important;
     text-align: right !important;
+  }
+
+  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-issuer {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
   }
 
   .print-area.print-invoice .invoice-print-template-minimal .invoice-print-brand {

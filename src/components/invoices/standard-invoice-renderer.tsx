@@ -5,6 +5,7 @@ import type { InvoiceDocumentModel, InvoiceDocumentPaymentMethod } from '@/lib/i
 
 interface StandardInvoiceRendererProps {
   model: InvoiceDocumentModel
+  issuerProfile?: { name: string; email: string }
   intlLocale: string
   t: (key: string) => string
   currencySymbolPosition?: CurrencySymbolPosition
@@ -21,7 +22,7 @@ function formatDocumentDate(value: string, intlLocale: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString(intlLocale)
 }
 
-export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPosition = 'automatic', printTemplate = 'business' }: StandardInvoiceRendererProps) {
+export function StandardInvoiceRenderer({ model, issuerProfile, intlLocale, t, currencySymbolPosition = 'automatic', printTemplate = 'business' }: StandardInvoiceRendererProps) {
   const allocationLines = model.payment.allocations.map((payment, index) => (
     <p key={`${payment.method}-${index}`}>{paymentMethodLabel(payment.method, t)}: {formatCurrency(payment.amount, model.currency, intlLocale, currencySymbolPosition)}{payment.reference ? ` · ${payment.reference}` : ''}</p>
   ))
@@ -31,6 +32,7 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
       <div className="invoice-print-header">
         <section className="invoice-print-client text-sm">
           <h1 className="mb-3 text-2xl font-semibold">{t('invoices.documentTitle')}</h1>
+          <p className="invoice-print-buyer-label text-xs font-medium uppercase">{t('invoices.client')}</p>
           <p className="font-semibold">{model.buyer.name || t('invoices.noClient')}</p>
           {model.buyer.visibleFields.company && model.buyer.company && <p>{model.buyer.company}</p>}
           {model.buyer.visibleFields.address && model.buyer.addressLines.map((line) => <p key={line}>{line}</p>)}
@@ -64,10 +66,17 @@ export function StandardInvoiceRenderer({ model, intlLocale, t, currencySymbolPo
             {model.seller.showDetails && model.seller.additionalLegalText && <p className="whitespace-pre-line text-xs text-slate-600">{model.seller.additionalLegalText}</p>}
           </div>
         </div>
+
+        {issuerProfile && (issuerProfile.name || issuerProfile.email) && (
+          <aside className="invoice-print-issuer text-sm">
+            {issuerProfile.name && <p className="font-semibold">{issuerProfile.name}</p>}
+            {issuerProfile.email && <p className="break-all text-xs">{issuerProfile.email}</p>}
+          </aside>
+        )}
       </div>
 
       <div className="invoice-print-meta text-sm">
-        <strong>{model.invoiceNumber}</strong>
+        <strong>{t('invoices.invoiceNumber')}: {model.invoiceNumber}</strong>
         <span>{t('invoices.issueDate')}: {formatDocumentDate(model.issueDate, intlLocale)}</span>
         {model.dueDate && <span>{t('invoices.dueDate')}: {formatDocumentDate(model.dueDate, intlLocale)}</span>}
         <span>{t('invoices.status')}: {t(`invoices.status.${model.status}`)}</span>

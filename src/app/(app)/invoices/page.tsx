@@ -495,6 +495,7 @@ export default function InvoicesPage() {
   const localDraftWriteRef = useRef<Promise<unknown> | null>(null)
   const openedNotificationInvoiceRef = useRef('')
   const [companyLogo, setCompanyLogo] = useState('')
+  const [issuerProfile, setIssuerProfile] = useState<{ userId: string; name: string; email: string } | null>(null)
   const [companyIban, setCompanyIban] = useState('')
   const [companyBic, setCompanyBic] = useState('')
   const [companyBrandingLoaded, setCompanyBrandingLoaded] = useState(false)
@@ -673,6 +674,28 @@ export default function InvoicesPage() {
       })
     return () => { active = false }
   }, [currentCompany?.id])
+
+  useEffect(() => {
+    setIssuerProfile(null)
+    if (!userId) return
+
+    let active = true
+    void supabase
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active || error || !data) return
+        setIssuerProfile({
+          userId,
+          name: data.full_name?.trim() ?? '',
+          email: data.email?.trim() ?? '',
+        })
+      })
+
+    return () => { active = false }
+  }, [supabase, userId])
 
   const handleIncludeCompanyAddressChange = (checked: boolean) => {
     setIncludeCompanyAddress(checked)
@@ -1924,12 +1947,12 @@ export default function InvoicesPage() {
       {printTemplateDialog}
       {printingInvoice && (
         <div className="print-area print-invoice hidden">
-          <StandardInvoiceRenderer model={buildInvoiceDocument(printingInvoice, true)} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />
+          <StandardInvoiceRenderer model={buildInvoiceDocument(printingInvoice, true)} issuerProfile={issuerProfile?.userId === userId ? issuerProfile : undefined} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />
         </div>
       )}
       {combinedPrintInvoices.length > 0 && (
         <div className="print-area print-invoice print-invoice-batch hidden">
-          {combinedPrintInvoices.map((invoice) => <StandardInvoiceRenderer key={invoice.id} model={buildInvoiceDocument(invoice, false)} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />)}
+          {combinedPrintInvoices.map((invoice) => <StandardInvoiceRenderer key={invoice.id} model={buildInvoiceDocument(invoice, false)} issuerProfile={issuerProfile?.userId === userId ? issuerProfile : undefined} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />)}
         </div>
       )}
       <PageHeader title={t('invoices.title')} description={`${t('invoices.description')} · ${currentCompany.name}`}>
