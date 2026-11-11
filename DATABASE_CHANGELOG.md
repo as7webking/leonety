@@ -663,9 +663,16 @@ These are production catalog findings, not migration-history claims:
   Do not apply it to production while equivalent columns remain present. No
   historical backfill was performed by this work.
 - **Snapshot strategy:** no new snapshot column or trigger change is proposed.
-  Application snapshot version 2 captures seller, buyer, saved line items, existing
-  totals, payment presentation and payment terms when a draft is first issued.
-  Existing snapshots and finalized invoices must not be rewritten.
+  Application snapshot version 2 captures seller and buyer presentation, each
+  saved line item (description, quantity, unit price, tax rate, line total and
+  optional unit), payment presentation, payment terms, and the already-persisted
+  subtotal/tax/total when a draft is first issued. Rendering does not recalculate
+  these totals. Existing snapshots and finalized invoices must not be rewritten.
+- **Legacy print behavior:** finalized invoices without a snapshot require explicit
+  confirmation. Since original seller/customer details cannot be reconstructed,
+  that print uses current workspace/client details but keeps saved invoice lines
+  and totals unchanged. Printing does not backfill a snapshot, update the invoice,
+  or recalculate totals.
 - **Limitations:** discounts are intentionally excluded because no established
   discount storage/calculation semantics were found. No account credentials are
   stored. Existing workspace RLS policies are not modified by this additive change.

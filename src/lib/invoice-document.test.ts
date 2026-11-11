@@ -213,6 +213,12 @@ test('version 2 snapshots freeze seller, buyer, all line items, payment presenta
   })
 
   assert.equal(snapshot.schemaVersion, 2)
+  assert.deepEqual(snapshot.seller, presentation.seller)
+  assert.equal(snapshot.buyer.vatId, 'BUYER-VAT')
+  assert.deepEqual(snapshot.items, model.items)
+  assert.deepEqual(snapshot.payment, model.payment)
+  assert.equal(snapshot.paymentTerms, 'Pay within 14 days')
+  assert.deepEqual(snapshot.totals, { subtotal: 50, taxAmount: 9.5, total: 59.5 })
   assert.equal(rendered.seller.name, 'Seller GmbH')
   assert.equal(rendered.seller.legalForm, 'GmbH')
   assert.equal(rendered.seller.taxNumber, 'SELLER-TAX')
@@ -226,6 +232,32 @@ test('version 2 snapshots freeze seller, buyer, all line items, payment presenta
   assert.equal(rendered.items[0].description, 'Service\nwith details')
   assert.deepEqual(rendered.totals, { subtotal: 50, taxAmount: 9.5, total: 59.5 })
   assert.equal(rendered.paymentTerms, 'Pay within 14 days')
+})
+
+test('legacy finalized invoice without a snapshot prints saved lines and totals without backfill or recalculation', async () => {
+  const invoice = {
+    id: 'legacy-no-snapshot', invoice_number: 'OLD-1', status: 'sent' as const,
+    issue_date: '2020-01-01', due_date: null, currency: 'EUR', notes: null,
+    subtotal: 80, tax_amount: 15.2, total: 95.2, document_snapshot: null,
+    invoice_items: [{ id: 'old-line', description: 'Saved service', quantity: 4, unit_price: 20, tax_rate: 19, line_total: 80 }],
+    clients: { name: 'Current client record', client_company: null, email: null, phone: null, tax_number: null },
+  }
+  const originalValues = structuredClone(invoice)
+  const model = createInvoiceDocumentModel(invoice, {
+    seller: { name: 'Current workspace record', logo: '', address: '', email: '', taxNumber: '', iban: '', bic: '', showDetails: true },
+    buyerAddressLines: [],
+    buyerVisibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true },
+    payment: { method: 'bank_transfer', amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true },
+  })
+  const page = await readFile(new URL('../app/(app)/invoices/page.tsx', import.meta.url), 'utf8')
+
+  assert.equal(model.seller.name, 'Current workspace record')
+  assert.equal(model.buyer.name, 'Current client record')
+  assert.deepEqual(model.items, [{ id: 'old-line', description: 'Saved service', quantity: 4, unitPrice: 20, taxRate: 19, lineTotal: 80, unit: null }])
+  assert.deepEqual(model.totals, { subtotal: 80, taxAmount: 15.2, total: 95.2 })
+  assert.deepEqual(invoice, originalValues)
+  assert.match(page, /const captureDocumentSnapshot = formData\.status !== 'draft'[\s\S]*!editingInvoice\?\.document_snapshot[\s\S]*\(!editingInvoice \|\| editingInvoice\.status === 'draft'\)/)
+  assert.match(page, /confirmLegacyPresentation/)
 })
 
 test('workspace legal API and invoice editor use verified server-backed fields and persist item units', async () => {

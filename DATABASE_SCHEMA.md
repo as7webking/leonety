@@ -201,13 +201,20 @@ current repository cannot reproduce the full production database from scratch.
 - **Modules:** invoices, print/PDF rendering, contracts, finance.
 - **Production-verified field:** nullable `document_snapshot` JSONB exists with
   snapshot protection/requirement triggers; migration-history status remains
-  unknown. Current application snapshot version 2 captures seller, buyer, all saved
-  line items, canonical totals, payment presentation and payment terms on first
-  issue. It does not backfill or rewrite older finalized invoices.
-- **Legacy behavior:** version 1 snapshots retain their original seller/buyer
-  presentation; the renderer reads line items and canonical totals from their
-  invoice records. Finalized invoices without a snapshot use the explicitly warned
-  legacy live-data print path. No historical values should be fabricated.
+  unknown. On first issue (including draft finalization), application snapshot
+  version 2 freezes the seller and buyer presentation, every saved line item
+  (description, quantity, unit price, tax rate, line total and optional unit),
+  payment presentation, payment terms, and the already-persisted subtotal, tax
+  amount and total. The renderer reads these totals and never recalculates them.
+  Snapshot capture is not a backfill: existing snapshots and finalized invoices
+  are not rewritten.
+- **Legacy behavior:** version 1 snapshots retain their captured seller/buyer
+  presentation; absent snapshot details are not inferred. A finalized invoice with
+  no snapshot requires an explicit print confirmation. Its print uses current
+  workspace/client details because historical party details cannot be recovered,
+  while line items and totals are rendered from the invoice's saved records as-is.
+  Printing does not create a snapshot, mutate the invoice or recalculate totals.
+  No historical values should be fabricated.
 
 ### `invoice_items`
 

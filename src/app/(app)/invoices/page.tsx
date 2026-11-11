@@ -1517,6 +1517,7 @@ export default function InvoicesPage() {
       invoicePayload.contract_id = sourceContractId
     }
 
+    // Capture only when a draft is first issued; never backfill an older finalized invoice.
     const captureDocumentSnapshot = formData.status !== 'draft'
       && !editingInvoice?.document_snapshot
       && (!editingInvoice || editingInvoice.status === 'draft')

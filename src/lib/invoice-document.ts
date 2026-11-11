@@ -211,6 +211,7 @@ export function createInvoiceDocumentSnapshot(
   model: InvoiceDocumentModel,
   capturedAt: string,
 ): InvoiceDocumentSnapshot {
+  // Version 2 freezes the complete presentation at first issue; totals are copied, never recomputed here.
   return {
     schemaVersion: 2,
     capturedAt,
