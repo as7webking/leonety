@@ -260,6 +260,35 @@ test('legacy finalized invoice without a snapshot prints saved lines and totals 
   assert.match(page, /confirmLegacyPresentation/)
 })
 
+test('long descriptions and large invoice item sets remain intact for multi-page A4 print', async () => {
+  const styles = await readFile(new URL('../app/globals.css', import.meta.url), 'utf8')
+  const longDescription = `Primary service\n${'Detailed scope and delivery conditions. '.repeat(80)}`
+  const invoice = {
+    id: 'multi-page-invoice', invoice_number: 'MP-1', status: 'sent' as const,
+    issue_date: '2026-11-09', due_date: null, currency: 'EUR', notes: null,
+    subtotal: 120, tax_amount: 22.8, total: 142.8,
+    invoice_items: Array.from({ length: 120 }, (_, index) => ({
+      id: `line-${index}`, description: index === 0 ? longDescription : `Service ${index + 1}`,
+      quantity: 1, unit_price: 1, tax_rate: 19, line_total: 1,
+    })),
+    clients: null,
+  }
+  const model = createInvoiceDocumentModel(invoice, {
+    seller: { name: 'Seller', logo: '', address: '', email: '', taxNumber: '', iban: '', bic: '', showDetails: true },
+    buyerAddressLines: [],
+    buyerVisibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true },
+    payment: { method: 'bank_transfer', amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true },
+  })
+
+  assert.equal(model.items.length, 120)
+  assert.equal(model.items[0].description, longDescription)
+  assert.deepEqual(model.totals, { subtotal: 120, taxAmount: 22.8, total: 142.8 })
+  assert.match(styles, /\.print-area\.print-invoice thead\s*\{\s*display:\s*table-header-group/)
+  assert.match(styles, /\.print-area\.print-invoice tr\s*\{\s*break-inside:\s*avoid/)
+  assert.match(styles, /\.print-area\.print-invoice \.invoice-print-description\s*\{[\s\S]*?white-space:\s*pre-wrap[\s\S]*?overflow-wrap:\s*anywhere/)
+  assert.match(styles, /@page\s*\{[\s\S]*?size:\s*A4 portrait/)
+})
+
 test('workspace legal API and invoice editor use verified server-backed fields and persist item units', async () => {
   const [route, settings, invoicePage, clientForm, offline, settingsFields, clientPayload] = await Promise.all([
     readFile(new URL('app/api/workspaces/legal/route.ts', root), 'utf8'),
