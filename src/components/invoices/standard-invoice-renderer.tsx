@@ -29,6 +29,7 @@ export function StandardInvoiceRenderer({ model, issuerProfile, intlLocale, t, c
 
   return (
     <article className={`invoice-print-document invoice-print-template-${printTemplate}`}>
+      <style media="print">{`@page { @bottom-right { content: ${JSON.stringify(`${t('kassenbuch.page')} `)} counter(page) " / " counter(pages); color: #4b5563; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; } }`}</style>
       <div className="invoice-print-header">
         <section className="invoice-print-client text-sm">
           <h1 className="mb-3 text-2xl font-semibold">{t('invoices.documentTitle')}</h1>
@@ -54,10 +55,10 @@ export function StandardInvoiceRenderer({ model, issuerProfile, intlLocale, t, c
             <h2 className="text-xl font-semibold">{model.seller.name}</h2>
             {model.seller.showDetails && model.seller.legalForm && <p className="text-xs text-slate-600">{model.seller.legalForm}</p>}
             {model.seller.showDetails && model.seller.address && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{model.seller.address}</p>}
-            {model.seller.showDetails && model.seller.email && <p className="text-xs text-slate-600">{model.seller.email}</p>}
-            {model.seller.showDetails && model.seller.phone && <p className="text-xs text-slate-600">{model.seller.phone}</p>}
-            {model.seller.showDetails && model.seller.taxNumber && <p className="text-xs text-slate-600">{t('contracts.party.taxNumber')}: {model.seller.taxNumber}</p>}
-            {model.seller.showDetails && model.seller.vatId && <p className="text-xs text-slate-600">{t('workspaceLegal.vatId')}: {model.seller.vatId}</p>}
+            {model.seller.showDetails && <p className="invoice-print-seller-detail text-xs text-slate-600"><span>{t('contracts.party.email')}:</span> {model.seller.email}</p>}
+            {model.seller.showDetails && <p className="invoice-print-seller-detail text-xs text-slate-600"><span>{t('contracts.party.phone')}:</span> {model.seller.phone ?? ''}</p>}
+            {model.seller.showDetails && <p className="invoice-print-seller-detail text-xs text-slate-600"><span>{t('contracts.party.taxNumber')}:</span> {model.seller.taxNumber}</p>}
+            {model.seller.showDetails && <p className="invoice-print-seller-detail text-xs text-slate-600"><span>{t('contracts.party.vatId')}:</span> {model.seller.vatId ?? ''}</p>}
             {model.seller.showDetails && model.seller.representative && <p className="text-xs text-slate-600">{t('workspaceLegal.representative')}: {model.seller.representative}</p>}
             {model.seller.showDetails && model.seller.commercialRegister && <p className="text-xs text-slate-600">{t('workspaceLegal.commercialRegister')}: {model.seller.commercialRegister}{model.seller.registrationNumber ? ` ${model.seller.registrationNumber}` : ''}</p>}
             {model.seller.showDetails && !model.seller.commercialRegister && model.seller.registrationNumber && <p className="text-xs text-slate-600">{t('workspaceLegal.commercialRegister')}: {model.seller.registrationNumber}</p>}
@@ -106,7 +107,17 @@ export function StandardInvoiceRenderer({ model, issuerProfile, intlLocale, t, c
         </div>
       )}
 
-      {model.seller.showDetails && model.seller.iban && <footer className="invoice-print-footer"><div className="invoice-print-footer-legal"><p><strong>IBAN:</strong> {model.seller.iban}</p></div></footer>}
+      {model.seller.showDetails && <footer className="invoice-print-footer">
+        <div className="invoice-print-footer-legal">
+          <p className="font-semibold">{t('invoiceSettings.paymentDetails')}</p>
+          <dl>
+            <div><dt>{t('invoiceSettings.accountHolder')}:</dt><dd>{model.seller.accountHolder ?? ''}</dd></div>
+            <div><dt>{t('invoiceSettings.bankName')}:</dt><dd>{model.seller.bankName ?? ''}</dd></div>
+            <div><dt>IBAN:</dt><dd>{model.seller.iban}</dd></div>
+            <div><dt>BIC:</dt><dd>{model.seller.bic}</dd></div>
+          </dl>
+        </div>
+      </footer>}
     </article>
   )
 }

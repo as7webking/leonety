@@ -822,9 +822,10 @@ html {
   }
 
   .print-area.print-invoice .invoice-print-footer {
-    display: block !important;
+    display: flex !important;
+    justify-content: flex-end !important;
     margin-top: auto !important;
-    padding-top: 8px !important;
+    padding-top: 6px !important;
     border-top: 1px solid #94a3b8 !important;
     font-size: 8px !important;
     line-height: 1.35 !important;
@@ -838,7 +839,33 @@ html {
   }
 
   .print-area.print-invoice .invoice-print-footer-legal {
-    text-align: center !important;
+    width: min(100%, 92mm) !important;
+    margin-left: auto !important;
+    text-align: right !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .print-area.print-invoice .invoice-print-footer-legal dl {
+    display: grid !important;
+    gap: 1px 8px !important;
+    margin: 2px 0 0 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-footer-legal dl > div {
+    display: grid !important;
+    grid-template-columns: minmax(24mm, max-content) minmax(0, 1fr) !important;
+    gap: 4px !important;
+  }
+
+  .print-area.print-invoice .invoice-print-footer-legal dt {
+    text-align: right !important;
+    font-weight: 600 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-footer-legal dd {
+    min-width: 0 !important;
+    margin: 0 !important;
+    text-align: left !important;
     overflow-wrap: anywhere !important;
   }
 
