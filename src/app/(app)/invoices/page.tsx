@@ -291,7 +291,7 @@ function loadClientPrintFields(companyId: string | null | undefined): InvoiceCli
       phone: typeof parsed.phone === 'boolean' ? parsed.phone : true,
       address: typeof parsed.address === 'boolean' ? parsed.address : true,
       taxNumber: typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : true,
-      vatId: typeof parsed.vatId === 'boolean' ? parsed.vatId : true,
+      vatId: typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : typeof parsed.vatId === 'boolean' ? parsed.vatId : true,
     }
   } catch {
     return defaultClientPrintFields
@@ -582,6 +582,7 @@ export default function InvoicesPage() {
     const paymentMeta = loadInvoicePaymentMeta(invoice.id)
     return createInvoiceDocumentModel(invoice, {
       seller: sellerPresentation,
+      issuerProfile: issuerProfile?.userId === userId ? { name: issuerProfile.name, email: issuerProfile.email } : null,
       buyerAddressLines: getClientAddressLines(invoice.clients, locale),
       buyerVisibleFields: clientPrintFields,
       paymentTerms: invoice.payment_terms ?? null,
@@ -706,7 +707,9 @@ export default function InvoicesPage() {
 
   const handleClientPrintFieldChange = (field: keyof InvoiceClientPrintFields, checked: boolean) => {
     setClientPrintFields((current) => {
-      const next = { ...current, [field]: checked }
+      const next = field === 'taxNumber'
+        ? { ...current, taxNumber: checked, vatId: checked }
+        : { ...current, [field]: checked }
       if (currentCompany) {
         saveClientPrintFields(currentCompany.id, next)
       }
@@ -1538,6 +1541,7 @@ export default function InvoicesPage() {
         clients: snapshotClient,
       }, {
         seller: sellerPresentation,
+        issuerProfile: issuerProfile?.userId === userId ? { name: issuerProfile.name, email: issuerProfile.email } : null,
         buyerAddressLines: getClientAddressLines(snapshotClient, locale),
         buyerVisibleFields: clientPrintFields,
         paymentTerms: formData.payment_terms.trim() || null,
@@ -2352,7 +2356,6 @@ export default function InvoicesPage() {
                     ['company', 'invoices.includeClientCompany'],
                     ['email', 'invoices.includeClientEmail'],
                     ['phone', 'invoices.includeClientPhone'],
-                    ['address', 'invoices.includeClientAddress'],
                     ['taxNumber', 'invoices.includeClientTaxNumber'],
                   ] as Array<[keyof InvoiceClientPrintFields, string]>).map(([field, labelKey]) => (
                     <label key={field} className="flex items-center gap-2 text-sm text-slate-700">

@@ -17,6 +17,11 @@ export interface InvoiceDocumentPaymentAllocation {
   reference: string | null
 }
 
+export interface InvoiceIssuerProfile {
+  name: string
+  email: string
+}
+
 export interface InvoiceDocumentModel {
   id: string
   templateId: 'standard'
@@ -27,6 +32,7 @@ export interface InvoiceDocumentModel {
   currency: string
   notes: string | null
   paymentTerms: string | null
+  issuerProfile?: InvoiceIssuerProfile | null
   seller: {
     name: string
     legalForm?: string
@@ -98,6 +104,14 @@ export type InvoiceDocumentSnapshot = InvoiceDocumentSnapshotBase & (
     payment: InvoiceDocumentModel['payment']
     paymentTerms: string | null
   }
+  | {
+    schemaVersion: 3
+    issuerProfile: InvoiceIssuerProfile | null
+    items: InvoiceDocumentItem[]
+    totals: InvoiceDocumentModel['totals']
+    payment: InvoiceDocumentModel['payment']
+    paymentTerms: string | null
+  }
 )
 
 interface InvoiceDocumentSource {
@@ -139,6 +153,7 @@ interface InvoiceDocumentSource {
 
 interface InvoiceDocumentPresentation {
   seller: InvoiceDocumentModel['seller']
+  issuerProfile?: InvoiceIssuerProfile | null
   buyerAddressLines: string[]
   buyerVisibleFields: InvoiceDocumentModel['buyer']['visibleFields']
   payment: Omit<InvoiceDocumentModel['payment'], 'isPaid'>
@@ -151,6 +166,7 @@ export function createInvoiceDocumentModel(
 ): InvoiceDocumentModel {
   const snapshot = invoice.document_snapshot
   const snapshotSeller = snapshot?.seller
+  const hasFullSnapshot = snapshot?.schemaVersion === 2 || snapshot?.schemaVersion === 3
   const seller = {
     ...(snapshotSeller ?? presentation.seller),
     // This is a current print preference, not historical invoice data.
@@ -166,9 +182,8 @@ export function createInvoiceDocumentModel(
     dueDate: invoice.due_date,
     currency: invoice.currency,
     notes: invoice.notes,
-    paymentTerms: snapshot?.schemaVersion === 2
-      ? snapshot.paymentTerms ?? null
-      : presentation.paymentTerms ?? null,
+    paymentTerms: hasFullSnapshot ? snapshot.paymentTerms ?? null : presentation.paymentTerms ?? null,
+    issuerProfile: snapshot?.schemaVersion === 3 ? snapshot.issuerProfile : presentation.issuerProfile,
     seller,
     buyer: {
       ...(snapshot?.buyer ?? {
@@ -184,7 +199,7 @@ export function createInvoiceDocumentModel(
       addressLines: [...(snapshot?.buyer.addressLines ?? presentation.buyerAddressLines)],
       visibleFields: { ...(snapshot?.buyer.visibleFields ?? presentation.buyerVisibleFields) },
     },
-    items: snapshot?.schemaVersion === 2 ? snapshot.items.map((item) => ({ ...item })) : (invoice.invoice_items ?? []).map((item) => ({
+    items: hasFullSnapshot ? snapshot.items.map((item) => ({ ...item })) : (invoice.invoice_items ?? []).map((item) => ({
       id: item.id,
       description: item.description,
       quantity: item.quantity,
@@ -195,13 +210,13 @@ export function createInvoiceDocumentModel(
     })),
     // These are canonical persisted invoice values. Renderers must never recalculate them.
     totals: {
-      subtotal: snapshot?.schemaVersion === 2 ? snapshot.totals.subtotal : invoice.subtotal,
-      taxAmount: snapshot?.schemaVersion === 2 ? snapshot.totals.taxAmount : invoice.tax_amount,
-      total: snapshot?.schemaVersion === 2 ? snapshot.totals.total : invoice.total,
+      subtotal: hasFullSnapshot ? snapshot.totals.subtotal : invoice.subtotal,
+      taxAmount: hasFullSnapshot ? snapshot.totals.taxAmount : invoice.tax_amount,
+      total: hasFullSnapshot ? snapshot.totals.total : invoice.total,
     },
     payment: {
-      ...(snapshot?.schemaVersion === 2 ? snapshot.payment : presentation.payment),
-      allocations: (snapshot?.schemaVersion === 2 ? snapshot.payment.allocations : presentation.payment.allocations).map((allocation) => ({ ...allocation })),
+      ...(hasFullSnapshot ? snapshot.payment : presentation.payment),
+      allocations: (hasFullSnapshot ? snapshot.payment.allocations : presentation.payment.allocations).map((allocation) => ({ ...allocation })),
       isPaid: invoice.status === 'paid',
     },
   }
@@ -211,16 +226,32 @@ export function createInvoiceDocumentSnapshot(
   model: InvoiceDocumentModel,
   capturedAt: string,
 ): InvoiceDocumentSnapshot {
-  // Version 2 freezes the complete presentation at first issue; totals are copied, never recomputed here.
+  // Version 3 also freezes the optionally displayed issuer profile; totals are copied, never recomputed.
+  const seller = model.seller.showDetails
+    ? { ...model.seller }
+    : {
+      ...model.seller,
+      legalForm: '', address: '', email: '', taxNumber: '', vatId: '', phone: '',
+      representative: '', commercialRegister: '', registerCourt: '', registrationNumber: '',
+      professionalRegulatoryInfo: '', additionalLegalText: '', iban: '', bic: '',
+      accountHolder: '', bankName: '',
+    }
+  const buyer = model.buyer
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     capturedAt,
     templateId: model.templateId,
-    seller: { ...model.seller },
+    seller,
+    issuerProfile: model.seller.showDetails ? model.issuerProfile ?? null : null,
     buyer: {
-      ...model.buyer,
-      addressLines: [...model.buyer.addressLines],
-      visibleFields: { ...model.buyer.visibleFields },
+      ...buyer,
+      company: buyer.visibleFields.company ? buyer.company : null,
+      email: buyer.visibleFields.email ? buyer.email : null,
+      phone: buyer.visibleFields.phone ? buyer.phone : null,
+      taxNumber: buyer.visibleFields.taxNumber ? buyer.taxNumber : null,
+      vatId: buyer.visibleFields.taxNumber && buyer.visibleFields.vatId ? buyer.vatId ?? null : null,
+      addressLines: [...buyer.addressLines],
+      visibleFields: { ...buyer.visibleFields },
     },
     items: model.items.map((item) => ({ ...item })),
     totals: { ...model.totals },

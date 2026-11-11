@@ -23,6 +23,7 @@ function formatDocumentDate(value: string, intlLocale: string) {
 }
 
 export function StandardInvoiceRenderer({ model, issuerProfile, intlLocale, t, currencySymbolPosition = 'automatic', printTemplate = 'business' }: StandardInvoiceRendererProps) {
+  const issuer = model.issuerProfile === undefined ? issuerProfile : model.issuerProfile
   const allocationLines = model.payment.allocations.map((payment, index) => (
     <p key={`${payment.method}-${index}`}>{paymentMethodLabel(payment.method, t)}: {formatCurrency(payment.amount, model.currency, intlLocale, currencySymbolPosition)}{payment.reference ? ` · ${payment.reference}` : ''}</p>
   ))
@@ -34,13 +35,13 @@ export function StandardInvoiceRenderer({ model, issuerProfile, intlLocale, t, c
         <section className="invoice-print-client text-sm">
           <h1 className="mb-3 text-2xl font-semibold">{t('invoices.documentTitle')}</h1>
           <p className="invoice-print-buyer-label text-xs font-medium uppercase">{t('invoices.client')}</p>
-          <p className="font-semibold">{model.buyer.name || t('invoices.noClient')}</p>
+          <p className="font-semibold">{model.buyer.name}</p>
           {model.buyer.visibleFields.company && model.buyer.company && <p>{model.buyer.company}</p>}
-          {model.buyer.visibleFields.address && model.buyer.addressLines.map((line) => <p key={line}>{line}</p>)}
+          {model.buyer.addressLines.map((line) => <p key={line}>{line}</p>)}
           {model.buyer.visibleFields.email && model.buyer.email && <p>{model.buyer.email}</p>}
           {model.buyer.visibleFields.phone && model.buyer.phone && <p>{model.buyer.phone}</p>}
           {model.buyer.visibleFields.taxNumber && model.buyer.taxNumber && <p>{t('contracts.party.taxNumber')}: {model.buyer.taxNumber}</p>}
-          {model.buyer.visibleFields.vatId && model.buyer.vatId && <p>{t('contracts.party.vatId')}: {model.buyer.vatId}</p>}
+          {model.buyer.visibleFields.taxNumber && model.buyer.visibleFields.vatId && model.buyer.vatId && <p>{t('contracts.party.vatId')}: {model.buyer.vatId}</p>}
         </section>
 
         <div className="invoice-print-brand">
@@ -68,10 +69,10 @@ export function StandardInvoiceRenderer({ model, issuerProfile, intlLocale, t, c
           </div>
         </div>
 
-        {issuerProfile && (issuerProfile.name || issuerProfile.email) && (
+        {model.seller.showDetails && issuer && (issuer.name || issuer.email) && (
           <aside className="invoice-print-issuer text-sm">
-            {issuerProfile.name && <p className="font-semibold">{issuerProfile.name}</p>}
-            {issuerProfile.email && <p className="break-all text-xs">{issuerProfile.email}</p>}
+            {issuer.name && <p className="font-semibold">{issuer.name}</p>}
+            {issuer.email && <p className="break-all text-xs">{issuer.email}</p>}
           </aside>
         )}
       </div>
