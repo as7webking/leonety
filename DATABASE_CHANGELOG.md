@@ -77,14 +77,28 @@ Status meanings:
 ### PREPARED - NOT APPLIED
 
 - Invoice party and payment presentation fields:
-  `supabase/migrations/20261109100000.sql`. Prepared from the production catalog
-  result supplied on 2026-11-09. Adds nullable company legal/bank fields, a distinct
-  client VAT ID, invoice-specific payment terms, and an optional invoice-item unit.
-  `companies.tax_number` was not included in the inspection output; its
-  `ADD COLUMN IF NOT EXISTS` is guarded but its existing type/presence must be
-  inspected before applying. No historical rows are backfilled; RLS, grants, totals,
-  VAT, and discount behavior are unchanged. Do not mark APPLIED until manually
-  executed and verified.
+  `supabase/migrations/20261109100000.sql`. The supplied production catalog results
+  on 2026-11-09 verify every proposed column as present with type `text`, including
+  `companies.tax_number`. The migration file's execution is not established by
+  column presence alone. Do not apply it to production while these objects remain
+  present; no additional migration is required for these fields. It remains
+  `PREPARED` in repository history and has not been marked `APPLIED`.
+
+### 2026-11-10 - Invoice payment storage schema verification
+
+- **Status:** `PRODUCTION VERIFIED`; no migration prepared because no required
+  payment column was missing.
+- **Evidence:** supplied read-only result for `public.invoice_payments` shows
+  `invoice_id uuid NOT NULL`, `company_id uuid NOT NULL`, `method text NOT NULL`,
+  `amount numeric NOT NULL`, `currency text NOT NULL DEFAULT 'EUR'`,
+  `paid_at date NOT NULL DEFAULT CURRENT_DATE`, and nullable `reference text` and
+  `notes text`.
+- **Repository comparison:** application writes and reads these columns. The
+  repository baseline references `invoice_payments` but does not define its full
+  table creation schema.
+- **Limitations:** this inspection did not establish constraints, indexes, RLS,
+  grants, or which migration/manual operation created the table. No SQL was run and
+  no database object was changed.
 
 ### NO ACTION REQUIRED
 
@@ -630,26 +644,28 @@ These are production catalog findings, not migration-history claims:
 
 ### 2026-11-09 - Invoice party and payment presentation fields
 
-- **Status:** `PREPARED`; not applied to production.
+- **Status:** `PREPARED`; execution of this file is not established. The equivalent
+  production columns were subsequently verified present.
 - **Migration filename:** `supabase/migrations/20261109100000.sql`
 - **Purpose:** persist optional seller legal/bank details, distinguish customer VAT
   ID from customer tax number, preserve invoice payment terms, and store an optional
   display unit for each invoice line.
 - **Main objects:** nullable columns on `companies`, `clients`, `invoices`, and
   `invoice_items`.
-- **Production evidence:** the supplied read-only result marked `legal_form`,
-  `account_holder`, `bank_name`, `iban`, `bic`, company/invoice `payment_terms`,
-  client `vat_id`, and invoice-item `unit` missing. `companies.tax_number` was not
-  included in the result and remains to be verified. Existing `document_snapshot`
-  is JSONB and already has immutable snapshot protections.
-- **Verification status:** migration prepared only. It has not been executed; no
-  production mutation or historical backfill was performed.
-- **Snapshot strategy:** no new snapshot column or trigger change is proposed. A
-  future application change may use a new snapshot schema version for newly issued
-  invoices, capturing seller, buyer, saved line items and payment presentation at
-  the moment the invoice first becomes non-draft. Existing snapshots and finalized
-  invoices must not be rewritten, and the existing immutability protection remains
-  in force.
+- **Production evidence:** subsequent catalog results verify `companies.legal_form`,
+  `companies.tax_number`, `companies.account_holder`, `companies.bank_name`,
+  `companies.iban`, `companies.bic`, `companies.payment_terms`, `clients.vat_id`,
+  `invoices.payment_terms`, and `invoice_items.unit` as present `text` columns.
+  `invoices.document_snapshot` remains production-verified JSONB with its existing
+  immutable-snapshot protections.
+- **Verification status:** schema compatibility is confirmed for the listed
+  columns; whether this particular migration file was executed is not established.
+  Do not apply it to production while equivalent columns remain present. No
+  historical backfill was performed by this work.
+- **Snapshot strategy:** no new snapshot column or trigger change is proposed.
+  Application snapshot version 2 captures seller, buyer, saved line items, existing
+  totals, payment presentation and payment terms when a draft is first issued.
+  Existing snapshots and finalized invoices must not be rewritten.
 - **Limitations:** discounts are intentionally excluded because no established
   discount storage/calculation semantics were found. No account credentials are
   stored. Existing workspace RLS policies are not modified by this additive change.

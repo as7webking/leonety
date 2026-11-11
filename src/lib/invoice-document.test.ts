@@ -229,19 +229,23 @@ test('version 2 snapshots freeze seller, buyer, all line items, payment presenta
 })
 
 test('workspace legal API and invoice editor use verified server-backed fields and persist item units', async () => {
-  const [route, settings, invoicePage, clientForm, offline] = await Promise.all([
+  const [route, settings, invoicePage, clientForm, offline, settingsFields, clientPayload] = await Promise.all([
     readFile(new URL('app/api/workspaces/legal/route.ts', root), 'utf8'),
     readFile(new URL('components/settings/workspace-legal-settings.tsx', root), 'utf8'),
     readFile(new URL('app/(app)/invoices/page.tsx', root), 'utf8'),
     readFile(new URL('components/clients/client-form.tsx', root), 'utf8'),
     readFile(new URL('./offline-drafts.ts', import.meta.url), 'utf8'),
+    readFile(new URL('./workspace-legal-settings.ts', import.meta.url), 'utf8'),
+    readFile(new URL('./client-write-payload.ts', import.meta.url), 'utf8'),
   ])
   for (const field of ['legal_form', 'tax_number', 'account_holder', 'bank_name', 'iban', 'bic', 'payment_terms']) {
-    assert.match(route, new RegExp(`'${field}'`))
+    assert.match(`${route}\n${settingsFields}`, new RegExp(`'${field}'`))
     assert.match(settings, new RegExp(field))
   }
   assert.match(route, /requireOwnedCompany/)
-  assert.match(clientForm, /vat_id:/)
+  assert.match(clientForm, /value=\{form\.vat_id\}/)
+  assert.match(clientPayload, /tax_number: form\.tax_number\.trim\(\) \|\| null/)
+  assert.match(clientPayload, /vat_id: form\.vat_id\.trim\(\) \|\| null/)
   assert.match(invoicePage, /payment_terms:\s*formData\.payment_terms/)
   assert.match(invoicePage, /unit: item\.unit\?\.trim\(\) \|\| null/)
   assert.match(offline, /paymentTerms\?: string/)

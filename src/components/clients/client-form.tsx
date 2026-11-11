@@ -10,6 +10,7 @@ import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { clientToForm, emptyClientForm, type ClientFormValues, type ClientRecord } from '@/lib/client-crm'
+import { clientFormToWritePayload } from '@/lib/client-write-payload'
 import { resolveCountryCode } from '@/lib/countries'
 import { createClient } from '@/lib/supabase-client'
 
@@ -87,24 +88,7 @@ export function ClientForm({ client, onSaved, onCancel }: ClientFormProps) {
     }
 
     setSaving(true)
-    const payload = {
-      company_id: currentCompany.id,
-      name: form.name.trim() || form.client_company.trim(),
-      client_company: form.clientType === 'company' ? form.client_company.trim() || null : null,
-      email: form.email.trim() || null,
-      phone: form.phone.trim() || null,
-      street: form.street.trim() || null,
-      house_number: form.house_number.trim() || null,
-      postal_code: form.postal_code.trim() || null,
-      city: form.city.trim() || null,
-      country: form.country.trim() || null,
-      tax_number: form.tax_number.trim() || null,
-      vat_id: form.vat_id.trim() || null,
-      interested_in: form.interested_in.trim() || null,
-      notes: form.notes.trim() || null,
-      status: form.status,
-      updated_at: new Date().toISOString(),
-    }
+    const payload = clientFormToWritePayload(currentCompany.id, form, new Date().toISOString())
 
     const save = async (value: Record<string, unknown>) => client
       ? await supabase.from('clients').update(value).eq('id', client.id).eq('company_id', currentCompany.id).select('id').single()

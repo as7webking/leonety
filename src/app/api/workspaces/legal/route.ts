@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireOwnedCompany } from '@/app/api/woocommerce/_utils'
+import { toWorkspaceLegalUpdate, workspaceLegalColumns } from '@/lib/workspace-legal-settings'
 
 export const runtime = 'nodejs'
 
@@ -31,31 +32,6 @@ const legalSettingsSchema = z.object({
   additional_legal_text: legalFieldSchema,
 })
 
-const legalColumns = [
-  'legal_name',
-  'legal_form',
-  'legal_representative',
-  'legal_street',
-  'legal_house_number',
-  'legal_postal_code',
-  'legal_city',
-  'legal_country_code',
-  'legal_email',
-  'legal_phone',
-  'vat_id',
-  'tax_number',
-  'account_holder',
-  'bank_name',
-  'iban',
-  'bic',
-  'payment_terms',
-  'commercial_register',
-  'register_court',
-  'registration_number',
-  'professional_regulatory_info',
-  'additional_legal_text',
-] as const
-
 function legalError(operation: 'load' | 'save', error: unknown) {
   console.error(`[workspace-legal] ${operation} failed`, {
     message: error instanceof Error ? error.message : 'Database operation failed',
@@ -73,7 +49,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await auth.adminSupabase
     .from('companies')
-    .select(legalColumns.join(','))
+    .select(workspaceLegalColumns.join(','))
     .eq('id', parsed.data)
     .eq('owner_id', auth.user.id)
     .maybeSingle()
@@ -91,16 +67,12 @@ export async function PATCH(request: Request) {
   const auth = await requireOwnedCompany(parsed.data.companyId)
   if ('error' in auth) return auth.error
 
-  const updates = Object.fromEntries(
-    legalColumns.map((column) => [column, parsed.data[column] || null]),
-  )
-
   const { data, error } = await auth.adminSupabase
     .from('companies')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...toWorkspaceLegalUpdate(parsed.data), updated_at: new Date().toISOString() })
     .eq('id', parsed.data.companyId)
     .eq('owner_id', auth.user.id)
-    .select(legalColumns.join(','))
+    .select(workspaceLegalColumns.join(','))
     .maybeSingle()
 
   if (error) return legalError('save', error)
