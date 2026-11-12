@@ -151,12 +151,16 @@ test('invoice renderer prints seller and buyer tax identifiers independently and
   assert.match(renderer, /model\.buyer\.vatId/)
   assert.match(renderer, /item\.unit/)
   assert.match(renderer, /model\.paymentTerms/)
-  assert.match(renderer, /<p className="whitespace-pre-line">\{model\.seller\.address\}<\/p>/)
+  assert.match(renderer, /model\.seller\.address && <p className="whitespace-pre-line">\{model\.seller\.address\}<\/p>/)
   assert.match(renderer, /model\.seller\.showDetails && <footer className="invoice-print-footer">/)
   assert.match(renderer, /invoice-print-title[\s\S]*invoice-print-issuer[\s\S]*invoice-print-client/)
   assert.match(renderer, /invoices\.client/)
   assert.match(renderer, /invoices\.invoiceNumber'\)\}: \{model\.invoiceNumber\}/)
-  assert.match(renderer, /model\.seller\.showDetails && \(/)
+  assert.match(renderer, /model\.showIssuer \|\| model\.seller\.showDetails/)
+  assert.match(renderer, /model\.seller\.visibleFields\?\.taxNumber !== false/)
+  assert.match(renderer, /model\.seller\.visibleFields\?\.vatId !== false/)
+  assert.match(renderer, /model\.buyer\.visibleFields\.taxNumber && <p>/)
+  assert.match(renderer, /model\.buyer\.visibleFields\.vatId && <p>/)
   assert.match(renderer, /issuer\.name/)
   assert.match(renderer, /issuer\.email/)
   assert.match(renderer, /model\.buyer\.addressLines\.map/)
@@ -166,11 +170,11 @@ test('invoice renderer prints seller and buyer tax identifiers independently and
   assert.match(renderer, /invoice-print-totals[\s\S]*invoice-print-footer/)
   assert.match(renderer, /model\.items\.map[\s\S]*item\.description/)
   assert.doesNotMatch(renderer, /repeatBankDetails[\s\S]*IBAN/)
-  assert.match(renderer, /model\.seller\.showDetails && \([\s\S]*?model\.seller\.address/)
+  assert.match(renderer, /model\.seller\.showDetails && <>[\s\S]*?model\.seller\.address/)
   assert.match(renderer, /contracts\.party\.email[^\n]*model\.seller\.email/)
   assert.match(renderer, /contracts\.party\.taxNumber[^\n]*model\.seller\.taxNumber/)
   assert.match(renderer, /contracts\.party\.vatId[^\n]*model\.seller\.vatId/)
-  assert.doesNotMatch(renderer, /model\.seller\.(email|phone|taxNumber|vatId)\s*&&/)
+  assert.doesNotMatch(renderer, /model\.seller\.visibleFields\?\.taxNumber !== false && model\.seller\.taxNumber/)
   assert.match(renderer, /invoice-print-issuer[\s\S]*model\.seller\.taxNumber[\s\S]*model\.seller\.vatId[\s\S]*invoice-print-meta/)
   assert.match(renderer, /invoice-print-footer[\s\S]*model\.seller\.(bic|bankName|accountHolder)/)
   assert.match(renderer, /<dt>IBAN:<\/dt><dd>\{model\.seller\.iban \?\? ''\}<\/dd>/)
@@ -185,7 +189,12 @@ test('invoice renderer prints seller and buyer tax identifiers independently and
   assert.match(page, /invoices\.printTemplateBusiness/)
   assert.match(page, /invoices\.printTemplateMinimal/)
   assert.doesNotMatch(page, /\['address', 'invoices\.includeClientAddress'\]/)
-  assert.match(page, /taxNumber: checked, vatId: checked/)
+  assert.doesNotMatch(page, /taxNumber: checked, vatId: checked/)
+  assert.match(page, /handleIncludeIssuerChange/)
+  assert.match(page, /handleSellerPrintFieldChange/)
+  assert.match(page, /handleIncludeClientDetailsChange/)
+  assert.match(page, /grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2/)
+  assert.match(page, /min-h-11 items-center gap-3/)
   assert.match(page, /issuerProfile: issuerProfile\?\.userId === userId/)
   assert.match(styles, /\.invoice-print-document\s*\{[\s\S]*?min-height:\s*273mm/)
   assert.match(styles, /\.invoice-print-footer\s*\{[\s\S]*?margin-top:\s*auto/)
@@ -202,7 +211,7 @@ test('invoice renderer prints seller and buyer tax identifiers independently and
   assert.match(modelSource, /These are canonical persisted invoice values\. Renderers must never recalculate them\./)
 })
 
-test('version 3 snapshots freeze seller, selected issuer, buyer, line items and canonical totals', () => {
+test('version 4 snapshots freeze seller, selected issuer, buyer, line items and canonical totals', () => {
   const invoice = {
     id: 'invoice-v2', invoice_number: '26-004', status: 'sent' as const, issue_date: '2026-11-09', due_date: null,
     currency: 'EUR', notes: null, payment_terms: 'Pay within 14 days', subtotal: 50, tax_amount: 9.5, total: 59.5,
@@ -235,9 +244,10 @@ test('version 3 snapshots freeze seller, selected issuer, buyer, line items and 
     paymentTerms: 'Changed after issue',
   })
 
-  assert.equal(snapshot.schemaVersion, 3)
+  assert.equal(snapshot.schemaVersion, 4)
+  assert.equal(snapshot.showIssuer, true)
   assert.deepEqual(snapshot.issuerProfile, presentation.issuerProfile)
-  assert.deepEqual(snapshot.seller, presentation.seller)
+  assert.deepEqual(snapshot.seller, { ...presentation.seller, visibleFields: { taxNumber: true, vatId: true } })
   assert.equal(snapshot.buyer.vatId, 'BUYER-VAT')
   assert.deepEqual(snapshot.items, model.items)
   assert.deepEqual(snapshot.payment, model.payment)
@@ -259,7 +269,7 @@ test('version 3 snapshots freeze seller, selected issuer, buyer, line items and 
   assert.equal(rendered.paymentTerms, 'Pay within 14 days')
 })
 
-test('seller opt-out excludes issuer identity from the saved snapshot', () => {
+test('seller and issuer print choices are independent and unchecked seller data is excluded', () => {
   const model = createInvoiceDocumentModel({
     id: 'invoice-private-issuer', invoice_number: '26-005', status: 'sent', issue_date: '2026-11-10', due_date: null,
     currency: 'EUR', notes: null, subtotal: 0, tax_amount: 0, total: 0, invoice_items: [],
@@ -267,13 +277,15 @@ test('seller opt-out excludes issuer identity from the saved snapshot', () => {
   }, {
     seller: { name: 'Seller', logo: '', address: '', email: '', taxNumber: '', iban: '', bic: '', showDetails: false },
     issuerProfile: { name: 'Private issuer', email: 'private@example.test' },
+    showIssuer: false,
     buyerAddressLines: ['Recipient Street 1'],
     buyerVisibleFields: { company: false, email: false, phone: false, address: false, taxNumber: false, vatId: false },
     payment: { method: 'bank_transfer', amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true },
   })
 
   const snapshot = createInvoiceDocumentSnapshot(model, '2026-11-10T10:00:00.000Z')
-  assert.equal(snapshot.schemaVersion, 3)
+  assert.equal(snapshot.schemaVersion, 4)
+  assert.equal(snapshot.showIssuer, false)
   assert.equal(snapshot.issuerProfile, null)
   assert.equal(snapshot.seller.email, '')
   assert.equal(snapshot.seller.iban, '')
@@ -283,6 +295,61 @@ test('seller opt-out excludes issuer identity from the saved snapshot', () => {
   assert.equal(snapshot.buyer.email, null)
   assert.equal(snapshot.buyer.taxNumber, null)
   assert.equal(snapshot.buyer.vatId, null)
+})
+
+test('seller tax number and VAT ID plus client tax number and VAT ID have independent snapshot visibility', () => {
+  const model = createInvoiceDocumentModel({
+    id: 'invoice-tax-visibility', invoice_number: '26-TAX', status: 'sent', issue_date: '2026-11-10', due_date: null,
+    currency: 'EUR', notes: null, subtotal: 10, tax_amount: 1.9, total: 11.9, invoice_items: [],
+    clients: { name: 'Buyer', client_company: null, email: null, phone: null, tax_number: 'BUYER-TAX', vat_id: 'BUYER-VAT' },
+  }, {
+    seller: { name: 'Seller', logo: '', address: '', email: '', taxNumber: 'SELLER-TAX', vatId: 'SELLER-VAT', iban: '', bic: '', showDetails: true, visibleFields: { taxNumber: false, vatId: true } },
+    issuerProfile: null,
+    showIssuer: true,
+    buyerAddressLines: [],
+    buyerVisibleFields: { company: true, email: true, phone: true, address: true, taxNumber: false, vatId: true },
+    payment: { method: 'bank_transfer', amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true },
+  })
+
+  const snapshot = createInvoiceDocumentSnapshot(model, '2026-11-10T10:00:00.000Z')
+  assert.equal(snapshot.seller.taxNumber, '')
+  assert.equal(snapshot.seller.vatId, 'SELLER-VAT')
+  assert.equal(snapshot.buyer.taxNumber, null)
+  assert.equal(snapshot.buyer.vatId, 'BUYER-VAT')
+  assert.deepEqual(snapshot.seller.visibleFields, { taxNumber: false, vatId: true })
+  assert.deepEqual(snapshot.buyer.visibleFields, { company: true, email: true, phone: true, address: true, taxNumber: false, vatId: true })
+})
+
+test('version 3 snapshots remain compatible while current independent print choices control visibility', () => {
+  const version3Snapshot = {
+    schemaVersion: 3 as const,
+    capturedAt: '2026-11-01T10:00:00.000Z',
+    templateId: 'standard' as const,
+    seller: { name: 'Saved seller', logo: '', address: '', email: '', taxNumber: 'SAVED-TAX', vatId: 'SAVED-VAT', iban: '', bic: '', showDetails: true },
+    buyer: { name: 'Saved buyer', company: null, email: null, phone: null, addressLines: [], taxNumber: 'BUYER-TAX', vatId: 'BUYER-VAT', visibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true } },
+    issuerProfile: { name: 'Saved issuer', email: 'issuer@example.test' },
+    items: [], totals: { subtotal: 0, taxAmount: 0, total: 0 },
+    payment: { method: 'bank_transfer' as const, amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true, isPaid: false },
+    paymentTerms: null,
+  }
+  const model = createInvoiceDocumentModel({
+    id: 'invoice-v3-compat', invoice_number: 'V3', status: 'sent', issue_date: '2026-11-01', due_date: null,
+    currency: 'EUR', notes: null, subtotal: 0, tax_amount: 0, total: 0, document_snapshot: version3Snapshot,
+  }, {
+    seller: { ...version3Snapshot.seller, visibleFields: { taxNumber: false, vatId: true } },
+    showIssuer: false,
+    buyerAddressLines: [],
+    buyerVisibleFields: { company: false, email: false, phone: false, address: true, taxNumber: false, vatId: true },
+    payment: { method: 'bank_transfer', amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true },
+  })
+
+  assert.equal(model.seller.taxNumber, 'SAVED-TAX')
+  assert.equal(model.seller.visibleFields?.taxNumber, false)
+  assert.equal(model.seller.visibleFields?.vatId, true)
+  assert.equal(model.showIssuer, false)
+  assert.equal(model.issuerProfile?.name, 'Saved issuer')
+  assert.equal(model.buyer.visibleFields.taxNumber, false)
+  assert.equal(model.buyer.visibleFields.vatId, true)
 })
 
 test('version 2 invoice snapshots remain readable after version 3 is introduced', () => {
@@ -417,6 +484,15 @@ test('invoice snapshots are captured only on initial issue or draft finalization
 test('legacy invoice snapshot warning is translated in all seven supported locales', () => {
   for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
     assert.ok(invoiceSnapshotDictionaries[locale]['invoices.legacySnapshotWarning'])
+    for (const key of [
+      'invoices.printVisibility',
+      'invoices.includeSellerDetails',
+      'invoices.includeIssuerDetails',
+      'invoices.includeSellerTaxNumber',
+      'invoices.includeSellerVatId',
+      'invoices.includeClientDetails',
+      'invoices.includeClientVatId',
+    ]) assert.ok(invoiceSnapshotDictionaries[locale][key], `${locale}:${key}`)
     assert.ok(accountingUxDictionaries[locale]['invoices.documentTitle'])
   }
 })

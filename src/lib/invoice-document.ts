@@ -41,6 +41,7 @@ export interface InvoiceDocumentModel {
   notes: string | null
   paymentTerms: string | null
   issuerProfile?: InvoiceIssuerProfile | null
+  showIssuer?: boolean
   seller: {
     name: string
     legalForm?: string
@@ -61,6 +62,7 @@ export interface InvoiceDocumentModel {
     accountHolder?: string
     bankName?: string
     showDetails: boolean
+    visibleFields?: { taxNumber: boolean; vatId: boolean }
   }
   buyer: {
     name: string
@@ -120,6 +122,15 @@ export type InvoiceDocumentSnapshot = InvoiceDocumentSnapshotBase & (
     payment: InvoiceDocumentModel['payment']
     paymentTerms: string | null
   }
+  | {
+    schemaVersion: 4
+    issuerProfile: InvoiceIssuerProfile | null
+    showIssuer: boolean
+    items: InvoiceDocumentItem[]
+    totals: InvoiceDocumentModel['totals']
+    payment: InvoiceDocumentModel['payment']
+    paymentTerms: string | null
+  }
 )
 
 interface InvoiceDocumentSource {
@@ -162,6 +173,7 @@ interface InvoiceDocumentSource {
 interface InvoiceDocumentPresentation {
   seller: InvoiceDocumentModel['seller']
   issuerProfile?: InvoiceIssuerProfile | null
+  showIssuer?: boolean
   buyerAddressLines: string[]
   buyerVisibleFields: InvoiceDocumentModel['buyer']['visibleFields']
   payment: Omit<InvoiceDocumentModel['payment'], 'isPaid'>
@@ -174,11 +186,15 @@ export function createInvoiceDocumentModel(
 ): InvoiceDocumentModel {
   const snapshot = invoice.document_snapshot
   const snapshotSeller = snapshot?.seller
-  const hasFullSnapshot = snapshot?.schemaVersion === 2 || snapshot?.schemaVersion === 3
+  const hasFullSnapshot = snapshot?.schemaVersion === 2 || snapshot?.schemaVersion === 3 || snapshot?.schemaVersion === 4
   const seller = {
     ...(snapshotSeller ?? presentation.seller),
     // This is a current print preference, not historical invoice data.
     showDetails: presentation.seller.showDetails,
+    visibleFields: {
+      taxNumber: presentation.seller.visibleFields?.taxNumber ?? true,
+      vatId: presentation.seller.visibleFields?.vatId ?? true,
+    },
   }
 
   return {
@@ -191,7 +207,8 @@ export function createInvoiceDocumentModel(
     currency: invoice.currency,
     notes: invoice.notes,
     paymentTerms: hasFullSnapshot ? snapshot.paymentTerms ?? null : presentation.paymentTerms ?? null,
-    issuerProfile: snapshot?.schemaVersion === 3 ? snapshot.issuerProfile : presentation.issuerProfile,
+    issuerProfile: snapshot?.schemaVersion === 3 || snapshot?.schemaVersion === 4 ? snapshot.issuerProfile : presentation.issuerProfile,
+    showIssuer: presentation.showIssuer ?? (snapshot?.schemaVersion === 4 ? snapshot.showIssuer : true),
     seller,
     buyer: {
       ...(snapshot?.buyer ?? {
@@ -205,7 +222,10 @@ export function createInvoiceDocumentModel(
         visibleFields: { ...presentation.buyerVisibleFields },
       }),
       addressLines: [...(snapshot?.buyer.addressLines ?? presentation.buyerAddressLines)],
-      visibleFields: { ...(snapshot?.buyer.visibleFields ?? presentation.buyerVisibleFields) },
+      visibleFields: {
+        ...presentation.buyerVisibleFields,
+        vatId: presentation.buyerVisibleFields.vatId ?? presentation.buyerVisibleFields.taxNumber,
+      },
     },
     items: hasFullSnapshot ? snapshot.items.map((item) => ({ ...item })) : (invoice.invoice_items ?? []).map((item) => ({
       id: item.id,
@@ -234,9 +254,13 @@ export function createInvoiceDocumentSnapshot(
   model: InvoiceDocumentModel,
   capturedAt: string,
 ): InvoiceDocumentSnapshot {
-  // Version 3 also freezes the optionally displayed issuer profile; totals are copied, never recomputed.
+  // Version 4 stores independent print visibility for seller, issuer and tax identifiers.
   const seller = model.seller.showDetails
-    ? { ...model.seller }
+    ? {
+      ...model.seller,
+      taxNumber: model.seller.visibleFields?.taxNumber === false ? '' : model.seller.taxNumber,
+      vatId: model.seller.visibleFields?.vatId === false ? '' : model.seller.vatId ?? '',
+    }
     : {
       ...model.seller,
       legalForm: '', address: '', email: '', taxNumber: '', vatId: '', phone: '',
@@ -246,18 +270,19 @@ export function createInvoiceDocumentSnapshot(
     }
   const buyer = model.buyer
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     capturedAt,
     templateId: model.templateId,
     seller,
-    issuerProfile: model.seller.showDetails ? model.issuerProfile ?? null : null,
+    issuerProfile: model.showIssuer === false ? null : model.issuerProfile ?? null,
+    showIssuer: model.showIssuer !== false,
     buyer: {
       ...buyer,
       company: buyer.visibleFields.company ? buyer.company : null,
       email: buyer.visibleFields.email ? buyer.email : null,
       phone: buyer.visibleFields.phone ? buyer.phone : null,
       taxNumber: buyer.visibleFields.taxNumber ? buyer.taxNumber : null,
-      vatId: buyer.visibleFields.taxNumber && buyer.visibleFields.vatId ? buyer.vatId ?? null : null,
+      vatId: buyer.visibleFields.vatId ? buyer.vatId ?? null : null,
       addressLines: [...buyer.addressLines],
       visibleFields: { ...buyer.visibleFields },
     },

@@ -291,7 +291,7 @@ function loadClientPrintFields(companyId: string | null | undefined): InvoiceCli
       phone: typeof parsed.phone === 'boolean' ? parsed.phone : true,
       address: typeof parsed.address === 'boolean' ? parsed.address : true,
       taxNumber: typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : true,
-      vatId: typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : typeof parsed.vatId === 'boolean' ? parsed.vatId : true,
+      vatId: typeof parsed.vatId === 'boolean' ? parsed.vatId : typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : true,
     }
   } catch {
     return defaultClientPrintFields
@@ -301,6 +301,26 @@ function loadClientPrintFields(companyId: string | null | undefined): InvoiceCli
 function saveClientPrintFields(companyId: string, fields: InvoiceClientPrintFields) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(getClientPrintFieldsKey(companyId), JSON.stringify(fields))
+}
+
+interface SellerPrintFields {
+  taxNumber: boolean
+  vatId: boolean
+}
+
+const defaultSellerPrintFields: SellerPrintFields = { taxNumber: true, vatId: true }
+
+function loadSellerPrintFields(companyId: string | null | undefined): SellerPrintFields {
+  if (!companyId || typeof window === 'undefined') return defaultSellerPrintFields
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(`leonety-invoice-seller-print-fields:${companyId}`) ?? '{}') as Partial<SellerPrintFields>
+    return {
+      taxNumber: typeof parsed.taxNumber === 'boolean' ? parsed.taxNumber : true,
+      vatId: typeof parsed.vatId === 'boolean' ? parsed.vatId : true,
+    }
+  } catch {
+    return defaultSellerPrintFields
+  }
 }
 
 const newItem = (taxRate = 19): InvoiceItem => ({
@@ -501,7 +521,10 @@ export default function InvoicesPage() {
   const [companyBrandingLoaded, setCompanyBrandingLoaded] = useState(false)
   const [companyLegalDetails, setCompanyLegalDetails] = useState<CompanyInvoiceLegalDetails | null>(null)
   const [companyLegalLoaded, setCompanyLegalLoaded] = useState(false)
-  const [includeCompanyAddress, setIncludeCompanyAddress] = useState(true)
+  const [includeSellerDetails, setIncludeSellerDetails] = useState(true)
+  const [includeIssuerDetails, setIncludeIssuerDetails] = useState(true)
+  const [sellerPrintFields, setSellerPrintFields] = useState<SellerPrintFields>(defaultSellerPrintFields)
+  const [includeClientDetails, setIncludeClientDetails] = useState(true)
   const [supportsClientDetails, setSupportsClientDetails] = useState(true)
   const [clientPrintFields, setClientPrintFields] = useState<InvoiceClientPrintFields>(defaultClientPrintFields)
   const requestedClientId = searchParams.get('clientId')?.trim() ?? ''
@@ -574,17 +597,28 @@ export default function InvoicesPage() {
       bic: companyBic,
       accountHolder: companyLegalDetails?.account_holder?.trim() ?? '',
       bankName: companyLegalDetails?.bank_name?.trim() ?? '',
-      showDetails: includeCompanyAddress,
+      showDetails: includeSellerDetails,
+      visibleFields: sellerPrintFields,
     }
-  }, [companyBic, companyIban, companyLegalDetails, companyLogo, currentCompany?.name, includeCompanyAddress, locale])
+  }, [companyBic, companyIban, companyLegalDetails, companyLogo, currentCompany?.name, includeSellerDetails, locale, sellerPrintFields])
+
+  const buyerPrintPresentation = useMemo(() => ({
+    ...clientPrintFields,
+    company: includeClientDetails && clientPrintFields.company,
+    email: includeClientDetails && clientPrintFields.email,
+    phone: includeClientDetails && clientPrintFields.phone,
+    taxNumber: includeClientDetails && clientPrintFields.taxNumber,
+    vatId: includeClientDetails && clientPrintFields.vatId,
+  }), [clientPrintFields, includeClientDetails])
 
   const buildInvoiceDocument = (invoice: InvoiceRecord, repeatBankDetails: boolean) => {
     const paymentMeta = loadInvoicePaymentMeta(invoice.id)
     return createInvoiceDocumentModel(invoice, {
       seller: sellerPresentation,
       issuerProfile: issuerProfile?.userId === userId ? { name: issuerProfile.name, email: issuerProfile.email } : null,
+      showIssuer: includeIssuerDetails,
       buyerAddressLines: getClientAddressLines(invoice.clients, locale),
-      buyerVisibleFields: clientPrintFields,
+      buyerVisibleFields: buyerPrintPresentation,
       paymentTerms: invoice.payment_terms ?? null,
       payment: {
         method: paymentMeta.method,
@@ -655,7 +689,13 @@ export default function InvoicesPage() {
     setCompanyBrandingLoaded(false)
     const branding = loadCompanyBranding(currentCompany.id)
     setCompanyLogo(branding.logo)
-    setIncludeCompanyAddress(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
+    setIncludeSellerDetails(window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false')
+    const legacySellerVisibility = window.localStorage.getItem(`leonety-include-company-address:${currentCompany.id}`) !== 'false'
+    setIncludeIssuerDetails(window.localStorage.getItem(`leonety-include-invoice-issuer:${currentCompany.id}`) === null
+      ? legacySellerVisibility
+      : window.localStorage.getItem(`leonety-include-invoice-issuer:${currentCompany.id}`) !== 'false')
+    setSellerPrintFields(loadSellerPrintFields(currentCompany.id))
+    setIncludeClientDetails(window.localStorage.getItem(`leonety-include-invoice-client-details:${currentCompany.id}`) !== 'false')
     setClientPrintFields(loadClientPrintFields(currentCompany.id))
     setCompanyBrandingLoaded(true)
   }, [currentCompany])
@@ -713,18 +753,34 @@ export default function InvoicesPage() {
     return () => { active = false }
   }, [supabase, userId])
 
-  const handleIncludeCompanyAddressChange = (checked: boolean) => {
-    setIncludeCompanyAddress(checked)
+  const handleIncludeSellerDetailsChange = (checked: boolean) => {
+    setIncludeSellerDetails(checked)
     if (currentCompany) {
       window.localStorage.setItem(`leonety-include-company-address:${currentCompany.id}`, String(checked))
     }
   }
 
+  const handleIncludeIssuerChange = (checked: boolean) => {
+    setIncludeIssuerDetails(checked)
+    if (currentCompany) window.localStorage.setItem(`leonety-include-invoice-issuer:${currentCompany.id}`, String(checked))
+  }
+
+  const handleSellerPrintFieldChange = (field: keyof SellerPrintFields, checked: boolean) => {
+    setSellerPrintFields((current) => {
+      const next = { ...current, [field]: checked }
+      if (currentCompany) window.localStorage.setItem(`leonety-invoice-seller-print-fields:${currentCompany.id}`, JSON.stringify(next))
+      return next
+    })
+  }
+
+  const handleIncludeClientDetailsChange = (checked: boolean) => {
+    setIncludeClientDetails(checked)
+    if (currentCompany) window.localStorage.setItem(`leonety-include-invoice-client-details:${currentCompany.id}`, String(checked))
+  }
+
   const handleClientPrintFieldChange = (field: keyof InvoiceClientPrintFields, checked: boolean) => {
     setClientPrintFields((current) => {
-      const next = field === 'taxNumber'
-        ? { ...current, taxNumber: checked, vatId: checked }
-        : { ...current, [field]: checked }
+      const next = { ...current, [field]: checked }
       if (currentCompany) {
         saveClientPrintFields(currentCompany.id, next)
       }
@@ -1557,8 +1613,9 @@ export default function InvoicesPage() {
       }, {
         seller: sellerPresentation,
         issuerProfile: issuerProfile?.userId === userId ? { name: issuerProfile.name, email: issuerProfile.email } : null,
+        showIssuer: includeIssuerDetails,
         buyerAddressLines: getClientAddressLines(snapshotClient, locale),
-        buyerVisibleFields: clientPrintFields,
+        buyerVisibleFields: buyerPrintPresentation,
         paymentTerms: formData.payment_terms.trim() || null,
         payment: {
           method: formData.payment_method,
@@ -2353,38 +2410,56 @@ export default function InvoicesPage() {
                 />
               </label>
 
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={includeCompanyAddress}
-                  onChange={(event) => handleIncludeCompanyAddressChange(event.target.checked)}
-                  className="h-4 w-4"
-                />
-                {t('invoices.includeCompanyAddress')}
-              </label>
-
               <fieldset className="rounded-md border border-slate-200 p-3">
-                <legend className="px-1 text-sm font-medium text-slate-700">{t('invoices.clientPrintFields')}</legend>
-                {!supportsClientDetails && (
-                  <p className="mb-2 text-xs text-amber-700">{t('clients.detailsMigrationRequired')}</p>
-                )}
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <legend className="px-1 text-sm font-medium text-slate-700">{t('invoices.printVisibility')}</legend>
+                <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
                   {([
-                    ['company', 'invoices.includeClientCompany'],
-                    ['email', 'invoices.includeClientEmail'],
-                    ['phone', 'invoices.includeClientPhone'],
-                    ['taxNumber', 'invoices.includeClientTaxNumber'],
-                  ] as Array<[keyof InvoiceClientPrintFields, string]>).map(([field, labelKey]) => (
-                    <label key={field} className="flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={clientPrintFields[field]}
-                        onChange={(event) => handleClientPrintFieldChange(field, event.target.checked)}
-                        className="h-4 w-4"
-                      />
-                      {t(labelKey)}
+                    [includeSellerDetails, handleIncludeSellerDetailsChange, 'invoices.includeSellerDetails'],
+                    [includeIssuerDetails, handleIncludeIssuerChange, 'invoices.includeIssuerDetails'],
+                  ] as Array<[boolean, (checked: boolean) => void, string]>).map(([checked, onChange, labelKey]) => (
+                    <label key={labelKey} className="flex min-h-11 items-center gap-3 rounded-sm py-2 text-sm text-slate-700">
+                      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 shrink-0 accent-blue-700" />
+                      <span>{t(labelKey)}</span>
                     </label>
                   ))}
+                </div>
+
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                  <p className="text-xs font-medium text-slate-600">{t('invoices.sellerTaxIdentifiers')}</p>
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                    {([
+                      ['taxNumber', 'invoices.includeSellerTaxNumber'],
+                      ['vatId', 'invoices.includeSellerVatId'],
+                    ] as Array<[keyof SellerPrintFields, string]>).map(([field, labelKey]) => (
+                      <label key={field} className="flex min-h-11 items-center gap-3 rounded-sm py-2 text-sm text-slate-700">
+                        <input type="checkbox" checked={sellerPrintFields[field]} onChange={(event) => handleSellerPrintFieldChange(field, event.target.checked)} className="h-5 w-5 shrink-0 accent-blue-700" />
+                        <span>{t(labelKey)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                  <label className="flex min-h-11 items-center gap-3 rounded-sm py-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={includeClientDetails} onChange={(event) => handleIncludeClientDetailsChange(event.target.checked)} className="h-5 w-5 shrink-0 accent-blue-700" />
+                    <span>{t('invoices.includeClientDetails')}</span>
+                  </label>
+                  {!supportsClientDetails && <p className="mb-2 text-xs text-amber-700">{t('clients.detailsMigrationRequired')}</p>}
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {([
+                      ['company', 'invoices.includeClientCompany'],
+                      ['email', 'invoices.includeClientEmail'],
+                      ['phone', 'invoices.includeClientPhone'],
+                      ['taxNumber', 'invoices.includeClientTaxNumber'],
+                      ['vatId', 'invoices.includeClientVatId'],
+                    ] as Array<[keyof InvoiceClientPrintFields, string]>).map(([field, labelKey]) => (
+                      <label key={field} className="flex min-h-11 items-center gap-3 rounded-sm py-2 text-sm text-slate-700">
+                        <input type="checkbox" checked={clientPrintFields[field]} disabled={!includeClientDetails} onChange={(event) => handleClientPrintFieldChange(field, event.target.checked)} className="h-5 w-5 shrink-0 accent-blue-700 disabled:opacity-50" />
+                        <span>{t(labelKey)}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">{t('invoices.clientNameAddressAlwaysIncluded')}</p>
                 </div>
               </fieldset>
 
