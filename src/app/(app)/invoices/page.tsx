@@ -23,7 +23,7 @@ import { getIntlLocale, type Locale } from '@/lib/i18n'
 import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
 import { SavedTableViews } from '@/components/saved-table-views'
 import type { InvoiceTableViewState } from '@/lib/saved-table-views'
-import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, type InvoiceDocumentSnapshot } from '@/lib/invoice-document'
+import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, estimateInvoicePageCount, type InvoiceDocumentSnapshot } from '@/lib/invoice-document'
 import { getNotificationCenterText } from '@/lib/notification-center-i18n'
 import {
   deleteOfflineInvoiceDraft,
@@ -631,6 +631,21 @@ export default function InvoicesPage() {
       if (opener?.isConnected) opener.focus()
     }
   }, [printTemplateDialogOpen])
+
+  useEffect(() => {
+    const updateInvoicePagination = () => {
+      const printRoots = Array.from(document.querySelectorAll<HTMLElement>('.print-area.print-invoice[data-invoice-print-root]'))
+      for (const root of printRoots) {
+        const documents = Array.from(root.querySelectorAll<HTMLElement>('.invoice-print-document'))
+        const pageHeights = documents.map((document) => Number.parseFloat(window.getComputedStyle(document).minHeight))
+        const pages = estimateInvoicePageCount(documents.map((document) => document.scrollHeight), pageHeights[0] ?? 0)
+        root.classList.toggle('invoice-print-show-page-numbers', pages > 2)
+      }
+    }
+
+    window.addEventListener('beforeprint', updateInvoicePagination)
+    return () => window.removeEventListener('beforeprint', updateInvoicePagination)
+  }, [])
 
   useEffect(() => {
     if (!currentCompany) {
@@ -1951,13 +1966,15 @@ export default function InvoicesPage() {
     <PageContainer>
       {printTemplateDialog}
       {printingInvoice && (
-        <div className="print-area print-invoice hidden">
+        <div className="print-area print-invoice hidden" data-invoice-print-root>
           <StandardInvoiceRenderer model={buildInvoiceDocument(printingInvoice, true)} issuerProfile={issuerProfile?.userId === userId ? issuerProfile : undefined} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />
+          <div className="invoice-print-page-number" aria-hidden="true">{t('kassenbuch.page')} </div>
         </div>
       )}
       {combinedPrintInvoices.length > 0 && (
-        <div className="print-area print-invoice print-invoice-batch hidden">
+        <div className="print-area print-invoice print-invoice-batch hidden" data-invoice-print-root>
           {combinedPrintInvoices.map((invoice) => <StandardInvoiceRenderer key={invoice.id} model={buildInvoiceDocument(invoice, false)} issuerProfile={issuerProfile?.userId === userId ? issuerProfile : undefined} intlLocale={intlLocale} t={t} currencySymbolPosition={currencySymbolPosition} printTemplate={printTemplate} />)}
+          <div className="invoice-print-page-number" aria-hidden="true">{t('kassenbuch.page')} </div>
         </div>
       )}
       <PageHeader title={t('invoices.title')} description={`${t('invoices.description')} · ${currentCompany.name}`}>

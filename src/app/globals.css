@@ -738,8 +738,8 @@ html {
 
   .print-area.print-invoice {
     display: block !important;
-    width: 168mm !important;
-    max-width: 168mm !important;
+    width: 186mm !important;
+    max-width: 186mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     background: #fff !important;
@@ -763,31 +763,45 @@ html {
   .print-area.print-invoice .invoice-print-header {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-    gap: 24px !important;
+    gap: 12mm !important;
     align-items: start !important;
-    margin-bottom: 20px !important;
+    margin-bottom: 0 !important;
   }
 
-  .print-area.print-invoice .invoice-print-brand {
-    display: grid !important;
-    grid-template-columns: 44px minmax(0, 1fr) !important;
-    gap: 10px !important;
-    align-items: start !important;
-    text-align: right !important;
+  .print-area.print-invoice .invoice-print-title {
+    margin: 0 !important;
+    text-align: left !important;
   }
 
   .print-area.print-invoice .invoice-print-client {
-    margin: 0 !important;
+    margin: 12mm 0 8mm !important;
     padding: 0 !important;
     border: 0 !important;
     background: transparent !important;
+    width: 50% !important;
+    min-height: 20mm !important;
   }
 
   .print-area.print-invoice .invoice-print-issuer {
-    grid-column: 2 !important;
-    grid-row: 2 !important;
+    display: block !important;
     text-align: right !important;
     overflow-wrap: anywhere !important;
+    min-width: 0 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-issuer p {
+    margin: 0 0 1mm !important;
+  }
+
+  .print-area.print-invoice .invoice-print-seller-name {
+    margin-top: 2mm !important;
+    font-weight: 600 !important;
+  }
+
+  .print-area.print-invoice .invoice-print-logo {
+    width: 44px !important;
+    height: 44px !important;
+    margin: 0 0 2mm auto !important;
   }
 
   .print-area.print-invoice .invoice-print-document {
@@ -822,51 +836,64 @@ html {
   }
 
   .print-area.print-invoice .invoice-print-footer {
-    display: flex !important;
-    justify-content: flex-end !important;
+    display: block !important;
     margin-top: auto !important;
-    padding-top: 6px !important;
+    padding-top: 2mm !important;
     border-top: 1px solid #94a3b8 !important;
-    font-size: 8px !important;
+    font-size: 8.5px !important;
     line-height: 1.35 !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
   .print-area.print-invoice .invoice-print-footer p {
-    margin: 0 0 2px !important;
+    margin: 0 0 1mm !important;
     overflow-wrap: anywhere !important;
   }
 
   .print-area.print-invoice .invoice-print-footer-legal {
-    width: min(100%, 92mm) !important;
-    margin-left: auto !important;
-    text-align: right !important;
-    overflow-wrap: anywhere !important;
+    width: 100% !important;
+    text-align: left !important;
   }
 
   .print-area.print-invoice .invoice-print-footer-legal dl {
     display: grid !important;
-    gap: 1px 8px !important;
-    margin: 2px 0 0 !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 2mm !important;
+    margin: 1mm 0 0 !important;
   }
 
   .print-area.print-invoice .invoice-print-footer-legal dl > div {
-    display: grid !important;
-    grid-template-columns: minmax(24mm, max-content) minmax(0, 1fr) !important;
-    gap: 4px !important;
+    display: block !important;
+    min-width: 0 !important;
   }
 
   .print-area.print-invoice .invoice-print-footer-legal dt {
-    text-align: right !important;
     font-weight: 600 !important;
   }
 
   .print-area.print-invoice .invoice-print-footer-legal dd {
     min-width: 0 !important;
     margin: 0 !important;
-    text-align: left !important;
     overflow-wrap: anywhere !important;
+  }
+
+  .print-area.print-invoice .invoice-print-page-number {
+    display: none !important;
+  }
+
+  .print-area.print-invoice.invoice-print-show-page-numbers .invoice-print-page-number {
+    display: block !important;
+    position: fixed !important;
+    right: 0 !important;
+    bottom: -8mm !important;
+    z-index: 10 !important;
+    font-size: 8pt !important;
+    color: #4b5563 !important;
+  }
+
+  .print-area.print-invoice.invoice-print-show-page-numbers .invoice-print-page-number::after {
+    content: counter(page) " / " counter(pages);
   }
 
   .print-area.print-invoice .invoice-print-template-business h1,
@@ -904,32 +931,7 @@ html {
   }
 
   .print-area.print-invoice .invoice-print-template-minimal .invoice-print-client {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-    text-align: right !important;
-  }
-
-  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-issuer {
-    grid-column: 2 !important;
-    grid-row: 2 !important;
-  }
-
-  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-brand {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    grid-template-columns: minmax(0, 1fr) 44px !important;
     text-align: left !important;
-  }
-
-  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-logo,
-  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-logo-fallback {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-  }
-
-  .print-area.print-invoice .invoice-print-template-minimal .invoice-print-company {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
   }
 
   .print-area.print-invoice table {
@@ -955,7 +957,7 @@ html {
     page-break-inside: avoid !important;
   }
 
-  .print-area.print-invoice .invoice-print-document:not(:last-child) {
+  .print-area.print-invoice-batch .invoice-print-document:not(:last-of-type) {
     break-after: page !important;
     page-break-after: always !important;
   }

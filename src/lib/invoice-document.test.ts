@@ -4,7 +4,7 @@ import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { accountingUxDictionaries } from './accounting-ux-i18n.ts'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
-import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot } from './invoice-document.ts'
+import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, estimateInvoicePageCount } from './invoice-document.ts'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { invoiceSnapshotDictionaries } from './invoice-snapshot-i18n.ts'
 
@@ -25,6 +25,14 @@ test('invoice document model passes through canonical totals without recalculati
 
   assert.deepEqual(model.totals, { subtotal: 123.45, taxAmount: 23.46, total: 146.91 })
   assert.equal(model.items[0].lineTotal, 123.45)
+})
+
+test('invoice pagination is enabled only after the estimated document exceeds two A4 pages', () => {
+  const pageHeight = 1032
+  assert.equal(estimateInvoicePageCount([pageHeight], pageHeight), 1)
+  assert.equal(estimateInvoicePageCount([pageHeight * 1.9], pageHeight), 2)
+  assert.equal(estimateInvoicePageCount([pageHeight * 2.1], pageHeight), 3)
+  assert.equal(estimateInvoicePageCount([pageHeight, pageHeight], pageHeight), 2)
 })
 
 test('finalized snapshots preserve seller and buyer presentation while totals remain canonical', () => {
@@ -121,7 +129,7 @@ test('single and batch print use one Standard renderer and retain Standard CSS h
 
   assert.equal((page.match(/<StandardInvoiceRenderer/g) ?? []).length, 2)
   assert.doesNotMatch(page, /invoice-print-header/)
-  for (const className of ['invoice-print-header', 'invoice-print-brand', 'invoice-print-client', 'invoice-print-table', 'invoice-print-totals', 'invoice-print-payment', 'invoice-print-footer']) {
+  for (const className of ['invoice-print-header', 'invoice-print-title', 'invoice-print-issuer', 'invoice-print-client', 'invoice-print-table', 'invoice-print-totals', 'invoice-print-payment', 'invoice-print-footer']) {
     assert.match(renderer, new RegExp(className))
   }
   assert.doesNotMatch(renderer, /calculateItems|quantity\s*\*\s*unitPrice/)
@@ -143,35 +151,37 @@ test('invoice renderer prints seller and buyer tax identifiers independently and
   assert.match(renderer, /model\.buyer\.vatId/)
   assert.match(renderer, /item\.unit/)
   assert.match(renderer, /model\.paymentTerms/)
-  assert.match(renderer, /model\.seller\.address && <p/)
+  assert.match(renderer, /<p className="whitespace-pre-line">\{model\.seller\.address\}<\/p>/)
   assert.match(renderer, /model\.seller\.showDetails && <footer className="invoice-print-footer">/)
-  assert.match(renderer, /invoice-print-client[\s\S]*invoice-print-brand/)
+  assert.match(renderer, /invoice-print-title[\s\S]*invoice-print-issuer[\s\S]*invoice-print-client/)
   assert.match(renderer, /invoices\.client/)
   assert.match(renderer, /invoices\.invoiceNumber'\)\}: \{model\.invoiceNumber\}/)
-  assert.match(renderer, /model\.seller\.showDetails && issuer &&/)
+  assert.match(renderer, /model\.seller\.showDetails && \(/)
   assert.match(renderer, /issuer\.name/)
   assert.match(renderer, /issuer\.email/)
   assert.match(renderer, /model\.buyer\.addressLines\.map/)
-  assert.doesNotMatch(renderer, /model\.buyer\.visibleFields\.address/)
+  assert.doesNotMatch(renderer, /model\.buyer\.visibleFields\.address && model\.buyer\.addressLines\.map/)
+  assert.match(renderer, /model\.buyer\.addressLines\.map/)
   assert.doesNotMatch(renderer, /model\.buyer\.name \|\| t\('invoices\.noClient'\)/)
   assert.match(renderer, /invoice-print-totals[\s\S]*invoice-print-footer/)
   assert.match(renderer, /model\.items\.map[\s\S]*item\.description/)
   assert.doesNotMatch(renderer, /repeatBankDetails[\s\S]*IBAN/)
-  assert.match(renderer, /showDetails && model\.seller\.address/)
+  assert.match(renderer, /model\.seller\.showDetails && \([\s\S]*?model\.seller\.address/)
   assert.match(renderer, /contracts\.party\.email[^\n]*model\.seller\.email/)
   assert.match(renderer, /contracts\.party\.taxNumber[^\n]*model\.seller\.taxNumber/)
   assert.match(renderer, /contracts\.party\.vatId[^\n]*model\.seller\.vatId/)
   assert.doesNotMatch(renderer, /model\.seller\.(email|phone|taxNumber|vatId)\s*&&/)
-  assert.match(renderer, /model\.seller\.showDetails && model\.seller\.address/)
-  assert.match(renderer, /invoice-print-header[\s\S]*model\.seller\.taxNumber[\s\S]*model\.seller\.vatId[\s\S]*invoice-print-meta/)
+  assert.match(renderer, /invoice-print-issuer[\s\S]*model\.seller\.taxNumber[\s\S]*model\.seller\.vatId[\s\S]*invoice-print-meta/)
   assert.match(renderer, /invoice-print-footer[\s\S]*model\.seller\.(bic|bankName|accountHolder)/)
-  assert.match(renderer, /<dt>IBAN:<\/dt><dd>\{model\.seller\.iban\}<\/dd>/)
+  assert.match(renderer, /<dt>IBAN:<\/dt><dd>\{model\.seller\.iban \?\? ''\}<\/dd>/)
   assert.match(renderer, /<dt>\{t\('invoiceSettings\.bankName'\)\}:<\/dt><dd>\{model\.seller\.bankName \?\? ''\}<\/dd>/)
   assert.match(renderer, /printTemplate\?: 'business' \| 'minimal'/)
-  assert.match(styles, /invoice-print-template-minimal \.invoice-print-brand/)
-  assert.match(renderer, /<dt>BIC:<\/dt><dd>\{model\.seller\.bic\}<\/dd>/)
-  assert.match(renderer, /counter\(page\)[\s\S]*counter\(pages\)/)
-  assert.match(renderer, /@bottom-right/)
+  assert.match(styles, /invoice-print-template-minimal \.invoice-print-client/)
+  assert.match(renderer, /<dt>BIC:<\/dt><dd>\{model\.seller\.bic \?\? ''\}<\/dd>/)
+  assert.match(styles, /invoice-print-show-page-numbers/)
+  assert.match(styles, /counter\(page\)[\s\S]*counter\(pages\)/)
+  assert.match(page, /invoice-print-show-page-numbers.*pages > 2/)
+  assert.match(page, /beforeprint/)
   assert.match(page, /invoices\.printTemplateBusiness/)
   assert.match(page, /invoices\.printTemplateMinimal/)
   assert.doesNotMatch(page, /\['address', 'invoices\.includeClientAddress'\]/)
@@ -179,7 +189,9 @@ test('invoice renderer prints seller and buyer tax identifiers independently and
   assert.match(page, /issuerProfile: issuerProfile\?\.userId === userId/)
   assert.match(styles, /\.invoice-print-document\s*\{[\s\S]*?min-height:\s*273mm/)
   assert.match(styles, /\.invoice-print-footer\s*\{[\s\S]*?margin-top:\s*auto/)
-  assert.match(styles, /\.print-area\.print-invoice\s*\{[\s\S]*?width:\s*168mm/)
+  assert.match(styles, /\.print-area\.print-invoice\s*\{[\s\S]*?width:\s*186mm/)
+  assert.match(styles, /invoice-print-footer-legal dl\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/)
+  assert.match(styles, /print-invoice-batch \.invoice-print-document:not\(:last-of-type\)/)
   assert.equal((page.match(/seller:\s*sellerPresentation/g) ?? []).length, 2)
   assert.match(page, /companyLegalLoaded\s*\|\|\s*!companyBrandingLoaded/)
   assert.match(page, /from\('profiles'\)[\s\S]*select\('full_name, email'\)[\s\S]*eq\('id', userId\)/)

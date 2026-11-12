@@ -22,6 +22,14 @@ export interface InvoiceIssuerProfile {
   email: string
 }
 
+export function estimateInvoicePageCount(documentHeights: number[], printablePageHeight: number): number {
+  if (!Number.isFinite(printablePageHeight) || printablePageHeight <= 0) return 0
+  return documentHeights.reduce((pages, height) => {
+    if (!Number.isFinite(height) || height <= 0) return pages
+    return pages + Math.max(1, Math.ceil(height / printablePageHeight))
+  }, 0)
+}
+
 export interface InvoiceDocumentModel {
   id: string
   templateId: 'standard'
