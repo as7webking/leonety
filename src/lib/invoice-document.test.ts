@@ -94,7 +94,8 @@ test('legacy snapshots never invent missing historical seller or buyer tax detai
   assert.equal(model.seller.taxNumber, '')
   assert.equal(model.seller.vatId, undefined)
   assert.equal(model.seller.phone, undefined)
-  assert.equal(model.seller.iban, '')
+  assert.equal(model.seller.iban, 'DE89370400440532013000')
+  assert.equal(invoice.document_snapshot.seller.iban, '')
   assert.equal(model.seller.bic, '')
   assert.deepEqual(model.totals, { subtotal: 100, taxAmount: 19, total: 119 })
 })
@@ -336,7 +337,7 @@ test('version 3 snapshots remain compatible while current independent print choi
     id: 'invoice-v3-compat', invoice_number: 'V3', status: 'sent', issue_date: '2026-11-01', due_date: null,
     currency: 'EUR', notes: null, subtotal: 0, tax_amount: 0, total: 0, document_snapshot: version3Snapshot,
   }, {
-    seller: { ...version3Snapshot.seller, visibleFields: { taxNumber: false, vatId: true } },
+    seller: { ...version3Snapshot.seller, iban: 'DE-CURRENT-PROFILE', visibleFields: { taxNumber: false, vatId: true } },
     showIssuer: false,
     buyerAddressLines: [],
     buyerVisibleFields: { company: false, email: false, phone: false, address: true, taxNumber: false, vatId: true },
@@ -344,12 +345,41 @@ test('version 3 snapshots remain compatible while current independent print choi
   })
 
   assert.equal(model.seller.taxNumber, 'SAVED-TAX')
+  assert.equal(model.seller.iban, 'DE-CURRENT-PROFILE')
   assert.equal(model.seller.visibleFields?.taxNumber, false)
   assert.equal(model.seller.visibleFields?.vatId, true)
   assert.equal(model.showIssuer, false)
   assert.equal(model.issuerProfile?.name, 'Saved issuer')
   assert.equal(model.buyer.visibleFields.taxNumber, false)
   assert.equal(model.buyer.visibleFields.vatId, true)
+})
+
+test('older invoice keeps a saved IBAN and only falls back to the profile when its snapshot IBAN is blank', () => {
+  const snapshot = {
+    schemaVersion: 3 as const,
+    capturedAt: '2026-11-01T10:00:00.000Z',
+    templateId: 'standard' as const,
+    seller: { name: 'Saved seller', logo: '', address: '', email: '', taxNumber: '', iban: 'DE-HISTORICAL', bic: '', showDetails: true },
+    buyer: { name: 'Buyer', company: null, email: null, phone: null, addressLines: [], taxNumber: null, visibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true } },
+    issuerProfile: null,
+    items: [], totals: { subtotal: 0, taxAmount: 0, total: 0 },
+    payment: { method: 'bank_transfer' as const, amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true, isPaid: false },
+    paymentTerms: null,
+  }
+  const invoice = {
+    id: 'invoice-iban-fallback', invoice_number: 'OLD-IBAN', status: 'sent' as const, issue_date: '2026-11-01', due_date: null,
+    currency: 'EUR', notes: null, subtotal: 0, tax_amount: 0, total: 0, document_snapshot: snapshot,
+  }
+  const presentation = {
+    seller: { ...snapshot.seller, iban: 'DE-CURRENT-PROFILE' },
+    buyerAddressLines: [],
+    buyerVisibleFields: { company: true, email: true, phone: true, address: true, taxNumber: true },
+    payment: { method: 'bank_transfer' as const, amountPaid: 0, splitPayment: false, allocations: [], groupAllocations: false, repeatBankDetails: true },
+  }
+
+  assert.equal(createInvoiceDocumentModel(invoice, presentation).seller.iban, 'DE-HISTORICAL')
+  assert.equal(snapshot.seller.iban, 'DE-HISTORICAL')
+  assert.equal(createInvoiceDocumentModel({ ...invoice, document_snapshot: { ...snapshot, seller: { ...snapshot.seller, iban: '' } } }, presentation).seller.iban, 'DE-CURRENT-PROFILE')
 })
 
 test('version 2 invoice snapshots remain readable after version 3 is introduced', () => {

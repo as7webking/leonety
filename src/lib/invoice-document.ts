@@ -189,6 +189,8 @@ export function createInvoiceDocumentModel(
   const hasFullSnapshot = snapshot?.schemaVersion === 2 || snapshot?.schemaVersion === 3 || snapshot?.schemaVersion === 4
   const seller = {
     ...(snapshotSeller ?? presentation.seller),
+    // Older issued invoices may predate saved bank details; only an empty IBAN falls back to the current workspace profile.
+    iban: snapshotSeller?.iban?.trim() ? snapshotSeller.iban : presentation.seller.iban,
     // This is a current print preference, not historical invoice data.
     showDetails: presentation.seller.showDetails,
     visibleFields: {
