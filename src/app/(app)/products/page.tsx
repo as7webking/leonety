@@ -1079,7 +1079,7 @@ export default function ProductsPage() {
   }
 
   if (companyLoading || loading) return <PageContainer><PageHeader title={t('products.title')} /><LoadingSkeleton /></PageContainer>
-  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/app/onboarding') }} /></PageContainer>
+  if (!currentCompany) return <PageContainer><PageHeader title={t('products.title')} /><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} action={{ label: t('common.goToOnboarding'), onClick: () => router.push('/app/onboarding') }} /></PageContainer>
   if (currentCompany.type !== 'business') return <PageContainer><PageHeader title={t('products.title')} /><EmptyState icon={BriefcaseBusiness} title={t('common.businessOnlyTitle')} description={t('modules.businessOnlyDescription')} /></PageContainer>
 
   return (

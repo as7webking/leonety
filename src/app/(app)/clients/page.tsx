@@ -450,9 +450,9 @@ export default function ClientsPage() {
           ? { title: t('clients.crm.noInactive'), description: t('clients.crm.noInactiveDescription') }
           : { title: t('clients.crm.noClientsYet'), description: t('clients.crm.noClientsYetDescription') }
 
-  if (companyLoading) return <PageContainer><LoadingSkeleton /></PageContainer>
-  if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} description={t('dashboard.noWorkspace')} /></PageContainer>
-  if (currentCompany.type !== 'business') return <PageContainer><EmptyState icon={Building2} title={t('common.businessOnlyTitle')} description={t('common.businessOnlyDescription')} /></PageContainer>
+  if (companyLoading) return <PageContainer><PageHeader title={t('clients.title')} /><LoadingSkeleton /></PageContainer>
+  if (!currentCompany) return <PageContainer><PageHeader title={t('clients.title')} /><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} description={t('dashboard.noWorkspace')} /></PageContainer>
+  if (currentCompany.type !== 'business') return <PageContainer><PageHeader title={t('clients.title')} /><EmptyState icon={Building2} title={t('common.businessOnlyTitle')} description={t('common.businessOnlyDescription')} /></PageContainer>
 
   return (
     <PageContainer>

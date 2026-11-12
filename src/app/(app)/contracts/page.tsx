@@ -873,7 +873,7 @@ function ContractsWorkspace({ initialMode = 'saved' }: { initialMode?: 'saved' |
   }
 
   if (!currentCompany) {
-    return <PageContainer><EmptyState icon={FileText} title={t('common.noWorkspaceSelected')} /></PageContainer>
+    return <PageContainer><PageHeader title={pageMode === 'create' ? t('contracts.create') : t('contracts.title')} /><EmptyState icon={FileText} title={t('common.noWorkspaceSelected')} /></PageContainer>
   }
 
   return (
