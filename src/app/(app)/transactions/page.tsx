@@ -23,7 +23,7 @@ import { buildKassenbuch, getKassenbuchText, isFullCalendarMonthSelected } from 
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
-import { orderTransactions, type TransactionDayOrder, type TransactionGroupOrder, type TransactionOrder } from '@/lib/transaction-ordering'
+import { mergeTransactionsByDate, orderTransactions, type TransactionDayOrder, type TransactionGroupOrder, type TransactionOrder } from '@/lib/transaction-ordering'
 import { buildKassenbuchPresentation, getKassenbuchDays, kassenbuchTransactionKey, type KassenbuchPrintOrder } from '@/lib/kassenbuch-presentation'
 import { useKassenbuchCustomOrder, useKassenbuchPrintOrderPreference } from '@/hooks/use-kassenbuch-print-order'
 
@@ -301,32 +301,31 @@ export default function TransactionsPage() {
       if (incomeRes.error) throw incomeRes.error
       if (expenseRes.error) throw expenseRes.error
 
-      const nextTransactions: TransactionRow[] = [
-        ...((incomeRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
-          ...item,
-          type: 'income' as const,
-          title: item.title ?? null,
-          note: item.note ?? null,
-          reference: item.reference ?? null,
-          payment_method: item.payment_method ?? null,
-          invoice_id: item.invoice_id ?? null,
-          created_at: item.created_at ?? null,
-          cash_amount: null,
-          amount: Number(item.amount),
-        })),
-        ...((expenseRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
-          ...item,
-          type: 'expense' as const,
-          title: item.title ?? null,
-          note: item.note ?? null,
-          reference: item.reference ?? null,
-          payment_method: item.payment_method ?? null,
-          invoice_id: item.invoice_id ?? null,
-          created_at: item.created_at ?? null,
-          cash_amount: null,
-          amount: Number(item.amount),
-        })),
-      ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+      const incomeTransactions: TransactionRow[] = ((incomeRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
+        ...item,
+        type: 'income' as const,
+        title: item.title ?? null,
+        note: item.note ?? null,
+        reference: item.reference ?? null,
+        payment_method: item.payment_method ?? null,
+        invoice_id: item.invoice_id ?? null,
+        created_at: item.created_at ?? null,
+        cash_amount: null,
+        amount: Number(item.amount),
+      }))
+      const expenseTransactions: TransactionRow[] = ((expenseRes.data ?? []) as SupabaseTransactionRow[]).map((item) => ({
+        ...item,
+        type: 'expense' as const,
+        title: item.title ?? null,
+        note: item.note ?? null,
+        reference: item.reference ?? null,
+        payment_method: item.payment_method ?? null,
+        invoice_id: item.invoice_id ?? null,
+        created_at: item.created_at ?? null,
+        cash_amount: null,
+        amount: Number(item.amount),
+      }))
+      const nextTransactions = mergeTransactionsByDate(incomeTransactions, expenseTransactions)
 
       const invoiceIds = Array.from(new Set(nextTransactions.flatMap((transaction) => (
         transaction.invoice_id ? [transaction.invoice_id] : []
@@ -1705,7 +1704,7 @@ export default function TransactionsPage() {
                 description={transaction.title ? transaction.description : undefined}
                 badge={<span className={`inline-flex items-center gap-1 text-xs font-medium ${isIncome ? 'text-emerald-700' : 'text-red-700'}`}><Icon className="h-4 w-4" />{isIncome ? t('income.title') : t('expenses.title')}</span>}
                 category={formatCategoryLabel(transaction.category, t)}
-                date={transaction.date}
+                date={new Date(`${transaction.date}T00:00:00`).toLocaleDateString(intlLocale)}
                 amount={transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
                   && normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
                   ? formatCurrency(Number(transaction.workspace_amount), normalizeCurrencyCode(transaction.workspace_currency), intlLocale)
