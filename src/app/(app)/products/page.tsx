@@ -398,6 +398,7 @@ export default function ProductsPage() {
   const [newCategoryName, setNewCategoryName] = useState('')
   const [renamedCategoryName, setRenamedCategoryName] = useState('')
   const [categoriesAvailable, setCategoriesAvailable] = useState(() => initialDataMemory?.value.categoriesAvailable ?? true)
+  const [productListViewport, setProductListViewport] = useState<'compact' | 'desktop'>('compact')
   const initialQuery = searchParams.get('q') ?? ''
   const initialStatus = searchParams.get('status')
   const initialStock = searchParams.get('stock')
@@ -430,6 +431,18 @@ export default function ProductsPage() {
   }, [])
 
   useBodyScrollLock(showForm || Boolean(viewingProduct))
+
+  useEffect(() => {
+    const desktopQuery = window.matchMedia('(min-width: 1024px)')
+    const updateViewport = () => setProductListViewport(desktopQuery.matches ? 'desktop' : 'compact')
+    updateViewport()
+    if (desktopQuery.addEventListener) {
+      desktopQuery.addEventListener('change', updateViewport)
+      return () => desktopQuery.removeEventListener('change', updateViewport)
+    }
+    desktopQuery.addListener(updateViewport)
+    return () => desktopQuery.removeListener(updateViewport)
+  }, [])
 
   const loadProducts = useCallback(async () => {
     if (!currentCompany) {
@@ -1549,7 +1562,7 @@ export default function ProductsPage() {
         <EmptyState title={t('products.empty')} description={t('products.emptyDescription')} />
       ) : (
         <>
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:hidden">
+          {productListViewport === 'compact' && <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             {visibleProducts.map((product) => {
               const lowStock = product.status === 'active' && product.current_stock <= product.low_stock_threshold
               const selected = selectedProductIds.has(product.id)
@@ -1584,8 +1597,8 @@ export default function ProductsPage() {
                 </Card>
               )
             })}
-          </div>
-          <Card className="hidden lg:block">
+          </div>}
+          {productListViewport === 'desktop' && <Card>
           <CardContent className="p-0">
             <div className="min-w-0 overflow-hidden">
               <table className="w-full table-fixed text-sm">
@@ -1655,7 +1668,7 @@ export default function ProductsPage() {
               </table>
             </div>
           </CardContent>
-          </Card>
+          </Card>}
         </>
       )}
 
