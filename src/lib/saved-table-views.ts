@@ -16,6 +16,7 @@ export interface ProductTableViewState {
 
 export interface ExpenseTableViewState {
   searchQuery: string
+  categoryFilter: string
   groupReportsByMonth: boolean
   filterFromDate: string
   filterToDate: string
@@ -81,9 +82,11 @@ export function parseSavedTableViewState(kind: SavedTableKind, value: unknown): 
     }
   }
   if (typeof value.searchQuery !== 'string' || value.searchQuery.length > 200 || typeof value.groupReportsByMonth !== 'boolean') return null
+  if (value.categoryFilter !== undefined && (typeof value.categoryFilter !== 'string' || value.categoryFilter.length > 120)) return null
   if (!validDate(value.filterFromDate) || !validDate(value.filterToDate) || !['date', 'amount'].includes(String(value.sortBy)) || !['asc', 'desc'].includes(String(value.sortDirection))) return null
   return {
     searchQuery: value.searchQuery,
+    categoryFilter: typeof value.categoryFilter === 'string' ? value.categoryFilter : '',
     groupReportsByMonth: value.groupReportsByMonth,
     filterFromDate: value.filterFromDate,
     filterToDate: value.filterToDate,

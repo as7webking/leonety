@@ -41,53 +41,44 @@ interface FinanceToolbarProps {
 export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, filters, sorting, utilities }: FinanceToolbarProps) {
   return (
     <section className="mb-5 space-y-3" aria-label={filtersLabel}>
-      <div className="grid grid-cols-2 gap-2 lg:hidden">
+      <div className="grid grid-cols-2 gap-2 lg:block lg:space-y-3">
         {filters && (
-          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
+          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700 lg:hidden">
               <SlidersHorizontal className="h-4 w-4" />
               {filtersLabel}
             </summary>
-            <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full">{filters}</div>
+            <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full lg:flex lg:flex-wrap lg:items-center lg:gap-2 lg:border-0 lg:p-0">
+              <span className="hidden text-xs font-semibold uppercase text-slate-500 lg:inline">{filtersLabel}</span>
+              {filters}
+            </div>
           </details>
         )}
         {sorting && (
-          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
+          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700 lg:hidden">
               <SlidersHorizontal className="h-4 w-4" />
               {sortingLabel}
             </summary>
-            <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full">{sorting}</div>
+            <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full lg:flex lg:flex-wrap lg:items-center lg:gap-2 lg:border-0 lg:p-0">
+              <span className="hidden text-xs font-semibold uppercase text-slate-500 lg:inline">{sortingLabel}</span>
+              {sorting}
+            </div>
           </details>
         )}
         {utilities && (
-          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
+          <details className="group col-span-2 rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700 lg:hidden">
               <Wrench className="h-4 w-4" />
               {utilitiesLabel}
             </summary>
-            <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full">{utilities}</div>
+            <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3 [&>*]:max-w-full lg:flex lg:min-w-0 lg:flex-wrap lg:items-center lg:gap-2 lg:border-y lg:bg-slate-50/70 lg:px-3 lg:py-3">
+              <h2 className="hidden shrink-0 text-xs font-semibold uppercase text-slate-500 lg:block">{utilitiesLabel}</h2>
+              {utilities}
+            </div>
           </details>
         )}
       </div>
-      {utilities && (
-        <div className="hidden min-w-0 items-center gap-5 border-y border-slate-200 bg-slate-50/70 px-3 py-3 lg:flex">
-          <h2 className="shrink-0 text-xs font-semibold uppercase text-slate-500">{utilitiesLabel}</h2>
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{utilities}</div>
-        </div>
-      )}
-      {filters && (
-        <div className="hidden min-w-0 flex-wrap items-center gap-2 lg:flex">
-          <span className="mr-1 text-xs font-semibold uppercase text-slate-500">{filtersLabel}</span>
-          {filters}
-        </div>
-      )}
-      {sorting && (
-        <div className="hidden min-w-0 flex-wrap items-center gap-2 lg:flex">
-          <span className="mr-1 text-xs font-semibold uppercase text-slate-500">{sortingLabel}</span>
-          {sorting}
-        </div>
-      )}
     </section>
   )
 }

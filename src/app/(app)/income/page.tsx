@@ -145,6 +145,7 @@ export default function IncomePage() {
   const [showBulkTitleDialog, setShowBulkTitleDialog] = useState(false)
   const [bulkTitleSubmitting, setBulkTitleSubmitting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [page, setPage] = useState(1)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const restoredDraftKeyRef = useRef<string | null>(null)
@@ -158,6 +159,10 @@ export default function IncomePage() {
   const conversionPreview = getMoneyConversionPreview(formData.amount, latestRate, currentCompany?.currency ?? 'USD')
   const descriptionSuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.description), [incomes])
   const categorySuggestions = useMemo(() => uniqueRecentValues(incomes, (income) => income.category), [incomes])
+  const availableIncomeCategories = useMemo(
+    () => [...new Set(incomes.map((income) => income.category).filter(Boolean))].sort((left, right) => left.localeCompare(right, intlLocale)),
+    [incomes, intlLocale]
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -573,17 +578,17 @@ export default function IncomePage() {
       const afterStart = !filterFromDate || income.date >= filterFromDate
       const beforeEnd = !filterToDate || income.date <= filterToDate
       const matchesSearch = matchesFinanceSearch(searchQuery, [income.title, income.description, income.category, income.reference])
-      return afterStart && beforeEnd && matchesSearch
+      return afterStart && beforeEnd && matchesSearch && (!categoryFilter || income.category === categoryFilter)
     }).sort((left, right) => {
       const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
       const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
       return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
     })
-  }, [filterFromDate, filterToDate, incomes, searchQuery, sortBy, sortDirection])
+  }, [categoryFilter, filterFromDate, filterToDate, incomes, searchQuery, sortBy, sortDirection])
   const totalPages = Math.max(1, Math.ceil(sortedIncomes.length / FINANCE_PAGE_SIZE))
   const paginatedIncomes = useMemo(() => sortedIncomes.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedIncomes])
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
-  useEffect(() => setPage(1), [filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
+  useEffect(() => setPage(1), [categoryFilter, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
   const visibleIncomeIds = useMemo(() => paginatedIncomes.map((income) => income.id), [paginatedIncomes])
   const selectedIncomeIdSet = useMemo(() => new Set(selectedIncomeIds), [selectedIncomeIds])
@@ -828,6 +833,7 @@ export default function IncomePage() {
           <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
           <input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setSelectedIncomeIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterFrom')} />
           <input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setSelectedIncomeIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterTo')} />
+          <AppSelect value={categoryFilter} onChange={(value) => { setCategoryFilter(value); setSelectedIncomeIds([]) }} options={[{ value: '', label: t('transactions.allCategories') }, ...availableIncomeCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('common.category')} className="w-full lg:w-48" />
         </> : undefined}
         sortingLabel={t('common.sortBy')}
         sorting={incomes.length > 0 ? <>
@@ -1071,7 +1077,7 @@ export default function IncomePage() {
                 title={income.title || income.description}
                 description={income.title ? income.description : undefined}
                 category={formatCategoryLabel(income.category, t)}
-                date={income.date}
+                date={new Date(`${income.date}T00:00:00`).toLocaleDateString(intlLocale)}
                 amount={getWorkspaceAmount(income) === null
                   ? formatCurrency(Number(income.amount), income.currency)
                   : formatCurrency(getWorkspaceAmount(income)!, income.workspace_currency ?? currentCompany.currency ?? 'USD')}

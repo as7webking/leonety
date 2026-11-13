@@ -31,10 +31,17 @@ test('collection parser rejects invalid entries and default IDs outside the coll
   assert.equal(result.defaultViewId, null)
 })
 
+test('legacy expense saved views default to all categories and preserve new category filters', () => {
+  const legacy = parseSavedTableViewState('expenses', { searchQuery: '', groupReportsByMonth: false, filterFromDate: '', filterToDate: '', sortBy: 'date', sortDirection: 'desc' }) as ExpenseTableViewState
+  assert.equal(legacy.categoryFilter, '')
+  const filtered = parseSavedTableViewState('expenses', { searchQuery: '', categoryFilter: 'Rent', groupReportsByMonth: false, filterFromDate: '', filterToDate: '', sortBy: 'date', sortDirection: 'desc' }) as ExpenseTableViewState
+  assert.equal(filtered.categoryFilter, 'Rent')
+})
+
 test('saved view collection round-trips without record data', () => {
   const collection: SavedTableViewCollection<ExpenseTableViewState> = {
     defaultViewId: 'view-1',
-    views: [{ id: 'view-1', name: 'This month / Rent', updatedAt: 100, state: { searchQuery: 'rent', groupReportsByMonth: true, filterFromDate: '2026-11-01', filterToDate: '2026-11-30', sortBy: 'date', sortDirection: 'desc' } }],
+    views: [{ id: 'view-1', name: 'This month / Rent', updatedAt: 100, state: { searchQuery: 'rent', categoryFilter: 'Rent', groupReportsByMonth: true, filterFromDate: '2026-11-01', filterToDate: '2026-11-30', sortBy: 'date', sortDirection: 'desc' } }],
   }
   assert.deepEqual(parseSavedTableViewCollection<ExpenseTableViewState>('expenses', serializeSavedTableViewCollection(collection)), collection)
 })

@@ -109,6 +109,7 @@ export default function ExpensesPage() {
   const [companyAddress, setCompanyAddress] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [page, setPage] = useState(1)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const restoredDraftKeyRef = useRef<string | null>(null)
@@ -117,6 +118,7 @@ export default function ExpensesPage() {
   const categoryOptions = ['Food', 'Utilities', 'Rent', 'Other']
   const applySavedExpenseView = useCallback((view: ExpenseTableViewState) => {
     setSearchQuery(view.searchQuery)
+    setCategoryFilter(view.categoryFilter)
     setGroupReportsByMonth(view.groupReportsByMonth)
     setFilterFromDate(view.filterFromDate)
     setFilterToDate(view.filterToDate)
@@ -127,6 +129,10 @@ export default function ExpensesPage() {
   const conversionPreview = getMoneyConversionPreview(formData.amount, latestRate, currentCompany?.currency ?? 'USD')
   const descriptionSuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.description), [expenses])
   const categorySuggestions = useMemo(() => uniqueRecentValues(expenses, (expense) => expense.category), [expenses])
+  const availableExpenseCategories = useMemo(
+    () => [...new Set(expenses.map((expense) => expense.category).filter(Boolean))].sort((left, right) => left.localeCompare(right, intlLocale)),
+    [expenses, intlLocale]
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -517,17 +523,17 @@ export default function ExpensesPage() {
       const afterStart = !filterFromDate || expense.date >= filterFromDate
       const beforeEnd = !filterToDate || expense.date <= filterToDate
       const matchesSearch = matchesFinanceSearch(searchQuery, [expense.title, expense.description, expense.category])
-      return afterStart && beforeEnd && matchesSearch
+      return afterStart && beforeEnd && matchesSearch && (!categoryFilter || expense.category === categoryFilter)
     }).sort((left, right) => {
       const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
       const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
       return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
     })
-  }, [expenses, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
+  }, [categoryFilter, expenses, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
   const totalPages = Math.max(1, Math.ceil(sortedExpenses.length / FINANCE_PAGE_SIZE))
   const paginatedExpenses = useMemo(() => sortedExpenses.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedExpenses])
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
-  useEffect(() => setPage(1), [filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
+  useEffect(() => setPage(1), [categoryFilter, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
   const groupExpenses = (items: Expense[]) => items.reduce<Record<string, Expense[]>>((groups, expense) => {
     const key = expense.date.slice(0, 7)
@@ -705,9 +711,10 @@ export default function ExpensesPage() {
         kind="expenses"
         userId={userId}
         workspaceId={currentCompany.id}
-        state={{ searchQuery, groupReportsByMonth, filterFromDate, filterToDate, sortBy, sortDirection }}
+        state={{ searchQuery, categoryFilter, groupReportsByMonth, filterFromDate, filterToDate, sortBy, sortDirection }}
         applyDefault={!searchParams.toString()}
         onApply={applySavedExpenseView}
+        compact
       />
       <FinanceToolbar
         filtersLabel={t('finance.filters')}
@@ -717,6 +724,7 @@ export default function ExpensesPage() {
           <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
           <input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterFrom')} />
           <input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterTo')} />
+          <AppSelect value={categoryFilter} onChange={setCategoryFilter} options={[{ value: '', label: t('transactions.allCategories') }, ...availableExpenseCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('common.category')} className="w-full lg:w-48" />
         </> : undefined}
         sortingLabel={t('common.sortBy')}
         sorting={expenses.length > 0 ? <>
@@ -886,7 +894,7 @@ export default function ExpensesPage() {
                 title={expense.title || expense.description}
                 description={expense.title ? expense.description : undefined}
                 category={formatCategoryLabel(expense.category, t)}
-                date={expense.date}
+                date={new Date(`${expense.date}T00:00:00`).toLocaleDateString(intlLocale)}
                 amount={getWorkspaceAmount(expense) === null
                   ? formatCurrency(Number(expense.amount), expense.currency)
                   : formatCurrency(getWorkspaceAmount(expense)!, expense.workspace_currency ?? currentCompany.currency ?? 'USD')}
