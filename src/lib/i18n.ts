@@ -3345,6 +3345,7 @@ for (const locale of locales) {
 const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   en: {
     'products.importExport': 'Import / Export',
+    'products.catalogTools': 'Catalog tools',
     'products.editorDescription': 'Edit the product without losing your current filters or selection.',
     'products.editor.general': 'General',
     'products.editor.pricing': 'Pricing',
@@ -3402,6 +3403,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   },
   de: {
     'products.importExport': 'Import / Export',
+    'products.catalogTools': 'Katalogwerkzeuge',
     'products.editorDescription': 'Bearbeite das Produkt, ohne aktuelle Filter oder Auswahl zu verlieren.',
     'products.editor.general': 'Allgemein',
     'products.editor.pricing': 'Preise',
@@ -3459,6 +3461,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   },
   ru: {
     'products.importExport': 'Импорт / Экспорт',
+    'products.catalogTools': 'Инструменты каталога',
     'products.editorDescription': 'Редактируйте товар, не теряя текущие фильтры и выбор.',
     'products.editor.general': 'Основное',
     'products.editor.pricing': 'Цены',
@@ -3516,6 +3519,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   },
   tr: {
     'products.importExport': 'İçe / Dışa Aktar',
+    'products.catalogTools': 'Katalog araçları',
     'products.editorDescription': 'Mevcut filtreleri veya seçimi kaybetmeden ürünü düzenleyin.',
     'products.editor.general': 'Genel',
     'products.editor.pricing': 'Fiyatlandırma',
@@ -3573,6 +3577,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   },
   uk: {
     'products.importExport': 'Імпорт / Експорт',
+    'products.catalogTools': 'Інструменти каталогу',
     'products.editorDescription': 'Редагуйте товар, не втрачаючи поточні фільтри або вибір.',
     'products.editor.general': 'Основне',
     'products.editor.pricing': 'Ціни',
@@ -3630,6 +3635,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   },
   pl: {
     'products.importExport': 'Import / Eksport',
+    'products.catalogTools': 'Narzędzia katalogu',
     'products.editorDescription': 'Edytuj produkt bez utraty bieżących filtrów lub zaznaczenia.',
     'products.editor.general': 'Ogólne',
     'products.editor.pricing': 'Ceny',
@@ -3687,6 +3693,7 @@ const inventoryUxDictionaries: Record<Locale, Record<string, string>> = {
   },
   fr: {
     'products.importExport': 'Import / Export',
+    'products.catalogTools': 'Outils du catalogue',
     'products.editorDescription': 'Modifiez le produit sans perdre vos filtres ou votre sélection.',
     'products.editor.general': 'Général',
     'products.editor.pricing': 'Prix',

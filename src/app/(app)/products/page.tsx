@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Archive, Barcode, BriefcaseBusiness, Building2, Copy, Download, Edit, Eye, PackagePlus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from 'lucide-react'
+import { Archive, Barcode, BriefcaseBusiness, Building2, ChevronDown, Copy, Download, Edit, Eye, PackagePlus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from 'lucide-react'
 import { DesktopPageUtilities, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
@@ -1108,6 +1108,7 @@ export default function ProductsPage() {
         state={{ query, statusFilter, categoryFilter, stockFilter, providerFilter, imageFilter, sortBy }}
         applyDefault={searchParams.size === 0}
         onApply={applySavedProductView}
+        compact
       />
       {refreshing && <p role="status" className="mb-3 text-xs text-slate-500">{t('app.refreshingData')}</p>}
       {wooPreviewLoading && <p role="status" className="mb-3 text-sm text-slate-600">{t('products.wooPreviewLoading')}</p>}
@@ -1151,7 +1152,7 @@ export default function ProductsPage() {
         <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} aria-label={t('products.search')} />
       </div>
 
-      <div className="mb-5 grid min-w-0 grid-cols-2 gap-2 lg:hidden">
+      {productListViewport === 'compact' && <div className="mb-5 grid min-w-0 grid-cols-2 gap-2 lg:hidden">
         <details className="group min-w-0 rounded-md border border-slate-200 bg-white open:col-span-2">
           <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
@@ -1193,11 +1194,11 @@ export default function ProductsPage() {
           <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
             <Download className="h-4 w-4 shrink-0" />
             <span className="min-w-0 break-words">{t('products.importExport')}</span>
+            <ChevronDown className="ml-auto h-4 w-4 shrink-0" aria-hidden="true" />
           </summary>
           <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3">
             <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
             <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
-            <ProductChannelComparisonDialog companyId={currentCompany.id} connectedProviders={connectedComparisonProviders} onChanged={loadProducts} />
             <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
               {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
               {t('woocommerce.exportAll')}
@@ -1205,20 +1206,42 @@ export default function ProductsPage() {
             <Button asChild variant="ghost" className="h-auto min-h-10 w-full justify-start whitespace-normal text-left"><Link href="/app/settings/integrations/woocommerce">{t('products.importToLeonety')} · WooCommerce</Link></Button>
           </div>
         </details>
-      </div>
+        <details className="group min-w-0 rounded-md border border-slate-200 bg-white open:col-span-2">
+          <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700">
+            <PackagePlus className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 break-words">{t('products.catalogTools')}</span>
+            <ChevronDown className="ml-auto h-4 w-4 shrink-0" aria-hidden="true" />
+          </summary>
+          <div className="grid min-w-0 gap-2 border-t border-slate-200 p-3">
+            <ProductChannelComparisonDialog companyId={currentCompany.id} connectedProviders={connectedComparisonProviders} onChanged={loadProducts} />
+            <Button asChild variant="outline" className="h-auto min-h-11 w-full justify-start whitespace-normal text-left"><Link href="/app/stock-movements">{t('stock.title')}</Link></Button>
+            <Button asChild variant="outline" className="h-auto min-h-11 w-full justify-start whitespace-normal text-left"><Link href="/app/settings/integrations/woocommerce">{t('nav.woocommerce')}</Link></Button>
+          </div>
+        </details>
+      </div>}
 
-      <DesktopPageUtilities title={t('pageUtilities.title')}>
-        <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
-        <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
-        <ProductChannelComparisonDialog companyId={currentCompany.id} connectedProviders={connectedComparisonProviders} onChanged={loadProducts} />
-        <Link href="/app/products/categories"><Button variant="outline">{t('productCategories.open')}</Button></Link>
-        <Link href="/app/stock-movements"><Button variant="outline">{t('stock.title')}</Button></Link>
-        <Link href="/app/settings/integrations/woocommerce"><Button variant="outline">{t('nav.woocommerce')}</Button></Link>
-        <Button variant="outline" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
-          {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-          {t('woocommerce.exportAll')}
-        </Button>
-      </DesktopPageUtilities>
+      {productListViewport === 'desktop' && <DesktopPageUtilities title={t('pageUtilities.title')}>
+        <details className="relative min-w-0">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">{t('products.importExport')}<ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /></summary>
+          <div className="absolute right-0 z-20 mt-1 grid min-w-64 gap-2 rounded-md border border-slate-200 bg-white p-3 shadow-lg">
+            <ProductCsvDialog companyId={currentCompany.id} currency={normalizeCurrencyCode(currentCompany.currency ?? 'EUR')} selectedProductIds={selectedProducts.map((product) => product.id)} visibleProductIds={visibleProducts.map((product) => product.id)} totalProducts={products.length} onImported={handleCsvProductsImported} />
+            <ProductPhotoImportDialog companyId={currentCompany.id} existingProducts={products} onImported={handlePhotoProductsImported} />
+            <Button variant="outline" className="min-h-11 justify-start whitespace-normal text-left" onClick={() => void handleWooExportAll()} disabled={syncingAll || visibleProducts.length === 0}>
+              {syncingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}{t('woocommerce.exportAll')}
+            </Button>
+            <Button asChild variant="ghost" className="min-h-11 justify-start whitespace-normal text-left"><Link href="/app/settings/integrations/woocommerce">{t('products.importToLeonety')} · WooCommerce</Link></Button>
+          </div>
+        </details>
+        <details className="relative min-w-0">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">{t('products.catalogTools')}<ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /></summary>
+          <div className="absolute right-0 z-20 mt-1 grid min-w-64 gap-2 rounded-md border border-slate-200 bg-white p-3 shadow-lg">
+            <ProductChannelComparisonDialog companyId={currentCompany.id} connectedProviders={connectedComparisonProviders} onChanged={loadProducts} />
+            <Button asChild variant="outline" className="min-h-11 justify-start"><Link href="/app/products/categories">{t('productCategories.open')}</Link></Button>
+            <Button asChild variant="outline" className="min-h-11 justify-start"><Link href="/app/stock-movements">{t('stock.title')}</Link></Button>
+            <Button asChild variant="outline" className="min-h-11 justify-start"><Link href="/app/settings/integrations/woocommerce">{t('nav.woocommerce')}</Link></Button>
+          </div>
+        </details>
+      </DesktopPageUtilities>}
 
       <div className="mb-5 hidden min-w-0 gap-3 lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(240px,1fr)_minmax(140px,0.7fr)_minmax(170px,0.8fr)_minmax(150px,0.7fr)_minmax(160px,0.8fr)_minmax(170px,0.8fr)_minmax(150px,0.7fr)]">
         <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-md border py-2 pl-9 pr-3 text-sm" placeholder={t('products.search')} /></div>
@@ -1328,7 +1351,7 @@ export default function ProductsPage() {
                 <h2 id="product-editor-title" className="truncate text-xl font-semibold text-slate-950">{editing ? `${t('products.edit')}: ${editing.name}` : t('products.add')}</h2>
                 <p className="mt-1 text-sm text-slate-500">{t('products.editorDescription')}</p>
               </div>
-              <button type="button" onClick={resetForm} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={t('common.cancel')}>
+              <button type="button" onClick={resetForm} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" aria-label={t('common.cancel')} title={t('common.cancel')}>
                 <X className="h-5 w-5" />
               </button>
             </div>

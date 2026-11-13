@@ -40,8 +40,18 @@ test('saved view collection round-trips without record data', () => {
 })
 
 test('saved view actions are translated for every supported locale', () => {
-  const required = ['title', 'choose', 'saveCurrent', 'name', 'save', 'cancel', 'apply', 'rename', 'delete', 'setDefault', 'default', 'storageUnavailable', 'nameRequired'] as const
+  const required = ['title', 'choose', 'saveCurrent', 'name', 'save', 'cancel', 'apply', 'rename', 'delete', 'setDefault', 'default', 'moreActions', 'storageUnavailable', 'nameRequired'] as const
   for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
     for (const key of required) assert.ok(savedTableViewsI18n[locale][key], `${locale}: ${key}`)
   }
+})
+
+test('saved view management keeps primary actions visible and offers compact secondary actions', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const component = await readFile(new URL('../components/saved-table-views.tsx', import.meta.url), 'utf8')
+  const products = await readFile(new URL('../app/(app)/products/page.tsx', import.meta.url), 'utf8')
+  assert.match(component, /compact\?: boolean/)
+  assert.match(component, /compact \? <details/)
+  assert.match(component, /text\.rename[\s\S]*text\.setDefault[\s\S]*text\.delete/)
+  assert.match(products, /kind="products"[\s\S]*compact/)
 })
