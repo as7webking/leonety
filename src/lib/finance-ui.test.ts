@@ -27,11 +27,12 @@ test('income, expenses and transactions use the shared finance list architecture
 })
 
 test('selectable finance modules place selection through the shared row slot', () => {
-  for (const route of ['income', 'transactions']) {
-    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
-    assert.match(source, /FinanceSelectionBar/)
-    assert.match(source, /selection=\{/)
-  }
+  const income = readFileSync(new URL('../app/(app)/income/page.tsx', import.meta.url), 'utf8')
+  const transactions = readFileSync(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
+  assert.match(income, /FinanceSelectionBar/)
+  assert.match(income, /selection=\{/)
+  assert.match(transactions, /finance\.selectVisible/)
+  assert.match(transactions, /selection=\{/)
 })
 
 test('shared mobile rows give finance amounts a full-width line and preserve desktop columns', () => {

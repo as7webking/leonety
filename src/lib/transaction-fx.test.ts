@@ -28,3 +28,10 @@ test('currency snapshot messages exist in every supported locale', () => {
     assert.deepEqual(Object.keys(transactionFxDictionaries[locale]).sort(), expected, locale)
   }
 })
+
+test('compact transaction conversion indicator preserves the full localized warning', () => {
+  for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
+    assert.ok(transactionFxDictionaries[locale]['currencySnapshot.noSnapshotShort'], `${locale}: compact label`)
+    assert.ok(transactionFxDictionaries[locale]['currencySnapshot.noSnapshot'], `${locale}: full detail`)
+  }
+})

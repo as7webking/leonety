@@ -39,13 +39,26 @@ test('provides complete ordering UI translations in all supported locales', () =
     'transactions.order.amount-desc', 'transactions.order.amount-asc', 'transactions.order.title-asc',
     'transactions.order.title-desc', 'transactions.groupOrder', 'transactions.group.chronological',
     'transactions.group.income-first', 'transactions.group.expenses-first', 'transactions.withinDay',
+    'transactions.withinDay.chronological', 'transactions.withinDay.income-first', 'transactions.withinDay.expenses-first', 'transactions.bulkActions',
     'transactions.typeFilter', 'transactions.allTypes', 'transactions.categoryFilter',
     'transactions.allCategories', 'transactions.printOrdering', 'transactions.printFilters',
     'transactions.kassenbuchFixedOrder',
   ]
   for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr']) {
-    for (const key of keys) assert.ok(transactionOrderingDictionaries[locale as keyof typeof transactionOrderingDictionaries][key], `${locale}: ${key}`)
+    const dictionary = transactionOrderingDictionaries[locale as keyof typeof transactionOrderingDictionaries]
+    for (const key of keys) assert.ok(dictionary[key], `${locale}: ${key}`)
+    assert.notEqual(dictionary['transactions.group.chronological'], dictionary['transactions.withinDay.chronological'], `${locale}: chronological controls must describe distinct behavior`)
   }
+})
+
+test('transaction page separates search/filtering, sorting, bulk actions, and full conversion detail', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
+  assert.match(source, /filters=\{<>[\s\S]*FinanceSearchInput[\s\S]*transactions\.typeFilter[\s\S]*transactions\.categoryFilter[\s\S]*<\/>/)
+  assert.match(source, /sorting=\{<>[\s\S]*transactions\.group\.\$\{value\}[\s\S]*transactions\.withinDay\.\$\{value\}[\s\S]*<\/>/)
+  assert.match(source, /aria-label=\{t\('transactions\.bulkActions'\)\}[\s\S]*transactions\.bulkRename/)
+  assert.match(source, /<details className="max-w-full">[\s\S]*currencySnapshot\.noSnapshotShort[\s\S]*currencySnapshot\.noSnapshot/)
+  assert.match(source, /selectionLabel=\{t\('transactions\.select'\)\}/)
 })
 
 test('presentation ordering cannot change Kassenbuch balances or totals', () => {

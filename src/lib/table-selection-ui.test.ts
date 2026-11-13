@@ -24,14 +24,15 @@ test('lists without row selection do not reserve a blank desktop selection colum
   assert.match(financeList, /!selection && 'finance-list-actions-without-selection'/)
 })
 
-test('Income and All Transactions use the shared, touch-sized accessible row selection', () => {
+test('Income and All Transactions keep touch-sized row selection and accessible select-visible controls', () => {
   for (const source of [income, transactions]) {
     assert.match(source, /h-11 w-11 cursor-pointer items-center justify-center rounded-md border/)
     assert.match(source, /type="checkbox"[\s\S]*?aria-label=/)
     assert.match(source, /focus-visible:ring-2 focus-visible:ring-blue-600/)
   }
   assert.match(income, /<FinanceSelectionBar/)
-  assert.match(transactions, /<FinanceSelectionBar/)
+  assert.match(transactions, /aria-label=\{t\('finance\.selectVisible'\)\}/)
+  assert.match(transactions, /transactions\.bulkActions/)
 })
 
 test('Product table places selection after product data and before rightmost actions', () => {
