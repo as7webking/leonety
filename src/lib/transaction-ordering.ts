@@ -12,6 +12,24 @@ export interface OrderableTransaction {
   created_at?: string | null
 }
 
+export function mergeTransactionsByDate<T extends { date: string }>(first: readonly T[], second: readonly T[]): T[] {
+  const merged: T[] = []
+  let firstIndex = 0
+  let secondIndex = 0
+
+  while (firstIndex < first.length && secondIndex < second.length) {
+    if (first[firstIndex].date >= second[secondIndex].date) {
+      merged.push(first[firstIndex++])
+    } else {
+      merged.push(second[secondIndex++])
+    }
+  }
+
+  while (firstIndex < first.length) merged.push(first[firstIndex++])
+  while (secondIndex < second.length) merged.push(second[secondIndex++])
+  return merged
+}
+
 function typeRank(type: OrderableTransaction['type'], order: TransactionGroupOrder | TransactionDayOrder) {
   if (order === 'income-first') return type === 'income' ? 0 : 1
   if (order === 'expenses-first') return type === 'expense' ? 0 : 1

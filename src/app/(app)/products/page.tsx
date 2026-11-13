@@ -15,6 +15,7 @@ import { currencyOptions, normalizeCurrencyCode } from '@/lib/currency'
 import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { buildProductEditorHref, rememberProductReturnScroll, restoreProductReturnScroll } from '@/lib/product-editor-navigation'
 import { productListColumns } from '@/lib/performance-query-projections'
+import { groupProductSyncs } from '@/lib/product-sync-grouping'
 import { createClient } from '@/lib/supabase-client'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 import { ProductPhotoImportDialog } from '@/components/products/product-photo-import-dialog'
@@ -494,11 +495,7 @@ export default function ProductsPage() {
       }))
       const nextSyncs: Record<string, ProductSync[]> = {}
       if (!syncResult.error) {
-      const grouped: Record<string, ProductSync[]> = {}
-      for (const sync of (syncResult.data ?? []) as ProductSync[]) {
-        grouped[sync.product_id] = [...(grouped[sync.product_id] ?? []), sync]
-      }
-        Object.assign(nextSyncs, grouped)
+        Object.assign(nextSyncs, groupProductSyncs((syncResult.data ?? []) as ProductSync[]))
       } else if (['42P01', 'PGRST205'].includes(syncResult.error.code ?? '')) {
         setError(t('products.syncDatabaseRequired'))
       } else {

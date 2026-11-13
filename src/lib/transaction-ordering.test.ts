@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 const { buildKassenbuch } = await import(new URL('./kassenbuch.ts', import.meta.url).href)
-const { orderTransactions } = await import(new URL('./transaction-ordering.ts', import.meta.url).href)
+const { mergeTransactionsByDate, orderTransactions } = await import(new URL('./transaction-ordering.ts', import.meta.url).href)
 const { transactionOrderingDictionaries } = await import(new URL('./transaction-ordering-i18n.ts', import.meta.url).href)
 
 const transactions = [
@@ -9,6 +9,29 @@ const transactions = [
   { id: 'e1', type: 'expense' as const, date: '2026-10-11', title: 'Alpha', description: null, amount: 15, currency: 'EUR', payment_method: 'cash', created_at: '2026-10-11T10:00:00Z' },
   { id: 'i1', type: 'income' as const, date: '2026-10-10', title: 'Beta', description: null, amount: 20, currency: 'EUR', payment_method: 'cash', created_at: '2026-10-10T10:00:00Z' },
 ]
+
+test('merges descending server-ordered transaction lists and preserves income-first date ties', () => {
+  const incomes = [
+    { id: 'income-new', date: '2026-05-03' },
+    { id: 'income-tie', date: '2026-05-02' },
+    { id: 'income-old', date: '2026-05-01' },
+  ]
+  const expenses = [
+    { id: 'expense-new', date: '2026-05-04' },
+    { id: 'expense-tie', date: '2026-05-02' },
+    { id: 'expense-old', date: '2026-04-30' },
+  ]
+
+  assert.deepEqual(mergeTransactionsByDate(incomes, expenses).map(({ id }: { id: string }) => id), [
+    'expense-new', 'income-new', 'income-tie', 'expense-tie', 'income-old', 'expense-old',
+  ])
+})
+
+test('merging transactions handles an empty source', () => {
+  const rows = [{ id: 'one', date: '2026-05-01' }]
+  assert.deepEqual(mergeTransactionsByDate(rows, []), rows)
+  assert.deepEqual(mergeTransactionsByDate([], rows), rows)
+})
 
 test('supports each requested transaction ordering deterministically', () => {
   assert.deepEqual(orderTransactions(transactions, 'date-desc', 'chronological', 'chronological').map((item: { id: string }) => item.id), ['e1', 'i2', 'i1'])
