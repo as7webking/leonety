@@ -12,8 +12,10 @@ const productsPage = readFileSync(new URL('../app/(app)/products/page.tsx', impo
 test('mobile finance rows give amount and conversion metadata a full-width row', () => {
   assert.match(css, /\.finance-list-grid\s*{\s*display:\s*grid;\s*grid-template-columns:\s*minmax\(0, 1fr\) max-content/)
   assert.match(css, /\.finance-list-grid > :nth-child\(4\)\s*{\s*grid-column:\s*1 \/ 3;\s*grid-row:\s*4/)
-  assert.match(financeList, /grid min-w-0 max-w-full gap-1 text-left lg:text-right/)
-  assert.match(financeList, /whitespace-normal break-words text-xs leading-4[\s\S]*overflow-wrap:anywhere/)
+  assert.match(financeList, /grid min-w-0 max-w-full grid-cols-\[minmax\(0,1fr\)_auto\] items-center gap-x-1 gap-y-1 text-left lg:text-right/)
+  assert.match(financeList, /whitespace-normal break-words text-left text-xs leading-4 text-amber-800/)
+  assert.match(financeList, /<span>\{conversionStatus\.label\}<\/span>/)
+  assert.match(financeList, /<p id=\{conversionDetailsId\} role="note" hidden=\{!conversionDetailsOpen\}/)
 })
 
 test('desktop finance list retains its six-column table layout', () => {

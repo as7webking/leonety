@@ -54,23 +54,24 @@ test('income and expense rows constrain conversion details beside action columns
   for (const route of ['income', 'expenses']) {
     const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
     assert.match(source, /currencySnapshot\.noSnapshot/)
-    assert.match(source, /CurrencyConversionDisclosure/)
+    assert.match(source, /conversionStatus=\{/)
     assert.match(source, /actions=\{<>[\s\S]*?aria-label=/)
   }
   assert.match(component, /min-w-0 max-w-full whitespace-normal break-words text-xs leading-4/)
-  assert.match(component, /aria-label/)
+  assert.match(component, /aria-label=\{conversionStatus\.label\}/)
   assert.match(component, /lg:flex-nowrap/)
 })
 
-test('all financial lists use the same keyboard- and touch-accessible conversion disclosure', () => {
+test('conversion status is compact beside the amount and keyboard/touch expandable in place', () => {
   const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
   const transactions = readFileSync(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
-  assert.match(transactions, /CurrencyConversionDisclosure/)
-  assert.match(component, /export function CurrencyConversionDisclosure/)
-  assert.match(component, /<details className="max-w-full text-left">/)
-  assert.match(component, /<summary className="flex min-h-11 cursor-pointer/)
+  assert.match(transactions, /conversionStatus=\{/)
+  assert.match(component, /grid-cols-\[minmax\(0,1fr\)_auto\]/)
+  assert.match(component, /type="button"[\s\S]*aria-expanded=\{conversionDetailsOpen\}[\s\S]*aria-controls=\{conversionDetailsId\}/)
+  assert.match(component, /className="flex min-h-11 min-w-11 max-w-full shrink-0/)
   assert.match(component, /focus-visible:ring-2/)
-  assert.match(component, /<p className="max-w-full whitespace-normal break-words/)
+  assert.match(component, /<p id=\{conversionDetailsId\} role="note" hidden=\{!conversionDetailsOpen\}/)
+  assert.match(component, /setConversionDetailsOpen\(\(open\) => !open\)/)
 })
 
 test('shared financial rows keep actions before the rightmost selection slot and compact spacing', () => {

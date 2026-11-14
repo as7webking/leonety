@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { Info, Search, SlidersHorizontal, Wrench } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
@@ -113,13 +113,17 @@ interface FinanceListRowProps {
   date: ReactNode
   amount: ReactNode
   amountDetail?: ReactNode
+  conversionStatus?: { label: string; detail: string }
   badge?: ReactNode
   selection?: ReactNode
   actions?: ReactNode
   className?: string
 }
 
-export function FinanceListRow({ title, description, category, date, amount, amountDetail, badge, selection, actions, className }: FinanceListRowProps) {
+export function FinanceListRow({ title, description, category, date, amount, amountDetail, conversionStatus, badge, selection, actions, className }: FinanceListRowProps) {
+  const [conversionDetailsOpen, setConversionDetailsOpen] = useState(false)
+  const conversionDetailsId = useId()
+
   return (
     <article className={cn('finance-list-grid min-w-0 gap-y-2 px-4 py-3', selection ? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection', className)}>
       <div className="min-w-0">
@@ -131,22 +135,27 @@ export function FinanceListRow({ title, description, category, date, amount, amo
         {description && <p className="mt-1 break-words text-slate-500 lg:hidden">{description}</p>}
       </div>
       <div className="border-t border-slate-100 pt-2 text-sm text-slate-500 lg:border-0 lg:pt-0">{date}</div>
-      <div className="grid min-w-0 max-w-full gap-1 text-left lg:text-right"><div className="min-w-0 max-w-full whitespace-normal break-words font-semibold leading-5 tabular-nums text-slate-950 [overflow-wrap:anywhere]">{amount}</div>{amountDetail && <div className="min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}</div>
+      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 gap-y-1 text-left lg:text-right">
+        <div className={cn('min-w-0 max-w-full whitespace-normal break-words font-semibold leading-5 tabular-nums text-slate-950 [overflow-wrap:anywhere]', conversionStatus ? 'col-start-1' : 'col-span-2')}>
+          {amount}
+        </div>
+        {conversionStatus && <button
+          type="button"
+          aria-label={conversionStatus.label}
+          aria-expanded={conversionDetailsOpen}
+          aria-controls={conversionDetailsId}
+          onClick={() => setConversionDetailsOpen((open) => !open)}
+          className="flex min-h-11 min-w-11 max-w-full shrink-0 items-center justify-center gap-1 rounded-md px-1 text-xs leading-4 text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
+        >
+          <Info className="h-4 w-4" aria-hidden="true" />
+          <span>{conversionStatus.label}</span>
+        </button>}
+        {conversionStatus && <p id={conversionDetailsId} role="note" hidden={!conversionDetailsOpen} className="col-span-2 min-w-0 whitespace-normal break-words text-left text-xs leading-4 text-amber-800 lg:text-right">{conversionStatus.detail}</p>}
+        {amountDetail && <div className="col-span-2 min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}
+      </div>
       <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
       {selection && <div className="flex min-h-10 items-center justify-start lg:justify-center">{selection}</div>}
     </article>
-  )
-}
-
-export function CurrencyConversionDisclosure({ label, detail }: { label: string; detail: string }) {
-  return (
-    <details className="max-w-full text-left">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 break-words rounded-sm text-xs text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
-        <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span>{label}</span>
-      </summary>
-      <p className="max-w-full whitespace-normal break-words pb-1 text-xs leading-4 text-amber-800">{detail}</p>
-    </details>
   )
 }
 

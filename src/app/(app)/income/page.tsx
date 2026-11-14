@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { FINANCE_PAGE_SIZE, CurrencyConversionDisclosure, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { formatValidationError, incomeSchema, type IncomeForm } from '@/lib/validations'
@@ -1075,10 +1075,11 @@ export default function IncomePage() {
                 amount={getWorkspaceAmount(income) === null
                   ? formatCurrency(Number(income.amount), income.currency)
                   : formatCurrency(getWorkspaceAmount(income)!, income.workspace_currency ?? currentCompany.currency ?? 'USD')}
-                amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency ?? 'USD')
-                  ? getWorkspaceAmount(income) === null
-                    ? <CurrencyConversionDisclosure label={t('currencySnapshot.noSnapshotShort')} detail={t('currencySnapshot.noSnapshot')} />
-                    : formatCurrency(Number(income.amount), income.currency)
+                conversionStatus={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null
+                  ? { label: t('currencySnapshot.noSnapshotShort'), detail: t('currencySnapshot.noSnapshot') }
+                  : undefined}
+                amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) !== null
+                  ? formatCurrency(Number(income.amount), income.currency)
                   : undefined}
                 selection={<label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedIncomeIdSet.has(income.id)} onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" /><span className="sr-only">{t('income.bulkSelectRow').replace('{title}', income.title || income.description)}</span></label>}
                 actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(income)} aria-label={`${t('common.edit')} ${income.title || income.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => void handleDuplicate(income)} aria-label={`${t('finance.duplicate')} ${income.title || income.description}`} title={t('finance.duplicate')}><Copy className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(income.id)} aria-label={`${t('common.delete')} ${income.title || income.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button></>}

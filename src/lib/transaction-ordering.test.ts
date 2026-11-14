@@ -81,8 +81,9 @@ test('transaction page separates search/filtering, sorting, bulk actions, and fu
   assert.match(source, /filters=\{<>[\s\S]*FinanceSearchInput[\s\S]*transactions\.typeFilter[\s\S]*transactions\.categoryFilter[\s\S]*<\/>/)
   assert.match(source, /sorting=\{<>[\s\S]*transactions\.group\.\$\{value\}[\s\S]*transactions\.withinDay\.\$\{value\}[\s\S]*<\/>/)
   assert.match(source, /aria-label=\{t\('transactions\.bulkActions'\)\}[\s\S]*transactions\.bulkRename/)
-  assert.match(source, /CurrencyConversionDisclosure label=\{t\('currencySnapshot\.noSnapshotShort'\)\} detail=\{t\('currencySnapshot\.noSnapshot'\)\}/)
-  assert.match(financeList, /<details className="max-w-full text-left">[\s\S]*<summary[\s\S]*<p className="max-w-full whitespace-normal break-words/)
+  assert.match(source, /conversionStatus=\{[\s\S]*currencySnapshot\.noSnapshotShort[\s\S]*currencySnapshot\.noSnapshot/)
+  assert.match(financeList, /aria-expanded=\{conversionDetailsOpen\}[\s\S]*aria-controls=\{conversionDetailsId\}/)
+  assert.match(financeList, /<p id=\{conversionDetailsId\} role="note" hidden=\{!conversionDetailsOpen\}/)
   assert.match(source, /selectionLabel=\{t\('transactions\.select'\)\}/)
 })
 
