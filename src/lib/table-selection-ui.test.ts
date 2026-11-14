@@ -10,12 +10,13 @@ const expenses = readFileSync(new URL('../app/(app)/expenses/page.tsx', import.m
 const transactions = readFileSync(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
 const invoices = readFileSync(new URL('../app/(app)/invoices/page.tsx', import.meta.url), 'utf8')
 
-test('shared finance lists keep Amount, Select and Actions in the agreed order', () => {
+test('shared finance lists keep Amount, Actions and rightmost Select in the agreed order', () => {
   const header = financeList.match(/<div className=\{cn\('finance-list-grid hidden[\s\S]*?<\/div>/)?.[0] ?? ''
-  assert.ok(header.indexOf('{amountLabel}') < header.indexOf('{selectionLabel}'))
-  assert.ok(header.indexOf('{selectionLabel}') < header.indexOf('{actionsLabel}'))
+  assert.ok(header.indexOf('{amountLabel}') < header.indexOf('{actionsLabel}'))
+  assert.ok(header.indexOf('{actionsLabel}') < header.indexOf('{selectionLabel}'))
+  assert.match(financeList, /\{actions\}[\s\S]*?\{selection\}/)
   assert.match(financeList, /whitespace-normal break-words font-semibold[\s\S]*?\{amountDetail &&[\s\S]*?whitespace-normal break-words text-xs/)
-  assert.match(globalStyles, /minmax\(120px, 140px\) 52px minmax\(176px, max-content\)/)
+  assert.match(globalStyles, /minmax\(120px, 140px\) minmax\(176px, max-content\) 52px/)
 })
 
 test('lists without row selection do not reserve a blank desktop selection column', () => {

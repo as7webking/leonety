@@ -98,8 +98,8 @@ export function FinanceListShell({ titleLabel, categoryLabel, dateLabel, amountL
     <div className={cn('overflow-hidden rounded-md border border-slate-200 bg-white', selectionLabel ? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection')}>
       <div className={cn('finance-list-grid hidden border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 lg:grid', selectionLabel ? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection')}>
         <span>{titleLabel}</span><span>{categoryLabel}</span><span>{dateLabel}</span>
-        <span className="text-right">{amountLabel}</span>{selectionLabel && <span className="text-center">{selectionLabel}</span>}
-        <span className="text-right">{actionsLabel}</span>
+        <span className="text-right">{amountLabel}</span>
+        <span className="text-right">{actionsLabel}</span>{selectionLabel && <span className="text-center">{selectionLabel}</span>}
       </div>
       <div className="divide-y divide-slate-200">{children}</div>
     </div>
@@ -132,8 +132,8 @@ export function FinanceListRow({ title, description, category, date, amount, amo
       </div>
       <div className="border-t border-slate-100 pt-2 text-sm text-slate-500 lg:border-0 lg:pt-0">{date}</div>
       <div className="grid min-w-0 max-w-full gap-1 text-left lg:text-right"><div className="min-w-0 max-w-full whitespace-normal break-words font-semibold leading-5 tabular-nums text-slate-950 [overflow-wrap:anywhere]">{amount}</div>{amountDetail && <div className="min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}</div>
-      {selection && <div className="flex min-h-10 items-center justify-start lg:justify-center">{selection}</div>}
       <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
+      {selection && <div className="flex min-h-10 items-center justify-start lg:justify-center">{selection}</div>}
     </article>
   )
 }
@@ -160,7 +160,7 @@ interface FinanceSelectionBarProps {
 
 export function FinanceSelectionBar({ checked, onCheckedChange, selectVisibleLabel, selectedLabel, children }: FinanceSelectionBarProps) {
   return (
-    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-end gap-3 rounded-md border border-slate-200 bg-white p-3">
+    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-end gap-2 rounded-md border border-slate-200 bg-white px-2 py-1">
       <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white">
           <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" />

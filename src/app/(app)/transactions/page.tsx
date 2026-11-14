@@ -1458,7 +1458,7 @@ export default function TransactionsPage() {
       )}
 
       {(sortedTransactions.length > 0 || showBulkRename) && (
-        <section className="mb-3 flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50/70 p-2" aria-label={t('transactions.bulkActions')}>
+        <section className="mb-3 flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50/70 px-2 py-1" aria-label={t('transactions.bulkActions')}>
           {sortedTransactions.length > 0 && <>
             <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
               <span className="flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 bg-white">

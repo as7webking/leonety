@@ -73,12 +73,12 @@ test('all financial lists use the same keyboard- and touch-accessible conversion
   assert.match(component, /<p className="max-w-full whitespace-normal break-words/)
 })
 
-test('shared financial rows keep the preferred selection-before-actions slots and compact spacing', () => {
+test('shared financial rows keep actions before the rightmost selection slot and compact spacing', () => {
   const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
   const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
   assert.match(component, /gap-y-2 px-4 py-3/)
-  assert.match(component, /selection && <div[\s\S]*?\{actions\}/)
-  assert.match(css, /minmax\(120px, 140px\) 52px minmax\(176px, max-content\)/)
+  assert.match(component, /\{actions\}[\s\S]*?selection && <div/)
+  assert.match(css, /minmax\(120px, 140px\) minmax\(176px, max-content\) 52px/)
 })
 
 test('finance toolbars separate utilities, filters and sorting without changing control availability', () => {
