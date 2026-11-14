@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
-import { buildDashboardAttentionItems } from './dashboard-attention.ts'
+import { buildDashboardAttentionItems, getDashboardAttentionDisplayState } from './dashboard-attention.ts'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { dashboardAttentionDictionaries } from './dashboard-attention-i18n.ts'
 
@@ -45,11 +45,12 @@ test('attention API verifies workspace ownership and returns independent source 
 
 test('dashboard renders loading, empty, partial and retrieval-error states distinctly', () => {
   const dashboard = read('../app/(app)/dashboard/page.tsx')
-  for (const key of ['loading', 'none', 'partial', 'error']) {
+  for (const key of ['loading', 'partial', 'error']) {
     assert.ok(dashboard.includes(`dashboard.attention.${key}`))
   }
-  assert.match(dashboard, /attention\.scope !== currentCompany\.id/)
-  assert.match(dashboard, /attention\.items\.length === 0 && attention\.status === 'loaded'/)
+  assert.match(dashboard, /attentionDisplayState === 'loading'/)
+  assert.match(dashboard, /attentionDisplayState === 'error'/)
+  assert.doesNotMatch(dashboard, /dashboard\.attention\.none/)
 })
 
 test('attention data refreshes on return to the app without polling or duplicate in-flight requests', () => {
@@ -74,4 +75,27 @@ test('dashboard attention remains readable and actionable on narrow screens', ()
   assert.match(dashboard, /className="break-words text-sm text-slate-600"/)
   assert.match(dashboard, /<Link href=\{item\.href\} className="shrink-0"><Button/)
   assert.match(dashboard, /const action = item\.type === 'overdue_invoices' \|\| item\.type === 'low_stock_products' \? 'view' : 'fix'/)
+})
+
+test('attention display hides empty success and keeps loading, errors, partial and issues distinct', () => {
+  const base = { workspaceId: 'workspace-a', scope: 'workspace-a', items: [] as const }
+  assert.equal(getDashboardAttentionDisplayState({ ...base, status: 'loaded' }), 'empty')
+  assert.equal(getDashboardAttentionDisplayState({ ...base, status: 'loaded', items: [{ type: 'overdue_invoices', count: 1, href: '/app/invoices' }] }), 'issues')
+  assert.equal(getDashboardAttentionDisplayState({ ...base, status: 'loaded', items: [
+    { type: 'overdue_invoices', count: 1, href: '/app/invoices' },
+    { type: 'low_stock_products', count: 2, href: '/app/inventory?stock=low' },
+  ] }), 'issues')
+  assert.equal(getDashboardAttentionDisplayState({ ...base, scope: 'workspace-b', status: 'loaded' }), 'loading')
+  assert.equal(getDashboardAttentionDisplayState({ ...base, status: 'loading' }), 'loading')
+  assert.equal(getDashboardAttentionDisplayState({ ...base, status: 'error' }), 'error')
+  assert.equal(getDashboardAttentionDisplayState({ ...base, status: 'partial' }), 'partial')
+  assert.equal(getDashboardAttentionDisplayState({ ...base, status: 'partial', items: [{ type: 'mailbox_reconnect', count: 1, href: '/app/settings/mailbox' }] }), 'issues_partial')
+})
+
+test('historical conversion warnings stay informational and separate from actionable attention', () => {
+  const dashboard = read('../app/(app)/dashboard/page.tsx')
+  assert.match(dashboard, /unconvertedRecordCount > 0[\s\S]*?currencySnapshot\.incompleteTotal/)
+  assert.match(dashboard, /getDashboardAttentionDisplayState\(\{[\s\S]*workspaceId: currentCompany\.id/)
+  const attentionSection = dashboard.slice(dashboard.indexOf("attentionDisplayState === 'issues'"), dashboard.indexOf("t('dashboard.businessTools')"))
+  assert.doesNotMatch(attentionSection, /unconvertedRecordCount|currencySnapshot/)
 })

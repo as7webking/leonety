@@ -11,13 +11,13 @@ import { useCompany } from '@/contexts/company-context'
 import { useAccountAccess } from '@/hooks/use-account-access'
 import { useI18n } from '@/contexts/i18n-context'
 import { AppSelect } from '@/components/app-select'
-import { AlertTriangle, Boxes, Building2, CalendarDays, Filter, Package, Users, X } from 'lucide-react'
+import { AlertTriangle, Boxes, Building2, CalendarDays, Filter, Package, RotateCw, Users, X } from 'lucide-react'
 import { getIntlLocale } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { getAppDataMemory, getAppViewMemory, setAppDataMemory, setAppViewMemory } from '@/lib/app-navigation-memory'
 import { dashboardFinancialColumns, dashboardLegacyFinancialColumns, dashboardTimeEntryColumns, isMissingDashboardSnapshotColumns } from '@/lib/performance-query-projections'
-import type { DashboardAttentionItem } from '@/lib/dashboard-attention'
+import { getDashboardAttentionDisplayState, type DashboardAttentionItem } from '@/lib/dashboard-attention'
 
 interface Income {
   id: string
@@ -69,7 +69,7 @@ interface DashboardViewMemory {
 }
 
 type PeriodPreset = 'all' | 'this_month' | 'last_month' | 'this_year' | 'custom'
-type AttentionState = { scope: string; status: 'loaded' | 'partial' | 'error'; items: DashboardAttentionItem[] }
+type AttentionState = { scope: string; status: 'loaded' | 'partial' | 'error' | 'loading'; items: DashboardAttentionItem[] }
 
 function toDateInputValue(date: Date) {
   const year = date.getFullYear()
@@ -110,6 +110,7 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshFailed, setRefreshFailed] = useState(false)
   const [attention, setAttention] = useState<AttentionState>({ scope: '', status: 'loaded', items: [] })
+  const [attentionRetryKey, setAttentionRetryKey] = useState(0)
   const [accountEmail, setAccountEmail] = useState<string | null | undefined>(undefined)
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>(() => initialViewMemory?.periodPreset ?? 'this_month')
   const [filterFromDate, setFilterFromDate] = useState(() => initialViewMemory?.filterFromDate ?? getPeriodRange('this_month')?.from ?? '')
@@ -229,7 +230,7 @@ export default function DashboardPage() {
       window.removeEventListener('focus', refreshAttention)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [attentionCompanyId])
+  }, [attentionCompanyId, attentionRetryKey])
 
   useEffect(() => {
     const loadAccountEmail = async () => {
@@ -329,6 +330,16 @@ export default function DashboardPage() {
   const unconvertedRecordCount = [...incomes, ...expenses].filter((item) => getDisplayAmount(item) === null).length
   const periodResult = periodIncome - periodExpense
   const closingBalance = openingBalance + periodResult
+  const attentionDisplayState = getDashboardAttentionDisplayState({
+    workspaceId: currentCompany.id,
+    scope: attention.scope,
+    status: attention.status,
+    items: attention.items,
+  })
+  const retryAttention = () => {
+    setAttention({ scope: currentCompany.id, status: 'loading', items: [] })
+    setAttentionRetryKey((current) => current + 1)
+  }
 
   const sortedIncomes = periodIncomes.sort((left, right) => {
     const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
@@ -483,20 +494,26 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {currentCompany.type === 'business' && <section aria-labelledby="dashboard-attention-title" className="mt-8 rounded-lg border border-amber-200 bg-white p-4 sm:p-5">
-        <div className="mb-3 flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-          <div>
+      {currentCompany.type === 'business' && attentionDisplayState === 'loading' && <p role="status" className="my-4 text-sm text-slate-500">{t('dashboard.attention.loading')}</p>}
+      {currentCompany.type === 'business' && attentionDisplayState === 'error' && <div role="alert" className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+        <span>{t('dashboard.attention.error')}</span>
+        <Button type="button" variant="outline" onClick={retryAttention}><RotateCw aria-hidden="true" />{t('dashboard.attention.retry')}</Button>
+      </div>}
+      {currentCompany.type === 'business' && attentionDisplayState === 'partial' && <div role="status" className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+        <span>{t('dashboard.attention.partial')}</span>
+        <Button type="button" variant="outline" onClick={retryAttention}><RotateCw aria-hidden="true" />{t('dashboard.attention.retry')}</Button>
+      </div>}
+      {currentCompany.type === 'business' && (attentionDisplayState === 'issues' || attentionDisplayState === 'issues_partial') && <section aria-labelledby="dashboard-attention-title" className="mt-8 rounded-lg border border-amber-200 bg-white p-4 sm:p-5">
+        <div className="mb-3 flex min-w-0 items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
             <h2 id="dashboard-attention-title" className="font-semibold">{t('dashboard.attention.title')}</h2>
             <p className="text-sm text-slate-600">{t('dashboard.attention.description')}</p>
           </div>
+          {attentionDisplayState === 'issues_partial' && <Button type="button" variant="outline" onClick={retryAttention}><RotateCw aria-hidden="true" />{t('dashboard.attention.retry')}</Button>}
         </div>
-        {attention.scope !== currentCompany.id ? <p role="status" className="text-sm text-slate-600">{t('dashboard.attention.loading')}</p>
-          : attention.status === 'error' ? <p role="alert" className="text-sm text-red-700">{t('dashboard.attention.error')}</p>
-            : <>
-              {attention.status === 'partial' && <p role="status" className="mb-3 text-sm text-amber-800">{t('dashboard.attention.partial')}</p>}
-              {attention.items.length === 0 && attention.status === 'loaded' && <p className="text-sm text-slate-600">{t('dashboard.attention.none')}</p>}
-              {attention.items.length > 0 && <ul className="divide-y divide-slate-100">
+        {attentionDisplayState === 'issues_partial' && <p role="status" className="mb-3 text-sm text-slate-600">{t('dashboard.attention.partial')}</p>}
+        <ul className="divide-y divide-slate-100">
                 {attention.items.map((item) => {
                   const action = item.type === 'overdue_invoices' || item.type === 'low_stock_products' ? 'view' : 'fix'
                   return <li key={item.type} className="flex min-w-0 flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
@@ -507,8 +524,7 @@ export default function DashboardPage() {
                     <Link href={item.href} className="shrink-0"><Button variant="outline">{t(`dashboard.attention.${action}`)}</Button></Link>
                   </li>
                 })}
-              </ul>}
-            </>}
+        </ul>
       </section>}
 
       {currentCompany.type === 'business' && (

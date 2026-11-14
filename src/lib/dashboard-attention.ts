@@ -6,6 +6,20 @@ export interface DashboardAttentionItem {
   href: string
 }
 
+export type DashboardAttentionDisplayState = 'loading' | 'error' | 'empty' | 'partial' | 'issues' | 'issues_partial'
+
+export function getDashboardAttentionDisplayState(input: {
+  workspaceId: string
+  scope: string
+  status: 'loaded' | 'partial' | 'error' | 'loading'
+  items: readonly DashboardAttentionItem[]
+}): DashboardAttentionDisplayState {
+  if (input.scope !== input.workspaceId || input.status === 'loading') return 'loading'
+  if (input.status === 'error') return 'error'
+  if (input.status === 'partial') return input.items.length > 0 ? 'issues_partial' : 'partial'
+  return input.items.length > 0 ? 'issues' : 'empty'
+}
+
 export type DashboardAttentionCounts = Record<DashboardAttentionType, number>
 
 const destinations: Record<DashboardAttentionType, string> = {
