@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { FINANCE_PAGE_SIZE, CurrencyConversionDisclosure, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { ArrowRightLeft, Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { expenseSchema, formatValidationError, type ExpenseForm } from '@/lib/validations'
@@ -900,7 +900,7 @@ export default function ExpensesPage() {
                   : formatCurrency(getWorkspaceAmount(expense)!, expense.workspace_currency ?? currentCompany.currency ?? 'USD')}
                 amountDetail={normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency ?? 'USD')
                   ? getWorkspaceAmount(expense) === null
-                    ? t('currencySnapshot.noSnapshot')
+                    ? <CurrencyConversionDisclosure label={t('currencySnapshot.noSnapshotShort')} detail={t('currencySnapshot.noSnapshot')} />
                     : formatCurrency(Number(expense.amount), expense.currency)
                   : undefined}
                 actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(expense)} aria-label={`${t('common.edit')} ${expense.title || expense.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => void handleDuplicate(expense)} aria-label={`${t('finance.duplicate')} ${expense.title || expense.description}`} title={t('finance.duplicate')}><Copy className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)} aria-label={`${t('common.delete')} ${expense.title || expense.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button><Button asChild variant="ghost" size="icon"><Link href="/app/transactions" aria-label={t('nav.transactions')} title={t('nav.transactions')}><ArrowRightLeft className="h-4 w-4" /></Link></Button></>}

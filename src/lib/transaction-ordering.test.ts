@@ -77,10 +77,12 @@ test('provides complete ordering UI translations in all supported locales', () =
 test('transaction page separates search/filtering, sorting, bulk actions, and full conversion detail', async () => {
   const { readFile } = await import('node:fs/promises')
   const source = await readFile(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
+  const financeList = await readFile(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
   assert.match(source, /filters=\{<>[\s\S]*FinanceSearchInput[\s\S]*transactions\.typeFilter[\s\S]*transactions\.categoryFilter[\s\S]*<\/>/)
   assert.match(source, /sorting=\{<>[\s\S]*transactions\.group\.\$\{value\}[\s\S]*transactions\.withinDay\.\$\{value\}[\s\S]*<\/>/)
   assert.match(source, /aria-label=\{t\('transactions\.bulkActions'\)\}[\s\S]*transactions\.bulkRename/)
-  assert.match(source, /<details className="max-w-full">[\s\S]*currencySnapshot\.noSnapshotShort[\s\S]*currencySnapshot\.noSnapshot/)
+  assert.match(source, /CurrencyConversionDisclosure label=\{t\('currencySnapshot\.noSnapshotShort'\)\} detail=\{t\('currencySnapshot\.noSnapshot'\)\}/)
+  assert.match(financeList, /<details className="max-w-full text-left">[\s\S]*<summary[\s\S]*<p className="max-w-full whitespace-normal break-words/)
   assert.match(source, /selectionLabel=\{t\('transactions\.select'\)\}/)
 })
 

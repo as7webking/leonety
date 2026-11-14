@@ -54,11 +54,31 @@ test('income and expense rows constrain conversion details beside action columns
   for (const route of ['income', 'expenses']) {
     const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
     assert.match(source, /currencySnapshot\.noSnapshot/)
+    assert.match(source, /CurrencyConversionDisclosure/)
     assert.match(source, /actions=\{<>[\s\S]*?aria-label=/)
   }
   assert.match(component, /min-w-0 max-w-full whitespace-normal break-words text-xs leading-4/)
   assert.match(component, /aria-label/)
   assert.match(component, /lg:flex-nowrap/)
+})
+
+test('all financial lists use the same keyboard- and touch-accessible conversion disclosure', () => {
+  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
+  const transactions = readFileSync(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
+  assert.match(transactions, /CurrencyConversionDisclosure/)
+  assert.match(component, /export function CurrencyConversionDisclosure/)
+  assert.match(component, /<details className="max-w-full text-left">/)
+  assert.match(component, /<summary className="flex min-h-11 cursor-pointer/)
+  assert.match(component, /focus-visible:ring-2/)
+  assert.match(component, /<p className="max-w-full whitespace-normal break-words/)
+})
+
+test('shared financial rows keep the preferred selection-before-actions slots and compact spacing', () => {
+  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
+  assert.match(component, /gap-y-2 px-4 py-3/)
+  assert.match(component, /selection && <div[\s\S]*?\{actions\}/)
+  assert.match(css, /minmax\(120px, 140px\) 52px minmax\(176px, max-content\)/)
 })
 
 test('finance toolbars separate utilities, filters and sorting without changing control availability', () => {

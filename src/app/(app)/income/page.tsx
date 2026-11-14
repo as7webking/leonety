@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { FINANCE_PAGE_SIZE, CurrencyConversionDisclosure, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { formatValidationError, incomeSchema, type IncomeForm } from '@/lib/validations'
@@ -1083,7 +1083,7 @@ export default function IncomePage() {
                   : formatCurrency(getWorkspaceAmount(income)!, income.workspace_currency ?? currentCompany.currency ?? 'USD')}
                 amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency ?? 'USD')
                   ? getWorkspaceAmount(income) === null
-                    ? t('currencySnapshot.noSnapshot')
+                    ? <CurrencyConversionDisclosure label={t('currencySnapshot.noSnapshotShort')} detail={t('currencySnapshot.noSnapshot')} />
                     : formatCurrency(Number(income.amount), income.currency)
                   : undefined}
                 selection={<label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedIncomeIdSet.has(income.id)} onChange={(event) => toggleIncomeSelection(income.id, event.target.checked)} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" /><span className="sr-only">{t('income.bulkSelectRow').replace('{title}', income.title || income.description)}</span></label>}

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowDown, ArrowDownCircle, ArrowUp, ArrowUpCircle, Building2, Copy, GripVertical, Info, Printer, Plus } from 'lucide-react'
-import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { ArrowDown, ArrowDownCircle, ArrowUp, ArrowUpCircle, Building2, Copy, GripVertical, Printer, Plus } from 'lucide-react'
+import { FINANCE_PAGE_SIZE, CurrencyConversionDisclosure, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
@@ -1713,13 +1713,7 @@ export default function TransactionsPage() {
                   && normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
                   ? formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)
                   : normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
-                    ? <details className="max-w-full">
-                        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 break-words text-xs text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
-                          <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span>{t('currencySnapshot.noSnapshotShort')}</span>
-                        </summary>
-                        <p className="max-w-full whitespace-normal break-words pb-1 text-xs text-amber-800">{t('currencySnapshot.noSnapshot')}</p>
-                      </details>
+                    ? <CurrencyConversionDisclosure label={t('currencySnapshot.noSnapshotShort')} detail={t('currencySnapshot.noSnapshot')} />
                     : undefined}
                 selection={<label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedTransactionSet.has(getSelectionKey(transaction))} onChange={(event) => { const key = getSelectionKey(transaction); setSelectedTransactions((current) => event.target.checked ? [...new Set([...current, key])] : current.filter((value) => value !== key)) }} aria-label={`${t('transactions.select')} ${transaction.title || transaction.description || transaction.date}`} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" /></label>}
                 actions={<Button size="icon" variant="outline" onClick={() => handleCopyTransaction(transaction)} aria-label={`${t('common.copy')} ${transaction.title || transaction.description || transaction.date}`} title={t('common.copy')}><Copy className="h-4 w-4" /></Button>}
