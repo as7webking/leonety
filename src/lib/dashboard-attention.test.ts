@@ -37,6 +37,9 @@ test('attention API verifies workspace ownership and returns independent source 
   assert.match(route, /status: hasUnavailable \? 'partial' : 'ok'/)
   assert.match(route, /maxProductRows/)
   assert.match(route, /data\.length !== expectedRows/)
+  assert.match(route, /result\.error \|\| result\.count === null/)
+  assert.match(route, /catch \{ return \[type, \{ count: null, status: 'unavailable'/)
+  assert.match(route, /countResult\.count > maxProductRows/)
   assert.doesNotMatch(route, /notification_read_states/)
 })
 
@@ -62,4 +65,13 @@ test('dashboard attention messages are translated for all supported locales', ()
   for (const locale of ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const) {
     for (const key of keys) assert.ok(dashboardAttentionDictionaries[locale][key as keyof typeof dashboardAttentionDictionaries.en])
   }
+})
+
+test('dashboard attention remains readable and actionable on narrow screens', () => {
+  const dashboard = read('../app/(app)/dashboard/page.tsx')
+  assert.match(dashboard, /className="flex min-w-0 flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"/)
+  assert.match(dashboard, /className="min-w-0"/)
+  assert.match(dashboard, /className="break-words text-sm text-slate-600"/)
+  assert.match(dashboard, /<Link href=\{item\.href\} className="shrink-0"><Button/)
+  assert.match(dashboard, /const action = item\.type === 'overdue_invoices' \|\| item\.type === 'low_stock_products' \? 'view' : 'fix'/)
 })
