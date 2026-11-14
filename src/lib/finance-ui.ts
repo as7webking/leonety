@@ -5,3 +5,7 @@ export function matchesFinanceSearch(query: string, values: Array<string | null 
   return values.some((value) => value?.toLocaleLowerCase().includes(normalizedQuery))
 }
 
+export function matchesOptionalDateRange(date: string, fromDate: string, toDate: string) {
+  return (!fromDate || date >= fromDate) && (!toDate || date <= toDate)
+}
+

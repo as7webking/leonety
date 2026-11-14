@@ -4,7 +4,7 @@ import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { financeUiDictionaries } from './finance-ui-i18n.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { matchesFinanceSearch } from './finance-ui.ts'
+import { matchesFinanceSearch, matchesOptionalDateRange } from './finance-ui.ts'
 
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 const requiredKeys = Object.keys(financeUiDictionaries.en)
@@ -130,4 +130,19 @@ test('finance search is case-insensitive and ignores empty optional fields', () 
   assert.equal(matchesFinanceSearch('software', ['ChatGPT Plus', 'Subscription', 'Software']), true)
   assert.equal(matchesFinanceSearch('fuel', ['ChatGPT Plus', null, 'Software']), false)
   assert.equal(matchesFinanceSearch('  ', [null]), true)
+})
+
+test('income and expenses default to all dates while explicit date filters remain inclusive', () => {
+  const dates = ['2021-04-12', '2024-09-03', '2026-11-14']
+  assert.deepEqual(dates.filter((date) => matchesOptionalDateRange(date, '', '')), dates)
+  assert.deepEqual(dates.filter((date) => matchesOptionalDateRange(date, '2024-09-03', '')), ['2024-09-03', '2026-11-14'])
+  assert.deepEqual(dates.filter((date) => matchesOptionalDateRange(date, '', '2024-09-03')), ['2021-04-12', '2024-09-03'])
+  assert.deepEqual(dates.filter((date) => matchesOptionalDateRange(date, '2024-09-03', '2024-09-03')), ['2024-09-03'])
+
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /const \[filterFromDate, setFilterFromDate\] = useState\(''\)/)
+    assert.match(source, /const \[filterToDate, setFilterToDate\] = useState\(''\)/)
+    assert.match(source, /matchesOptionalDateRange\(/)
+  }
 })

@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch } from '@/lib/finance-ui'
+import { matchesFinanceSearch, matchesOptionalDateRange } from '@/lib/finance-ui'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useLocalDraft } from '@/hooks/use-local-draft'
@@ -99,12 +99,8 @@ export default function ExpensesPage() {
   const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
-  const [filterFromDate, setFilterFromDate] = useState(() => {
-    const date = new Date()
-    date.setDate(1)
-    return date.toISOString().split('T')[0]
-  })
-  const [filterToDate, setFilterToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [filterFromDate, setFilterFromDate] = useState('')
+  const [filterToDate, setFilterToDate] = useState('')
   const [companyLogo, setCompanyLogo] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -520,10 +516,8 @@ export default function ExpensesPage() {
 
   const sortedExpenses = useMemo(() => {
     return expenses.filter((expense) => {
-      const afterStart = !filterFromDate || expense.date >= filterFromDate
-      const beforeEnd = !filterToDate || expense.date <= filterToDate
       const matchesSearch = matchesFinanceSearch(searchQuery, [expense.title, expense.description, expense.category])
-      return afterStart && beforeEnd && matchesSearch && (!categoryFilter || expense.category === categoryFilter)
+      return matchesOptionalDateRange(expense.date, filterFromDate, filterToDate) && matchesSearch && (!categoryFilter || expense.category === categoryFilter)
     }).sort((left, right) => {
       const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
       const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)

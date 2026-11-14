@@ -45,7 +45,7 @@ test('Income and Expenses expose category filters while Expense Saved Views reta
   assert.match(incomePage, /value=\{categoryFilter\} onChange=\{\(value\) => \{ setCategoryFilter\(value\); setSelectedIncomeIds\(\[\]\) \}\}/)
   assert.match(expensesPage, /value=\{categoryFilter\} onChange=\{setCategoryFilter\}/)
   assert.match(expensesPage, /state=\{\{ searchQuery, categoryFilter,/)
-  assert.match(expensesPage, /return afterStart && beforeEnd && matchesSearch && \(!categoryFilter \|\| expense\.category === categoryFilter\)/)
+  assert.match(expensesPage, /matchesOptionalDateRange\(expense\.date, filterFromDate, filterToDate\) && matchesSearch && \(!categoryFilter \|\| expense\.category === categoryFilter\)/)
 })
 
 test('existing Saved Views use the same compact control layout where supported', () => {
