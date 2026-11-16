@@ -14,7 +14,7 @@ import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
-import { createTransactionFxSnapshot, getMoneyConversionPreview } from '@/lib/transaction-fx'
+import { createHistoricalTransactionFxSnapshot, getMoneyConversionPreview } from '@/lib/transaction-fx'
 import { parseCsv } from '@/lib/csv'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
@@ -453,13 +453,8 @@ export default function TransactionsPage() {
     }
 
     const table = formData.type === 'income' ? 'incomes' : 'expenses'
-    let fxSnapshot
-    try {
-      fxSnapshot = await createTransactionFxSnapshot(amount, formData.currency, currentCompany.currency ?? 'USD')
-    } catch {
-      setErrorMessage(t('currencySnapshot.rateUnavailable'))
-      return
-    }
+    const fxResult = await createHistoricalTransactionFxSnapshot(amount, formData.currency, currentCompany.currency ?? 'USD', formData.date)
+    const fxSnapshot = fxResult.snapshot
     const payload = {
       company_id: currentCompany.id,
       amount,
@@ -484,7 +479,7 @@ export default function TransactionsPage() {
       return
     }
 
-    setMessage(t('transactions.created'))
+    setMessage(`${t('transactions.created')}${fxResult.verified ? '' : ` ${t('currencySnapshot.historicalUnavailable')}`}`)
     setShowForm(false)
     setFormData({
       type: 'income',
@@ -586,7 +581,7 @@ export default function TransactionsPage() {
         }
 
         existingKeys.add(key)
-        const fxSnapshot = await createTransactionFxSnapshot(Number(amount.toFixed(2)), currency, currentCompany.currency ?? 'USD')
+        const { snapshot: fxSnapshot } = await createHistoricalTransactionFxSnapshot(Number(amount.toFixed(2)), currency, currentCompany.currency ?? 'USD', date)
         payloads[type].push({
           company_id: currentCompany.id,
           date,
@@ -617,9 +612,11 @@ export default function TransactionsPage() {
         if (error) throw error
       }
 
-      setMessage(t('transactions.importedRowsWithSkipped')
+      const unavailableCount = [...payloads.income, ...payloads.expense].filter((item) => item.workspace_amount === null).length
+      const importedMessage = t('transactions.importedRowsWithSkipped')
         .replace('{count}', String(payloads.income.length + payloads.expense.length))
-        .replace('{skipped}', String(skippedDuplicates)))
+        .replace('{skipped}', String(skippedDuplicates))
+      setMessage(`${importedMessage}${unavailableCount > 0 ? ` ${t('currencySnapshot.unverifiedCount').replace('{count}', String(unavailableCount))}` : ''}`)
       await loadTransactions()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : t('transactions.importFailed'))

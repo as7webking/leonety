@@ -1,13 +1,16 @@
-import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
+import { fetchHistoricalExchangeRate, fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
 import { normalizeCurrencyCode } from '@/lib/currency'
 import { multiplyMoneyByRate, roundDecimalToScale } from '@/lib/decimal-money'
+import { resolveHistoricalTransactionFxSnapshot, type HistoricalTransactionFxResult, type TransactionFxSnapshotData } from '@/lib/transaction-fx-snapshot'
 
 export { getStoredWorkspaceAmount } from '@/lib/decimal-money'
+export { buildHistoricalTransactionFxSnapshot } from '@/lib/transaction-fx-snapshot'
+export { transactionFxInputsChanged } from '@/lib/transaction-fx-snapshot'
+export { mapWithConcurrency } from '@/lib/transaction-fx-snapshot'
+export type { HistoricalTransactionFxResult } from '@/lib/transaction-fx-snapshot'
 
-export interface TransactionFxSnapshot {
+export interface TransactionFxSnapshot extends TransactionFxSnapshotData {
   workspace_amount: string
-  workspace_currency: string
-  exchange_rate: string
   exchange_rate_source: string
   exchange_rate_at: string
   exchange_rate_date: string
@@ -53,4 +56,21 @@ export async function createTransactionFxSnapshot(
     exchange_rate_at: quote.fetchedAt,
     exchange_rate_date: quote.rateDate,
   }
+}
+
+export async function createHistoricalTransactionFxSnapshot(
+  amount: number | string,
+  transactionCurrency: string,
+  workspaceCurrency: string,
+  transactionDate: string
+): Promise<HistoricalTransactionFxResult> {
+  const from = normalizeCurrencyCode(transactionCurrency)
+  const to = normalizeCurrencyCode(workspaceCurrency)
+  return resolveHistoricalTransactionFxSnapshot(
+    amount,
+    from,
+    to,
+    transactionDate,
+    fetchHistoricalExchangeRate
+  )
 }

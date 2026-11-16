@@ -13,7 +13,7 @@ import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
-import { createTransactionFxSnapshot, getMoneyConversionPreview, getStoredWorkspaceAmount } from '@/lib/transaction-fx'
+import { createHistoricalTransactionFxSnapshot, getMoneyConversionPreview, getStoredWorkspaceAmount, mapWithConcurrency, transactionFxInputsChanged } from '@/lib/transaction-fx'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -352,13 +352,11 @@ export default function IncomePage() {
         description: fallbackDescription,
       })
       const category = validatedData.category === 'Other' ? customCategory || 'Other' : validatedData.category
-      const financialFieldsChanged = Boolean(editingEntry && (
-        Number(editingEntry.amount) !== validatedData.amount
-        || normalizeCurrencyCode(editingEntry.currency) !== normalizeCurrencyCode(validatedData.currency)
-      ))
-      const fxSnapshot = !editingEntry || financialFieldsChanged
-        ? await createTransactionFxSnapshot(validatedData.amount, validatedData.currency, currentCompany.currency ?? 'USD')
+      const financialFieldsChanged = Boolean(editingEntry && transactionFxInputsChanged(editingEntry, validatedData))
+      const fxResult = !editingEntry || financialFieldsChanged
+        ? await createHistoricalTransactionFxSnapshot(validatedData.amount, validatedData.currency, currentCompany.currency ?? 'USD', validatedData.date)
         : null
+      const fxSnapshot = fxResult?.snapshot ?? null
       const payload = {
         title: desiredTitle || null,
         description: validatedData.description,
@@ -398,7 +396,8 @@ export default function IncomePage() {
         const migrationMessage = accountingFallback
           ? t('income.accountingFieldsMigrationRequired')
           : titleFallback ? t('transactions.titleMigrationRequired') : ''
-        setSuccessMessage(migrationMessage ? `${baseMessage} ${migrationMessage}` : baseMessage)
+        const unavailableMessage = fxResult && !fxResult.verified ? ` ${t('currencySnapshot.historicalUnavailable')}` : ''
+        setSuccessMessage(`${baseMessage}${unavailableMessage}${migrationMessage ? ` ${migrationMessage}` : ''}`)
       }
 
       void discardIncomeDraft().catch(() => undefined)
@@ -463,13 +462,8 @@ export default function IncomePage() {
       return
     }
 
-    let fxSnapshot
-    try {
-      fxSnapshot = await createTransactionFxSnapshot(entry.amount, entry.currency, currentCompany.currency ?? 'USD')
-    } catch {
-      setErrorMessage(t('currencySnapshot.rateUnavailable'))
-      return
-    }
+    const fxResult = await createHistoricalTransactionFxSnapshot(entry.amount, entry.currency, currentCompany.currency ?? 'USD', entry.date)
+    const fxSnapshot = fxResult.snapshot
     const payload = {
       title: entry.title ?? null,
       description: entry.description,
@@ -492,7 +486,7 @@ export default function IncomePage() {
       }
       if (error) throw error
       await loadIncomes()
-      setSuccessMessage(t('income.duplicated'))
+      setSuccessMessage(`${t('income.duplicated')}${fxResult.verified ? '' : ` ${t('currencySnapshot.historicalUnavailable')}`}`)
       window.setTimeout(() => setSuccessMessage(''), 3000)
     } catch (error) {
       console.error('Income duplicate error:', error)
@@ -668,7 +662,8 @@ export default function IncomePage() {
     const originalAmount = `${Number(income.amount).toFixed(2)} ${income.currency}`
     const workspaceAmount = getWorkspaceAmount(income)
     const workspaceCurrency = normalizeCurrencyCode(income.workspace_currency ?? currentCompany?.currency ?? 'USD')
-    if (normalizeCurrencyCode(income.currency) === workspaceCurrency) return originalAmount
+    if (normalizeCurrencyCode(income.currency) === workspaceCurrency
+      || (normalizeCurrencyCode(income.currency) === normalizeCurrencyCode(currentCompany?.currency ?? 'USD') && workspaceAmount === null)) return originalAmount
     if (workspaceAmount === null) return `${originalAmount} · ${t('currencySnapshot.noSnapshot')}`
     const baseText = formatCurrency(workspaceAmount, workspaceCurrency, intlLocale)
     return printCurrencyMode === 'both' ? `${originalAmount} (${baseText})` : baseText
@@ -720,7 +715,7 @@ export default function IncomePage() {
         throw new Error(t('transactions.importMissingColumns'))
       }
 
-      const payload = await Promise.all(rows.slice(1).map(async (columns, index) => {
+      const payload = await mapWithConcurrency(rows.slice(1), 4, async (columns, index) => {
         const rowNumber = index + 2
         const date = parseTransactionDate(columns[dateIndex] ?? '')
         const description = columns[descriptionIndex]?.trim()
@@ -753,7 +748,7 @@ export default function IncomePage() {
           throw new Error(t('transactions.importRowUnsupportedCurrency').replace('{row}', String(rowNumber)))
         }
 
-        const fxSnapshot = await createTransactionFxSnapshot(amount, currency, currentCompany.currency ?? 'USD')
+        const { snapshot: fxSnapshot } = await createHistoricalTransactionFxSnapshot(amount, currency, currentCompany.currency ?? 'USD', date)
         return {
           company_id: currentCompany.id,
           date,
@@ -764,7 +759,7 @@ export default function IncomePage() {
           currency,
           ...fxSnapshot,
         }
-      }))
+      })
 
       let { error } = await supabase.from('incomes').insert(payload)
       if (isMissingOptionalColumn(error)) {
@@ -773,7 +768,9 @@ export default function IncomePage() {
       }
       if (error) throw error
 
-      setSuccessMessage(t('transactions.importedRows').replace('{count}', String(payload.length)))
+      const unavailableCount = payload.filter((item) => item.workspace_amount === null).length
+      const importedMessage = t('transactions.importedRows').replace('{count}', String(payload.length))
+      setSuccessMessage(`${importedMessage}${unavailableCount > 0 ? ` ${t('currencySnapshot.unverifiedCount').replace('{count}', String(unavailableCount))}` : ''}`)
       await loadIncomes()
     } catch (error) {
       console.error('Income CSV import failed:', error)
@@ -891,8 +888,8 @@ export default function IncomePage() {
 
         <p className="mt-4 text-right font-semibold">
           {t('common.total')}: {formatWorkspaceTotals(sortedIncomes)}
-          {sortedIncomes.some((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency) && getWorkspaceAmount(income) === null) && (
-            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(sortedIncomes.filter((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency) && getWorkspaceAmount(income) === null).length))}</span>
+          {sortedIncomes.some((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null) && (
+            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(sortedIncomes.filter((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null).length))}</span>
           )}
         </p>
       </div>
@@ -1075,7 +1072,7 @@ export default function IncomePage() {
                 amount={getWorkspaceAmount(income) === null
                   ? formatCurrency(Number(income.amount), income.currency)
                   : formatCurrency(getWorkspaceAmount(income)!, income.workspace_currency ?? currentCompany.currency ?? 'USD')}
-                conversionStatus={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null
+                conversionStatus={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null
                   ? { label: t('currencySnapshot.noSnapshotShort'), detail: t('currencySnapshot.noSnapshot') }
                   : undefined}
                 amountDetail={normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) !== null

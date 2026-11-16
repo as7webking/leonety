@@ -20,6 +20,8 @@ export const transactionFxDictionaries: Record<Locale, Dictionary> = {
     'currencySnapshot.workspaceAmount': 'Workspace amount',
     'currencySnapshot.workspaceCurrency': 'Snapshot currency',
     'currencySnapshot.retry': 'Retry rate lookup',
+    'currencySnapshot.historicalUnavailable': 'Saved in the original currency; no verified historical conversion is available.',
+    'currencySnapshot.unverifiedCount': '{count} record(s) were saved without a verified historical conversion.',
   },
   de: {
     'currencySnapshot.rateUnavailable': 'Ein aktueller Wechselkurs ist nicht verfügbar. Bitte vor dem Speichern erneut versuchen; es wurde kein Ersatzkurs verwendet.',
@@ -38,6 +40,8 @@ export const transactionFxDictionaries: Record<Locale, Dictionary> = {
     'currencySnapshot.workspaceAmount': 'Betrag in Workspace-Währung',
     'currencySnapshot.workspaceCurrency': 'Snapshot-Währung',
     'currencySnapshot.retry': 'Kurs erneut abrufen',
+    'currencySnapshot.historicalUnavailable': 'In der Originalwährung gespeichert; kein verifizierter historischer Kurs verfügbar.',
+    'currencySnapshot.unverifiedCount': '{count} Einträge wurden ohne verifizierten historischen Kurs gespeichert.',
   },
   ru: {
     'currencySnapshot.rateUnavailable': 'Текущий курс недоступен. Повторите попытку перед сохранением; запасной курс не использовался.',
@@ -56,6 +60,8 @@ export const transactionFxDictionaries: Record<Locale, Dictionary> = {
     'currencySnapshot.workspaceAmount': 'Сумма в валюте пространства',
     'currencySnapshot.workspaceCurrency': 'Валюта снимка',
     'currencySnapshot.retry': 'Повторить запрос курса',
+    'currencySnapshot.historicalUnavailable': 'Сохранено в исходной валюте; подтверждённый исторический курс недоступен.',
+    'currencySnapshot.unverifiedCount': 'Записей без подтверждённого исторического курса: {count}.',
   },
   tr: {
     'currencySnapshot.rateUnavailable': 'Güncel kur alınamadı. Kaydetmeden önce yeniden deneyin; yedek kur kullanılmadı.',
@@ -74,6 +80,8 @@ export const transactionFxDictionaries: Record<Locale, Dictionary> = {
     'currencySnapshot.workspaceAmount': 'Çalışma alanı tutarı',
     'currencySnapshot.workspaceCurrency': 'Anlık görüntü para birimi',
     'currencySnapshot.retry': 'Kur aramasını yeniden dene',
+    'currencySnapshot.historicalUnavailable': 'Orijinal para biriminde kaydedildi; doğrulanmış geçmiş kur bulunamadı.',
+    'currencySnapshot.unverifiedCount': '{count} kayıt doğrulanmış geçmiş kur olmadan kaydedildi.',
   },
   uk: {
     'currencySnapshot.rateUnavailable': 'Поточний курс недоступний. Повторіть спробу перед збереженням; резервний курс не використовувався.',
@@ -92,6 +100,8 @@ export const transactionFxDictionaries: Record<Locale, Dictionary> = {
     'currencySnapshot.workspaceAmount': 'Сума у валюті простору',
     'currencySnapshot.workspaceCurrency': 'Валюта знімка',
     'currencySnapshot.retry': 'Повторити запит курсу',
+    'currencySnapshot.historicalUnavailable': 'Збережено в початковій валюті; перевірений історичний курс недоступний.',
+    'currencySnapshot.unverifiedCount': '{count} записів збережено без перевіреного історичного курсу.',
   },
   pl: {
     'currencySnapshot.rateUnavailable': 'Bieżący kurs jest niedostępny. Ponów próbę przed zapisem; nie użyto kursu zastępczego.',
@@ -110,6 +120,8 @@ export const transactionFxDictionaries: Record<Locale, Dictionary> = {
     'currencySnapshot.workspaceAmount': 'Kwota w walucie obszaru',
     'currencySnapshot.workspaceCurrency': 'Waluta migawki',
     'currencySnapshot.retry': 'Ponów pobieranie kursu',
+    'currencySnapshot.historicalUnavailable': 'Zapisano w oryginalnej walucie; brak zweryfikowanego kursu historycznego.',
+    'currencySnapshot.unverifiedCount': 'Liczba wpisów zapisanych bez zweryfikowanego kursu historycznego: {count}.',
   },
   fr: {
     'currencySnapshot.rateUnavailable': 'Le taux de change actuel est indisponible. Réessayez avant l’enregistrement ; aucun taux de secours n’a été utilisé.',
@@ -128,5 +140,7 @@ export const transactionFxDictionaries: Record<Locale, Dictionary> = {
     'currencySnapshot.workspaceAmount': 'Montant dans la devise de l’espace',
     'currencySnapshot.workspaceCurrency': 'Devise de l’instantané',
     'currencySnapshot.retry': 'Réessayer la recherche du taux',
+    'currencySnapshot.historicalUnavailable': 'Enregistré dans la devise d’origine ; aucun taux historique vérifié n’est disponible.',
+    'currencySnapshot.unverifiedCount': '{count} élément(s) enregistré(s) sans taux historique vérifié.',
   },
 }

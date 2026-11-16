@@ -14,7 +14,7 @@ import { loadCompanyBranding } from '@/lib/company-branding'
 import { currencyOptions, isSupportedCurrency, normalizeCurrencyCode } from '@/lib/currency'
 import { useCurrencyFormat } from '@/contexts/currency-format-context'
 import { fetchLatestExchangeRate } from '@/lib/exchange-rates-client'
-import { createTransactionFxSnapshot, getMoneyConversionPreview, getStoredWorkspaceAmount } from '@/lib/transaction-fx'
+import { createHistoricalTransactionFxSnapshot, getMoneyConversionPreview, getStoredWorkspaceAmount, mapWithConcurrency, transactionFxInputsChanged } from '@/lib/transaction-fx'
 import { useI18n } from '@/contexts/i18n-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -311,13 +311,11 @@ export default function ExpensesPage() {
         description: formData.description,
       })
       const category = isOtherExpense ? customCategory.trim() || 'Other' : validatedData.category
-      const financialFieldsChanged = Boolean(editingEntry && (
-        Number(editingEntry.amount) !== validatedData.amount
-        || normalizeCurrencyCode(editingEntry.currency) !== normalizeCurrencyCode(validatedData.currency)
-      ))
-      const fxSnapshot = !editingEntry || financialFieldsChanged
-        ? await createTransactionFxSnapshot(validatedData.amount, validatedData.currency, currentCompany.currency ?? 'USD')
+      const financialFieldsChanged = Boolean(editingEntry && transactionFxInputsChanged(editingEntry, validatedData))
+      const fxResult = !editingEntry || financialFieldsChanged
+        ? await createHistoricalTransactionFxSnapshot(validatedData.amount, validatedData.currency, currentCompany.currency ?? 'USD', validatedData.date)
         : null
+      const fxSnapshot = fxResult?.snapshot ?? null
       const payload = {
         title: desiredTitle,
         description: validatedData.description,
@@ -348,7 +346,8 @@ export default function ExpensesPage() {
           titleFallback = !error && Boolean(desiredTitle)
         }
         if (error) throw error
-        setSuccessMessage(titleFallback ? `${t('expenses.updated')} ${t('transactions.titleMigrationRequired')}` : t('expenses.updated'))
+        const baseMessage = titleFallback ? `${t('expenses.updated')} ${t('transactions.titleMigrationRequired')}` : t('expenses.updated')
+        setSuccessMessage(`${baseMessage}${fxResult && !fxResult.verified ? ` ${t('currencySnapshot.historicalUnavailable')}` : ''}`)
       } else {
         let { error } = await supabase.from('expenses').insert(payload)
         if (isMissingOptionalColumn(error)) {
@@ -357,7 +356,8 @@ export default function ExpensesPage() {
           titleFallback = !error && Boolean(desiredTitle)
         }
         if (error) throw error
-        setSuccessMessage(titleFallback ? `${t('expenses.created')} ${t('transactions.titleMigrationRequired')}` : t('expenses.created'))
+        const baseMessage = titleFallback ? `${t('expenses.created')} ${t('transactions.titleMigrationRequired')}` : t('expenses.created')
+        setSuccessMessage(`${baseMessage}${fxResult && !fxResult.verified ? ` ${t('currencySnapshot.historicalUnavailable')}` : ''}`)
       }
 
       setFormData({
@@ -411,13 +411,8 @@ export default function ExpensesPage() {
       return
     }
 
-    let fxSnapshot
-    try {
-      fxSnapshot = await createTransactionFxSnapshot(entry.amount, entry.currency, currentCompany.currency ?? 'USD')
-    } catch {
-      setErrorMessage(t('currencySnapshot.rateUnavailable'))
-      return
-    }
+    const fxResult = await createHistoricalTransactionFxSnapshot(entry.amount, entry.currency, currentCompany.currency ?? 'USD', entry.date)
+    const fxSnapshot = fxResult.snapshot
     const payload = {
       title: entry.title ?? entry.description,
       description: entry.title ? entry.description : '',
@@ -437,7 +432,7 @@ export default function ExpensesPage() {
       }
       if (error) throw error
       await loadExpenses()
-      setSuccessMessage(t('expenses.duplicated'))
+      setSuccessMessage(`${t('expenses.duplicated')}${fxResult.verified ? '' : ` ${t('currencySnapshot.historicalUnavailable')}`}`)
       window.setTimeout(() => setSuccessMessage(''), 3000)
     } catch (error) {
       console.error('Expense duplicate error:', error)
@@ -550,7 +545,8 @@ export default function ExpensesPage() {
     const originalAmount = `${Number(expense.amount).toFixed(2)} ${expense.currency}`
     const workspaceAmount = getWorkspaceAmount(expense)
     const workspaceCurrency = normalizeCurrencyCode(expense.workspace_currency ?? currentCompany?.currency ?? 'USD')
-    if (normalizeCurrencyCode(expense.currency) === workspaceCurrency) return originalAmount
+    if (normalizeCurrencyCode(expense.currency) === workspaceCurrency
+      || (normalizeCurrencyCode(expense.currency) === normalizeCurrencyCode(currentCompany?.currency ?? 'USD') && workspaceAmount === null)) return originalAmount
     if (workspaceAmount === null) return `${originalAmount} · ${t('currencySnapshot.noSnapshot')}`
     const baseText = formatCurrency(workspaceAmount, workspaceCurrency, intlLocale)
     return printCurrencyMode === 'both' ? `${originalAmount} (${baseText})` : baseText
@@ -602,7 +598,7 @@ export default function ExpensesPage() {
         throw new Error(t('transactions.importMissingColumns'))
       }
 
-      const payload = await Promise.all(rows.slice(1).map(async (columns, index) => {
+      const payload = await mapWithConcurrency(rows.slice(1), 4, async (columns, index) => {
         const rowNumber = index + 2
         const date = parseTransactionDate(columns[dateIndex] ?? '')
         const description = columns[descriptionIndex]?.trim()
@@ -635,7 +631,7 @@ export default function ExpensesPage() {
           throw new Error(t('transactions.importRowUnsupportedCurrency').replace('{row}', String(rowNumber)))
         }
 
-        const fxSnapshot = await createTransactionFxSnapshot(Number(amount.toFixed(2)), currency, currentCompany.currency ?? 'USD')
+        const { snapshot: fxSnapshot } = await createHistoricalTransactionFxSnapshot(Number(amount.toFixed(2)), currency, currentCompany.currency ?? 'USD', date)
         return {
           company_id: currentCompany.id,
           date,
@@ -646,7 +642,7 @@ export default function ExpensesPage() {
           currency,
           ...fxSnapshot,
         }
-      }))
+      })
 
       let { error } = await supabase.from('expenses').insert(payload)
       if (isMissingOptionalColumn(error)) {
@@ -655,7 +651,9 @@ export default function ExpensesPage() {
       }
       if (error) throw error
 
-      setSuccessMessage(t('transactions.importedRows').replace('{count}', String(payload.length)))
+      const unavailableCount = payload.filter((item) => item.workspace_amount === null).length
+      const importedMessage = t('transactions.importedRows').replace('{count}', String(payload.length))
+      setSuccessMessage(`${importedMessage}${unavailableCount > 0 ? ` ${t('currencySnapshot.unverifiedCount').replace('{count}', String(unavailableCount))}` : ''}`)
       await loadExpenses()
     } catch (error) {
       console.error('Expense CSV import failed:', error)
@@ -782,8 +780,8 @@ export default function ExpensesPage() {
 
         <p className="mt-2 text-right font-semibold">
           {t('common.total')}: {formatWorkspaceTotals(sortedExpenses)}
-          {sortedExpenses.some((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency) && getWorkspaceAmount(expense) === null) && (
-            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(sortedExpenses.filter((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency) && getWorkspaceAmount(expense) === null).length))}</span>
+          {sortedExpenses.some((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null) && (
+            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(sortedExpenses.filter((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null).length))}</span>
           )}
         </p>
       </div>
@@ -892,7 +890,7 @@ export default function ExpensesPage() {
                 amount={getWorkspaceAmount(expense) === null
                   ? formatCurrency(Number(expense.amount), expense.currency)
                   : formatCurrency(getWorkspaceAmount(expense)!, expense.workspace_currency ?? currentCompany.currency ?? 'USD')}
-                conversionStatus={normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null
+                conversionStatus={normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null
                   ? { label: t('currencySnapshot.noSnapshotShort'), detail: t('currencySnapshot.noSnapshot') }
                   : undefined}
                 amountDetail={normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) !== null
