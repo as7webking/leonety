@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowDownCircle, ArrowUp, ArrowUpCircle, Building2, Copy, GripVertical, Printer, Plus } from 'lucide-react'
 import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
@@ -128,6 +128,10 @@ export default function TransactionsPage() {
   const queryState = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const currentWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  currentWorkspaceIdRef.current = currentCompany?.id ?? null
+  const displayedWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  const transactionLoadControllerRef = useRef<AbortController | null>(null)
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
   const dataMemoryKey = currentCompany ? `transactions:${currentCompany.id}` : ''
@@ -208,6 +212,18 @@ export default function TransactionsPage() {
   useBodyScrollLock(printFormatDialogOpen)
   const conversionPreview = getMoneyConversionPreview(formData.amount, latestRate, currentCompany?.currency ?? 'USD')
 
+  useLayoutEffect(() => {
+    const workspaceId = currentCompany?.id ?? null
+    if (displayedWorkspaceIdRef.current === workspaceId) return
+    displayedWorkspaceIdRef.current = workspaceId
+    setTransactions([])
+    setSelectedTransactions([])
+    setLoading(Boolean(workspaceId))
+    setRefreshing(false)
+    setErrorMessage('')
+    setMessage('')
+  }, [currentCompany?.id])
+
   useEffect(() => {
     if (!currentCompany) return
     const from = normalizeCurrencyCode(formData.currency)
@@ -249,9 +265,16 @@ export default function TransactionsPage() {
 
   const loadTransactions = useCallback(async () => {
     if (!currentCompany) {
+      transactionLoadControllerRef.current?.abort()
+      transactionLoadControllerRef.current = null
       setLoading(false)
       return
     }
+
+    transactionLoadControllerRef.current?.abort()
+    const controller = new AbortController()
+    const workspaceId = currentCompany.id
+    transactionLoadControllerRef.current = controller
 
     const memoryKey = `transactions:${currentCompany.id}`
     const cached = getAppDataMemory<TransactionsMemory>(memoryKey)
@@ -277,7 +300,8 @@ export default function TransactionsPage() {
           .from(table)
           .select(columns)
           .eq('company_id', currentCompany.id)
-          .order('date', { ascending: false }) as TransactionQueryResult
+          .order('date', { ascending: false })
+          .abortSignal(controller.signal) as TransactionQueryResult
       }
 
       let [incomeRes, expenseRes] = await Promise.all([
@@ -297,6 +321,8 @@ export default function TransactionsPage() {
           queryTransactions('expenses', false, false, false),
         ])
       }
+
+      if (controller.signal.aborted || currentWorkspaceIdRef.current !== workspaceId || transactionLoadControllerRef.current !== controller) return
 
       if (incomeRes.error) throw incomeRes.error
       if (expenseRes.error) throw expenseRes.error
@@ -337,7 +363,9 @@ export default function TransactionsPage() {
           .from('invoice_payments')
           .select('invoice_id, amount, method')
           .in('invoice_id', invoiceIds.slice(index, index + 100))
+          .abortSignal(controller.signal)
 
+        if (controller.signal.aborted || currentWorkspaceIdRef.current !== workspaceId || transactionLoadControllerRef.current !== controller) return
         if (error) break
         paymentRows.push(...((data ?? []) as InvoicePaymentRow[]))
       }
@@ -359,15 +387,21 @@ export default function TransactionsPage() {
       setAppDataMemory<TransactionsMemory>(memoryKey, { transactions: nextTransactions })
       setTransactions(nextTransactions)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load transactions')
+      if (!controller.signal.aborted && currentWorkspaceIdRef.current === workspaceId && transactionLoadControllerRef.current === controller) {
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to load transactions')
+      }
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (!controller.signal.aborted && transactionLoadControllerRef.current === controller && currentWorkspaceIdRef.current === workspaceId) {
+        transactionLoadControllerRef.current = null
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [currentCompany, supabase])
 
   useEffect(() => {
     void loadTransactions()
+    return () => transactionLoadControllerRef.current?.abort()
   }, [loadTransactions])
 
   useEffect(() => {

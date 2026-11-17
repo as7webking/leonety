@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Archive, Barcode, BriefcaseBusiness, Building2, ChevronDown, Copy, Download, Edit, Eye, PackagePlus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from 'lucide-react'
 import { DesktopPageUtilities, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
@@ -369,6 +369,10 @@ export default function ProductsPage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const currentWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  currentWorkspaceIdRef.current = currentCompany?.id ?? null
+  const displayedWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  const productLoadControllerRef = useRef<AbortController | null>(null)
   const { userId } = useOfflineMode()
   const { t } = useI18n()
   const dataMemoryKey = currentCompany ? `products:${currentCompany.id}` : ''
@@ -431,6 +435,21 @@ export default function ProductsPage() {
     setSortBy(view.sortBy)
   }, [])
 
+  useLayoutEffect(() => {
+    const workspaceId = currentCompany?.id ?? null
+    if (displayedWorkspaceIdRef.current === workspaceId) return
+    displayedWorkspaceIdRef.current = workspaceId
+    setProducts([])
+    setCategories([])
+    setSyncs({})
+    setStoreConnections({} as Record<ProductChannel, StoreConnectionStatus>)
+    setSelectedProductIds(new Set())
+    setCategoriesAvailable(true)
+    setLoading(Boolean(workspaceId))
+    setRefreshing(false)
+    setError('')
+  }, [currentCompany?.id])
+
   useBodyScrollLock(showForm || Boolean(viewingProduct))
 
   useEffect(() => {
@@ -447,9 +466,15 @@ export default function ProductsPage() {
 
   const loadProducts = useCallback(async () => {
     if (!currentCompany) {
+      productLoadControllerRef.current?.abort()
+      productLoadControllerRef.current = null
       setLoading(false)
       return
     }
+    productLoadControllerRef.current?.abort()
+    const controller = new AbortController()
+    const workspaceId = currentCompany.id
+    productLoadControllerRef.current = controller
     const memoryKey = `products:${currentCompany.id}`
     const cached = getAppDataMemory<ProductsMemory>(memoryKey)
     if (cached) {
@@ -466,20 +491,23 @@ export default function ProductsPage() {
 
     try {
       const [productResult, syncResult, categoryResult, integrationResult] = await Promise.all([
-        supabase.from('products').select(productListColumns).eq('company_id', currentCompany.id).order('name'),
+        supabase.from('products').select(productListColumns).eq('company_id', currentCompany.id).order('name').abortSignal(controller.signal),
         supabase
           .from('product_syncs')
           .select('product_id, channel, external_product_id, external_url, sync_status, last_synced_at, error_message')
-          .eq('company_id', currentCompany.id),
+          .eq('company_id', currentCompany.id)
+          .abortSignal(controller.signal),
         supabase
           .from('product_categories')
           .select('id, company_id, name, woo_category_id')
           .eq('company_id', currentCompany.id)
-          .order('name'),
-        fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store' })
+          .order('name')
+          .abortSignal(controller.signal),
+        fetch(`/api/store-integrations?companyId=${encodeURIComponent(currentCompany.id)}`, { cache: 'no-store', signal: controller.signal })
           .then((response) => response.ok ? response.json() : { integrations: [], unavailable: true })
           .catch(() => ({ integrations: [], unavailable: true })),
       ])
+      if (controller.signal.aborted || currentWorkspaceIdRef.current !== workspaceId || productLoadControllerRef.current !== controller) return
       const { data, error: loadError } = productResult
       if (loadError) {
         setError(loadError.code === '42P01' ? t('products.databaseRequired') : loadError.message)
@@ -537,13 +565,23 @@ export default function ProductsPage() {
       setSyncs(nextMemory.syncs)
       setStoreConnections(nextMemory.storeConnections)
       setCategoriesAvailable(nextMemory.categoriesAvailable)
+    } catch (loadError) {
+      if (!controller.signal.aborted && currentWorkspaceIdRef.current === workspaceId && productLoadControllerRef.current === controller) {
+        setError(loadError instanceof Error ? loadError.message : t('common.error'))
+      }
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (!controller.signal.aborted && productLoadControllerRef.current === controller && currentWorkspaceIdRef.current === workspaceId) {
+        productLoadControllerRef.current = null
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [currentCompany, supabase, t])
 
-  useEffect(() => { void loadProducts() }, [loadProducts])
+  useEffect(() => {
+    void loadProducts()
+    return () => productLoadControllerRef.current?.abort()
+  }, [loadProducts])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 180)
