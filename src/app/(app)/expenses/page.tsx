@@ -894,7 +894,10 @@ export default function ExpensesPage() {
                   ? { label: t('currencySnapshot.noSnapshotShort'), detail: t('currencySnapshot.noSnapshot') }
                   : undefined}
                 amountDetail={normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) !== null
-                  ? formatCurrency(Number(expense.amount), expense.currency)
+                  ? formatCurrency(Number(expense.amount), expense.currency, intlLocale)
+                  : undefined}
+                conversionRate={normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) !== null
+                  ? { rate: expense.exchange_rate, source: expense.exchange_rate_source, rateDate: expense.exchange_rate_date, fromCurrency: normalizeCurrencyCode(expense.currency), toCurrency: normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency), locale: intlLocale, label: t('currencySnapshot.rate') }
                   : undefined}
                 actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(expense)} aria-label={`${t('common.edit')} ${expense.title || expense.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => void handleDuplicate(expense)} aria-label={`${t('finance.duplicate')} ${expense.title || expense.description}`} title={t('finance.duplicate')}><Copy className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)} aria-label={`${t('common.delete')} ${expense.title || expense.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button><Button asChild variant="ghost" size="icon"><Link href="/app/transactions" aria-label={t('nav.transactions')} title={t('nav.transactions')}><ArrowRightLeft className="h-4 w-4" /></Link></Button></>}
               />

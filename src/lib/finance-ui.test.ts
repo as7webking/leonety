@@ -4,7 +4,7 @@ import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { financeUiDictionaries } from './finance-ui-i18n.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { matchesFinanceSearch, matchesOptionalDateRange } from './finance-ui.ts'
+import { formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange } from './finance-ui.ts'
 
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 const requiredKeys = Object.keys(financeUiDictionaries.en)
@@ -14,6 +14,21 @@ test('finance UI labels have complete seven-locale coverage', () => {
     assert.deepEqual(Object.keys(financeUiDictionaries[locale]).sort(), [...requiredKeys].sort())
     for (const key of requiredKeys) assert.ok(financeUiDictionaries[locale][key]?.trim(), `${locale}:${key}`)
   }
+})
+
+test('verified historical rate metadata is formatted locally without inventing unavailable details', () => {
+  const detail = formatHistoricalRateDetail({
+    rate: '0.54000000',
+    source: 'Frankfurter',
+    rateDate: '2026-09-30',
+    fromCurrency: 'AZN',
+    toCurrency: 'EUR',
+    locale: 'en-GB',
+    label: 'Rate',
+  })
+  assert.equal(detail, 'Rate: 1 AZN = 0.54 EUR · 30/09/2026 · Frankfurter')
+  assert.equal(formatHistoricalRateDetail({ rate: '1', source: null, rateDate: null, fromCurrency: 'AZN', toCurrency: 'EUR', locale: 'en', label: 'Rate' }), null)
+  assert.equal(formatHistoricalRateDetail({ rate: '1', source: null, rateDate: '2026-02-30', fromCurrency: 'AZN', toCurrency: 'EUR', locale: 'en', label: 'Rate' }), null)
 })
 
 test('income, expenses and transactions use the shared finance list architecture', () => {

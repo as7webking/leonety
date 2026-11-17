@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { Info, Search, SlidersHorizontal, Wrench } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
+import { formatHistoricalRateDetail } from '@/lib/finance-ui'
 import { cn } from '@/lib/utils'
 
 export const FINANCE_PAGE_SIZE = 25
@@ -113,6 +114,15 @@ interface FinanceListRowProps {
   date: ReactNode
   amount: ReactNode
   amountDetail?: ReactNode
+  conversionRate?: {
+    rate: number | string | null | undefined
+    source: string | null | undefined
+    rateDate: string | null | undefined
+    fromCurrency: string
+    toCurrency: string
+    locale: string
+    label: string
+  }
   conversionStatus?: { label: string; detail: string }
   badge?: ReactNode
   selection?: ReactNode
@@ -120,9 +130,10 @@ interface FinanceListRowProps {
   className?: string
 }
 
-export function FinanceListRow({ title, description, category, date, amount, amountDetail, conversionStatus, badge, selection, actions, className }: FinanceListRowProps) {
+export function FinanceListRow({ title, description, category, date, amount, amountDetail, conversionRate, conversionStatus, badge, selection, actions, className }: FinanceListRowProps) {
   const [conversionDetailsOpen, setConversionDetailsOpen] = useState(false)
   const conversionDetailsId = useId()
+  const conversionRateText = conversionRate ? formatHistoricalRateDetail(conversionRate) : null
 
   return (
     <article className={cn('finance-list-grid min-w-0 gap-y-2 px-4 py-3', selection ? 'finance-list-grid-with-selection' : 'finance-list-grid-no-selection', className)}>
@@ -152,6 +163,7 @@ export function FinanceListRow({ title, description, category, date, amount, amo
         </button>}
         {conversionStatus && <p id={conversionDetailsId} role="note" hidden={!conversionDetailsOpen} className="col-span-2 min-w-0 whitespace-normal break-words text-left text-xs leading-4 text-amber-800 lg:text-right">{conversionStatus.detail}</p>}
         {amountDetail && <div className="col-span-2 min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}
+        {conversionRateText && <div className="col-span-2 min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 text-slate-500 [overflow-wrap:anywhere]">{conversionRateText}</div>}
       </div>
       <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
       {selection && <div className="flex min-h-10 items-center justify-start lg:justify-center">{selection}</div>}

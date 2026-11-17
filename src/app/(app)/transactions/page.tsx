@@ -1710,6 +1710,10 @@ export default function TransactionsPage() {
                   && normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
                   ? formatCurrency(transaction.amount, normalizeCurrencyCode(transaction.currency), intlLocale)
                   : undefined}
+                conversionRate={transaction.workspace_amount !== null && transaction.workspace_amount !== undefined
+                  && normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
+                  ? { rate: transaction.exchange_rate, source: transaction.exchange_rate_source, rateDate: transaction.exchange_rate_date, fromCurrency: normalizeCurrencyCode(transaction.currency), toCurrency: normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency), locale: intlLocale, label: t('currencySnapshot.rate') }
+                  : undefined}
                 conversionStatus={normalizeCurrencyCode(transaction.workspace_currency ?? currentCompany.currency) !== normalizeCurrencyCode(transaction.currency)
                   && (transaction.workspace_amount === null || transaction.workspace_amount === undefined)
                   ? { label: t('currencySnapshot.noSnapshotShort'), detail: t('currencySnapshot.noSnapshot') }
