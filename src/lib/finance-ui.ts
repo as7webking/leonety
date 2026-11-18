@@ -9,6 +9,12 @@ export function matchesOptionalDateRange(date: string, fromDate: string, toDate:
   return (!fromDate || date >= fromDate) && (!toDate || date <= toDate)
 }
 
+export function selectFinanceRecordsForPrint<T extends { id: string }>(records: T[], selectedIds: string[]) {
+  if (selectedIds.length === 0) return records
+  const selected = new Set(selectedIds)
+  return records.filter((record) => selected.has(record.id))
+}
+
 export function formatHistoricalRateDetail(input: {
   rate: number | string | null | undefined
   source: string | null | undefined

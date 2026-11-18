@@ -4,7 +4,7 @@ import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { financeUiDictionaries } from './finance-ui-i18n.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange } from './finance-ui.ts'
+import { formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint } from './finance-ui.ts'
 
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 const requiredKeys = Object.keys(financeUiDictionaries.en)
@@ -29,6 +29,13 @@ test('verified historical rate metadata is formatted locally without inventing u
   assert.equal(detail, 'Rate: 1 AZN = 0.54 EUR · 30/09/2026 · Frankfurter')
   assert.equal(formatHistoricalRateDetail({ rate: '1', source: null, rateDate: null, fromCurrency: 'AZN', toCurrency: 'EUR', locale: 'en', label: 'Rate' }), null)
   assert.equal(formatHistoricalRateDetail({ rate: '1', source: null, rateDate: '2026-02-30', fromCurrency: 'AZN', toCurrency: 'EUR', locale: 'en', label: 'Rate' }), null)
+})
+
+test('print selection uses all filtered records by default and only selected filtered records when selected', () => {
+  const dateFiltered = [{ id: 'in-range-1' }, { id: 'in-range-2' }]
+  assert.deepEqual(selectFinanceRecordsForPrint(dateFiltered, []), dateFiltered)
+  assert.deepEqual(selectFinanceRecordsForPrint(dateFiltered, ['in-range-2', 'outside-range']), [{ id: 'in-range-2' }])
+  assert.deepEqual(selectFinanceRecordsForPrint(dateFiltered, ['outside-range']), [])
 })
 
 test('income, expenses and transactions use the shared finance list architecture', () => {
@@ -114,7 +121,9 @@ test('finance toolbars separate utilities, filters and sorting without changing 
 test('Income and Expenses keep printing visible while preserving existing print currency formats', () => {
   for (const route of ['income', 'expenses']) {
     const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
-    assert.match(source, /primaryAction=\{\w+\.length > 0 \? <Button variant="outline" onClick=\{handlePrint\} size="sm">\{t\('common\.print'\)\}<\/Button> : undefined\}/)
+    assert.match(source, /primaryAction=\{\w+\.length > 0 \? <Button variant="outline" onClick=\{handlePrint\} size="sm">\{selected\w+Ids\.length > 0 \? `\$\{t\('common\.print'\)\} · \$\{t\('finance\.selectedCount'\)/)
+    assert.match(source, /const printable\w+ = selectFinanceRecordsForPrint\(sorted\w+, selected\w+Ids\)/)
+    assert.match(source, /group\w+\(printable\w+\)/)
     assert.match(source, /printCurrencyMode, setPrintCurrencyMode/)
     assert.match(source, /value: 'workspace', label: t\('currencySnapshot\.workspaceOnly'\)/)
     assert.match(source, /value: 'both', label: t\('currencySnapshot\.originalAndWorkspace'\)/)

@@ -21,7 +21,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { IncomeBulkTitleDialog } from '@/components/income-bulk-title-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch, matchesOptionalDateRange } from '@/lib/finance-ui'
+import { matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint } from '@/lib/finance-ui'
 import { applyIncomeTitleToSelection } from '@/lib/income-bulk-title'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
@@ -173,6 +173,7 @@ export default function IncomePage() {
     if (formWorkspaceRef.current === nextWorkspaceId) return
     formWorkspaceRef.current = nextWorkspaceId
     restoredDraftKeyRef.current = null
+    setSelectedIncomeIds([])
     setEditingEntry(null)
     setShowForm(false)
     setCustomCategory('')
@@ -505,6 +506,7 @@ export default function IncomePage() {
     try {
       const { error } = await supabase.from('incomes').delete().eq('id', id).eq('company_id', currentCompany.id)
       if (error) throw error
+      setSelectedIncomeIds((current) => current.filter((selectedId) => selectedId !== id))
       loadIncomes()
       setSuccessMessage(t('income.deleted'))
       window.setTimeout(() => setSuccessMessage(''), 3000)
@@ -649,8 +651,9 @@ export default function IncomePage() {
     }
   }, {})
   const displayGroups = groupReportsByMonth ? Object.entries(groupIncomes(paginatedIncomes)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', paginatedIncomes] as const]
-  const printGroups = groupReportsByMonth ? Object.entries(groupIncomes(sortedIncomes)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedIncomes] as const]
-  const hasForeignCurrencySnapshots = sortedIncomes.some((income) => income.workspace_amount !== null && income.workspace_amount !== undefined
+  const printableIncomes = selectFinanceRecordsForPrint(sortedIncomes, selectedIncomeIds)
+  const printGroups = groupReportsByMonth ? Object.entries(groupIncomes(printableIncomes)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', printableIncomes] as const]
+  const hasForeignCurrencySnapshots = printableIncomes.some((income) => income.workspace_amount !== null && income.workspace_amount !== undefined
     && normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(income.workspace_currency ?? currentCompany?.currency ?? 'USD'))
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
@@ -670,7 +673,7 @@ export default function IncomePage() {
   }
 
   const handlePrint = () => {
-    if (sortedIncomes.length === 0) {
+    if (printableIncomes.length === 0) {
       setErrorMessage(t('time.noDataPrint'))
       window.setTimeout(() => setErrorMessage(''), 3000)
       return
@@ -819,7 +822,7 @@ export default function IncomePage() {
       <FinanceToolbar
         filtersLabel={t('finance.filters')}
         utilitiesLabel={t('finance.utilities')}
-        primaryAction={incomes.length > 0 ? <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button> : undefined}
+        primaryAction={incomes.length > 0 ? <Button variant="outline" onClick={handlePrint} size="sm">{selectedIncomeIds.length > 0 ? `${t('common.print')} · ${t('finance.selectedCount').replace('{count}', String(printableIncomes.length))}` : t('common.print')}</Button> : undefined}
         filters={incomes.length > 0 ? <>
           <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setSelectedIncomeIds([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
           <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
@@ -887,9 +890,9 @@ export default function IncomePage() {
         ))}
 
         <p className="mt-4 text-right font-semibold">
-          {t('common.total')}: {formatWorkspaceTotals(sortedIncomes)}
-          {sortedIncomes.some((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null) && (
-            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(sortedIncomes.filter((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null).length))}</span>
+          {t('common.total')}: {formatWorkspaceTotals(printableIncomes)}
+          {printableIncomes.some((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null) && (
+            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(printableIncomes.filter((income) => normalizeCurrencyCode(income.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(income) === null).length))}</span>
           )}
         </p>
       </div>

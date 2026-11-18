@@ -46,8 +46,12 @@ test('Product table places selection after product data and before rightmost act
   assert.match(products, /selected \? 'bg-blue-50\/50'/)
 })
 
-test('Expense table remains intentionally unselectable; invoice cards keep selection distinct and visible', () => {
-  assert.doesNotMatch(expenses, /FinanceSelectionBar|selectedExpenseIds|selectVisible/)
+test('Expense table supports accessible selection for selected-record printing; invoice cards keep selection distinct and visible', () => {
+  assert.match(expenses, /<FinanceSelectionBar/)
+  assert.match(expenses, /selectedExpenseIds/)
+  assert.match(expenses, /selectionLabel=\{t\('transactions\.select'\)\}/)
+  assert.match(expenses, /type="checkbox"[\s\S]*?aria-label|<span className="sr-only">\{t\('transactions\.select'\)/)
+  assert.match(expenses, /selectFinanceRecordsForPrint\(sortedExpenses, selectedExpenseIds\)/)
   assert.match(invoices, /Card key=\{invoice\.id\} className=\{selectedInvoiceIds\.has\(invoice\.id\)/)
   assert.match(invoices, /aria-label=\{`\$\{t\('invoices\.selectInvoice'\)\} \$\{invoice\.invoice_number\}`\}/)
   assert.match(invoices, /flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border/)

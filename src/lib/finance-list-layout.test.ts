@@ -45,7 +45,7 @@ test('Income, Expenses and Transactions render date-only values in the active UI
 
 test('Income and Expenses expose category filters while Expense Saved Views retain the selection', () => {
   assert.match(incomePage, /value=\{categoryFilter\} onChange=\{\(value\) => \{ setCategoryFilter\(value\); setSelectedIncomeIds\(\[\]\) \}\}/)
-  assert.match(expensesPage, /value=\{categoryFilter\} onChange=\{setCategoryFilter\}/)
+  assert.match(expensesPage, /value=\{categoryFilter\} onChange=\{\(value\) => \{ setCategoryFilter\(value\); setSelectedExpenseIds\(\[\]\) \}\}/)
   assert.match(expensesPage, /state=\{\{ searchQuery, categoryFilter,/)
   assert.match(expensesPage, /matchesOptionalDateRange\(expense\.date, filterFromDate, filterToDate\) && matchesSearch && \(!categoryFilter \|\| expense\.category === categoryFilter\)/)
 })

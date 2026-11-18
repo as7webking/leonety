@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { ArrowRightLeft, Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { expenseSchema, formatValidationError, type ExpenseForm } from '@/lib/validations'
@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch, matchesOptionalDateRange } from '@/lib/finance-ui'
+import { matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint } from '@/lib/finance-ui'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useLocalDraft } from '@/hooks/use-local-draft'
@@ -106,6 +106,7 @@ export default function ExpensesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const restoredDraftKeyRef = useRef<string | null>(null)
@@ -113,6 +114,7 @@ export default function ExpensesPage() {
   const { draft: expenseDraft, loading: expenseDraftLoading, save: saveExpenseDraft, discard: discardExpenseDraft } = useLocalDraft<ExpenseLocalDraft>('expense', currentCompany?.id)
   const categoryOptions = ['Food', 'Utilities', 'Rent', 'Other']
   const applySavedExpenseView = useCallback((view: ExpenseTableViewState) => {
+    setSelectedExpenseIds([])
     setSearchQuery(view.searchQuery)
     setCategoryFilter(view.categoryFilter)
     setGroupReportsByMonth(view.groupReportsByMonth)
@@ -143,6 +145,7 @@ export default function ExpensesPage() {
     if (formWorkspaceRef.current === nextWorkspaceId) return
     formWorkspaceRef.current = nextWorkspaceId
     restoredDraftKeyRef.current = null
+    setSelectedExpenseIds([])
     setEditingEntry(null)
     setShowForm(false)
     setCustomCategory('')
@@ -451,6 +454,7 @@ export default function ExpensesPage() {
     try {
       const { error } = await supabase.from('expenses').delete().eq('id', id).eq('company_id', currentCompany.id)
       if (error) throw error
+      setSelectedExpenseIds((current) => current.filter((selectedId) => selectedId !== id))
       loadExpenses()
       setSuccessMessage(t('expenses.deleted'))
       window.setTimeout(() => setSuccessMessage(''), 3000)
@@ -524,6 +528,28 @@ export default function ExpensesPage() {
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
   useEffect(() => setPage(1), [categoryFilter, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
+  const visibleExpenseIds = useMemo(() => paginatedExpenses.map((expense) => expense.id), [paginatedExpenses])
+  const selectedExpenseIdSet = useMemo(() => new Set(selectedExpenseIds), [selectedExpenseIds])
+  const allVisibleSelected = visibleExpenseIds.length > 0 && visibleExpenseIds.every((id) => selectedExpenseIdSet.has(id))
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    setSelectedExpenseIds((current) => {
+      const next = new Set(current)
+      for (const id of visibleExpenseIds) {
+        if (checked) next.add(id)
+        else next.delete(id)
+      }
+      return [...next]
+    })
+  }
+
+  const toggleExpenseSelection = (id: string, checked: boolean) => {
+    setSelectedExpenseIds((current) => checked
+      ? [...new Set([...current, id])]
+      : current.filter((currentId) => currentId !== id)
+    )
+  }
+
   const groupExpenses = (items: Expense[]) => items.reduce<Record<string, Expense[]>>((groups, expense) => {
     const key = expense.date.slice(0, 7)
     return {
@@ -532,8 +558,9 @@ export default function ExpensesPage() {
     }
   }, {})
   const displayGroups = groupReportsByMonth ? Object.entries(groupExpenses(paginatedExpenses)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', paginatedExpenses] as const]
-  const printGroups = (groupReportsByMonth ? Object.entries(groupExpenses(sortedExpenses)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', sortedExpenses] as const]).filter(([, groupItems]) => groupItems.length > 0)
-  const hasForeignCurrencySnapshots = sortedExpenses.some((expense) => expense.workspace_amount !== null && expense.workspace_amount !== undefined
+  const printableExpenses = selectFinanceRecordsForPrint(sortedExpenses, selectedExpenseIds)
+  const printGroups = (groupReportsByMonth ? Object.entries(groupExpenses(printableExpenses)).sort(([left], [right]) => sortDirection === 'asc' ? left.localeCompare(right) : right.localeCompare(left)) : [['all', printableExpenses] as const]).filter(([, groupItems]) => groupItems.length > 0)
+  const hasForeignCurrencySnapshots = printableExpenses.some((expense) => expense.workspace_amount !== null && expense.workspace_amount !== undefined
     && normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(expense.workspace_currency ?? currentCompany?.currency ?? 'USD'))
   const formatMonthLabel = (monthKey: string) => {
     if (monthKey === 'all') return ''
@@ -553,7 +580,7 @@ export default function ExpensesPage() {
   }
 
   const handlePrint = () => {
-    if (sortedExpenses.length === 0) {
+    if (printableExpenses.length === 0) {
       setErrorMessage(t('time.noDataPrint'))
       window.setTimeout(() => setErrorMessage(''), 3000)
       return
@@ -711,13 +738,13 @@ export default function ExpensesPage() {
       <FinanceToolbar
         filtersLabel={t('finance.filters')}
         utilitiesLabel={t('finance.utilities')}
-        primaryAction={expenses.length > 0 ? <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button> : undefined}
+        primaryAction={expenses.length > 0 ? <Button variant="outline" onClick={handlePrint} size="sm">{selectedExpenseIds.length > 0 ? `${t('common.print')} · ${t('finance.selectedCount').replace('{count}', String(printableExpenses.length))}` : t('common.print')}</Button> : undefined}
         filters={expenses.length > 0 ? <>
-          <FinanceSearchInput value={searchQuery} onChange={setSearchQuery} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
+          <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setSelectedExpenseIds([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
           <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
-          <input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterFrom')} />
-          <input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterTo')} />
-          <AppSelect value={categoryFilter} onChange={setCategoryFilter} options={[{ value: '', label: t('transactions.allCategories') }, ...availableExpenseCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('common.category')} className="w-full lg:w-48" />
+          <input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setSelectedExpenseIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterFrom')} />
+          <input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setSelectedExpenseIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterTo')} />
+          <AppSelect value={categoryFilter} onChange={(value) => { setCategoryFilter(value); setSelectedExpenseIds([]) }} options={[{ value: '', label: t('transactions.allCategories') }, ...availableExpenseCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('common.category')} className="w-full lg:w-48" />
         </> : undefined}
         sortingLabel={t('common.sortBy')}
         sorting={expenses.length > 0 ? <>
@@ -779,15 +806,19 @@ export default function ExpensesPage() {
         ))}
 
         <p className="mt-2 text-right font-semibold">
-          {t('common.total')}: {formatWorkspaceTotals(sortedExpenses)}
-          {sortedExpenses.some((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null) && (
-            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(sortedExpenses.filter((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null).length))}</span>
+          {t('common.total')}: {formatWorkspaceTotals(printableExpenses)}
+          {printableExpenses.some((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null) && (
+            <span className="mt-1 block text-xs font-normal text-amber-800">{t('currencySnapshot.incompleteTotal').replace('{count}', String(printableExpenses.filter((expense) => normalizeCurrencyCode(expense.currency) !== normalizeCurrencyCode(currentCompany.currency ?? 'USD') && getWorkspaceAmount(expense) === null).length))}</span>
           )}
         </p>
       </div>
 
       {successMessage && <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-green-800">{successMessage}</div>}
       {errorMessage && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">{errorMessage}</div>}
+
+      {sortedExpenses.length > 0 && (
+        <FinanceSelectionBar checked={allVisibleSelected} onCheckedChange={toggleVisibleSelection} selectVisibleLabel={t('finance.selectVisible')} selectedLabel={t('finance.selectedCount').replace('{count}', String(selectedExpenseIds.length))} />
+      )}
 
       {showForm && !editingEntry && (
         <Card className="mb-6">
@@ -879,7 +910,7 @@ export default function ExpensesPage() {
           {displayGroups.map(([groupKey, groupItems]) => (
             <div key={groupKey} className="space-y-4">
               {groupReportsByMonth && <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{formatMonthLabel(groupKey)}</h2>}
-              <FinanceListShell titleLabel={t('transactions.titleLabel')} categoryLabel={t('common.category')} dateLabel={t('common.date')} amountLabel={t('common.amount')} actionsLabel={t('finance.actions')}>
+              <FinanceListShell titleLabel={t('transactions.titleLabel')} categoryLabel={t('common.category')} dateLabel={t('common.date')} amountLabel={t('common.amount')} selectionLabel={t('transactions.select')} actionsLabel={t('finance.actions')}>
               {groupItems.map((expense) => (
             <div key={expense.id}>
               <FinanceListRow
@@ -900,6 +931,7 @@ export default function ExpensesPage() {
                   ? { rate: expense.exchange_rate, source: expense.exchange_rate_source, rateDate: expense.exchange_rate_date, fromCurrency: normalizeCurrencyCode(expense.currency), toCurrency: normalizeCurrencyCode(expense.workspace_currency ?? currentCompany.currency), locale: intlLocale, label: t('currencySnapshot.rate') }
                   : undefined}
                 actions={<><Button variant="outline" size="icon" onClick={() => handleEdit(expense)} aria-label={`${t('common.edit')} ${expense.title || expense.description}`} title={t('common.edit')}><Edit className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => void handleDuplicate(expense)} aria-label={`${t('finance.duplicate')} ${expense.title || expense.description}`} title={t('finance.duplicate')}><Copy className="h-4 w-4" /></Button><Button variant="destructive" size="icon" onClick={() => setDeleteId(expense.id)} aria-label={`${t('common.delete')} ${expense.title || expense.description}`} title={t('common.delete')}><Trash2 className="h-4 w-4" /></Button><Button asChild variant="ghost" size="icon"><Link href="/app/transactions" aria-label={t('nav.transactions')} title={t('nav.transactions')}><ArrowRightLeft className="h-4 w-4" /></Link></Button></>}
+                selection={<label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-slate-200"><input type="checkbox" checked={selectedExpenseIdSet.has(expense.id)} onChange={(event) => toggleExpenseSelection(expense.id, event.target.checked)} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" /><span className="sr-only">{t('transactions.select')} {expense.title || expense.description}</span></label>}
               />
             {editingEntry?.id === expense.id && (
               <Card className="border-primary/30 bg-slate-50">
