@@ -40,6 +40,25 @@ test('failed related-record requests cannot render a false empty history', () =>
   assert.match(clientDetail, /activityLoadFailed \? <RelatedDataUnavailable t=\{t\} \/> : <ActivityList/)
 })
 
+test('recorded payments are shown only from workspace-scoped invoice payment rows', () => {
+  const paymentQuery = clientDetail.match(/\.from\('invoice_payments'\)[\s\S]*?\.in\('invoice_id',[^\n]+/)?.[0]
+  assert.ok(paymentQuery, 'missing invoice payment query')
+  assert.match(paymentQuery, /\.eq\('company_id', currentCompany\.id\)/)
+  assert.match(paymentQuery, /\.in\('invoice_id', invoiceRows\.map\(\(invoice\) => invoice\.id\)\)/)
+  assert.match(clientDetail, /invoice\.recorded_payment_amount = paymentTotals\.get\(invoice\.id\)/)
+  assert.match(clientDetail, /invoiceCurrencies\.get\(payment\.invoice_id\) !== String\(payment\.currency \?\? ''\)\.toUpperCase\(\)/)
+  assert.match(clientDetail, /setRelatedDataError\(true\)[\s\S]{0,80}setInvoiceLoadFailed\(true\)/)
+  assert.match(clientDetail, /invoices\.filter\(\(invoice\) => \(invoice\.recorded_payment_amount \?\? 0\) > 0\)/)
+  assert.doesNotMatch(clientDetail.match(/function RecordedPayments[\s\S]*?\n}/)?.[0] ?? '', /status === 'paid'/)
+})
+
+test('client data is hidden immediately when the workspace or client scope changes', () => {
+  assert.match(clientDetail, /const scopeKey = currentCompany && params\.id \? `\$\{currentCompany\.id\}:\$\{params\.id\}` : ''/)
+  assert.match(clientDetail, /loadedScope !== scopeKey/)
+  assert.match(clientDetail, /setLoadedScope\(`\$\{companyId\}:\$\{params\.id\}`\)/)
+  assert.match(clientDetail, /if \(clientResult\.error\) \{\s*if \(activeRequest !== requestId\.current\) return\s*setClient\(null\)/)
+})
+
 test('invoice and contract creation preserve client context and verify it in the workspace', () => {
   assert.match(clientDetail, /buildClientInvoicesHref\(client\.id, \{ create: true \}\)/)
   assert.match(clientDetail, /\/app\/contracts\/new\?clientId=\$\{encodeURIComponent\(client\.id\)\}/)

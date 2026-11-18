@@ -30,6 +30,7 @@ interface InvoiceRow {
   status: string
   created_at: string
   paid_amount?: number
+  recorded_payment_amount?: number
 }
 
 interface ContractRow {
@@ -51,6 +52,12 @@ interface ClientTransactionRow {
   currency: string
   date: string
   invoice_id: string | null
+}
+
+interface InvoicePaymentRow {
+  invoice_id: string
+  amount: number | string
+  currency: string
 }
 
 function sumInvoices(invoices: InvoiceRow[], kind: 'paid' | 'unpaid') {
@@ -76,6 +83,7 @@ export default function ClientDetailPage() {
   const [contracts, setContracts] = useState<ContractRow[]>([])
   const [transactions, setTransactions] = useState<ClientTransactionRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadedScope, setLoadedScope] = useState('')
   const [editing, setEditing] = useState(false)
   const [tab, setTab] = useState<DetailTab>('overview')
   const [error, setError] = useState('')
@@ -148,6 +156,8 @@ export default function ClientDetailPage() {
 
     if (clientResult.error) {
       if (activeRequest !== requestId.current) return
+      setClient(null)
+      setLoadedScope(`${companyId}:${params.id}`)
       setError(t('clients.crm.loadFailed'))
       setLoading(false)
       return
@@ -166,17 +176,34 @@ export default function ClientDetailPage() {
     }
 
     const invoiceRows = invoiceResult.error ? [] : (invoiceResult.data ?? []) as InvoiceRow[]
+    let paymentRows: InvoicePaymentRow[] = []
     if (invoiceRows.length > 0) {
       const paymentResult = await supabase
         .from('invoice_payments')
-        .select('invoice_id, amount')
+        .select('invoice_id, amount, currency')
         .eq('company_id', currentCompany.id)
         .in('invoice_id', invoiceRows.map((invoice) => invoice.id))
       if (activeRequest !== requestId.current || currentCompany?.id !== companyId) return
       if (!paymentResult.error) {
         const paymentTotals = new Map<string, number>()
-        for (const payment of paymentResult.data ?? []) paymentTotals.set(payment.invoice_id, (paymentTotals.get(payment.invoice_id) ?? 0) + Number(payment.amount || 0))
-        for (const invoice of invoiceRows) invoice.paid_amount = paymentTotals.get(invoice.id)
+        paymentRows = (paymentResult.data ?? []) as InvoicePaymentRow[]
+        const invoiceCurrencies = new Map(invoiceRows.map((invoice) => [invoice.id, String(invoice.currency ?? '').toUpperCase()]))
+        const hasInvalidPayment = paymentRows.some((payment) => (
+          invoiceCurrencies.get(payment.invoice_id) !== String(payment.currency ?? '').toUpperCase()
+          || !Number.isFinite(Number(payment.amount))
+          || Number(payment.amount) < 0
+        ))
+        if (hasInvalidPayment) {
+          setRelatedDataError(true)
+          setInvoiceLoadFailed(true)
+          setError(t('clients.crm.relatedDataLoadFailed'))
+        } else {
+          for (const payment of paymentRows) paymentTotals.set(payment.invoice_id, (paymentTotals.get(payment.invoice_id) ?? 0) + Number(payment.amount || 0))
+          for (const invoice of invoiceRows) {
+            invoice.recorded_payment_amount = paymentTotals.get(invoice.id)
+            invoice.paid_amount = invoice.recorded_payment_amount
+          }
+        }
       } else {
         setRelatedDataError(true)
         setInvoiceLoadFailed(true)
@@ -204,6 +231,7 @@ export default function ClientDetailPage() {
       ...(incomeResult.error ? [] : (incomeResult.data ?? []).map((row) => ({ ...row, type: 'income' as const }))),
       ...(expenseResult.error ? [] : (expenseResult.data ?? []).map((row) => ({ ...row, type: 'expense' as const }))),
     ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()) as ClientTransactionRow[])
+    setLoadedScope(`${companyId}:${params.id}`)
     setLoading(false)
   }, [currentCompany, params.id, supabase, t])
 
@@ -241,7 +269,8 @@ export default function ClientDetailPage() {
     else await loadClient()
   }
 
-  if (companyLoading || loading) return <PageContainer><LoadingSkeleton /></PageContainer>
+  const scopeKey = currentCompany && params.id ? `${currentCompany.id}:${params.id}` : ''
+  if (companyLoading || loading || (currentCompany && loadedScope !== scopeKey)) return <PageContainer><LoadingSkeleton /></PageContainer>
   if (!currentCompany) return <PageContainer><EmptyState icon={Building2} title={t('common.noWorkspaceSelected')} description={t('dashboard.noWorkspace')} /></PageContainer>
   if (currentCompany.type !== 'business') return <PageContainer><EmptyState icon={Building2} title={t('common.businessOnlyTitle')} description={t('common.businessOnlyDescription')} /></PageContainer>
   if (!client) return <PageContainer><EmptyState title={t('clients.crm.notFound')} description={error || t('clients.crm.notFoundDescription')} /></PageContainer>
@@ -281,7 +310,7 @@ export default function ClientDetailPage() {
             <Metric label={t('clients.crm.invoiceCount')} value={relatedDataError ? '—' : String(invoices.length)} />
             <Metric label={t('clients.crm.contractCount')} value={relatedDataError ? '—' : String(contracts.length)} />
           </div>
-          {!relatedDataError && <OutstandingInvoices invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} />}
+          {!relatedDataError && <div className="grid gap-6 lg:grid-cols-2"><OutstandingInvoices invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} /><RecordedPayments invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} /></div>}
           <div className="grid gap-6 lg:grid-cols-2">
             <Card><CardHeader><CardTitle>{t('clients.crm.information')}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm text-slate-700">
               {client.email && <p className="flex min-w-0 gap-2"><Mail className="h-4 w-4 shrink-0" /><span className="break-all">{client.email}</span></p>}
@@ -323,6 +352,12 @@ function OutstandingInvoices({ invoices, clientId, locale, t, currencySymbolPosi
     const remaining = Math.max(0, Number(invoice.total || 0) - (invoice.paid_amount ?? 0))
     return <li key={invoice.id} className="flex min-w-0 flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"><div className="min-w-0"><Link className="break-all text-sm font-medium text-slate-900 hover:text-blue-700 hover:underline" href={buildClientInvoiceHref(clientId, invoice.id)}>{invoice.invoice_number}</Link><p className="text-xs text-slate-500">{t(`invoices.status.${invoice.status}`)} · {new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(invoice.issue_date))}</p></div><p className="font-semibold tabular-nums">{formatCurrencyGroups({ [invoice.currency]: remaining }, getIntlLocale(locale), 'EUR', currencySymbolPosition)}</p></li>
   })}</ul>}</CardContent></Card>
+}
+
+function RecordedPayments({ invoices, clientId, locale, t, currencySymbolPosition }: { invoices: InvoiceRow[]; clientId: string; locale: Locale; t: (key: string) => string; currencySymbolPosition: import('@/lib/currency').CurrencySymbolPosition }) {
+  const recorded = invoices.filter((invoice) => (invoice.recorded_payment_amount ?? 0) > 0)
+
+  return <Card><CardHeader><CardTitle>{t('clients.crm.recordedPayments')}</CardTitle></CardHeader><CardContent>{recorded.length === 0 ? <p className="text-sm text-slate-500">{t('clients.crm.noRecordedPayments')}</p> : <ul className="divide-y divide-slate-100">{recorded.map((invoice) => <li key={invoice.id} className="flex min-w-0 items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><Link className="min-w-0 break-all text-sm font-medium text-slate-900 hover:text-blue-700 hover:underline" href={buildClientInvoiceHref(clientId, invoice.id)}>{invoice.invoice_number}</Link><span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrencyGroups({ [invoice.currency]: invoice.recorded_payment_amount ?? 0 }, getIntlLocale(locale), invoice.currency, currencySymbolPosition)}</span></li>)}</ul>}</CardContent></Card>
 }
 
 function ActivityList({ items, t, locale }: { items: Array<{ id: string; date: string; label: string; detail?: string; href?: string }>; t: (key: string) => string; locale: Locale }) {
