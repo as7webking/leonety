@@ -819,6 +819,7 @@ export default function IncomePage() {
       <FinanceToolbar
         filtersLabel={t('finance.filters')}
         utilitiesLabel={t('finance.utilities')}
+        primaryAction={incomes.length > 0 ? <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button> : undefined}
         filters={incomes.length > 0 ? <>
           <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setSelectedIncomeIds([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
           <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
@@ -835,7 +836,6 @@ export default function IncomePage() {
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>{importing ? t('transactions.importing') : t('common.importCsv')}</Button>
           {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
           {hasForeignCurrencySnapshots && <AppSelect value={printCurrencyMode} onChange={(value) => setPrintCurrencyMode(value as 'workspace' | 'both')} options={[{ value: 'workspace', label: t('currencySnapshot.workspaceOnly') }, { value: 'both', label: t('currencySnapshot.originalAndWorkspace') }]} ariaLabel={t('common.currency')} className="w-full sm:w-56" />}
-          {incomes.length > 0 && <Button variant="outline" onClick={handlePrint} size="sm">{t('common.print')}</Button>}
         </>}
       />
 

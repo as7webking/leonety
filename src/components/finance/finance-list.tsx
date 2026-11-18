@@ -34,14 +34,16 @@ interface FinanceToolbarProps {
   filtersLabel: string
   sortingLabel?: string
   utilitiesLabel: string
+  primaryAction?: ReactNode
   filters?: ReactNode
   sorting?: ReactNode
   utilities?: ReactNode
 }
 
-export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, filters, sorting, utilities }: FinanceToolbarProps) {
+export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, primaryAction, filters, sorting, utilities }: FinanceToolbarProps) {
   return (
     <section className="mb-5 space-y-3" aria-label={filtersLabel}>
+      {primaryAction && <div className="flex justify-end">{primaryAction}</div>}
       <div className="grid grid-cols-2 gap-2 lg:block lg:space-y-3">
         {filters && (
           <details className="group rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
@@ -182,14 +184,14 @@ interface FinanceSelectionBarProps {
 export function FinanceSelectionBar({ checked, onCheckedChange, selectVisibleLabel, selectedLabel, children }: FinanceSelectionBarProps) {
   return (
     <div className="mb-4 flex min-w-0 flex-wrap items-center justify-end gap-2 rounded-md border border-slate-200 bg-white px-2 py-1">
-      <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+      {children}
+      <span className="text-sm text-slate-500">{selectedLabel}</span>
+      <label className="ml-auto flex min-h-11 shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-700">
+        <span>{selectVisibleLabel}</span>
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white">
           <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} className="h-5 w-5 accent-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2" />
         </span>
-        {selectVisibleLabel}
       </label>
-      <span className="text-sm text-slate-500">{selectedLabel}</span>
-      {children}
     </div>
   )
 }

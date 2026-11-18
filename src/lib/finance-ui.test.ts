@@ -111,6 +111,41 @@ test('finance toolbars separate utilities, filters and sorting without changing 
   assert.match(component, /sortingLabel\}/)
 })
 
+test('Income and Expenses keep printing visible while preserving existing print currency formats', () => {
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /primaryAction=\{\w+\.length > 0 \? <Button variant="outline" onClick=\{handlePrint\} size="sm">\{t\('common\.print'\)\}<\/Button> : undefined\}/)
+    assert.match(source, /printCurrencyMode, setPrintCurrencyMode/)
+    assert.match(source, /value: 'workspace', label: t\('currencySnapshot\.workspaceOnly'\)/)
+    assert.match(source, /value: 'both', label: t\('currencySnapshot\.originalAndWorkspace'\)/)
+    assert.match(source, /window\.print\(\)/)
+    assert.match(source, /createHistoricalTransactionFxSnapshot/)
+    assert.match(source, /\.from\('\w+'\)\.delete\(\)\.eq\('id', id\)\.eq\('company_id', currentCompany\.id\)/)
+  }
+})
+
+test('bulk selection label is left of the right-aligned checkbox without changing selection actions', () => {
+  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
+  const bar = component.slice(component.indexOf('export function FinanceSelectionBar'), component.indexOf('interface FinanceEmptyStateProps'))
+  assert.ok(bar.indexOf('{children}') < bar.indexOf('{selectedLabel}'))
+  assert.ok(bar.indexOf('{selectedLabel}') < bar.indexOf('{selectVisibleLabel}'))
+  assert.ok(bar.indexOf('{selectVisibleLabel}') < bar.indexOf('<input type="checkbox"'))
+  assert.match(bar, /ml-auto flex min-h-11 shrink-0[\s\S]*whitespace-nowrap/)
+  assert.match(bar, /checked=\{checked\} onChange=\{\(event\) => onCheckedChange\(event\.target\.checked\)\}/)
+})
+
+test('Income and Expenses retain separate input contracts while keeping CRUD and FX handlers', () => {
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /const handleSubmit = async/)
+    assert.match(source, /const handleEdit = \(/)
+    assert.match(source, /const handleDuplicate = async/)
+    assert.match(source, /const handleDelete = async/)
+    assert.match(source, /transactionFxInputsChanged\(editingEntry, validatedData\)/)
+    assert.match(source, /fxResult\?\.snapshot/)
+  }
+})
+
 test('workspace selector truncates long names while preserving their full option label', () => {
   const selector = readFileSync(new URL('../components/app-select.tsx', import.meta.url), 'utf8')
   const workspace = readFileSync(new URL('../components/app-shell/workspace-selector-client.tsx', import.meta.url), 'utf8')
