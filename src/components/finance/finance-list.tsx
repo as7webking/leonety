@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { Info, Search, SlidersHorizontal, Wrench } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
-import { formatHistoricalRateDetail } from '@/lib/finance-ui'
+import { FINANCE_PAGE_SIZES, formatHistoricalRateDetail } from '@/lib/finance-ui'
 import { cn } from '@/lib/utils'
 
 export const FINANCE_PAGE_SIZE = 25
@@ -232,7 +232,7 @@ export function FinancePagination({ page, totalPages, totalItems, label, previou
         {pageSize !== undefined && onPageSizeChange && <label className="flex items-center gap-2 text-sm text-slate-600">
           <span>{pageSizeLabel}</span>
           <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+            {FINANCE_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
           </select>
         </label>}
         {totalPages > 1 && <div className="flex gap-2">

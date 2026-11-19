@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowDownCircle, ArrowUp, ArrowUpCircle, Building2, Copy, GripVertical, Printer, Plus } from 'lucide-react'
-import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
+import { FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceToolbar, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppSelect } from '@/components/app-select'
@@ -18,7 +18,7 @@ import { createHistoricalTransactionFxSnapshot, getMoneyConversionPreview } from
 import { parseCsv } from '@/lib/csv'
 import { createClient } from '@/lib/supabase-client'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch } from '@/lib/finance-ui'
+import { matchesFinanceSearch, normalizeFinancePageSize, paginateFinanceRecords } from '@/lib/finance-ui'
 import { buildKassenbuch, getKassenbuchText, isFullCalendarMonthSelected } from '@/lib/kassenbuch'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
@@ -94,6 +94,7 @@ interface TransactionsMemory {
 interface TransactionsViewMemory {
   searchQuery: string
   page: number
+  pageSize?: number
   sortOrder: TransactionOrder
   sortBy?: 'date' | 'amount'
   sortDirection?: 'asc' | 'desc'
@@ -149,6 +150,7 @@ export default function TransactionsPage() {
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState(() => queryState?.get('txSearch') ?? initialViewMemory?.searchQuery ?? '')
   const [page, setPage] = useState(() => Math.max(1, Number(queryState?.get('txPage')) || initialViewMemory?.page || 1))
+  const [pageSize, setPageSize] = useState(() => normalizeFinancePageSize(queryState?.get('txPageSize') ?? initialViewMemory?.pageSize))
   const [bulkEdit, setBulkEdit] = useState({
     category: { enabled: false, value: '' },
     date: { enabled: false, value: '' },
@@ -409,6 +411,7 @@ export default function TransactionsPage() {
     setAppViewMemory<TransactionsViewMemory>(`transactions-view:${currentCompany.id}`, {
       searchQuery,
       page,
+      pageSize,
       sortOrder,
       groupOrder,
       dayOrder,
@@ -417,13 +420,14 @@ export default function TransactionsPage() {
       printFromDate,
       printToDate,
     })
-  }, [currentCompany, page, printFromDate, printToDate, searchQuery, sortOrder, groupOrder, dayOrder, typeFilter, categoryFilter])
+  }, [currentCompany, page, pageSize, printFromDate, printToDate, searchQuery, sortOrder, groupOrder, dayOrder, typeFilter, categoryFilter])
 
   useEffect(() => {
     const url = new URL(window.location.href)
     const values: Record<string, string> = {
       txSearch: searchQuery,
       txPage: String(page),
+      txPageSize: String(pageSize),
       txSort: sortOrder,
       txGroup: groupOrder,
       txDay: dayOrder,
@@ -433,14 +437,14 @@ export default function TransactionsPage() {
       txTo: printToDate,
     }
     for (const [key, value] of Object.entries(values)) {
-      if (value && !(key === 'txPage' && value === '1') && !(key === 'txGroup' && value === 'chronological') && !(key === 'txDay' && value === 'chronological') && !(key === 'txType' && value === 'all')) {
+      if (value && !(key === 'txPage' && value === '1') && !(key === 'txPageSize' && value === '25') && !(key === 'txGroup' && value === 'chronological') && !(key === 'txDay' && value === 'chronological') && !(key === 'txType' && value === 'all')) {
         url.searchParams.set(key, value)
       } else {
         url.searchParams.delete(key)
       }
     }
     window.history.replaceState(window.history.state, '', url)
-  }, [page, searchQuery, sortOrder, groupOrder, dayOrder, typeFilter, categoryFilter, printFromDate, printToDate])
+  }, [page, pageSize, searchQuery, sortOrder, groupOrder, dayOrder, typeFilter, categoryFilter, printFromDate, printToDate])
 
   useEffect(() => {
     if (!currentCompany) return
@@ -859,8 +863,9 @@ export default function TransactionsPage() {
   const transactionCategories = useMemo(() => Array.from(new Set(
     transactions.map((transaction) => transaction.category).filter((category): category is string => Boolean(category))
   )).sort((left, right) => left.localeCompare(right, intlLocale, { sensitivity: 'base' })), [transactions, intlLocale])
-  const totalPages = Math.max(1, Math.ceil(sortedTransactions.length / FINANCE_PAGE_SIZE))
-  const paginatedTransactions = useMemo(() => sortedTransactions.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedTransactions])
+  const financePage = useMemo(() => paginateFinanceRecords(sortedTransactions, page, pageSize), [page, pageSize, sortedTransactions])
+  const totalPages = financePage.totalPages
+  const paginatedTransactions = financePage.items
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
   const visibleTransactionKeys = useMemo(() => paginatedTransactions.map(getSelectionKey), [paginatedTransactions])
   const selectedTransactionSet = useMemo(() => new Set(selectedTransactions), [selectedTransactions])
@@ -1095,8 +1100,8 @@ export default function TransactionsPage() {
         utilitiesLabel={t('finance.utilities')}
         filters={<>
           <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setPage(1); setSelectedTransactions([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
-          <AppSelect value={typeFilter} onChange={(value) => { setTypeFilter(value as 'all' | 'income' | 'expense'); setPage(1) }} options={[{ value: 'all', label: t('transactions.allTypes') }, { value: 'income', label: t('income.title') }, { value: 'expense', label: t('expenses.title') }]} ariaLabel={t('transactions.typeFilter')} className="w-full lg:w-40" />
-          <AppSelect value={categoryFilter} onChange={(value) => { setCategoryFilter(value); setPage(1) }} options={[{ value: '', label: t('transactions.allCategories') }, ...transactionCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('transactions.categoryFilter')} className="w-full lg:w-44" />
+          <AppSelect value={typeFilter} onChange={(value) => { setTypeFilter(value as 'all' | 'income' | 'expense'); setPage(1); setSelectedTransactions([]) }} options={[{ value: 'all', label: t('transactions.allTypes') }, { value: 'income', label: t('income.title') }, { value: 'expense', label: t('expenses.title') }]} ariaLabel={t('transactions.typeFilter')} className="w-full lg:w-40" />
+          <AppSelect value={categoryFilter} onChange={(value) => { setCategoryFilter(value); setPage(1); setSelectedTransactions([]) }} options={[{ value: '', label: t('transactions.allCategories') }, ...transactionCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('transactions.categoryFilter')} className="w-full lg:w-44" />
         </>}
         sorting={<>
           <AppSelect value={sortOrder} onChange={(value) => { setSortOrder(value as TransactionOrder); setPage(1) }} options={(['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'title-asc', 'title-desc'] as const).map((value) => ({ value, label: t(`transactions.order.${value}`) }))} ariaLabel={t('transactions.order')} className="w-full lg:w-48" />
@@ -1759,7 +1764,7 @@ export default function TransactionsPage() {
           })}
         </FinanceListShell>
       )}
-      {sortedTransactions.length > 0 && <FinancePagination page={page} totalPages={totalPages} totalItems={sortedTransactions.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} />}
+      {sortedTransactions.length > 0 && <FinancePagination page={financePage.page} totalPages={totalPages} totalItems={sortedTransactions.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} pageSize={pageSize} pageSizeLabel={t('finance.pageSize')} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />}
     </PageContainer>
   )
 }

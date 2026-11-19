@@ -17,6 +17,20 @@ export function selectFinanceRecordsForPrint<T extends { id: string }>(records: 
 
 export type FinanceSortBy = 'date' | 'amount' | 'title'
 export type FinanceSortDirection = 'asc' | 'desc'
+export const FINANCE_PAGE_SIZES = [10, 25, 50, 100] as const
+
+export function normalizeFinancePageSize(value: unknown) {
+  const size = typeof value === 'string' ? Number(value) : value
+  return typeof size === 'number' && FINANCE_PAGE_SIZES.includes(size as (typeof FINANCE_PAGE_SIZES)[number]) ? size : 25
+}
+
+export function paginateFinanceRecords<T>(records: readonly T[], requestedPage: number, requestedPageSize: unknown) {
+  const pageSize = normalizeFinancePageSize(requestedPageSize)
+  const totalPages = Math.max(1, Math.ceil(records.length / pageSize))
+  const page = Math.min(Math.max(1, Math.trunc(requestedPage) || 1), totalPages)
+  const start = (page - 1) * pageSize
+  return { items: records.slice(start, start + pageSize), page, pageSize, totalPages }
+}
 
 export function sortFinanceRecords<T extends { id: string; date: string; amount: number | string; title?: string | null; description?: string | null }>(
   records: T[],

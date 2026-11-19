@@ -85,6 +85,20 @@ test('transaction page separates search/filtering, sorting, bulk actions, and fu
   assert.match(financeList, /aria-expanded=\{conversionDetailsOpen\}[\s\S]*aria-controls=\{conversionDetailsId\}/)
   assert.match(financeList, /<p id=\{conversionDetailsId\} role="note" hidden=\{!conversionDetailsOpen\}/)
   assert.match(source, /selectionLabel=\{t\('transactions\.select'\)\}/)
+  assert.match(source, /paginateFinanceRecords\(sortedTransactions, page, pageSize\)/)
+  assert.match(source, /pageSizeLabel=\{t\('finance\.pageSize'\)\}/)
+  assert.match(source, /setTypeFilter\(value as 'all' \| 'income' \| 'expense'\); setPage\(1\); setSelectedTransactions\(\[\]\)/)
+  assert.match(source, /setCategoryFilter\(value\); setPage\(1\); setSelectedTransactions\(\[\]\)/)
+  assert.match(source, /txPageSize: String\(pageSize\)/)
+})
+
+test('transaction selection is current-page visible selection and remains workspace-local', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
+  assert.match(source, /const visibleTransactionKeys = useMemo\(\(\) => paginatedTransactions\.map\(getSelectionKey\)/)
+  assert.match(source, /visibleTransactionKeys\.forEach\(\(key\) => checked \? next\.add\(key\) : next\.delete\(key\)\)/)
+  assert.match(source, /\.eq\('company_id', currentCompany\.id\)/)
+  assert.match(source, /setSelectedTransactions\(\[\]\)[\s\S]*setLoading\(Boolean\(workspaceId\)\)/)
 })
 
 test('presentation ordering cannot change Kassenbuch balances or totals', () => {

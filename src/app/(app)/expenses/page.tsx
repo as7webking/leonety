@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint, sortFinanceRecords } from '@/lib/finance-ui'
+import { matchesFinanceSearch, matchesOptionalDateRange, paginateFinanceRecords, selectFinanceRecordsForPrint, sortFinanceRecords } from '@/lib/finance-ui'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useLocalDraft } from '@/hooks/use-local-draft'
@@ -72,6 +72,9 @@ export default function ExpensesPage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const currentWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  currentWorkspaceIdRef.current = currentCompany?.id ?? null
+  const expenseLoadRequestRef = useRef(0)
   const { isOnline, userId } = useOfflineMode()
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
@@ -197,13 +200,19 @@ export default function ExpensesPage() {
   }, [currentCompany])
 
   const loadExpenses = useCallback(async () => {
+    const requestId = ++expenseLoadRequestRef.current
     if (!currentCompany) {
+      setExpenses([])
+      setSelectedExpenseIds([])
       setLoading(false)
       return
     }
 
     try {
       setLoading(true)
+      setErrorMessage('')
+      setExpenses([])
+      setSelectedExpenseIds([])
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
       const { data, error } = await supabase
@@ -213,12 +222,14 @@ export default function ExpensesPage() {
         .order('date', { ascending: false })
 
       if (error) throw error
+      if (requestId !== expenseLoadRequestRef.current || currentWorkspaceIdRef.current !== currentCompany.id) return
       setExpenses((data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
     } catch (error) {
+      if (requestId !== expenseLoadRequestRef.current || currentWorkspaceIdRef.current !== currentCompany.id) return
       console.error('Failed to load expenses:', error)
       setErrorMessage(t('expenses.loadFailed'))
     } finally {
-      setLoading(false)
+      if (requestId === expenseLoadRequestRef.current && currentWorkspaceIdRef.current === currentCompany?.id) setLoading(false)
     }
   }, [currentCompany, supabase, t])
 
@@ -521,8 +532,9 @@ export default function ExpensesPage() {
     })
     return sortFinanceRecords(filtered, sortBy, sortDirection, intlLocale)
   }, [categoryFilter, expenses, filterFromDate, filterToDate, intlLocale, searchQuery, sortBy, sortDirection])
-  const totalPages = Math.max(1, Math.ceil(sortedExpenses.length / pageSize))
-  const paginatedExpenses = useMemo(() => sortedExpenses.slice((page - 1) * pageSize, page * pageSize), [page, pageSize, sortedExpenses])
+  const financePage = useMemo(() => paginateFinanceRecords(sortedExpenses, page, pageSize), [page, pageSize, sortedExpenses])
+  const totalPages = financePage.totalPages
+  const paginatedExpenses = financePage.items
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
   useEffect(() => setPage(1), [categoryFilter, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
@@ -953,7 +965,7 @@ export default function ExpensesPage() {
               </FinanceListShell>
             </div>
           ))}
-          <FinancePagination page={page} totalPages={totalPages} totalItems={sortedExpenses.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} pageSize={pageSize} pageSizeLabel={t('finance.pageSize')} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
+          <FinancePagination page={financePage.page} totalPages={totalPages} totalItems={sortedExpenses.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} pageSize={pageSize} pageSizeLabel={t('finance.pageSize')} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
         </div>
       )}
       <ConfirmDialog

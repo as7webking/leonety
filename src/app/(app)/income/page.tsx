@@ -21,7 +21,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { IncomeBulkTitleDialog } from '@/components/income-bulk-title-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint, sortFinanceRecords } from '@/lib/finance-ui'
+import { matchesFinanceSearch, matchesOptionalDateRange, paginateFinanceRecords, selectFinanceRecordsForPrint, sortFinanceRecords } from '@/lib/finance-ui'
 import { applyIncomeTitleToSelection } from '@/lib/income-bulk-title'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
@@ -98,6 +98,9 @@ export default function IncomePage() {
   const searchParams = useSearchParams()
   const [supabase] = useState(() => createClient())
   const { currentCompany, loading: companyLoading } = useCompany()
+  const currentWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  currentWorkspaceIdRef.current = currentCompany?.id ?? null
+  const incomeLoadRequestRef = useRef(0)
   const { isOnline } = useOfflineMode()
   const { locale, t } = useI18n()
   const intlLocale = getIntlLocale(locale)
@@ -230,13 +233,22 @@ export default function IncomePage() {
   }, [currentCompany])
 
   const loadIncomes = useCallback(async () => {
+    const requestId = ++incomeLoadRequestRef.current
     if (!currentCompany) {
+      setIncomes([])
+      setClients([])
+      setInvoices([])
+      setSelectedIncomeIds([])
       setLoading(false)
       return
     }
 
     try {
       setLoading(true)
+      setErrorMessage('')
+      setIncomes([])
+      setClients([])
+      setInvoices([])
       setSelectedIncomeIds([])
       setFormData((prev) => ({ ...prev, currency: normalizeCurrencyCode(currentCompany.currency ?? 'USD') }))
 
@@ -249,14 +261,16 @@ export default function IncomePage() {
       if (incomeResult.error) throw incomeResult.error
       if (clientResult.error) throw clientResult.error
       if (invoiceResult.error) throw invoiceResult.error
+      if (requestId !== incomeLoadRequestRef.current || currentWorkspaceIdRef.current !== currentCompany.id) return
       setIncomes((incomeResult.data ?? []).map((item) => ({ ...item, amount: Number(item.amount) })))
       setClients((clientResult.data ?? []) as RelatedClient[])
       setInvoices((invoiceResult.data ?? []) as RelatedInvoice[])
     } catch (error) {
+      if (requestId !== incomeLoadRequestRef.current || currentWorkspaceIdRef.current !== currentCompany.id) return
       console.error('Failed to load incomes:', error)
       setErrorMessage(t('income.loadFailed'))
     } finally {
-      setLoading(false)
+      if (requestId === incomeLoadRequestRef.current && currentWorkspaceIdRef.current === currentCompany?.id) setLoading(false)
     }
   }, [currentCompany, supabase, t])
 
@@ -573,8 +587,9 @@ export default function IncomePage() {
     })
     return sortFinanceRecords(filtered, sortBy, sortDirection, intlLocale)
   }, [categoryFilter, filterFromDate, filterToDate, incomes, intlLocale, searchQuery, sortBy, sortDirection])
-  const totalPages = Math.max(1, Math.ceil(sortedIncomes.length / pageSize))
-  const paginatedIncomes = useMemo(() => sortedIncomes.slice((page - 1) * pageSize, page * pageSize), [page, pageSize, sortedIncomes])
+  const financePage = useMemo(() => paginateFinanceRecords(sortedIncomes, page, pageSize), [page, pageSize, sortedIncomes])
+  const totalPages = financePage.totalPages
+  const paginatedIncomes = financePage.items
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
   useEffect(() => setPage(1), [categoryFilter, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
@@ -1112,7 +1127,7 @@ export default function IncomePage() {
               </FinanceListShell>
             </div>
           ))}
-          <FinancePagination page={page} totalPages={totalPages} totalItems={sortedIncomes.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} pageSize={pageSize} pageSizeLabel={t('finance.pageSize')} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
+          <FinancePagination page={financePage.page} totalPages={totalPages} totalItems={sortedIncomes.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} pageSize={pageSize} pageSizeLabel={t('finance.pageSize')} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
         </div>
       )}
       <ConfirmDialog

@@ -4,7 +4,7 @@ import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { financeUiDictionaries } from './finance-ui-i18n.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint, sortFinanceRecords } from './finance-ui.ts'
+import { FINANCE_PAGE_SIZES, formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange, normalizeFinancePageSize, paginateFinanceRecords, selectFinanceRecordsForPrint, sortFinanceRecords } from './finance-ui.ts'
 
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 const requiredKeys = Object.keys(financeUiDictionaries.en)
@@ -34,6 +34,23 @@ test('finance sorting supports date, amount and title with deterministic ID tie-
   assert.deepEqual(sortFinanceRecords(records, 'amount', 'asc', 'en').map((row) => row.id), ['c', 'a', 'b'])
   assert.deepEqual(sortFinanceRecords(records, 'title', 'asc', 'en').map((row) => row.id), ['a', 'c', 'b'])
   assert.deepEqual(sortFinanceRecords(records, 'title', 'desc', 'en').map((row) => row.id), ['b', 'a', 'c'])
+})
+
+test('finance pagination covers every sorted record exactly once for each supported page size', () => {
+  assert.deepEqual(FINANCE_PAGE_SIZES, [10, 25, 50, 100])
+  const records = Array.from({ length: 237 }, (_, index) => index)
+  for (const pageSize of [10, 25, 50, 100]) {
+    const pages = []
+    const first = paginateFinanceRecords(records, 1, pageSize)
+    for (let page = 1; page <= first.totalPages; page += 1) {
+      pages.push(...paginateFinanceRecords(records, page, pageSize).items)
+    }
+    assert.deepEqual(pages, records)
+    assert.equal(paginateFinanceRecords(records, 999, pageSize).page, first.totalPages)
+  }
+  assert.equal(normalizeFinancePageSize('50'), 50)
+  assert.equal(normalizeFinancePageSize(20), 25)
+  assert.deepEqual(paginateFinanceRecords([], 1, 25), { items: [], page: 1, pageSize: 25, totalPages: 1 })
 })
 
 test('verified historical rate metadata is formatted locally without inventing unavailable details', () => {
@@ -158,14 +175,25 @@ test('Income and Expenses paginate filtered and sorted results while print keeps
   for (const route of ['income', 'expenses']) {
     const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
     assert.match(source, /const \[pageSize, setPageSize\] = useState\(FINANCE_PAGE_SIZE\)/)
-    assert.match(source, /Math\.ceil\(sorted\w+\.length \/ pageSize\)/)
-    assert.match(source, /sorted\w+\.slice\(\(page - 1\) \* pageSize, page \* pageSize\)/)
+    assert.match(source, /paginateFinanceRecords\(sorted\w+, page, pageSize\)/)
     assert.match(source, /selectFinanceRecordsForPrint\(sorted\w+, selected\w+Ids\)/)
     assert.match(source, /pageSizeLabel=\{t\('finance\.pageSize'\)\}/)
     assert.match(source, /setPageSize\(value\); setPage\(1\)/)
   }
-  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
-  assert.match(component, /\[10, 25, 50, 100\]/)
+  for (const route of ['transactions']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /paginateFinanceRecords\(sortedTransactions, page, pageSize\)/)
+    assert.match(source, /pageSizeLabel=\{t\('finance\.pageSize'\)\}/)
+  }
+})
+
+test('Income and Expenses discard stale workspace loads and clear old workspace rows', () => {
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /currentWorkspaceIdRef\.current = currentCompany\?\.id \?\? null/)
+    assert.match(source, /requestId !== \w+LoadRequestRef\.current \|\| currentWorkspaceIdRef\.current !== currentCompany\.id/)
+    assert.match(source, /set\w+\(\[\]\)[\s\S]*setSelected\w+Ids\(\[\]\)/)
+  }
 })
 
 test('bulk selection label is left of the right-aligned checkbox without changing selection actions', () => {
