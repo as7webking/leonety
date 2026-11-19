@@ -51,6 +51,16 @@ describe('global search helpers', () => {
     assert.match(routeSource, /Cache-Control': 'private, no-store'/)
   })
 
+  it('adds related client context and localized invoice status without extra record queries', () => {
+    assert.match(routeSource, /invoice_number, status, clients\(name, client_company\)/)
+    assert.match(routeSource, /reference, title, clients\(name, client_company\)/)
+    assert.match(routeSource, /detail: client\?\.client_company \|\| client\?\.name/)
+    assert.match(routeSource, /status: row\.status/)
+    assert.match(componentSource, /t\(`invoices\.status\.\$\{result\.status\}`\)/)
+    assert.match(componentSource, /\[result\.detail, status\]\.filter\(Boolean\)\.join\(' · '\)/)
+    assert.equal((routeSource.match(/\.limit\(limit\)/g) ?? []).length, 8)
+  })
+
   it('debounces requests, cancels stale workspace searches and supports keyboard navigation', () => {
     assert.match(componentSource, /setTimeout\(async/)
     assert.match(componentSource, /controller\.abort\(\)/)

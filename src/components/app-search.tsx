@@ -16,6 +16,7 @@ interface SearchResult {
   group: GlobalSearchGroup
   title: string
   detail: string
+  status?: string
   href: string
 }
 
@@ -62,6 +63,10 @@ export function AppSearch({ commandLauncher = false }: { commandLauncher?: boole
     [visibleResults]
   )
   const activeResult = activeIndex >= 0 ? visibleResults[activeIndex] : undefined
+  const getResultContext = useCallback((result: SearchResult) => {
+    const status = result.status ? t(`invoices.status.${result.status}`) : ''
+    return [result.detail, status].filter(Boolean).join(' · ')
+  }, [t])
   const quickActions = useMemo<QuickAction[]>(() => {
     if (!currentCompany) return []
     const icons = { invoice: FilePlus2, client: Plus, product: PackagePlus, income: Plus, expense: Plus, timer: Timer }
@@ -278,6 +283,7 @@ export function AppSearch({ commandLauncher = false }: { commandLauncher?: boole
               </div>
               {section.items.map((result) => {
                 const index = visibleResults.findIndex((item) => item.group === result.group && item.id === result.id)
+                const context = getResultContext(result)
                 return (
                   <a
                     key={`${result.group}-${result.id}`}
@@ -295,7 +301,7 @@ export function AppSearch({ commandLauncher = false }: { commandLauncher?: boole
                     }}
                   >
                     <span className="block truncate font-medium text-slate-900">{result.title}</span>
-                    {result.detail && <span className="block truncate text-xs text-slate-500">{result.detail}</span>}
+                    {context && <span className="block truncate text-xs text-slate-500">{context}</span>}
                   </a>
                 )
               })}
@@ -345,7 +351,8 @@ export function AppSearch({ commandLauncher = false }: { commandLauncher?: boole
                 : groupedResults.length === 0 ? <p className="px-3 py-3 text-sm text-slate-500" role="status">{t('search.noResults')}</p>
                   : groupedResults.map((section) => <div key={section.group} className="py-1"><p className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{t(groupLabelKeys[section.group])}</p>{section.items.map((result) => {
                     const index = visibleResults.findIndex((item) => item.group === result.group && item.id === result.id)
-                    return <button key={`${result.group}-${result.id}`} id={`app-command-option-${index}`} type="button" role="option" aria-selected={index === activeIndex} onMouseEnter={() => setActiveIndex(index)} onClick={() => { router.push(result.href); closeCommand() }} className={`block min-h-11 w-full rounded-md px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 ${index === activeIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}><span className="block truncate text-sm font-medium text-slate-900">{result.title}</span>{result.detail && <span className="block truncate text-xs text-slate-500">{result.detail}</span>}</button>
+                    const context = getResultContext(result)
+                    return <button key={`${result.group}-${result.id}`} id={`app-command-option-${index}`} type="button" role="option" aria-selected={index === activeIndex} onMouseEnter={() => setActiveIndex(index)} onClick={() => { router.push(result.href); closeCommand() }} className={`block min-h-11 w-full rounded-md px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 ${index === activeIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}><span className="block truncate text-sm font-medium text-slate-900">{result.title}</span>{context && <span className="block truncate text-xs text-slate-500">{context}</span>}</button>
                   })}</div>)}
         </div>
         <div className="hidden items-center justify-between border-t px-4 py-2 text-xs text-slate-500 sm:flex"><span>{t('search.keyboardNavigation')}</span><span>{t('search.keyboardHints')}</span></div>
