@@ -15,7 +15,7 @@ test('shared finance lists keep Amount, Actions and rightmost Select in the agre
   assert.ok(header.indexOf('{amountLabel}') < header.indexOf('{actionsLabel}'))
   assert.ok(header.indexOf('{actionsLabel}') < header.indexOf('{selectionLabel}'))
   assert.match(financeList, /\{actions\}[\s\S]*?\{selection\}/)
-  assert.match(financeList, /whitespace-normal break-words font-semibold[\s\S]*?\{amountDetail &&[\s\S]*?whitespace-normal break-words text-xs/)
+  assert.match(financeList, /overflow-x-auto whitespace-nowrap font-semibold[\s\S]*?\{amountDetail &&[\s\S]*?whitespace-normal break-words text-xs/)
   assert.match(globalStyles, /minmax\(120px, 140px\) minmax\(176px, max-content\) 52px/)
 })
 

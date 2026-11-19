@@ -38,6 +38,13 @@ test('legacy expense saved views default to all categories and preserve new cate
   assert.equal(filtered.categoryFilter, 'Rent')
 })
 
+test('expense saved views accept title sorting without invalidating existing date and amount views', () => {
+  for (const sortBy of ['date', 'amount', 'title'] as const) {
+    const state = parseSavedTableViewState('expenses', { searchQuery: '', groupReportsByMonth: false, filterFromDate: '', filterToDate: '', sortBy, sortDirection: 'asc' }) as ExpenseTableViewState
+    assert.equal(state.sortBy, sortBy)
+  }
+})
+
 test('saved view collection round-trips without record data', () => {
   const collection: SavedTableViewCollection<ExpenseTableViewState> = {
     defaultViewId: 'view-1',

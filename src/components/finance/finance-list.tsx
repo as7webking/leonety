@@ -148,8 +148,8 @@ export function FinanceListRow({ title, description, category, date, amount, amo
         {description && <p className="mt-1 break-words text-slate-500 lg:hidden">{description}</p>}
       </div>
       <div className="border-t border-slate-100 pt-2 text-sm text-slate-500 lg:border-0 lg:pt-0">{date}</div>
-      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 gap-y-1 text-left lg:text-right">
-        <div className={cn('min-w-0 max-w-full whitespace-normal break-words font-semibold leading-5 tabular-nums text-slate-950 [overflow-wrap:anywhere]', conversionStatus ? 'col-start-1' : 'col-span-2')}>
+      <div className="grid min-w-0 max-w-full grid-cols-1 gap-y-1 text-left lg:text-right">
+        <div className="min-w-0 max-w-full overflow-x-auto whitespace-nowrap font-semibold leading-5 tabular-nums text-slate-950">
           {amount}
         </div>
         {conversionStatus && <button
@@ -158,14 +158,14 @@ export function FinanceListRow({ title, description, category, date, amount, amo
           aria-expanded={conversionDetailsOpen}
           aria-controls={conversionDetailsId}
           onClick={() => setConversionDetailsOpen((open) => !open)}
-          className="flex min-h-11 min-w-11 max-w-full shrink-0 items-center justify-center gap-1 rounded-md px-1 text-xs leading-4 text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
+          className="flex min-h-11 min-w-11 max-w-full shrink-0 items-center justify-start gap-1 rounded-md px-1 text-xs leading-4 text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 lg:justify-end"
         >
           <Info className="h-4 w-4" aria-hidden="true" />
           <span>{conversionStatus.label}</span>
         </button>}
-        {conversionStatus && <p id={conversionDetailsId} role="note" hidden={!conversionDetailsOpen} className="col-span-2 min-w-0 whitespace-normal break-words text-left text-xs leading-4 text-amber-800 lg:text-right">{conversionStatus.detail}</p>}
-        {amountDetail && <div className="col-span-2 min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}
-        {conversionRateText && <div className="col-span-2 min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 text-slate-500 [overflow-wrap:anywhere]">{conversionRateText}</div>}
+        {conversionStatus && <p id={conversionDetailsId} role="note" hidden={!conversionDetailsOpen} className="min-w-0 whitespace-normal break-words text-left text-xs leading-4 text-amber-800 lg:text-right">{conversionStatus.detail}</p>}
+        {amountDetail && <div className="min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 tabular-nums text-slate-500 [overflow-wrap:anywhere]">{amountDetail}</div>}
+        {conversionRateText && <div className="min-w-0 max-w-full whitespace-normal break-words text-xs leading-4 text-slate-500 [overflow-wrap:anywhere]">{conversionRateText}</div>}
       </div>
       <div className={cn('flex min-w-0 flex-wrap items-center justify-start gap-2 lg:flex-nowrap lg:justify-end', !selection && 'finance-list-actions-without-selection')}>{actions}</div>
       {selection && <div className="flex min-h-10 items-center justify-start lg:justify-center">{selection}</div>}
@@ -217,17 +217,28 @@ interface FinancePaginationProps {
   previousLabel: string
   nextLabel: string
   onPageChange: (page: number) => void
+  pageSize?: number
+  pageSizeLabel?: string
+  onPageSizeChange?: (pageSize: number) => void
 }
 
-export function FinancePagination({ page, totalPages, totalItems, label, previousLabel, nextLabel, onPageChange }: FinancePaginationProps) {
-  if (totalPages <= 1) return null
+export function FinancePagination({ page, totalPages, totalItems, label, previousLabel, nextLabel, onPageChange, pageSize, pageSizeLabel, onPageSizeChange }: FinancePaginationProps) {
+  if (totalItems === 0 || (totalPages <= 1 && pageSize === undefined)) return null
 
   return (
     <nav className="mt-4 flex flex-wrap items-center justify-between gap-3" aria-label={label}>
       <p className="text-sm text-slate-500">{label.replace('{page}', String(page)).replace('{pages}', String(totalPages)).replace('{total}', String(totalItems))}</p>
-      <div className="flex gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>{previousLabel}</Button>
-        <Button type="button" size="sm" variant="outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>{nextLabel}</Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {pageSize !== undefined && onPageSizeChange && <label className="flex items-center gap-2 text-sm text-slate-600">
+          <span>{pageSizeLabel}</span>
+          <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+          </select>
+        </label>}
+        {totalPages > 1 && <div className="flex gap-2">
+          <Button type="button" size="sm" variant="outline" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>{previousLabel}</Button>
+          <Button type="button" size="sm" variant="outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>{nextLabel}</Button>
+        </div>}
       </div>
     </nav>
   )

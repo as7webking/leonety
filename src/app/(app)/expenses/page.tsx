@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint } from '@/lib/finance-ui'
+import { matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint, sortFinanceRecords } from '@/lib/finance-ui'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
 import { useLocalDraft } from '@/hooks/use-local-draft'
@@ -97,7 +97,7 @@ export default function ExpensesPage() {
   const [latestRateLoading, setLatestRateLoading] = useState(false)
   const [printCurrencyMode, setPrintCurrencyMode] = useState<'workspace' | 'both'>('both')
   const [groupReportsByMonth, setGroupReportsByMonth] = useState(false)
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'title'>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [filterFromDate, setFilterFromDate] = useState('')
   const [filterToDate, setFilterToDate] = useState('')
@@ -108,6 +108,7 @@ export default function ExpensesPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([])
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(FINANCE_PAGE_SIZE)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const restoredDraftKeyRef = useRef<string | null>(null)
   const formWorkspaceRef = useRef<string | null>(null)
@@ -514,17 +515,14 @@ export default function ExpensesPage() {
   }
 
   const sortedExpenses = useMemo(() => {
-    return expenses.filter((expense) => {
+    const filtered = expenses.filter((expense) => {
       const matchesSearch = matchesFinanceSearch(searchQuery, [expense.title, expense.description, expense.category])
       return matchesOptionalDateRange(expense.date, filterFromDate, filterToDate) && matchesSearch && (!categoryFilter || expense.category === categoryFilter)
-    }).sort((left, right) => {
-      const leftValue = sortBy === 'date' ? new Date(left.date).getTime() : Number(left.amount)
-      const rightValue = sortBy === 'date' ? new Date(right.date).getTime() : Number(right.amount)
-      return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue
     })
-  }, [categoryFilter, expenses, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
-  const totalPages = Math.max(1, Math.ceil(sortedExpenses.length / FINANCE_PAGE_SIZE))
-  const paginatedExpenses = useMemo(() => sortedExpenses.slice((page - 1) * FINANCE_PAGE_SIZE, page * FINANCE_PAGE_SIZE), [page, sortedExpenses])
+    return sortFinanceRecords(filtered, sortBy, sortDirection, intlLocale)
+  }, [categoryFilter, expenses, filterFromDate, filterToDate, intlLocale, searchQuery, sortBy, sortDirection])
+  const totalPages = Math.max(1, Math.ceil(sortedExpenses.length / pageSize))
+  const paginatedExpenses = useMemo(() => sortedExpenses.slice((page - 1) * pageSize, page * pageSize), [page, pageSize, sortedExpenses])
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages])
   useEffect(() => setPage(1), [categoryFilter, filterFromDate, filterToDate, searchQuery, sortBy, sortDirection])
 
@@ -748,7 +746,7 @@ export default function ExpensesPage() {
         </> : undefined}
         sortingLabel={t('common.sortBy')}
         sorting={expenses.length > 0 ? <>
-          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }]} ariaLabel={t('common.sortBy')} className="w-full lg:w-36" />
+          <AppSelect value={sortBy} onChange={(value) => setSortBy(value as 'date' | 'amount' | 'title')} options={[{ value: 'date', label: t('common.sortDate') }, { value: 'amount', label: t('common.sortAmount') }, { value: 'title', label: t('common.sortTitle') }]} ariaLabel={t('common.sortBy')} className="w-full lg:w-36" />
           <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-full lg:w-40" />
         </> : undefined}
         utilities={<>
@@ -955,7 +953,7 @@ export default function ExpensesPage() {
               </FinanceListShell>
             </div>
           ))}
-          <FinancePagination page={page} totalPages={totalPages} totalItems={sortedExpenses.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} />
+          <FinancePagination page={page} totalPages={totalPages} totalItems={sortedExpenses.length} label={t('finance.pagination')} previousLabel={t('finance.previous')} nextLabel={t('finance.next')} onPageChange={setPage} pageSize={pageSize} pageSizeLabel={t('finance.pageSize')} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
         </div>
       )}
       <ConfirmDialog

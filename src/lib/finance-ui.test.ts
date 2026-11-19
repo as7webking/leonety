@@ -4,7 +4,7 @@ import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { financeUiDictionaries } from './finance-ui-i18n.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint } from './finance-ui.ts'
+import { formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange, selectFinanceRecordsForPrint, sortFinanceRecords } from './finance-ui.ts'
 
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 const requiredKeys = Object.keys(financeUiDictionaries.en)
@@ -14,6 +14,26 @@ test('finance UI labels have complete seven-locale coverage', () => {
     assert.deepEqual(Object.keys(financeUiDictionaries[locale]).sort(), [...requiredKeys].sort())
     for (const key of requiredKeys) assert.ok(financeUiDictionaries[locale][key]?.trim(), `${locale}:${key}`)
   }
+})
+
+test('page-size labels and title-sort labels are available in all supported locales', () => {
+  for (const locale of locales) {
+    assert.ok(financeUiDictionaries[locale]['finance.pageSize'])
+  }
+  const translations = readFileSync(new URL('./i18n.ts', import.meta.url), 'utf8')
+  assert.equal((translations.match(/'common\.sortTitle':/g) ?? []).length, locales.length)
+})
+
+test('finance sorting supports date, amount and title with deterministic ID tie-breaking', () => {
+  const records = [
+    { id: 'b', date: '2026-01-02', amount: 20, title: 'Beta' },
+    { id: 'a', date: '2026-01-02', amount: 20, title: 'Alpha' },
+    { id: 'c', date: '2026-01-01', amount: 10, title: 'alpha' },
+  ]
+  assert.deepEqual(sortFinanceRecords(records, 'date', 'desc', 'en'), ['a', 'b', 'c'].map((id) => records.find((row) => row.id === id)))
+  assert.deepEqual(sortFinanceRecords(records, 'amount', 'asc', 'en').map((row) => row.id), ['c', 'a', 'b'])
+  assert.deepEqual(sortFinanceRecords(records, 'title', 'asc', 'en').map((row) => row.id), ['a', 'c', 'b'])
+  assert.deepEqual(sortFinanceRecords(records, 'title', 'desc', 'en').map((row) => row.id), ['b', 'a', 'c'])
 })
 
 test('verified historical rate metadata is formatted locally without inventing unavailable details', () => {
@@ -84,11 +104,12 @@ test('income and expense rows constrain conversion details beside action columns
   assert.match(component, /lg:flex-nowrap/)
 })
 
-test('conversion status is compact beside the amount and keyboard/touch expandable in place', () => {
+test('conversion status stays separate from the unbroken amount and remains keyboard/touch expandable', () => {
   const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
   const transactions = readFileSync(new URL('../app/(app)/transactions/page.tsx', import.meta.url), 'utf8')
   assert.match(transactions, /conversionStatus=\{/)
-  assert.match(component, /grid-cols-\[minmax\(0,1fr\)_auto\]/)
+  assert.match(component, /grid-cols-1 gap-y-1 text-left lg:text-right/)
+  assert.match(component, /overflow-x-auto whitespace-nowrap font-semibold leading-5 tabular-nums/)
   assert.match(component, /type="button"[\s\S]*aria-expanded=\{conversionDetailsOpen\}[\s\S]*aria-controls=\{conversionDetailsId\}/)
   assert.match(component, /className="flex min-h-11 min-w-11 max-w-full shrink-0/)
   assert.match(component, /focus-visible:ring-2/)
@@ -131,6 +152,20 @@ test('Income and Expenses keep printing visible while preserving existing print 
     assert.match(source, /createHistoricalTransactionFxSnapshot/)
     assert.match(source, /\.from\('\w+'\)\.delete\(\)\.eq\('id', id\)\.eq\('company_id', currentCompany\.id\)/)
   }
+})
+
+test('Income and Expenses paginate filtered and sorted results while print keeps the full filtered set', () => {
+  for (const route of ['income', 'expenses']) {
+    const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
+    assert.match(source, /const \[pageSize, setPageSize\] = useState\(FINANCE_PAGE_SIZE\)/)
+    assert.match(source, /Math\.ceil\(sorted\w+\.length \/ pageSize\)/)
+    assert.match(source, /sorted\w+\.slice\(\(page - 1\) \* pageSize, page \* pageSize\)/)
+    assert.match(source, /selectFinanceRecordsForPrint\(sorted\w+, selected\w+Ids\)/)
+    assert.match(source, /pageSizeLabel=\{t\('finance\.pageSize'\)\}/)
+    assert.match(source, /setPageSize\(value\); setPage\(1\)/)
+  }
+  const component = readFileSync(new URL('../components/finance/finance-list.tsx', import.meta.url), 'utf8')
+  assert.match(component, /\[10, 25, 50, 100\]/)
 })
 
 test('bulk selection label is left of the right-aligned checkbox without changing selection actions', () => {

@@ -15,6 +15,30 @@ export function selectFinanceRecordsForPrint<T extends { id: string }>(records: 
   return records.filter((record) => selected.has(record.id))
 }
 
+export type FinanceSortBy = 'date' | 'amount' | 'title'
+export type FinanceSortDirection = 'asc' | 'desc'
+
+export function sortFinanceRecords<T extends { id: string; date: string; amount: number | string; title?: string | null; description?: string | null }>(
+  records: T[],
+  sortBy: FinanceSortBy,
+  direction: FinanceSortDirection,
+  locale: string,
+) {
+  return [...records].sort((left, right) => {
+    let comparison = 0
+    if (sortBy === 'date') {
+      comparison = new Date(left.date).getTime() - new Date(right.date).getTime()
+    } else if (sortBy === 'amount') {
+      comparison = Number(left.amount) - Number(right.amount)
+    } else {
+      comparison = (left.title || left.description || '').localeCompare(right.title || right.description || '', locale, { sensitivity: 'base', numeric: true })
+    }
+
+    if (comparison !== 0) return direction === 'asc' ? comparison : -comparison
+    return left.id.localeCompare(right.id)
+  })
+}
+
 export function formatHistoricalRateDetail(input: {
   rate: number | string | null | undefined
   source: string | null | undefined

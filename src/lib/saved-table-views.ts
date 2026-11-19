@@ -20,7 +20,7 @@ export interface ExpenseTableViewState {
   groupReportsByMonth: boolean
   filterFromDate: string
   filterToDate: string
-  sortBy: 'date' | 'amount'
+  sortBy: 'date' | 'amount' | 'title'
   sortDirection: 'asc' | 'desc'
 }
 
@@ -83,7 +83,7 @@ export function parseSavedTableViewState(kind: SavedTableKind, value: unknown): 
   }
   if (typeof value.searchQuery !== 'string' || value.searchQuery.length > 200 || typeof value.groupReportsByMonth !== 'boolean') return null
   if (value.categoryFilter !== undefined && (typeof value.categoryFilter !== 'string' || value.categoryFilter.length > 120)) return null
-  if (!validDate(value.filterFromDate) || !validDate(value.filterToDate) || !['date', 'amount'].includes(String(value.sortBy)) || !['asc', 'desc'].includes(String(value.sortDirection))) return null
+  if (!validDate(value.filterFromDate) || !validDate(value.filterToDate) || !['date', 'amount', 'title'].includes(String(value.sortBy)) || !['asc', 'desc'].includes(String(value.sortDirection))) return null
   return {
     searchQuery: value.searchQuery,
     categoryFilter: typeof value.categoryFilter === 'string' ? value.categoryFilter : '',
