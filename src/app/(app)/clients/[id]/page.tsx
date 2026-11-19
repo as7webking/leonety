@@ -58,6 +58,8 @@ interface InvoicePaymentRow {
   invoice_id: string
   amount: number | string
   currency: string
+  paid_at: string
+  method: string
 }
 
 function sumInvoices(invoices: InvoiceRow[], kind: 'paid' | 'unpaid') {
@@ -82,6 +84,7 @@ export default function ClientDetailPage() {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [contracts, setContracts] = useState<ContractRow[]>([])
   const [transactions, setTransactions] = useState<ClientTransactionRow[]>([])
+  const [payments, setPayments] = useState<InvoicePaymentRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadedScope, setLoadedScope] = useState('')
   const [editing, setEditing] = useState(false)
@@ -106,6 +109,7 @@ export default function ClientDetailPage() {
     setInvoiceLoadFailed(false)
     setContractLoadFailed(false)
     setActivityLoadFailed(false)
+    setPayments([])
 
     const results = await Promise.all([
       supabase
@@ -180,7 +184,7 @@ export default function ClientDetailPage() {
     if (invoiceRows.length > 0) {
       const paymentResult = await supabase
         .from('invoice_payments')
-        .select('invoice_id, amount, currency')
+        .select('invoice_id, amount, currency, paid_at, method')
         .eq('company_id', currentCompany.id)
         .in('invoice_id', invoiceRows.map((invoice) => invoice.id))
       if (activeRequest !== requestId.current || currentCompany?.id !== companyId) return
@@ -198,6 +202,7 @@ export default function ClientDetailPage() {
           setInvoiceLoadFailed(true)
           setError(t('clients.crm.relatedDataLoadFailed'))
         } else {
+          setPayments(paymentRows)
           for (const payment of paymentRows) paymentTotals.set(payment.invoice_id, (paymentTotals.get(payment.invoice_id) ?? 0) + Number(payment.amount || 0))
           for (const invoice of invoiceRows) {
             invoice.recorded_payment_amount = paymentTotals.get(invoice.id)
@@ -248,7 +253,9 @@ export default function ClientDetailPage() {
 
   const paid = useMemo(() => sumInvoices(invoices, 'paid'), [invoices])
   const unpaid = useMemo(() => sumInvoices(invoices, 'unpaid'), [invoices])
-  const activity = useMemo(() => [
+  const activity = useMemo(() => {
+    const invoicesById = new Map(invoices.map((invoice) => [invoice.id, invoice]))
+    return [
     ...(client ? [
       { id: `created-${client.id}`, date: client.created_at, label: t('clients.crm.activityClientCreated') },
       ...(client.updated_at && client.updated_at !== client.created_at ? [{ id: `updated-${client.id}`, date: client.updated_at, label: t('clients.crm.activityClientUpdated') }] : []),
@@ -256,7 +263,18 @@ export default function ClientDetailPage() {
     ...invoices.map((invoice) => ({ id: `invoice-${invoice.id}`, date: invoice.created_at, label: t('clients.crm.activityInvoiceCreated'), detail: `${invoice.invoice_number} · ${t(`invoices.status.${invoice.status}`)}`, href: client ? buildClientInvoiceHref(client.id, invoice.id) : undefined })),
     ...contracts.map((contract) => ({ id: `contract-${contract.id}`, date: contract.created_at, label: t('clients.crm.activityContractCreated'), detail: contract.reference, href: client ? buildClientContractHref(contract.id, client.id) : undefined })),
     ...transactions.map((transaction) => ({ id: `transaction-${transaction.type}-${transaction.id}`, date: transaction.date, label: t(transaction.type === 'income' ? 'income.title' : 'expenses.title'), detail: transaction.title || transaction.description || undefined })),
-  ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()).slice(0, 20), [client, contracts, invoices, t, transactions])
+    ...payments.flatMap((payment, index) => {
+      const invoice = invoicesById.get(payment.invoice_id)
+      return invoice ? [{
+        id: `payment-${payment.invoice_id}-${payment.paid_at}-${index}`,
+        date: payment.paid_at,
+        label: t('clients.crm.paymentRecorded'),
+        detail: `${invoice.invoice_number} · ${formatCurrencyGroups({ [payment.currency]: Number(payment.amount) }, getIntlLocale(locale), payment.currency, currencySymbolPosition)}`,
+        href: client ? buildClientInvoiceHref(client.id, invoice.id) : undefined,
+      }] : []
+    }),
+  ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()).slice(0, 20)
+  }, [client, contracts, currencySymbolPosition, invoices, locale, payments, t, transactions])
 
   const archive = async () => {
     if (!client || !currentCompany || !window.confirm(t('clients.crm.archiveConfirm'))) return
@@ -310,7 +328,7 @@ export default function ClientDetailPage() {
             <Metric label={t('clients.crm.invoiceCount')} value={relatedDataError ? '—' : String(invoices.length)} />
             <Metric label={t('clients.crm.contractCount')} value={relatedDataError ? '—' : String(contracts.length)} />
           </div>
-          {!relatedDataError && <div className="grid gap-6 lg:grid-cols-2"><OutstandingInvoices invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} /><RecordedPayments invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} /></div>}
+          {!relatedDataError && <div className="grid gap-6 lg:grid-cols-2"><OutstandingInvoices invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} /><RecordedPayments payments={payments} invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} /></div>}
           <div className="grid gap-6 lg:grid-cols-2">
             <Card><CardHeader><CardTitle>{t('clients.crm.information')}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm text-slate-700">
               {client.email && <p className="flex min-w-0 gap-2"><Mail className="h-4 w-4 shrink-0" /><span className="break-all">{client.email}</span></p>}
@@ -328,7 +346,19 @@ export default function ClientDetailPage() {
       {tab === 'invoices' && (invoiceLoadFailed ? <RelatedDataUnavailable t={t} /> : <InvoiceList invoices={invoices} clientId={client.id} locale={locale} t={t} currencySymbolPosition={currencySymbolPosition} />)}
       {tab === 'contracts' && (contractLoadFailed ? <RelatedDataUnavailable t={t} /> : <ContractList contracts={contracts} clientId={client.id} locale={locale} t={t} />)}
       {tab === 'activity' && (activityLoadFailed ? <RelatedDataUnavailable t={t} /> : <ActivityList items={activity} t={t} locale={locale} />)}
-      {tab === 'contacts' && <Card><CardContent className="space-y-3 p-5 text-sm"><p>{client.name}</p><p className="break-all">{client.email || '—'}</p><p>{client.phone || '—'}</p><p>{address || '—'}</p></CardContent></Card>}
+      {tab === 'contacts' && <Card><CardHeader><CardTitle>{t('clients.crm.information')}</CardTitle></CardHeader><CardContent><dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
+        <ProfileField label={t('clients.crm.contact')} value={client.name} />
+        <ProfileField label={t('clients.email')} value={client.email} breakAll />
+        <ProfileField label={t('clients.phone')} value={client.phone} />
+        <ProfileField label={t('clients.crm.billingAddress')} value={address} />
+        <ProfileField label={t('contracts.party.taxNumber')} value={client.tax_number} />
+        <ProfileField label={t('contracts.party.vatId')} value={client.vat_id} />
+        <ProfileField label={t('clients.interestedIn')} value={client.interested_in} />
+        <ProfileField label={t('clients.source')} value={client.source} />
+        <ProfileField label={t('clients.firstContact')} value={client.first_contact_at ? new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(new Date(client.first_contact_at)) : null} />
+        <ProfileField label={t('clients.crm.lastActivity')} value={client.last_activity_at ? new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(new Date(client.last_activity_at)) : null} />
+        <ProfileField label={t('clients.status')} value={t(`clients.status.${client.status}`)} />
+      </dl></CardContent></Card>}
       {tab === 'notes' && <Card><CardContent className="whitespace-pre-wrap p-5 text-sm text-slate-700">{client.notes || t('clients.crm.noNotes')}</CardContent></Card>}
     </PageContainer>
   )
@@ -336,6 +366,11 @@ export default function ClientDetailPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <Card><CardContent className="p-4"><p className="text-sm text-slate-500">{label}</p><p className="mt-1 break-words text-xl font-semibold text-slate-950">{value}</p></CardContent></Card>
+}
+
+function ProfileField({ label, value, breakAll = false }: { label: string; value: string | null | undefined; breakAll?: boolean }) {
+  if (!value) return null
+  return <div className="min-w-0"><dt className="text-xs font-medium text-slate-500">{label}</dt><dd className={`mt-1 text-slate-900 ${breakAll ? 'break-all' : 'break-words'}`}>{value}</dd></div>
 }
 
 function RelatedDataUnavailable({ t }: { t: (key: string) => string }) {
@@ -354,10 +389,15 @@ function OutstandingInvoices({ invoices, clientId, locale, t, currencySymbolPosi
   })}</ul>}</CardContent></Card>
 }
 
-function RecordedPayments({ invoices, clientId, locale, t, currencySymbolPosition }: { invoices: InvoiceRow[]; clientId: string; locale: Locale; t: (key: string) => string; currencySymbolPosition: import('@/lib/currency').CurrencySymbolPosition }) {
-  const recorded = invoices.filter((invoice) => (invoice.recorded_payment_amount ?? 0) > 0)
+function RecordedPayments({ payments, invoices, clientId, locale, t, currencySymbolPosition }: { payments: InvoicePaymentRow[]; invoices: InvoiceRow[]; clientId: string; locale: Locale; t: (key: string) => string; currencySymbolPosition: import('@/lib/currency').CurrencySymbolPosition }) {
+  const invoicesById = new Map(invoices.map((invoice) => [invoice.id, invoice]))
 
-  return <Card><CardHeader><CardTitle>{t('clients.crm.recordedPayments')}</CardTitle></CardHeader><CardContent>{recorded.length === 0 ? <p className="text-sm text-slate-500">{t('clients.crm.noRecordedPayments')}</p> : <ul className="divide-y divide-slate-100">{recorded.map((invoice) => <li key={invoice.id} className="flex min-w-0 items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><Link className="min-w-0 break-all text-sm font-medium text-slate-900 hover:text-blue-700 hover:underline" href={buildClientInvoiceHref(clientId, invoice.id)}>{invoice.invoice_number}</Link><span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrencyGroups({ [invoice.currency]: invoice.recorded_payment_amount ?? 0 }, getIntlLocale(locale), invoice.currency, currencySymbolPosition)}</span></li>)}</ul>}</CardContent></Card>
+  return <Card><CardHeader><CardTitle>{t('clients.crm.recordedPayments')}</CardTitle></CardHeader><CardContent>{payments.length === 0 ? <p className="text-sm text-slate-500">{t('clients.crm.noRecordedPayments')}</p> : <ul className="divide-y divide-slate-100">{payments.map((payment, index) => {
+    const invoice = invoicesById.get(payment.invoice_id)
+    if (!invoice) return null
+    const methodLabel = payment.method === 'cash' ? t('invoices.paymentCash') : payment.method === 'bank_transfer' ? t('invoices.paymentBankTransfer') : payment.method === 'card' ? t('invoices.paymentCard') : payment.method
+    return <li key={`${payment.invoice_id}-${payment.paid_at}-${payment.method}-${index}`} className="flex min-w-0 items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0"><Link className="break-all text-sm font-medium text-slate-900 hover:text-blue-700 hover:underline" href={buildClientInvoiceHref(clientId, invoice.id)}>{invoice.invoice_number}</Link><p className="text-xs text-slate-500">{new Intl.DateTimeFormat(getIntlLocale(locale)).format(new Date(`${payment.paid_at}T00:00:00`))} · {methodLabel}</p></div><span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrencyGroups({ [payment.currency]: Number(payment.amount) }, getIntlLocale(locale), payment.currency, currencySymbolPosition)}</span></li>
+  })}</ul>}</CardContent></Card>
 }
 
 function ActivityList({ items, t, locale }: { items: Array<{ id: string; date: string; label: string; detail?: string; href?: string }>; t: (key: string) => string; locale: Locale }) {

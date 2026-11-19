@@ -45,11 +45,25 @@ test('recorded payments are shown only from workspace-scoped invoice payment row
   assert.ok(paymentQuery, 'missing invoice payment query')
   assert.match(paymentQuery, /\.eq\('company_id', currentCompany\.id\)/)
   assert.match(paymentQuery, /\.in\('invoice_id', invoiceRows\.map\(\(invoice\) => invoice\.id\)\)/)
+  assert.match(paymentQuery, /paid_at, method/)
+  assert.match(clientDetail, /payments\.map\(\(payment, index\)/)
+  assert.match(clientDetail, /new Date\(`\$\{payment\.paid_at\}T00:00:00`\)/)
+  assert.match(clientDetail, /label: t\('clients\.crm\.paymentRecorded'\)/)
   assert.match(clientDetail, /invoice\.recorded_payment_amount = paymentTotals\.get\(invoice\.id\)/)
   assert.match(clientDetail, /invoiceCurrencies\.get\(payment\.invoice_id\) !== String\(payment\.currency \?\? ''\)\.toUpperCase\(\)/)
   assert.match(clientDetail, /setRelatedDataError\(true\)[\s\S]{0,80}setInvoiceLoadFailed\(true\)/)
-  assert.match(clientDetail, /invoices\.filter\(\(invoice\) => \(invoice\.recorded_payment_amount \?\? 0\) > 0\)/)
+  assert.match(clientDetail, /function RecordedPayments\(\{ payments, invoices/)
+  assert.match(clientDetail, /const invoicesById = new Map\(invoices\.map\(\(invoice\) => \[invoice\.id, invoice\]\)\)/)
+  assert.match(clientDetail, /const invoice = invoicesById\.get\(payment\.invoice_id\)/)
   assert.doesNotMatch(clientDetail.match(/function RecordedPayments[\s\S]*?\n}/)?.[0] ?? '', /status === 'paid'/)
+})
+
+test('client profile exposes stored contact, billing, tax and CRM fields without placeholder values', () => {
+  const contactsTab = clientDetail.match(/tab === 'contacts' &&[\s\S]*?\n      \{tab === 'notes'/)?.[0] ?? ''
+  for (const field of ['client.name', 'client.email', 'client.phone', 'address', 'client.tax_number', 'client.vat_id', 'client.interested_in', 'client.source', 'client.first_contact_at', 'client.last_activity_at']) {
+    assert.ok(contactsTab.includes(field), `missing client profile field: ${field}`)
+  }
+  assert.match(clientDetail, /function ProfileField[\s\S]*?if \(!value\) return null/)
 })
 
 test('client data is hidden immediately when the workspace or client scope changes', () => {
