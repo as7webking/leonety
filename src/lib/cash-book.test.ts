@@ -73,6 +73,25 @@ test('calculates stable chronological balances in integer minor units', () => {
   assert.equal(result.closingBalanceMinor, 9305)
 })
 
+test('detects negative chronological balances and rejects a posting that creates one', () => {
+  const expense = entry({ kind: 'expense', paymentMethod: 'cash', amountMinor: 500, idempotencyKey: 'expense' })
+  assert.deepEqual(buildCashBookBalance(register, [expense]).negativeBalanceEntryIds, ['entry-1'])
+  assertDomainError('negative_balance', () => appendCashBookEntry(register, [], expense))
+})
+
+test('keeps register balances and currencies isolated', () => {
+  const secondRegister: CashBookRegister = { id: 'register-2', workspaceId: register.workspaceId, currency: 'USD', active: true }
+  const eurIncome = entry({ id: 'eur', idempotencyKey: 'eur', amountMinor: 2500 })
+  const usdIncome: CashBookEntry = {
+    ...eurIncome, id: 'usd', idempotencyKey: 'usd', registerId: secondRegister.id,
+    currency: 'USD', amountMinor: 5000,
+  }
+
+  assert.equal(buildCashBookBalance(register, [eurIncome]).closingBalanceMinor, 2500)
+  assert.equal(buildCashBookBalance(secondRegister, [usdIncome]).closingBalanceMinor, 5000)
+  assertDomainError('workspace_mismatch', () => buildCashBookBalance(register, [usdIncome]))
+})
+
 test('corrections preserve the original and require a full linked reversal plus replacement', () => {
   const original = entry({ kind: 'expense', amountMinor: 5000, id: 'original', idempotencyKey: 'original' })
   const reversal = entry({
@@ -102,6 +121,15 @@ test('rejects duplicate source postings and makes exact retries idempotent', () 
   assertDomainError('idempotency_conflict', () => appendCashBookEntry(register, saved, { ...first, amountMinor: 2000 }))
   assertDomainError('duplicate_source', () => appendCashBookEntry(register, saved, {
     ...first, id: 'duplicate-source', idempotencyKey: 'different-request',
+  }))
+})
+
+test('preserves optional receipt references and treats them as part of an idempotent request', () => {
+  const withReceipt = entry({ receiptReference: 'Beleg-17' })
+  const saved = appendCashBookEntry(register, [], withReceipt)
+  assert.equal(saved[0].receiptReference, 'Beleg-17')
+  assertDomainError('idempotency_conflict', () => appendCashBookEntry(register, saved, {
+    ...withReceipt, receiptReference: 'Beleg-18',
   }))
 })
 

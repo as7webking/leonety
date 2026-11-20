@@ -20,6 +20,7 @@ export interface CashBookEntry {
   description: string
   idempotencyKey: string
   sourceKey?: string | null
+  receiptReference?: string | null
   paymentMethod?: string | null
   openingConfirmed?: boolean
   reversesEntryId?: string | null
@@ -35,6 +36,7 @@ export interface CashBookRow {
 export interface CashBookBalance {
   rows: CashBookRow[]
   closingBalanceMinor: number
+  negativeBalanceEntryIds: string[]
 }
 
 export class CashBookDomainError extends Error {
@@ -74,6 +76,7 @@ function sameIdempotentRequest(left: CashBookEntry, right: CashBookEntry) {
     && left.amountMinor === right.amountMinor
     && left.description === right.description
     && (left.sourceKey ?? null) === (right.sourceKey ?? null)
+    && (left.receiptReference ?? null) === (right.receiptReference ?? null)
     && (left.paymentMethod ?? null) === (right.paymentMethod ?? null)
     && (left.openingConfirmed ?? false) === (right.openingConfirmed ?? false)
     && (left.reversesEntryId ?? null) === (right.reversesEntryId ?? null)
@@ -170,7 +173,12 @@ function validateAppend(
 
   // Evaluate the signed value here as a final check for reversal direction and target.
   signedAmount(candidate, reversalTarget)
-  return [...currentEntries, candidate]
+  const nextEntries = [...currentEntries, candidate]
+  const balance = buildCashBookBalance(register, nextEntries)
+  if (balance.negativeBalanceEntryIds.length > 0) {
+    fail('negative_balance', 'A cash-book posting cannot create a negative chronological cash balance.')
+  }
+  return nextEntries
 }
 
 export function appendCashBookEntry(
@@ -193,6 +201,7 @@ export function buildCashBookBalance(
   const idempotencyKeys = new Set<string>()
   const sourceKeys = new Set<string>()
   const reversedIds = new Set<string>()
+  const negativeBalanceEntryIds: string[] = []
   let balanceMinor = 0
 
   for (const [index, entry] of ordered.entries()) {
@@ -224,11 +233,12 @@ export function buildCashBookBalance(
 
     const signedAmountMinor = signedAmount(entry, original)
     balanceMinor += signedAmountMinor
+    if (balanceMinor < 0) negativeBalanceEntryIds.push(entry.id)
     rows.push({ entry, signedAmountMinor, balanceMinor })
     byId.set(entry.id, entry)
     idempotencyKeys.add(entry.idempotencyKey)
     if (entry.sourceKey) sourceKeys.add(entry.sourceKey)
   }
 
-  return { rows, closingBalanceMinor: balanceMinor }
+  return { rows, closingBalanceMinor: balanceMinor, negativeBalanceEntryIds }
 }
