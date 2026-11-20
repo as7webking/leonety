@@ -28,7 +28,7 @@ export async function requireOwnedCompany(companyId: string) {
     .maybeSingle()
 
   if (companyError) {
-    return { error: NextResponse.json({ error: companyError.message }, { status: 500 }) }
+    return { error: NextResponse.json({ error: 'Workspace authorization could not be verified.' }, { status: 500 }) }
   }
 
   if (!company) {
