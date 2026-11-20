@@ -24,6 +24,7 @@ import { filterInvoicesForClient } from '@/lib/client-invoice-navigation'
 import { SavedTableViews } from '@/components/saved-table-views'
 import type { InvoiceTableViewState } from '@/lib/saved-table-views'
 import { createInvoiceDocumentModel, createInvoiceDocumentSnapshot, estimateInvoicePageCount, type InvoiceDocumentSnapshot } from '@/lib/invoice-document'
+import { canDeleteInvoice, invoiceUpdateForFinalized, isInvoiceFinalized, shouldRecordInvoicePayments } from '@/lib/invoice-immutability'
 import { getNotificationCenterText } from '@/lib/notification-center-i18n'
 import {
   deleteOfflineInvoiceDraft,
@@ -170,6 +171,7 @@ interface InvoiceRecord {
   payment_terms: string | null
   created_at: string
   document_snapshot?: InvoiceDocumentSnapshot | null
+  issued_at?: string | null
   clients?: ClientOption | null
   invoice_items?: InvoiceItem[]
   invoice_payments?: InvoicePaymentAllocation[]
@@ -492,6 +494,8 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null)
+  const isFinalizedInvoice = Boolean(editingInvoice && isInvoiceFinalized(editingInvoice))
+  const isExistingPaidInvoice = Boolean(isFinalizedInvoice && editingInvoice?.status === 'paid')
   const [printingInvoice, setPrintingInvoice] = useState<InvoiceRecord | null>(null)
   const [combinedPrintInvoices, setCombinedPrintInvoices] = useState<InvoiceRecord[]>([])
   const [printTemplateDialogOpen, setPrintTemplateDialogOpen] = useState(false)
@@ -569,6 +573,9 @@ export default function InvoicesPage() {
   )
   const allVisibleInvoicesSelected = filteredInvoices.length > 0 && filteredInvoices.every((invoice) => selectedInvoiceIds.has(invoice.id))
   const calculated = useMemo(() => calculateItems(formData.items), [formData.items])
+  const invoiceTotalForPayment = isFinalizedInvoice ? Number(editingInvoice?.total ?? 0) : calculated.total
+  const invoiceSubtotalForDisplay = isFinalizedInvoice ? Number(editingInvoice?.subtotal ?? 0) : calculated.subtotal
+  const invoiceTaxForDisplay = isFinalizedInvoice ? Number(editingInvoice?.tax_amount ?? 0) : calculated.taxAmount
   const vatOptions = useMemo(() => getVatOptions(formData.tax_country, t), [formData.tax_country, t])
 
   const sellerPresentation = useMemo(() => {
@@ -1359,6 +1366,18 @@ export default function InvoicesPage() {
   }, [currentCompany?.id, handleEdit, invoices, loading, locale, requestedInvoiceId, router])
 
   const validateInvoice = () => {
+    if (isFinalizedInvoice) {
+      if (formData.status !== 'paid' || editingInvoice?.status === 'paid') return ''
+      const paidCents = toCents(formData.amount_paid || invoiceTotalForPayment)
+      if (paidCents <= 0) return t('invoices.validation.amountPaidRequired')
+      if (paidCents !== toCents(invoiceTotalForPayment)) return t('invoices.validation.paidTotalMismatch')
+      if (formData.split_payment) {
+        const paymentCents = formData.payments.reduce((sum, payment) => sum + toCents(payment.amount), 0)
+        if (formData.payments.some((payment) => toCents(payment.amount) < 0)) return t('invoices.validation.paymentNegative')
+        if (paymentCents !== paidCents) return t('invoices.validation.splitMismatch')
+      }
+      return ''
+    }
     if (!formData.invoice_number.trim()) return t('invoices.validation.invoiceNumberRequired')
     if (!formData.issue_date) return t('invoices.validation.issueDateRequired')
     if (formData.items.some((item) => !item.description.trim())) return t('invoices.validation.itemDescriptionRequired')
@@ -1366,9 +1385,9 @@ export default function InvoicesPage() {
       return t('invoices.validation.contractClientMismatch')
     }
     if (formData.status === 'paid') {
-      const paidCents = toCents(formData.amount_paid || calculated.total)
+      const paidCents = toCents(formData.amount_paid || invoiceTotalForPayment)
       if (paidCents <= 0) return t('invoices.validation.amountPaidRequired')
-      if (paidCents !== toCents(calculated.total)) return t('invoices.validation.paidTotalMismatch')
+      if (paidCents !== toCents(invoiceTotalForPayment)) return t('invoices.validation.paidTotalMismatch')
       if (formData.split_payment) {
         const paymentCents = formData.payments.reduce((sum, payment) => sum + toCents(payment.amount), 0)
         if (formData.payments.some((payment) => toCents(payment.amount) < 0)) return t('invoices.validation.paymentNegative')
@@ -1379,26 +1398,26 @@ export default function InvoicesPage() {
   }
 
   const saveInvoicePayments = async (invoiceId: string, total: number) => {
+    if (formData.status !== 'paid') return true
+
     const amountPaid = formData.amount_paid.trim() || String(total)
-    const paymentsToSave = formData.status === 'paid'
-      ? formData.split_payment
-        ? formData.payments
-          .filter((payment) => toCents(payment.amount) > 0)
-          .map((payment) => ({
-            method: payment.method,
-            amount: Number((toCents(payment.amount) / 100).toFixed(2)),
-            paid_at: payment.paid_at || formData.issue_date,
-            reference: payment.reference?.trim() || null,
-            notes: payment.notes?.trim() || null,
-          }))
-        : [{
-          method: formData.payment_method,
-          amount: Number((toCents(amountPaid) / 100).toFixed(2)),
-          paid_at: formData.issue_date,
-          reference: null,
-          notes: null,
-        }]
-      : []
+    const paymentsToSave = formData.split_payment
+      ? formData.payments
+        .filter((payment) => toCents(payment.amount) > 0)
+        .map((payment) => ({
+          method: payment.method,
+          amount: Number((toCents(payment.amount) / 100).toFixed(2)),
+          paid_at: payment.paid_at || formData.issue_date,
+          reference: payment.reference?.trim() || null,
+          notes: payment.notes?.trim() || null,
+        }))
+      : [{
+        method: formData.payment_method,
+        amount: Number((toCents(amountPaid) / 100).toFixed(2)),
+        paid_at: formData.issue_date,
+        reference: null,
+        notes: null,
+      }]
 
     saveInvoicePaymentMeta(invoiceId, {
       method: formData.payment_method,
@@ -1563,7 +1582,7 @@ export default function InvoicesPage() {
     if (shouldSnapshotPaidIncome && !existingPaidIncomeId) {
       try {
         paidIncomeSnapshot = await createTransactionFxSnapshot(
-          totals.total,
+          invoiceTotalForPayment,
           formData.currency,
           currentCompany.currency ?? 'USD'
         )
@@ -1619,7 +1638,7 @@ export default function InvoicesPage() {
         paymentTerms: formData.payment_terms.trim() || null,
         payment: {
           method: formData.payment_method,
-          amountPaid: Number(formData.amount_paid || totals.total),
+          amountPaid: Number(formData.amount_paid || invoiceTotalForPayment),
           splitPayment: formData.split_payment,
           allocations: formData.payments.map((payment) => ({
             method: payment.method,
@@ -1633,9 +1652,20 @@ export default function InvoicesPage() {
       invoicePayload.document_snapshot = createInvoiceDocumentSnapshot(snapshotModel, new Date().toISOString())
     }
 
+    const invoicePayloadToSave: Record<string, unknown> | null = isFinalizedInvoice
+      ? invoiceUpdateForFinalized(editingInvoice!, formData.status, new Date().toISOString())
+      : { ...invoicePayload, status: 'draft' }
+    if (!invoicePayloadToSave) {
+      setErrorMessage(t('invoices.saveFailed'))
+      setSaving(false)
+      return
+    }
+    if (!isFinalizedInvoice) delete invoicePayloadToSave.document_snapshot
+
     try {
       let contractLinkFallback = false
       let invoiceItemsAlreadySaved = false
+      let invoiceAlreadyFinalized = isFinalizedInvoice
       const saveInvoiceRecord = async (payloadToSave: Record<string, unknown>) => {
         if (editingInvoice) {
           const { error } = await supabase
@@ -1644,7 +1674,7 @@ export default function InvoicesPage() {
             .eq('id', editingInvoice.id)
             .eq('company_id', currentCompany.id)
 
-          return { invoiceId: editingInvoice.id, error }
+          return { invoiceId: editingInvoice.id, error, alreadyFinalized: isFinalizedInvoice }
         }
 
         const { data, error } = await supabase
@@ -1656,17 +1686,18 @@ export default function InvoicesPage() {
         if (error?.code === '23505' && localDraftIdForSave) {
           const existing = await supabase
             .from('invoices')
-            .select('id, company_id, client_id, currency, subtotal, tax_amount, total, status, issue_date, due_date, notes, payment_terms')
+            .select('id, company_id, client_id, invoice_number, currency, subtotal, tax_amount, total, status, issue_date, due_date, notes, payment_terms, document_snapshot, issued_at')
             .eq('id', localDraftIdForSave)
             .eq('company_id', currentCompany.id)
             .maybeSingle()
           if (!existing.error && existing.data) {
-            const sameInvoice = existing.data.client_id === clientId
+            const sameInvoice = existing.data.invoice_number === formData.invoice_number.trim()
+              && existing.data.client_id === clientId
               && existing.data.currency === normalizeCurrencyCode(formData.currency)
               && Number(existing.data.subtotal) === totals.subtotal
               && Number(existing.data.tax_amount) === totals.taxAmount
               && Number(existing.data.total) === totals.total
-              && existing.data.status === formData.status
+              && (existing.data.status === formData.status || (existing.data.status === 'draft' && formData.status !== 'draft'))
               && existing.data.issue_date === formData.issue_date
               && (existing.data.due_date ?? null) === (formData.due_date || null)
               && (existing.data.notes ?? null) === (formData.notes.trim() || null)
@@ -1690,18 +1721,19 @@ export default function InvoicesPage() {
                 })
               if ((existingItems.data?.length ?? 0) === 0 || itemsMatch) {
                 invoiceItemsAlreadySaved = itemsMatch
-                return { invoiceId: localDraftIdForSave, error: null }
+                invoiceAlreadyFinalized = isInvoiceFinalized(existing.data)
+                return { invoiceId: localDraftIdForSave, error: null, alreadyFinalized: invoiceAlreadyFinalized }
               }
             }
           }
         }
 
-        return { invoiceId: data?.id as string | undefined, error }
+        return { invoiceId: data?.id as string | undefined, error, alreadyFinalized: false }
       }
 
-      let saveResult = await saveInvoiceRecord(invoicePayload)
+      let saveResult = await saveInvoiceRecord(invoicePayloadToSave)
       if (saveResult.error && sourceContractId && isMissingOptionalColumn(saveResult.error)) {
-        const fallbackPayload = { ...invoicePayload }
+        const fallbackPayload = { ...invoicePayloadToSave }
         delete fallbackPayload.contract_id
         saveResult = await saveInvoiceRecord(fallbackPayload)
         if (!saveResult.error) contractLinkFallback = true
@@ -1710,8 +1742,10 @@ export default function InvoicesPage() {
 
       const invoiceId = saveResult.invoiceId
       if (!invoiceId) throw new Error(t('invoices.saveFailed'))
+      invoiceAlreadyFinalized = saveResult.alreadyFinalized
+      const reusedExistingFinalizedInvoice = invoiceAlreadyFinalized && !editingInvoice
 
-      if (editingInvoice) {
+      if (editingInvoice && !invoiceAlreadyFinalized && !invoiceItemsAlreadySaved) {
         const { error: deleteItemsError } = await supabase
           .from('invoice_items')
           .delete()
@@ -1729,12 +1763,32 @@ export default function InvoicesPage() {
         unit: item.unit?.trim() || null,
       }))
 
-      if (!invoiceItemsAlreadySaved) {
+      if (!invoiceAlreadyFinalized && !invoiceItemsAlreadySaved) {
         const { error: itemError } = await supabase.from('invoice_items').insert(itemPayload)
         if (itemError) throw itemError
       }
 
-      const paymentsSaved = await saveInvoicePayments(invoiceId, totals.total)
+      if (!invoiceAlreadyFinalized && formData.status !== 'draft') {
+        const finalizationPayload: Record<string, unknown> = {
+          status: formData.status,
+          updated_at: new Date().toISOString(),
+        }
+        if (invoicePayload.document_snapshot) finalizationPayload.document_snapshot = invoicePayload.document_snapshot
+        const { data: finalizedInvoice, error: finalizeError } = await supabase
+          .from('invoices')
+          .update(finalizationPayload)
+          .eq('id', invoiceId)
+          .eq('company_id', currentCompany.id)
+          .eq('status', 'draft')
+          .select('id')
+          .maybeSingle()
+        if (finalizeError) throw finalizeError
+        if (!finalizedInvoice) throw new Error(t('invoices.saveFailed'))
+      }
+
+      const paymentsSaved = shouldRecordInvoicePayments(editingInvoice?.status ?? null, formData.status, !editingInvoice, reusedExistingFinalizedInvoice)
+        ? await saveInvoicePayments(invoiceId, invoiceTotalForPayment)
+        : true
 
       let nextSuccessMessage = !paymentsSaved
         ? `${editingInvoice ? t('invoices.updated') : t('invoices.created')} ${t('invoices.paymentMigrationRequired')}`
@@ -1742,7 +1796,7 @@ export default function InvoicesPage() {
         ? `${editingInvoice ? t('invoices.updated') : t('invoices.created')} ${t('invoices.contractLinkMigrationRequired')}`
         : editingInvoice ? t('invoices.updated') : t('invoices.created')
 
-      if (formData.status === 'paid') {
+      if (shouldSnapshotPaidIncome && !reusedExistingFinalizedInvoice) {
         const clientName = clients.find((client) => client.id === clientId)?.name
         const itemNames = totals.items.map((item) => item.description.trim()).filter(Boolean).join(', ')
         const transactionTitle = itemNames || clientName || formData.invoice_number.trim()
@@ -1786,7 +1840,7 @@ export default function InvoicesPage() {
               title: transactionTitle,
               description: `Invoice ${formData.invoice_number.trim()} paid`,
               category: 'Invoice Payment',
-              amount: totals.total,
+              amount: invoiceTotalForPayment,
               currency: normalizeCurrencyCode(formData.currency),
               date: formData.issue_date,
               client_id: clientId,
@@ -1830,7 +1884,7 @@ export default function InvoicesPage() {
             nextSuccessMessage = t('invoices.paidIncomeRecorded')
           }
         }
-        if (paidIncomeSnapshotUnavailable && shouldSnapshotPaidIncome && !existingPaidIncomeId) {
+        if (paidIncomeSnapshotUnavailable && shouldSnapshotPaidIncome && !existingPaidIncomeId && !reusedExistingFinalizedInvoice) {
           nextSuccessMessage = `${nextSuccessMessage} ${t('currencySnapshot.incomeSnapshotPending')}`
         }
       }
@@ -1860,6 +1914,11 @@ export default function InvoicesPage() {
 
   const handleDelete = async (invoice: InvoiceRecord, keepIncome: boolean) => {
     if (!currentCompany) return
+    if (!canDeleteInvoice(invoice)) {
+      setErrorMessage(t('invoices.issuedContentReadOnly'))
+      setDeleteInvoice(null)
+      return
+    }
 
     try {
       if (!keepIncome) {
@@ -2096,6 +2155,11 @@ export default function InvoicesPage() {
             <CardTitle>{editingInvoice ? t('invoices.edit') : t('invoices.add')}</CardTitle>
           </CardHeader>
           <CardContent>
+            {isFinalizedInvoice && (
+              <p className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900" role="status">
+                {t(isExistingPaidInvoice ? 'invoices.paidInvoiceReadOnly' : 'invoices.issuedContentReadOnly')}
+              </p>
+            )}
             {invoiceLocalDraftId && (!isOnline || reviewingLocalDraft) && (
               <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
                 {invoiceLocalDrafts.some((draft) => draft.localId === invoiceLocalDraftId)
@@ -2109,7 +2173,7 @@ export default function InvoicesPage() {
                   <span className="text-sm font-medium">{t('invoices.client')}</span>
                   <AppSelect
                     value={formData.client_id}
-                    disabled={Boolean(sourceContractClientId)}
+                    disabled={Boolean(sourceContractClientId) || isFinalizedInvoice}
                     onChange={(value) => {
                       setFormData({ ...formData, client_id: value })
                       if (value) setQuickClient({ name: '', phone: '', interested_in: '' })
@@ -2130,18 +2194,21 @@ export default function InvoicesPage() {
                     <div className="grid gap-2 md:grid-cols-3">
                       <input
                         value={quickClient.name}
+                        disabled={isFinalizedInvoice}
                         onChange={(event) => setQuickClient({ ...quickClient, name: event.target.value })}
                         className="rounded-md border bg-white px-3 py-2 text-sm"
                         placeholder={t('clients.name')}
                       />
                       <input
                         value={quickClient.phone}
+                        disabled={isFinalizedInvoice}
                         onChange={(event) => setQuickClient({ ...quickClient, phone: event.target.value })}
                         className="rounded-md border bg-white px-3 py-2 text-sm"
                         placeholder={t('clients.phone')}
                       />
                       <input
                         value={quickClient.interested_in}
+                        disabled={isFinalizedInvoice}
                         onChange={(event) => setQuickClient({ ...quickClient, interested_in: event.target.value })}
                         className="rounded-md border bg-white px-3 py-2 text-sm"
                         placeholder={t('clients.interestedIn')}
@@ -2153,7 +2220,7 @@ export default function InvoicesPage() {
                   <span className="text-sm font-medium">{t('invoices.invoiceNumber')}</span>
                   {!isOnline && invoiceLocalDraftId
                     ? <span className="block rounded-md border border-dashed px-3 py-2 text-sm text-slate-500">{t('offline.invoice.offlineNumber')}</span>
-                    : <input value={formData.invoice_number} onChange={(event) => setFormData({ ...formData, invoice_number: event.target.value })} className="w-full rounded-md border px-3 py-2" required />}
+                    : <input value={formData.invoice_number} disabled={isFinalizedInvoice} onChange={(event) => setFormData({ ...formData, invoice_number: event.target.value })} className="w-full rounded-md border px-3 py-2 disabled:bg-slate-50 disabled:text-slate-600" required />}
                 </label>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.status')}</span>
@@ -2167,20 +2234,21 @@ export default function InvoicesPage() {
                 </label>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.issueDate')}</span>
-                  <input type="date" value={formData.issue_date} onChange={(event) => setFormData({ ...formData, issue_date: event.target.value })} className="w-full rounded-md border px-3 py-2" required />
+                  <input type="date" value={formData.issue_date} disabled={isFinalizedInvoice} onChange={(event) => setFormData({ ...formData, issue_date: event.target.value })} className="w-full rounded-md border px-3 py-2 disabled:bg-slate-50 disabled:text-slate-600" required />
                 </label>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('invoices.dueDate')}</span>
-                  <input type="date" value={formData.due_date} onChange={(event) => setFormData({ ...formData, due_date: event.target.value })} className="w-full rounded-md border px-3 py-2" />
+                  <input type="date" value={formData.due_date} disabled={isFinalizedInvoice} onChange={(event) => setFormData({ ...formData, due_date: event.target.value })} className="w-full rounded-md border px-3 py-2 disabled:bg-slate-50 disabled:text-slate-600" />
                 </label>
                 <label className="min-w-0 space-y-1 md:col-span-2">
                   <span className="text-sm font-medium">{t('invoiceSettings.paymentTerms')}</span>
-                  <textarea value={formData.payment_terms} onChange={(event) => setFormData({ ...formData, payment_terms: event.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2" />
+                  <textarea value={formData.payment_terms} disabled={isFinalizedInvoice} onChange={(event) => setFormData({ ...formData, payment_terms: event.target.value })} className="min-h-20 w-full rounded-md border px-3 py-2 disabled:bg-slate-50 disabled:text-slate-600" />
                 </label>
                 <label className="space-y-1">
                   <span className="text-sm font-medium">{t('common.currency')}</span>
                   <AppSelect
                     value={formData.currency}
+                    disabled={isFinalizedInvoice}
                     onChange={(value) => setFormData({ ...formData, currency: normalizeCurrencyCode(value) })}
                     options={currencyOptions.map((option) => ({ value: option.code, label: `${option.code} - ${option.label}` }))}
                   />
@@ -2189,6 +2257,7 @@ export default function InvoicesPage() {
                   <span className="text-sm font-medium">{t('invoices.taxCountry')}</span>
                   <AppSelect
                     value={formData.tax_country}
+                    disabled={isFinalizedInvoice}
                     onChange={(value) => {
                       const nextCountry = value as TaxCountryCode
                       const nextRate = getTaxRate(nextCountry, 'standard')
@@ -2213,6 +2282,7 @@ export default function InvoicesPage() {
                       <span className="text-sm font-medium">{t('invoices.paymentMethod')}</span>
                       <AppSelect
                         value={formData.payment_method}
+                        disabled={isExistingPaidInvoice}
                         onChange={(value) => setFormData({ ...formData, payment_method: value as PaymentMethod })}
                         options={[
                           { value: 'bank_transfer', label: t('invoices.paymentBankTransfer') },
@@ -2228,9 +2298,10 @@ export default function InvoicesPage() {
                         min="0"
                         step="0.01"
                         value={formData.amount_paid}
+                        disabled={isExistingPaidInvoice}
                         onChange={(event) => setFormData({ ...formData, amount_paid: event.target.value })}
                         className="w-full rounded-md border bg-white px-3 py-2"
-                        placeholder={String(calculated.total)}
+                        placeholder={String(invoiceTotalForPayment)}
                       />
                       {formData.payment_method === 'bank_transfer' && companyIban && (
                         <p className="text-xs text-slate-500">IBAN: {companyIban}</p>
@@ -2241,6 +2312,7 @@ export default function InvoicesPage() {
                     <input
                       type="checkbox"
                       checked={formData.split_payment}
+                      disabled={isExistingPaidInvoice}
                       onChange={(event) => setFormData({
                         ...formData,
                         split_payment: event.target.checked,
@@ -2256,6 +2328,7 @@ export default function InvoicesPage() {
                         <div key={index} className="grid gap-2 rounded-md border border-slate-200 bg-white p-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)_auto]">
                           <AppSelect
                             value={payment.method}
+                            disabled={isExistingPaidInvoice}
                             onChange={(value) => setFormData({
                               ...formData,
                               payments: formData.payments.map((item, itemIndex) => itemIndex === index ? { ...item, method: value as PaymentMethod } : item),
@@ -2272,6 +2345,7 @@ export default function InvoicesPage() {
                             min="0"
                             step="0.01"
                             value={payment.amount}
+                            disabled={isExistingPaidInvoice}
                             onChange={(event) => setFormData({
                               ...formData,
                               payments: formData.payments.map((item, itemIndex) => itemIndex === index ? { ...item, amount: Number(event.target.value) } : item),
@@ -2281,6 +2355,7 @@ export default function InvoicesPage() {
                           />
                           <input
                             value={payment.reference ?? ''}
+                            disabled={isExistingPaidInvoice}
                             onChange={(event) => setFormData({
                               ...formData,
                               payments: formData.payments.map((item, itemIndex) => itemIndex === index ? { ...item, reference: event.target.value } : item),
@@ -2292,6 +2367,7 @@ export default function InvoicesPage() {
                             type="button"
                             variant="outline"
                             size="sm"
+                            disabled={isExistingPaidInvoice}
                             onClick={() => setFormData({ ...formData, payments: formData.payments.filter((_, itemIndex) => itemIndex !== index) })}
                           >
                             {t('common.delete')}
@@ -2299,7 +2375,7 @@ export default function InvoicesPage() {
                         </div>
                       ))}
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => setFormData({ ...formData, payments: [...formData.payments, newPaymentAllocation('cash')] })}>
+                        <Button type="button" variant="outline" size="sm" disabled={isExistingPaidInvoice} onClick={() => setFormData({ ...formData, payments: [...formData.payments, newPaymentAllocation('cash')] })}>
                           {t('invoices.addPaymentPart')}
                         </Button>
                         <p className="text-sm text-slate-600">
@@ -2311,6 +2387,7 @@ export default function InvoicesPage() {
                 </div>
               )}
 
+              <fieldset disabled={isFinalizedInvoice} className="min-w-0 space-y-5">
               {(!companyIban || !companyLegalDetails?.bic || !companyLegalDetails?.account_holder || !companyLegalDetails?.bank_name || !companyLegalDetails?.tax_number) && (
                 <p role="status" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('invoiceSettings.missingPaymentDetails')}</p>
               )}
@@ -2321,7 +2398,7 @@ export default function InvoicesPage() {
                   <Button type="button" variant="outline" size="sm" onClick={() => setFormData({ ...formData, items: [...formData.items, newItem(getTaxRate(formData.tax_country, 'standard'))] })}>{t('invoices.addItem')}</Button>
                 </div>
                 {formData.items.map((item, index) => {
-                  const normalizedLine = calculateItems([item]).items[0]
+                  const normalizedLine = isFinalizedInvoice ? item : calculateItems([item]).items[0]
                   return (
                     <div key={index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_130px_110px_150px_130px_120px_auto]">
                       <label className="space-y-1">
@@ -2464,10 +2541,11 @@ export default function InvoicesPage() {
               </fieldset>
 
               <div className="ml-auto max-w-xs space-y-2 rounded-md border bg-slate-50 p-4 text-sm">
-                <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(calculated.subtotal, formData.currency)}</span></div>
-                <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(calculated.taxAmount, formData.currency)}</span></div>
-                <div className="flex justify-between border-t pt-2 font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(calculated.total, formData.currency)}</span></div>
+                <div className="flex justify-between"><span>{t('invoices.subtotal')}</span><span>{formatCurrency(invoiceSubtotalForDisplay, formData.currency)}</span></div>
+                <div className="flex justify-between"><span>{t('invoices.tax')}</span><span>{formatCurrency(invoiceTaxForDisplay, formData.currency)}</span></div>
+                <div className="flex justify-between border-t pt-2 font-semibold"><span>{t('invoices.total')}</span><span>{formatCurrency(invoiceTotalForPayment, formData.currency)}</span></div>
               </div>
+              </fieldset>
 
               <div className="flex flex-wrap gap-2">
                 {isOnline
@@ -2570,10 +2648,12 @@ export default function InvoicesPage() {
                     <Printer className="h-4 w-4" />
                     {t('common.print')}
                   </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setDeleteInvoice(invoice)}>
-                    <Trash2 className="h-4 w-4" />
-                    {t('common.delete')}
-                  </Button>
+                  {canDeleteInvoice(invoice) && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setDeleteInvoice(invoice)}>
+                      <Trash2 className="h-4 w-4" />
+                      {t('common.delete')}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
