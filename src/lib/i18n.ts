@@ -37,6 +37,7 @@ import { productCategoriesDictionaries, productCategoriesWooDictionaries } from 
 import { productWorkspaceDictionaries } from '@/lib/product-workspace-i18n'
 import { dashboardAttentionDictionaries } from '@/lib/dashboard-attention-i18n'
 import { invoiceImmutabilityDictionaries } from '@/lib/invoice-immutability-i18n'
+import { cashBookModuleDictionaries } from '@/lib/cash-book-module-i18n'
 
 export const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 
@@ -9403,6 +9404,7 @@ for (const locale of locales) {
   Object.assign(dictionaries[locale], productWorkspaceDictionaries[locale])
   Object.assign(dictionaries[locale], dashboardAttentionDictionaries[locale])
   Object.assign(dictionaries[locale], invoiceImmutabilityDictionaries[locale])
+  Object.assign(dictionaries[locale], cashBookModuleDictionaries[locale])
 }
 
 Object.assign(dictionaries.uk, ukrainianAuthenticatedFixes)
