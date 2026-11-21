@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { formatApiError, requireOwnedCompany } from '@/app/api/woocommerce/_utils'
 import { encryptSecret, encryptSecretForStorage, maskSecret as maskStoredSecret } from '@/lib/credential-encryption'
 import { isStoreProvider, normalizeStoreUrl, type StoreProvider } from '@/lib/store-integrations'
+import { sanitizeIntegrationErrorMessage } from '@/lib/integration-presentation'
 
 export const runtime = 'nodejs'
 
@@ -90,6 +91,7 @@ function secretForStorage(nextValue: string, existingValue?: string | null) {
 
 function publicIntegration(row: StoreIntegrationRow) {
   const exposesManualCredentialState = row.provider === 'opencart'
+  const metadata = row.metadata ?? {}
   return {
     id: row.id,
     provider: row.provider,
@@ -105,10 +107,22 @@ function publicIntegration(row: StoreIntegrationRow) {
     lastSyncAt: row.last_sync_at,
     connectedAt: row.connected_at ?? null,
     lastWebhookAt: row.last_webhook_at ?? null,
-    errorMessage: row.error_message ?? '',
-    metadata: row.metadata ?? null,
+    errorMessage: sanitizeIntegrationErrorMessage(row.error_message),
+    metadata: {
+      ...(typeof metadata.clientCreationMode === 'string' ? { clientCreationMode: metadata.clientCreationMode } : {}),
+      ...(typeof metadata.primaryDisplayPhoneNumber === 'string'
+        ? { displayPhoneNumber: metadata.primaryDisplayPhoneNumber }
+        : typeof metadata.displayPhoneNumber === 'string'
+          ? { displayPhoneNumber: metadata.displayPhoneNumber }
+          : {}),
+    },
     updatedAt: row.updated_at,
   }
+}
+
+type PublicIntegration = Omit<ReturnType<typeof publicIntegration>, 'status'> & {
+  status: StoreIntegrationRow['status'] | 'unverified'
+  metadata: ReturnType<typeof publicIntegration>['metadata'] | null
 }
 
 function publicWhatsAppNumber(row: Record<string, unknown>) {
@@ -123,7 +137,7 @@ function publicWhatsAppNumber(row: Record<string, unknown>) {
     isDefault: Boolean(row.is_default),
     connectedAt: typeof row.connected_at === 'string' ? row.connected_at : null,
     lastWebhookAt: typeof row.last_webhook_at === 'string' ? row.last_webhook_at : null,
-    lastError: String(row.last_error ?? ''),
+    lastError: sanitizeIntegrationErrorMessage(String(row.last_error ?? '')),
     clientCreationMode: String(row.client_creation_mode ?? 'ask'),
   }
 }
@@ -157,7 +171,7 @@ export async function GET(request: Request) {
       throw error
     }
 
-    const integrations = error && isMissingRelation(error)
+    const integrations: PublicIntegration[] = error && isMissingRelation(error)
       ? []
       : (rows as StoreIntegrationRow[]).map(publicIntegration)
 
@@ -172,6 +186,7 @@ export async function GET(request: Request) {
       if (wooError && wooError.code !== '42P01') throw wooError
 
       if (wooConnection?.active) {
+        // The legacy active flag is set when credentials are saved, not after a connection test.
         integrations.push({
           id: 'woocommerce-legacy',
           provider: 'woocommerce',
@@ -183,12 +198,12 @@ export async function GET(request: Request) {
           merchantId: '',
           accessTokenPreview: '',
           refreshTokenPreview: '',
-          status: 'connected',
+          status: 'unverified',
           lastSyncAt: null,
           connectedAt: wooConnection.updated_at ?? null,
           lastWebhookAt: null,
           errorMessage: '',
-          metadata: null,
+          metadata: {},
           updatedAt: wooConnection.updated_at ?? null,
         })
       }

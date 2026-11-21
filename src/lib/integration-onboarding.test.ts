@@ -8,6 +8,8 @@ const integrationsPage = readFileSync(new URL('../app/(app)/settings/integration
 const integrationRoute = readFileSync(new URL('../app/api/store-integrations/route.ts', import.meta.url), 'utf8')
 const openCartTestRoute = readFileSync(new URL('../app/api/store-integrations/opencart/test/route.ts', import.meta.url), 'utf8')
 const connectionPage = readFileSync(new URL('../app/(app)/settings/integrations/[connectionId]/page.tsx', import.meta.url), 'utf8')
+const wooSettingsPage = readFileSync(new URL('../app/(app)/settings/integrations/woocommerce/page.tsx', import.meta.url), 'utf8')
+const wooConnectionRoute = readFileSync(new URL('../app/api/woocommerce/connection/route.ts', import.meta.url), 'utf8')
 
 test('classifies every listed provider with an explicit onboarding mode', () => {
   assert.equal(integrationCatalog.length, 13)
@@ -47,6 +49,40 @@ test('preserves the dedicated WooCommerce onboarding route', () => {
   assert.equal(provider.mode, 'dedicated')
   assert.equal(provider.directSettings, '/app/settings/integrations/woocommerce')
   assert.equal(canStartIntegrationSetup(provider), true)
+})
+
+test('legacy WooCommerce credentials are not presented as a verified connection', () => {
+  assert.match(integrationRoute, /status: 'unverified'/)
+  assert.match(integrationRoute, /errorMessage: sanitizeIntegrationErrorMessage\(row\.error_message\)/)
+  assert.match(integrationRoute, /lastError: sanitizeIntegrationErrorMessage/)
+  assert.match(integrationRoute, /metadata: \{[\s\S]*clientCreationMode[\s\S]*displayPhoneNumber/)
+  assert.doesNotMatch(integrationRoute, /metadata: row\.metadata \?\? null/)
+  assert.equal(getIntegrationProviderState(getIntegrationCatalogItem('woocommerce'), 'unverified'), 'unverified')
+})
+
+test('WooCommerce distinguishes saved credentials from a successful test without exposing credentials', () => {
+  assert.match(wooConnectionRoute, /configured: Boolean\(row\?\.active\)/)
+  assert.match(wooConnectionRoute, /verified: false/)
+  assert.match(wooSettingsPage, /status\.configured \? \(status\.verified \? t\('woocommerce\.connected'\)/)
+  assert.match(wooSettingsPage, /setStatus\(\(previous\) => \(\{ \.\.\.previous, verified: true \}\)\)/)
+  assert.match(wooSettingsPage, /<ConfirmDialog/)
+  assert.doesNotMatch(wooConnectionRoute, /consumerKey:\s*row\.consumer_key|consumerSecret:\s*row\.consumer_secret/)
+})
+
+test('disconnect requires accessible confirmation on both integration screens', () => {
+  for (const source of [integrationsPage, connectionPage]) {
+    assert.match(source, /<ConfirmDialog/)
+    assert.match(source, /disconnectConfirm:/)
+    assert.match(source, /onCancel=\{\(\) => setConfirmDisconnectOpen\(false\)\}/)
+  }
+})
+
+test('integration pages clear prior workspace state and ignore stale responses', () => {
+  for (const source of [integrationsPage, connectionPage]) {
+    assert.match(source, /useLayoutEffect\(\(\) => \{[\s\S]*displayedWorkspaceIdRef/)
+    assert.match(source, /currentWorkspaceIdRef\.current !== currentCompany\.id/)
+    assert.match(source, /integrationRequestRef\.current\?\.abort\(\)|connectionRequestRef\.current\?\.abort\(\)/)
+  }
 })
 
 test('exposes only provider-specific onboarding fields', () => {

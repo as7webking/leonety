@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BookOpen, BriefcaseBusiness, Building2, Clock3, KeyRound, Plug, Store, Unplug, X } from 'lucide-react'
 import { EmptyState, PageContainer, PageHeader } from '@/components'
 import { AppSelect } from '@/components/app-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { createClient } from '@/lib/supabase-client'
@@ -23,7 +24,7 @@ import {
   type StoreProvider as Provider,
 } from '@/lib/integration-catalog'
 
-type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
+type IntegrationStatus = 'not_connected' | 'connected' | 'unverified' | 'error' | 'disabled'
 type WhatsAppClientCreationMode = 'ask' | 'auto_create_lead' | 'never'
 
 declare global {
@@ -89,6 +90,7 @@ const copy: Record<Locale, Record<string, string>> = {
     refreshToken: 'Refresh token',
     save: 'Save connection',
     disconnect: 'Disconnect',
+    disconnectConfirm: 'Disconnect this integration and remove its saved authorization?',
     openWoo: 'Open WooCommerce tools',
     connected: 'Connected',
     notConnected: 'Not connected',
@@ -150,6 +152,7 @@ const copy: Record<Locale, Record<string, string>> = {
     refreshToken: 'Refresh Token',
     save: 'Verbindung speichern',
     disconnect: 'Trennen',
+    disconnectConfirm: 'Diese Integration trennen und die gespeicherte Autorisierung entfernen?',
     openWoo: 'WooCommerce-Werkzeuge öffnen',
     connected: 'Verbunden',
     notConnected: 'Nicht verbunden',
@@ -211,6 +214,7 @@ const copy: Record<Locale, Record<string, string>> = {
     refreshToken: 'Refresh token',
     save: 'Bağlantıyı kaydet',
     disconnect: 'Bağlantıyı kes',
+    disconnectConfirm: 'Bu entegrasyon kesilip kayıtlı yetkilendirme kaldırılsın mı?',
     openWoo: 'WooCommerce araçlarını aç',
     connected: 'Bağlı',
     notConnected: 'Bağlı değil',
@@ -272,6 +276,7 @@ const copy: Record<Locale, Record<string, string>> = {
     refreshToken: 'Refresh token',
     save: 'Сохранить подключение',
     disconnect: 'Отключить',
+    disconnectConfirm: 'Отключить интеграцию и удалить сохранённую авторизацию?',
     openWoo: 'Открыть инструменты WooCommerce',
     connected: 'Подключено',
     notConnected: 'Не подключено',
@@ -333,6 +338,7 @@ const copy: Record<Locale, Record<string, string>> = {
     refreshToken: 'Refresh token',
     save: 'Зберегти підключення',
     disconnect: 'Відключити',
+    disconnectConfirm: 'Відключити інтеграцію та видалити збережену авторизацію?',
     openWoo: 'Відкрити інструменти WooCommerce',
     connected: 'Підключено',
     notConnected: 'Не підключено',
@@ -394,6 +400,7 @@ const copy: Record<Locale, Record<string, string>> = {
     refreshToken: 'Refresh token',
     save: 'Zapisz połączenie',
     disconnect: 'Odłącz',
+    disconnectConfirm: 'Odłączyć tę integrację i usunąć zapisaną autoryzację?',
     openWoo: 'Otwórz narzędzia WooCommerce',
     connected: 'Połączono',
     notConnected: 'Nie połączono',
@@ -455,6 +462,7 @@ const copy: Record<Locale, Record<string, string>> = {
     refreshToken: 'Refresh token',
     save: 'Enregistrer la connexion',
     disconnect: 'Déconnecter',
+    disconnectConfirm: 'Déconnecter cette intégration et supprimer son autorisation enregistrée ?',
     openWoo: 'Ouvrir les outils WooCommerce',
     connected: 'Connecté',
     notConnected: 'Non connecté',
@@ -505,6 +513,7 @@ const copy: Record<Locale, Record<string, string>> = {
 }
 
 function providerStateKey(state: IntegrationProviderState) {
+  if (state === 'unverified') return 'integrationOnboarding.unverified'
   if (state === 'configuration_required') return 'integrationOnboarding.configurationRequired'
   if (state === 'partner_required') return 'integrationOnboarding.partnerRequired'
   if (state === 'coming_soon') return 'integrationOnboarding.comingSoon'
@@ -514,7 +523,7 @@ function providerStateKey(state: IntegrationProviderState) {
 function providerStateClass(state: IntegrationProviderState) {
   if (state === 'connected') return 'bg-green-100 text-green-700'
   if (state === 'error') return 'bg-red-100 text-red-700'
-  if (state === 'configuration_required' || state === 'partner_required') return 'bg-amber-100 text-amber-800'
+  if (state === 'configuration_required' || state === 'partner_required' || state === 'unverified') return 'bg-amber-100 text-amber-800'
   if (state === 'available') return 'bg-blue-100 text-blue-700'
   return 'bg-slate-100 text-slate-600'
 }
@@ -551,7 +560,11 @@ export default function StoreIntegrationsPage() {
   const [guideOpen, setGuideOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false)
   const integrationRequestRef = useRef<AbortController | null>(null)
+  const currentWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  const displayedWorkspaceIdRef = useRef<string | null>(null)
+  currentWorkspaceIdRef.current = currentCompany?.id ?? null
   const whatsAppSignupDataRef = useRef<Record<string, unknown>>({})
   const selectedProvider = useMemo(() => providerOptions.find((item) => item.value === provider) ?? providerOptions[0], [provider])
   const currentIntegration = integrations.find((item) => item.provider === provider)
@@ -559,6 +572,18 @@ export default function StoreIntegrationsPage() {
   const hasSetupGuide = provider === 'woocommerce' || provider === 'whatsapp_business' || provider === 'iss_pos' ||
     provider === 'google_merchant'
   useBodyScrollLock(guideOpen)
+
+  useLayoutEffect(() => {
+    const workspaceId = currentCompany?.id ?? null
+    if (displayedWorkspaceIdRef.current === workspaceId) return
+    displayedWorkspaceIdRef.current = workspaceId
+    integrationRequestRef.current?.abort()
+    integrationRequestRef.current = null
+    setIntegrations([])
+    setPublicationCounts(null)
+    setPublicationCountsError(false)
+    setError('')
+  }, [currentCompany?.id])
   const guideStepKeys = useMemo(() => {
     if (provider === 'woocommerce') return [
       'integrations.guide.woocommerce.1',
@@ -615,6 +640,7 @@ export default function StoreIntegrationsPage() {
         signal: controller.signal,
       })
       const payload = await response.json().catch(() => ({}))
+      if (controller.signal.aborted || currentWorkspaceIdRef.current !== currentCompany.id) return
 
       if (!response.ok) {
         setIntegrations([])
@@ -644,12 +670,15 @@ export default function StoreIntegrationsPage() {
 
   const loadPublicationCounts = useCallback(async () => {
     if (!currentCompany) return
+    const workspaceId = currentCompany.id
     setPublicationCountsError(false)
     const [productsResult, wooResult, shopifyResult] = await Promise.all([
       supabase.from('products').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id),
       supabase.from('product_syncs').select('external_product_id, sync_status, last_synced_at').eq('company_id', currentCompany.id).eq('channel', 'woocommerce'),
       supabase.from('product_syncs').select('external_product_id, sync_status, last_synced_at').eq('company_id', currentCompany.id).eq('channel', 'shopify'),
     ])
+
+    if (currentWorkspaceIdRef.current !== workspaceId) return
 
     if (productsResult.error || wooResult.error || shopifyResult.error) {
       setPublicationCounts(null)
@@ -1113,7 +1142,7 @@ export default function StoreIntegrationsPage() {
                   </Button>
                 )}
                 {currentIntegration && selectedProvider.mode !== 'coming_soon' && (
-                  <Button type="button" variant="outline" disabled={saving} onClick={handleDisconnect}>{labels.disconnect}</Button>
+                  <Button type="button" variant="outline" disabled={saving} onClick={() => setConfirmDisconnectOpen(true)}>{labels.disconnect}</Button>
                 )}
                 {selectedProvider.directSettings && (
                   <Link href={selectedProvider.directSettings}>
@@ -1267,6 +1296,19 @@ export default function StoreIntegrationsPage() {
           </section>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmDisconnectOpen}
+        title={labels.disconnect}
+        description={labels.disconnectConfirm}
+        confirmLabel={labels.disconnect}
+        cancelLabel={t('common.cancel')}
+        destructive
+        onConfirm={async () => {
+          await handleDisconnect()
+          setConfirmDisconnectOpen(false)
+        }}
+        onCancel={() => setConfirmDisconnectOpen(false)}
+      />
     </PageContainer>
   )
 }

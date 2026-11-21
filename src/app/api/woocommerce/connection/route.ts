@@ -17,7 +17,8 @@ interface ConnectionRow {
 
 function publicConnection(row: ConnectionRow | null) {
   return {
-    connected: Boolean(row?.active),
+    configured: Boolean(row?.active),
+    verified: false,
     storeUrl: row?.store_url ?? '',
     consumerKeyPreview: row ? maskSecret(row.consumer_key) : '',
     consumerSecretPreview: row ? maskSecret(row.consumer_secret) : '',

@@ -3,7 +3,16 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { getChannelPublicationCounts, getProductChannelPresentation } from './integration-presentation.ts'
+import { getChannelPublicationCounts, getProductChannelPresentation, sanitizeIntegrationErrorMessage } from './integration-presentation.ts'
+
+test('integration error presentation redacts credentials and bounds provider text', () => {
+  const message = sanitizeIntegrationErrorMessage('Authorization: Bearer abc.def_ghi password="do-not-show" https://user:pass@example.test/?access_token=secret')
+  assert.equal(message.includes('abc.def_ghi'), false)
+  assert.equal(message.includes('do-not-show'), false)
+  assert.equal(message.includes('user:pass'), false)
+  assert.equal(message.includes('access_token=secret'), false)
+  assert.ok(message.length <= 300)
+})
 
 test('publication counts require both successful status and external ID', () => {
   const counts = getChannelPublicationCounts(7, [

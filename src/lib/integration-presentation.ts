@@ -4,6 +4,18 @@ export interface ChannelSyncRecord {
   last_synced_at?: string | null
 }
 
+export function sanitizeIntegrationErrorMessage(value: string | null | undefined) {
+  if (!value) return ''
+
+  return value
+    .replace(/\s+/g, ' ')
+    .replace(/https?:\/\/[^\s/@:]+:[^\s/@]+@/gi, 'https://[redacted]@')
+    .replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi, '[redacted authorization]')
+    .replace(/((?:api|consumer)[_-]?(?:key|secret)|access[_-]?token|refresh[_-]?token|password|authorization|secret|token|credential)(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s&,;"'}]+)/gi, '$1$2[redacted]')
+    .replace(/([?&](?:api[_-]?key|consumer[_-]?(?:key|secret)|access[_-]?token|refresh[_-]?token|password|authorization|secret|token|signature)=)[^&#\s]*/gi, '$1[redacted]')
+    .slice(0, 300)
+}
+
 export function getChannelPublicationCounts(totalProducts: number, records: ChannelSyncRecord[]) {
   const published = records.filter((row) => row.sync_status === 'synced' && Boolean(row.external_product_id)).length
   const errors = records.filter((row) => row.sync_status === 'failed').length

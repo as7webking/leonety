@@ -7,12 +7,14 @@ import { BriefcaseBusiness, Building2, ExternalLink, HelpCircle, Plug, Unplug } 
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { OrderNotificationsSettings } from '@/components/order-notifications-settings'
 
 interface WooConnectionStatus {
-  connected: boolean
+  configured: boolean
+  verified: boolean
   storeUrl: string
   consumerKeyPreview: string
   consumerSecretPreview: string
@@ -31,7 +33,8 @@ interface WooPreviewProduct {
 }
 
 const emptyStatus: WooConnectionStatus = {
-  connected: false,
+  configured: false,
+  verified: false,
   storeUrl: '',
   consumerKeyPreview: '',
   consumerSecretPreview: '',
@@ -57,6 +60,7 @@ export default function WooCommerceSettingsPage() {
   const [previewCategories, setPreviewCategories] = useState<string[]>([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [disconnectConfirmationOpen, setDisconnectConfirmationOpen] = useState(false)
 
   const loadConnection = useCallback(async () => {
     if (!currentCompany) {
@@ -112,8 +116,10 @@ export default function WooCommerceSettingsPage() {
 
     if (!response.ok) {
       setError(payload.error ?? t('woocommerce.connectionFailed'))
+      setStatus((previous) => ({ ...previous, verified: false }))
     } else {
       setMessage(t('woocommerce.connectionTested'))
+      setStatus((previous) => ({ ...previous, verified: true }))
     }
 
     setTesting(false)
@@ -181,6 +187,7 @@ export default function WooCommerceSettingsPage() {
     }
 
     setSaving(false)
+    setDisconnectConfirmationOpen(false)
   }
 
   const handleImportProducts = async (options?: { silent?: boolean }) => {
@@ -276,7 +283,7 @@ export default function WooCommerceSettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
           {[
-            { name: 'WooCommerce', status: status.connected ? t('woocommerce.connected') : t('woocommerce.notConnected') },
+            { name: 'WooCommerce', status: status.configured ? (status.verified ? t('woocommerce.connected') : t('integrationOnboarding.unverified')) : t('woocommerce.notConnected') },
             { name: 'Shopify', status: t('integrations.comingSoon') },
             { name: 'OpenCart', status: t('integrations.comingSoon') },
           ].map((integration) => (
@@ -292,9 +299,9 @@ export default function WooCommerceSettingsPage() {
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>{t('woocommerce.integrationSettings')}</CardTitle>
-            <span className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-sm ${status.connected ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'}`}>
-              {status.connected ? <Plug className="h-4 w-4" /> : <Unplug className="h-4 w-4" />}
-              {status.connected ? t('woocommerce.connected') : t('woocommerce.notConnected')}
+            <span className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-sm ${status.verified ? 'bg-green-100 text-green-800' : status.configured ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+              {status.configured ? <Plug className="h-4 w-4" /> : <Unplug className="h-4 w-4" />}
+              {status.verified ? t('woocommerce.connected') : status.configured ? t('integrationOnboarding.unverified') : t('woocommerce.notConnected')}
             </span>
           </div>
         </CardHeader>
@@ -326,7 +333,7 @@ export default function WooCommerceSettingsPage() {
               <span className="text-sm font-medium">{t('woocommerce.storeUrl')}</span>
               <input
                 value={storeUrl}
-                onChange={(event) => setStoreUrl(event.target.value)}
+                onChange={(event) => { setStoreUrl(event.target.value); setStatus((previous) => ({ ...previous, verified: false })) }}
                 placeholder="https://example.com"
                 className="w-full rounded-md border px-3 py-2"
                 required
@@ -338,8 +345,8 @@ export default function WooCommerceSettingsPage() {
                 <span className="text-sm font-medium">{t('woocommerce.consumerKey')}</span>
                 <input
                   value={consumerKey}
-                  onChange={(event) => setConsumerKey(event.target.value)}
-                  placeholder={status.connected ? t('woocommerce.keepSecretHint') : 'ck_...'}
+                  onChange={(event) => { setConsumerKey(event.target.value); setStatus((previous) => ({ ...previous, verified: false })) }}
+                  placeholder={status.configured ? t('woocommerce.keepSecretHint') : 'ck_...'}
                   className="w-full rounded-md border px-3 py-2"
                   autoComplete="off"
                 />
@@ -349,15 +356,15 @@ export default function WooCommerceSettingsPage() {
                 <input
                   type="password"
                   value={consumerSecret}
-                  onChange={(event) => setConsumerSecret(event.target.value)}
-                  placeholder={status.connected ? t('woocommerce.keepSecretHint') : 'cs_...'}
+                  onChange={(event) => { setConsumerSecret(event.target.value); setStatus((previous) => ({ ...previous, verified: false })) }}
+                  placeholder={status.configured ? t('woocommerce.keepSecretHint') : 'cs_...'}
                   className="w-full rounded-md border px-3 py-2"
                   autoComplete="new-password"
                 />
               </label>
             </div>
 
-            {status.connected && (
+            {status.configured && (
               <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 md:grid-cols-3">
                 <div>
                   <p className="text-xs font-medium uppercase text-slate-500">{t('woocommerce.savedStore')}</p>
@@ -394,17 +401,17 @@ export default function WooCommerceSettingsPage() {
               <Button type="submit" disabled={saving}>
                 {saving ? t('common.loading') : t('woocommerce.saveConnection')}
               </Button>
-              {status.connected && (
-                <Button type="button" variant="outline" onClick={handleDisconnect} disabled={saving}>
+              {status.configured && (
+                <Button type="button" variant="outline" onClick={() => setDisconnectConfirmationOpen(true)} disabled={saving}>
                   {t('woocommerce.disconnect')}
                 </Button>
               )}
-              {status.connected && (
+              {status.configured && (
                 <Button type="button" variant="outline" onClick={() => void handleImportProducts()} disabled={importing || saving}>
                   {importing ? t('common.loading') : t('woocommerce.importProducts')}
                 </Button>
               )}
-              {status.connected && (
+              {status.configured && (
                 <Button type="button" variant="outline" onClick={handlePreviewCatalog} disabled={previewLoading || saving}>
                   {previewLoading ? t('common.loading') : t('woocommerce.previewCatalog')}
                 </Button>
@@ -414,7 +421,18 @@ export default function WooCommerceSettingsPage() {
         </CardContent>
       </Card>
 
-      <OrderNotificationsSettings companyId={currentCompany.id} companyName={currentCompany.name} wooConnected={status.connected} />
+      <OrderNotificationsSettings companyId={currentCompany.id} companyName={currentCompany.name} wooConnected={status.configured} />
+
+      <ConfirmDialog
+        open={disconnectConfirmationOpen}
+        title={t('woocommerce.disconnect')}
+        description={t('woocommerce.disconnectConfirmation')}
+        confirmLabel={t('woocommerce.disconnect')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        onConfirm={handleDisconnect}
+        onCancel={() => setDisconnectConfirmationOpen(false)}
+      />
 
       {(previewProducts.length > 0 || previewCategories.length > 0) && (
         <Card className="mt-5">

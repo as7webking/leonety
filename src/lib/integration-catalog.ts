@@ -28,6 +28,7 @@ export type IntegrationSetupMethod =
 export type IntegrationProviderState =
   | 'available'
   | 'connected'
+  | 'unverified'
   | 'configuration_required'
   | 'partner_required'
   | 'coming_soon'
@@ -65,9 +66,10 @@ export function getIntegrationCatalogItem(provider: StoreProvider) {
 
 export function getIntegrationProviderState(
   item: IntegrationCatalogItem,
-  connectionStatus?: 'not_connected' | 'connected' | 'error' | 'disabled'
+  connectionStatus?: 'not_connected' | 'connected' | 'unverified' | 'error' | 'disabled'
 ): IntegrationProviderState {
   if (connectionStatus === 'connected') return 'connected'
+  if (connectionStatus === 'unverified') return 'unverified'
   if (connectionStatus === 'error') return 'error'
   return item.initialState
 }

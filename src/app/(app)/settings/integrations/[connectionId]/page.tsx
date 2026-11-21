@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Clock3, Plug, Store, Unplug } from 'lucide-react'
 import { EmptyState, LoadingSkeleton, PageContainer, PageHeader } from '@/components'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import type { Locale } from '@/lib/i18n'
@@ -15,7 +16,7 @@ import {
   getIntegrationOnboardingDescriptionKey,
   type StoreProvider as Provider,
 } from '@/lib/integration-catalog'
-type IntegrationStatus = 'not_connected' | 'connected' | 'error' | 'disabled'
+type IntegrationStatus = 'not_connected' | 'connected' | 'unverified' | 'error' | 'disabled'
 
 interface StoreIntegration {
   id: string
@@ -60,6 +61,7 @@ const copy: Record<Locale, Record<string, string>> = {
     description: 'Manage this connected store for the current workspace.',
     status: 'Status',
     connected: 'Connected',
+    unverified: 'Credentials saved; connection not verified',
     notConnected: 'Not connected',
     error: 'Error',
     provider: 'Provider',
@@ -78,6 +80,7 @@ const copy: Record<Locale, Record<string, string>> = {
     exportProducts: 'Export products CSV',
     syncProducts: 'Synchronize products',
     disconnect: 'Disconnect',
+    disconnectConfirm: 'Disconnect this integration and remove its saved authorization?',
     openLegacyWoo: 'Open WooCommerce tools',
     notFound: 'Connection not found for this workspace.',
     imported: 'Imported products: {count}.',
@@ -100,6 +103,7 @@ const copy: Record<Locale, Record<string, string>> = {
     description: 'Verwalte diesen verbundenen Shop für den aktuellen Arbeitsbereich.',
     status: 'Status',
     connected: 'Verbunden',
+    unverified: 'Zugangsdaten gespeichert; Verbindung nicht geprüft',
     notConnected: 'Nicht verbunden',
     error: 'Fehler',
     provider: 'Anbieter',
@@ -118,6 +122,7 @@ const copy: Record<Locale, Record<string, string>> = {
     exportProducts: 'Produkte als CSV exportieren',
     syncProducts: 'Produkte synchronisieren',
     disconnect: 'Trennen',
+    disconnectConfirm: 'Diese Integration trennen und die gespeicherte Autorisierung entfernen?',
     openLegacyWoo: 'WooCommerce-Werkzeuge öffnen',
     notFound: 'Verbindung für diesen Arbeitsbereich nicht gefunden.',
     imported: 'Importierte Produkte: {count}.',
@@ -140,6 +145,7 @@ const copy: Record<Locale, Record<string, string>> = {
     description: 'Управление этим подключенным магазином для текущего workspace.',
     status: 'Статус',
     connected: 'Подключено',
+    unverified: 'Данные сохранены; подключение не проверено',
     notConnected: 'Не подключено',
     error: 'Ошибка',
     provider: 'Провайдер',
@@ -158,6 +164,7 @@ const copy: Record<Locale, Record<string, string>> = {
     exportProducts: 'Экспорт товаров CSV',
     syncProducts: 'Синхронизировать товары',
     disconnect: 'Отключить',
+    disconnectConfirm: 'Отключить интеграцию и удалить сохранённую авторизацию?',
     openLegacyWoo: 'Открыть инструменты WooCommerce',
     notFound: 'Подключение для этого workspace не найдено.',
     imported: 'Импортировано товаров: {count}.',
@@ -180,6 +187,7 @@ const copy: Record<Locale, Record<string, string>> = {
     description: 'Geçerli çalışma alanı için bu mağaza bağlantısını yönetin.',
     status: 'Durum',
     connected: 'Bağlı',
+    unverified: 'Bilgiler kaydedildi; bağlantı doğrulanmadı',
     notConnected: 'Bağlı değil',
     error: 'Hata',
     provider: 'Sağlayıcı',
@@ -198,6 +206,7 @@ const copy: Record<Locale, Record<string, string>> = {
     exportProducts: 'Ürünleri CSV dışa aktar',
     syncProducts: 'Ürünleri senkronize et',
     disconnect: 'Bağlantıyı kes',
+    disconnectConfirm: 'Bu entegrasyon kesilip kayıtlı yetkilendirme kaldırılsın mı?',
     openLegacyWoo: 'WooCommerce araçlarını aç',
     notFound: 'Bu çalışma alanı için bağlantı bulunamadı.',
     imported: 'İçe aktarılan ürünler: {count}.',
@@ -220,6 +229,7 @@ const copy: Record<Locale, Record<string, string>> = {
     description: 'Керуйте цим підключеним магазином для поточного workspace.',
     status: 'Статус',
     connected: 'Підключено',
+    unverified: 'Дані збережено; з’єднання не перевірено',
     notConnected: 'Не підключено',
     error: 'Помилка',
     provider: 'Провайдер',
@@ -238,6 +248,7 @@ const copy: Record<Locale, Record<string, string>> = {
     exportProducts: 'Експорт товарів CSV',
     syncProducts: 'Синхронізувати товари',
     disconnect: 'Відключити',
+    disconnectConfirm: 'Відключити інтеграцію та видалити збережену авторизацію?',
     openLegacyWoo: 'Відкрити інструменти WooCommerce',
     notFound: 'Підключення для цього workspace не знайдено.',
     imported: 'Імпортовано товарів: {count}.',
@@ -260,6 +271,7 @@ const copy: Record<Locale, Record<string, string>> = {
     description: 'Zarządzaj tym połączonym sklepem dla bieżącego workspace.',
     status: 'Status',
     connected: 'Połączono',
+    unverified: 'Dane zapisane; połączenie niezweryfikowane',
     notConnected: 'Nie połączono',
     error: 'Błąd',
     provider: 'Dostawca',
@@ -278,6 +290,7 @@ const copy: Record<Locale, Record<string, string>> = {
     exportProducts: 'Eksport produktów CSV',
     syncProducts: 'Synchronizuj produkty',
     disconnect: 'Odłącz',
+    disconnectConfirm: 'Odłączyć tę integrację i usunąć zapisaną autoryzację?',
     openLegacyWoo: 'Otwórz narzędzia WooCommerce',
     notFound: 'Nie znaleziono połączenia dla tego workspace.',
     imported: 'Zaimportowano produkty: {count}.',
@@ -300,6 +313,7 @@ const copy: Record<Locale, Record<string, string>> = {
     description: 'Gérez cette boutique connectée pour l’espace de travail actuel.',
     status: 'Statut',
     connected: 'Connecté',
+    unverified: 'Identifiants enregistrés ; connexion non vérifiée',
     notConnected: 'Non connecté',
     error: 'Erreur',
     provider: 'Fournisseur',
@@ -318,6 +332,7 @@ const copy: Record<Locale, Record<string, string>> = {
     exportProducts: 'Exporter les produits CSV',
     syncProducts: 'Synchroniser les produits',
     disconnect: 'Déconnecter',
+    disconnectConfirm: 'Déconnecter cette intégration et supprimer son autorisation enregistrée ?',
     openLegacyWoo: 'Ouvrir les outils WooCommerce',
     notFound: 'Connexion introuvable pour cet espace de travail.',
     imported: 'Produits importés : {count}.',
@@ -338,6 +353,7 @@ const copy: Record<Locale, Record<string, string>> = {
 
 function statusLabel(status: IntegrationStatus, labels: Record<string, string>) {
   if (status === 'connected') return labels.connected
+  if (status === 'unverified') return labels.unverified
   if (status === 'error') return labels.error
   if (status === 'disabled') return labels.notConnected
   return labels.notConnected
@@ -366,12 +382,27 @@ export default function StoreIntegrationDetailPage() {
   const [busyAction, setBusyAction] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false)
   const connectionRequestRef = useRef<AbortController | null>(null)
+  const currentWorkspaceIdRef = useRef<string | null>(currentCompany?.id ?? null)
+  const displayedWorkspaceIdRef = useRef<string | null>(null)
+  currentWorkspaceIdRef.current = currentCompany?.id ?? null
 
   const connection = useMemo(
     () => integrations.find((item) => item.id === connectionId),
     [connectionId, integrations]
   )
+
+  useLayoutEffect(() => {
+    const workspaceId = currentCompany?.id ?? null
+    if (displayedWorkspaceIdRef.current === workspaceId) return
+    displayedWorkspaceIdRef.current = workspaceId
+    connectionRequestRef.current?.abort()
+    connectionRequestRef.current = null
+    setIntegrations([])
+    setError('')
+    setLoadingConnection(Boolean(workspaceId))
+  }, [currentCompany?.id])
 
   const loadConnection = useCallback(async () => {
     if (!currentCompany) {
@@ -392,6 +423,7 @@ export default function StoreIntegrationDetailPage() {
         signal: controller.signal,
       })
       const payload = await response.json().catch(() => ({}))
+      if (controller.signal.aborted || currentWorkspaceIdRef.current !== currentCompany.id) return
 
       if (!response.ok) {
         setIntegrations([])
@@ -530,10 +562,10 @@ export default function StoreIntegrationDetailPage() {
     })
   }
 
-  const disconnect = () => {
+  const disconnect = async () => {
     if (!currentCompany || !connection) return
 
-    void runAction('disconnect', async () => {
+    await runAction('disconnect', async () => {
       const endpoint = connection.id === 'woocommerce-legacy'
         ? '/api/woocommerce/connection'
         : '/api/store-integrations'
@@ -650,7 +682,7 @@ export default function StoreIntegrationDetailPage() {
                   <Button type="button" variant="outline">{labels.openLegacyWoo}</Button>
                 </Link>
               )}
-              <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={disconnect}>
+              <Button type="button" variant="outline" disabled={Boolean(busyAction)} onClick={() => setConfirmDisconnectOpen(true)}>
                 {busyAction === 'disconnect' ? t('common.loading') : labels.disconnect}
               </Button>
             </div>
@@ -685,6 +717,19 @@ export default function StoreIntegrationDetailPage() {
           </CardContent>
         </Card>
       </div>
+      <ConfirmDialog
+        open={confirmDisconnectOpen}
+        title={labels.disconnect}
+        description={labels.disconnectConfirm}
+        confirmLabel={labels.disconnect}
+        cancelLabel={t('common.cancel')}
+        destructive
+        onConfirm={async () => {
+          await disconnect()
+          setConfirmDisconnectOpen(false)
+        }}
+        onCancel={() => setConfirmDisconnectOpen(false)}
+      />
     </PageContainer>
   )
 }
