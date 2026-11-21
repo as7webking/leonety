@@ -78,9 +78,11 @@ export function AiAssistantWidget() {
 
   useEffect(() => {
     let active = true
-    void supabase.auth.getUser().then(({ data }) => {
-      if (active) setAuthenticatedUserId(data.user?.id ?? '')
-    })
+    if (open) {
+      void supabase.auth.getUser().then(({ data }) => {
+        if (active) setAuthenticatedUserId(data.user?.id ?? '')
+      })
+    }
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) setAuthenticatedUserId(session?.user.id ?? '')
     })
@@ -89,9 +91,11 @@ export function AiAssistantWidget() {
       active = false
       data.subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [open, supabase])
 
   useEffect(() => {
+    if (!open) return
+
     if (!storageKey) {
       activeRequestRef.current?.controller.abort()
       activeRequestRef.current = null
@@ -123,16 +127,16 @@ export function AiAssistantWidget() {
     setChats([firstChat])
     setActiveChatId(firstChat.id)
     setLoadedStorageKey(storageKey)
-  }, [storageKey])
+  }, [open, storageKey])
 
   useEffect(() => {
-    if (!storageKey || loadedStorageKey !== storageKey || chats.length === 0) return
+    if (!open || !storageKey || loadedStorageKey !== storageKey || chats.length === 0) return
     try {
       window.localStorage.setItem(storageKey, serializeAssistantChatCache(chats))
     } catch {
       // Keep the active chat usable when browser storage is unavailable or full.
     }
-  }, [chats, loadedStorageKey, storageKey])
+  }, [chats, loadedStorageKey, open, storageKey])
 
   const updateChatMessages = (chatId: string, nextMessages: ChatMessage[]) => {
     const now = new Date().toISOString()
