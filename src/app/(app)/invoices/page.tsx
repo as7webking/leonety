@@ -1668,11 +1668,25 @@ export default function InvoicesPage() {
       let invoiceAlreadyFinalized = isFinalizedInvoice
       const saveInvoiceRecord = async (payloadToSave: Record<string, unknown>) => {
         if (editingInvoice) {
-          const { error } = await supabase
+          let updateQuery = supabase
             .from('invoices')
             .update(payloadToSave)
             .eq('id', editingInvoice.id)
             .eq('company_id', currentCompany.id)
+            .eq('status', editingInvoice.status)
+
+          if (!isFinalizedInvoice) {
+            updateQuery = updateQuery.is('document_snapshot', null).is('issued_at', null)
+          }
+
+          const { data: updatedInvoice, error } = await updateQuery.select('id').maybeSingle()
+          if (!error && !updatedInvoice) {
+            return {
+              invoiceId: editingInvoice.id,
+              error: new Error(t('invoices.saveFailed')),
+              alreadyFinalized: isFinalizedInvoice,
+            }
+          }
 
           return { invoiceId: editingInvoice.id, error, alreadyFinalized: isFinalizedInvoice }
         }

@@ -77,6 +77,16 @@ test('issued invoice UI retains status/payment handling but skips content and it
   assert.match(page, /invoiceTotalForPayment = isFinalizedInvoice \? Number\(editingInvoice\?\.total \?\? 0\)/)
 })
 
+test('invoice updates use compare-and-set status guards and draft-only snapshot conditions', () => {
+  const updatePath = page.match(/let updateQuery = supabase[\s\S]*?return \{ invoiceId: editingInvoice\.id, error, alreadyFinalized: isFinalizedInvoice \}/)?.[0]
+  assert.ok(updatePath, 'missing guarded invoice update path')
+  assert.match(updatePath, /\.eq\('status', editingInvoice\.status\)/)
+  assert.match(updatePath, /if \(!isFinalizedInvoice\)[\s\S]*?\.is\('document_snapshot', null\)\.is\('issued_at', null\)/)
+  assert.match(updatePath, /updateQuery\.select\('id'\)\.maybeSingle\(\)/)
+  assert.match(updatePath, /if \(!error && !updatedInvoice\)/)
+  assert.match(updatePath, /alreadyFinalized: isFinalizedInvoice/)
+})
+
 test('invoice lines are persisted before draft-to-issued status and snapshot finalization', () => {
   const linesSaved = page.indexOf("if (!invoiceAlreadyFinalized && !invoiceItemsAlreadySaved) {")
   const issued = page.indexOf("if (!invoiceAlreadyFinalized && formData.status !== 'draft') {")
