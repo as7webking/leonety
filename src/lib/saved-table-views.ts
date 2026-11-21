@@ -22,6 +22,7 @@ export interface ExpenseTableViewState {
   filterToDate: string
   sortBy: 'date' | 'amount' | 'title'
   sortDirection: 'asc' | 'desc'
+  pageSize?: number
 }
 
 export type SavedTableViewState = InvoiceTableViewState | ProductTableViewState | ExpenseTableViewState
@@ -92,8 +93,13 @@ export function parseSavedTableViewState(kind: SavedTableKind, value: unknown): 
     filterToDate: value.filterToDate,
     sortBy: value.sortBy as ExpenseTableViewState['sortBy'],
     sortDirection: value.sortDirection as ExpenseTableViewState['sortDirection'],
+    ...(value.pageSize === undefined ? {} : FINANCE_SAVED_PAGE_SIZES.includes(value.pageSize as (typeof FINANCE_SAVED_PAGE_SIZES)[number])
+      ? { pageSize: value.pageSize as ExpenseTableViewState['pageSize'] }
+      : {}),
   }
 }
+
+const FINANCE_SAVED_PAGE_SIZES = [10, 25, 50, 100] as const
 
 export function parseSavedTableViewCollection<T extends SavedTableViewState>(kind: SavedTableKind, raw: string | null): SavedTableViewCollection<T> {
   if (!raw || raw.length > MAX_STORAGE_LENGTH) return { views: [], defaultViewId: null }

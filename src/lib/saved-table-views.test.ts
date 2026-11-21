@@ -45,10 +45,21 @@ test('expense saved views accept title sorting without invalidating existing dat
   }
 })
 
+test('expense saved views preserve supported page sizes and keep legacy views compatible', () => {
+  for (const pageSize of [10, 25, 50, 100] as const) {
+    const state = parseSavedTableViewState('expenses', { searchQuery: '', groupReportsByMonth: false, filterFromDate: '', filterToDate: '', sortBy: 'date', sortDirection: 'desc', pageSize }) as ExpenseTableViewState
+    assert.equal(state.pageSize, pageSize)
+  }
+  const legacy = parseSavedTableViewState('expenses', { searchQuery: '', groupReportsByMonth: false, filterFromDate: '', filterToDate: '', sortBy: 'date', sortDirection: 'desc' }) as ExpenseTableViewState
+  assert.equal(legacy.pageSize, undefined)
+  const invalid = parseSavedTableViewState('expenses', { searchQuery: '', groupReportsByMonth: false, filterFromDate: '', filterToDate: '', sortBy: 'date', sortDirection: 'desc', pageSize: 500 }) as ExpenseTableViewState
+  assert.equal(invalid.pageSize, undefined)
+})
+
 test('saved view collection round-trips without record data', () => {
   const collection: SavedTableViewCollection<ExpenseTableViewState> = {
     defaultViewId: 'view-1',
-    views: [{ id: 'view-1', name: 'This month / Rent', updatedAt: 100, state: { searchQuery: 'rent', categoryFilter: 'Rent', groupReportsByMonth: true, filterFromDate: '2026-11-01', filterToDate: '2026-11-30', sortBy: 'date', sortDirection: 'desc' } }],
+    views: [{ id: 'view-1', name: 'This month / Rent', updatedAt: 100, state: { searchQuery: 'rent', categoryFilter: 'Rent', groupReportsByMonth: true, filterFromDate: '2026-11-01', filterToDate: '2026-11-30', sortBy: 'date', sortDirection: 'desc', pageSize: 50 } }],
   }
   assert.deepEqual(parseSavedTableViewCollection<ExpenseTableViewState>('expenses', serializeSavedTableViewCollection(collection)), collection)
 })
