@@ -1,8 +1,9 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Info, Search, SlidersHorizontal, Wrench } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
-import { FINANCE_PAGE_SIZES, formatHistoricalRateDetail } from '@/lib/finance-ui'
+import { FINANCE_PAGE_SIZES, formatHistoricalRateDetail, getFinanceDatePreset, getFinanceDatePresetRange, isValidOptionalDateRange, type FinanceDatePreset } from '@/lib/finance-ui'
+import type { Locale } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 export const FINANCE_PAGE_SIZE = 25
@@ -38,15 +39,31 @@ interface FinanceToolbarProps {
   filters?: ReactNode
   sorting?: ReactNode
   utilities?: ReactNode
+  alwaysVisibleFilters?: ReactNode
 }
 
-export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, primaryAction, filters, sorting, utilities }: FinanceToolbarProps) {
+export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, primaryAction, filters, sorting, utilities, alwaysVisibleFilters }: FinanceToolbarProps) {
+  const disclosureRefs = useRef<Array<HTMLDetailsElement | null>>([])
+
+  useLayoutEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    const syncDisclosureState = () => {
+      for (const disclosure of disclosureRefs.current) {
+        if (disclosure) disclosure.open = media.matches
+      }
+    }
+    syncDisclosureState()
+    media.addEventListener('change', syncDisclosureState)
+    return () => media.removeEventListener('change', syncDisclosureState)
+  }, [])
+
   return (
     <section className="mb-5 space-y-3" aria-label={filtersLabel}>
       {primaryAction && <div className="flex justify-end">{primaryAction}</div>}
+      {alwaysVisibleFilters && <div className="rounded-md border border-slate-200 bg-white p-3" aria-label={filtersLabel}>{alwaysVisibleFilters}</div>}
       <div className="grid grid-cols-2 gap-2 lg:block lg:space-y-3">
         {filters && (
-          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
+          <details ref={(element) => { disclosureRefs.current[0] = element }} className="group rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700 lg:hidden">
               <SlidersHorizontal className="h-4 w-4" />
               {filtersLabel}
@@ -58,7 +75,7 @@ export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, pri
           </details>
         )}
         {sorting && (
-          <details className="group rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
+          <details ref={(element) => { disclosureRefs.current[1] = element }} className="group rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700 lg:hidden">
               <SlidersHorizontal className="h-4 w-4" />
               {sortingLabel}
@@ -70,7 +87,7 @@ export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, pri
           </details>
         )}
         {utilities && (
-          <details className="group col-span-2 rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
+          <details ref={(element) => { disclosureRefs.current[2] = element }} className="group col-span-2 rounded-md border border-slate-200 bg-white open:col-span-2 lg:border-0 lg:bg-transparent">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-700 lg:hidden">
               <Wrench className="h-4 w-4" />
               {utilitiesLabel}
@@ -83,6 +100,52 @@ export function FinanceToolbar({ filtersLabel, sortingLabel, utilitiesLabel, pri
         )}
       </div>
     </section>
+  )
+}
+
+interface FinanceDateFiltersProps {
+  fromDate: string
+  toDate: string
+  onFromDateChange: (value: string) => void
+  onToDateChange: (value: string) => void
+  locale: Locale
+  fromLabel: string
+  toLabel: string
+  presetLabel: string
+  presetLabels: Record<Exclude<FinanceDatePreset, 'custom'> | 'custom', string>
+  invalidRangeLabel: string
+}
+
+export function FinanceDateFilters({ fromDate, toDate, onFromDateChange, onToDateChange, locale, fromLabel, toLabel, presetLabel, presetLabels, invalidRangeLabel }: FinanceDateFiltersProps) {
+  const validRange = isValidOptionalDateRange(fromDate, toDate)
+  const preset = getFinanceDatePreset(fromDate, toDate)
+  const dateInputClass = 'h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+  const updatePreset = (value: string) => {
+    if (value === 'custom') return
+    const range = getFinanceDatePresetRange(value as Exclude<FinanceDatePreset, 'custom'>)
+    onFromDateChange(range.fromDate)
+    onToDateChange(range.toDate)
+  }
+
+  return (
+    <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(10rem,0.8fr)_minmax(10rem,1fr)_minmax(10rem,1fr)]">
+      <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-700">
+        <span>{presetLabel}</span>
+        <select value={preset} onChange={(event) => updatePreset(event.target.value)} className={dateInputClass}>
+          {(['thisMonth', 'lastMonth', 'thisYear', 'all', 'custom'] as const).map((value) => <option key={value} value={value}>{presetLabels[value]}</option>)}
+        </select>
+      </label>
+      <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-700">
+        <span>{fromLabel}</span>
+        <input type="date" lang={locale} value={fromDate} onChange={(event) => onFromDateChange(event.target.value)} className={dateInputClass} aria-invalid={!validRange} />
+      </label>
+      <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-700">
+        <span>{toLabel}</span>
+        <input type="date" lang={locale} value={toDate} onChange={(event) => onToDateChange(event.target.value)} className={dateInputClass} aria-invalid={!validRange} />
+      </label>
+      {!validRange && <p role="alert" className="text-sm text-red-700 sm:col-span-2 lg:col-span-3">{invalidRangeLabel}</p>}
+    </div>
   )
 }
 

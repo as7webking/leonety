@@ -9,6 +9,49 @@ export function matchesOptionalDateRange(date: string, fromDate: string, toDate:
   return (!fromDate || date >= fromDate) && (!toDate || date <= toDate)
 }
 
+function isDateOnly(value: string) {
+  if (!value) return true
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+export function isValidOptionalDateRange(fromDate: string, toDate: string) {
+  return isDateOnly(fromDate) && isDateOnly(toDate) && (!fromDate || !toDate || fromDate <= toDate)
+}
+
+export function filterFinanceRecordsByDate<T extends { date: string }>(records: readonly T[], fromDate: string, toDate: string) {
+  if (!isValidOptionalDateRange(fromDate, toDate)) return []
+  return records.filter((record) => matchesOptionalDateRange(record.date, fromDate, toDate))
+}
+
+export type FinanceDatePreset = 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'custom'
+
+function localDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function getFinanceDatePresetRange(preset: Exclude<FinanceDatePreset, 'custom'>, now = new Date()) {
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  if (preset === 'all') return { fromDate: '', toDate: '' }
+  if (preset === 'thisYear') return { fromDate: localDateInputValue(new Date(year, 0, 1)), toDate: localDateInputValue(new Date(year, 11, 31)) }
+  if (preset === 'lastMonth') return { fromDate: localDateInputValue(new Date(year, month - 1, 1)), toDate: localDateInputValue(new Date(year, month, 0)) }
+  return { fromDate: localDateInputValue(new Date(year, month, 1)), toDate: localDateInputValue(new Date(year, month + 1, 0)) }
+}
+
+export function getFinanceDatePreset(fromDate: string, toDate: string, now = new Date()): FinanceDatePreset {
+  if (!fromDate && !toDate) return 'all'
+  for (const preset of ['thisMonth', 'lastMonth', 'thisYear'] as const) {
+    const range = getFinanceDatePresetRange(preset, now)
+    if (range.fromDate === fromDate && range.toDate === toDate) return preset
+  }
+  return 'custom'
+}
+
 export function selectFinanceRecordsForPrint<T extends { id: string }>(records: T[], selectedIds: string[]) {
   if (selectedIds.length === 0) return records
   const selected = new Set(selectedIds)

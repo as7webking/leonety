@@ -4,7 +4,7 @@ import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
 import { financeUiDictionaries } from './finance-ui-i18n.ts'
 // @ts-expect-error Node's native TypeScript runner requires explicit extensions.
-import { FINANCE_PAGE_SIZES, formatHistoricalRateDetail, matchesFinanceSearch, matchesOptionalDateRange, normalizeFinancePageSize, paginateFinanceRecords, selectFinanceRecordsForPrint, sortFinanceRecords } from './finance-ui.ts'
+import { FINANCE_PAGE_SIZES, filterFinanceRecordsByDate, formatHistoricalRateDetail, getFinanceDatePreset, getFinanceDatePresetRange, isValidOptionalDateRange, matchesFinanceSearch, matchesOptionalDateRange, normalizeFinancePageSize, paginateFinanceRecords, selectFinanceRecordsForPrint, sortFinanceRecords } from './finance-ui.ts'
 
 const locales = ['en', 'de', 'ru', 'tr', 'uk', 'pl', 'fr'] as const
 const requiredKeys = Object.keys(financeUiDictionaries.en)
@@ -266,6 +266,36 @@ test('income and expenses default to all dates while explicit date filters remai
     const source = readFileSync(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url), 'utf8')
     assert.match(source, /const \[filterFromDate, setFilterFromDate\] = useState\(''\)/)
     assert.match(source, /const \[filterToDate, setFilterToDate\] = useState\(''\)/)
-    assert.match(source, /matchesOptionalDateRange\(/)
+    assert.match(source, /filterFinanceRecordsByDate\(/)
+    assert.match(source, /alwaysVisibleFilters=\{<FinanceDateFilters/)
   }
+})
+
+test('date-only filtering supports either boundary inclusively and rejects invalid ranges', () => {
+  const records = [
+    { id: 'before', date: '2026-01-01' },
+    { id: 'start', date: '2026-01-10' },
+    { id: 'end', date: '2026-01-20' },
+    { id: 'after', date: '2026-01-21' },
+  ]
+  assert.deepEqual(filterFinanceRecordsByDate(records, '2026-01-10', '').map((record) => record.id), ['start', 'end', 'after'])
+  assert.deepEqual(filterFinanceRecordsByDate(records, '', '2026-01-20').map((record) => record.id), ['before', 'start', 'end'])
+  assert.deepEqual(filterFinanceRecordsByDate(records, '2026-01-10', '2026-01-20').map((record) => record.id), ['start', 'end'])
+  assert.equal(isValidOptionalDateRange('2026-01-20', '2026-01-10'), false)
+  assert.equal(isValidOptionalDateRange('2026-02-30', ''), false)
+  assert.deepEqual(filterFinanceRecordsByDate(records, '2026-01-20', '2026-01-10'), [])
+})
+
+test('date filtering happens before pagination and period presets use local date boundaries', () => {
+  const records = Array.from({ length: 30 }, (_, index) => ({ id: String(index), date: index < 4 ? '2026-02-01' : '2026-03-01' }))
+  const matching = filterFinanceRecordsByDate(records, '2026-03-01', '2026-03-01')
+  assert.equal(matching.length, 26)
+  assert.equal(paginateFinanceRecords(matching, 1, 10).items.length, 10)
+  const now = new Date(2026, 2, 15, 12)
+  assert.deepEqual(getFinanceDatePresetRange('thisMonth', now), { fromDate: '2026-03-01', toDate: '2026-03-31' })
+  assert.deepEqual(getFinanceDatePresetRange('lastMonth', now), { fromDate: '2026-02-01', toDate: '2026-02-28' })
+  assert.deepEqual(getFinanceDatePresetRange('thisYear', now), { fromDate: '2026-01-01', toDate: '2026-12-31' })
+  assert.equal(getFinanceDatePreset('2026-03-01', '2026-03-31', now), 'thisMonth')
+  assert.equal(getFinanceDatePreset('', '', now), 'all')
+  assert.equal(getFinanceDatePreset('2026-03-02', '', now), 'custom')
 })

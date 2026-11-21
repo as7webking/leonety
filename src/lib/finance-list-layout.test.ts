@@ -31,6 +31,20 @@ test('finance toolbar adapts one mounted set of controls to mobile disclosures a
   assert.match(toolbar, /lg:block lg:space-y-3/)
   assert.match(toolbar, /lg:hidden/)
   assert.match(toolbar, /lg:flex/)
+  assert.match(toolbar, /alwaysVisibleFilters &&/)
+  assert.match(toolbar, /alwaysVisibleFilters\}/)
+  assert.match(toolbar, /matchMedia\('\(min-width: 1024px\)'\)/)
+  assert.match(toolbar, /disclosure\.open = media\.matches/)
+})
+
+test('Income and Expenses render date labels and inputs outside disclosure menus', () => {
+  for (const source of [incomePage, expensesPage]) {
+    assert.match(source, /alwaysVisibleFilters=\{<FinanceDateFilters/)
+    assert.doesNotMatch(source, /<input type="date" value=\{filterFromDate\}/)
+  }
+  assert.match(financeList, /<span>\{fromLabel\}<\/span>[\s\S]*<input type="date" lang=\{locale\}/)
+  assert.match(financeList, /<span>\{toLabel\}<\/span>[\s\S]*<input type="date" lang=\{locale\}/)
+  assert.match(financeList, /role="alert" className="text-sm text-red-700/)
 })
 
 test('Income, Expenses and Transactions render date-only values in the active UI locale', () => {
@@ -47,7 +61,7 @@ test('Income and Expenses expose category filters while Expense Saved Views reta
   assert.match(incomePage, /value=\{categoryFilter\} onChange=\{\(value\) => \{ setCategoryFilter\(value\); setSelectedIncomeIds\(\[\]\) \}\}/)
   assert.match(expensesPage, /value=\{categoryFilter\} onChange=\{\(value\) => \{ setCategoryFilter\(value\); setSelectedExpenseIds\(\[\]\) \}\}/)
   assert.match(expensesPage, /state=\{\{ searchQuery, categoryFilter,/)
-  assert.match(expensesPage, /matchesOptionalDateRange\(expense\.date, filterFromDate, filterToDate\) && matchesSearch && \(!categoryFilter \|\| expense\.category === categoryFilter\)/)
+  assert.match(expensesPage, /filterFinanceRecordsByDate\(expenses, filterFromDate, filterToDate\)\.filter\(\(expense\) => \{[\s\S]*return matchesSearch && \(!categoryFilter \|\| expense\.category === categoryFilter\)/)
 })
 
 test('existing Saved Views use the same compact control layout where supported', () => {
