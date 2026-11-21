@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { FINANCE_PAGE_SIZE, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
+import { FINANCE_PAGE_SIZE, FinanceDateFilters, FinanceEmptyState, FinanceListRow, FinanceListShell, FinancePagination, FinanceSearchInput, FinanceSelectionBar, FinanceToolbar, PageContainer, PageHeader, EmptyState, LoadingSkeleton } from "@/components"
 import { Building2, Copy, Edit, Trash2 } from "lucide-react"
 import { createClient } from '@/lib/supabase-client'
 import { formatValidationError, incomeSchema, type IncomeForm } from '@/lib/validations'
@@ -21,7 +21,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { IncomeBulkTitleDialog } from '@/components/income-bulk-title-dialog'
 import { AppSelect } from '@/components/app-select'
 import { getIntlLocale } from '@/lib/i18n'
-import { matchesFinanceSearch, matchesOptionalDateRange, paginateFinanceRecords, selectFinanceRecordsForPrint, sortFinanceRecords } from '@/lib/finance-ui'
+import { filterFinanceRecordsByDate, matchesFinanceSearch, paginateFinanceRecords, selectFinanceRecordsForPrint, sortFinanceRecords } from '@/lib/finance-ui'
 import { applyIncomeTitleToSelection } from '@/lib/income-bulk-title'
 import { getCsvColumnIndex, normalizeCsvHeader, parseLocalizedAmount, parseTransactionDate, validateSignedAmountInput } from '@/lib/transaction-utils'
 import { useOfflineMode } from '@/contexts/offline-mode-context'
@@ -581,9 +581,9 @@ export default function IncomePage() {
   }
 
   const sortedIncomes = useMemo(() => {
-    const filtered = incomes.filter((income) => {
+    const filtered = filterFinanceRecordsByDate(incomes, filterFromDate, filterToDate).filter((income) => {
       const matchesSearch = matchesFinanceSearch(searchQuery, [income.title, income.description, income.category, income.reference])
-      return matchesOptionalDateRange(income.date, filterFromDate, filterToDate) && matchesSearch && (!categoryFilter || income.category === categoryFilter)
+      return matchesSearch && (!categoryFilter || income.category === categoryFilter)
     })
     return sortFinanceRecords(filtered, sortBy, sortDirection, intlLocale)
   }, [categoryFilter, filterFromDate, filterToDate, incomes, intlLocale, searchQuery, sortBy, sortDirection])
@@ -835,12 +835,22 @@ export default function IncomePage() {
       <FinanceToolbar
         filtersLabel={t('finance.filters')}
         utilitiesLabel={t('finance.utilities')}
+        alwaysVisibleFilters={<FinanceDateFilters
+          fromDate={filterFromDate}
+          toDate={filterToDate}
+          onFromDateChange={(value) => { setFilterFromDate(value); setSelectedIncomeIds([]) }}
+          onToDateChange={(value) => { setFilterToDate(value); setSelectedIncomeIds([]) }}
+          locale={locale}
+          fromLabel={t('dashboard.filterFrom')}
+          toLabel={t('dashboard.filterTo')}
+          presetLabel={t('dashboard.periodPreset')}
+          presetLabels={{ thisMonth: t('dashboard.periodThisMonth'), lastMonth: t('dashboard.periodLastMonth'), thisYear: t('dashboard.periodThisYear'), all: t('dashboard.periodAllTime'), custom: t('dashboard.periodCustom') }}
+          invalidRangeLabel={t('finance.invalidDateRange')}
+        />}
         primaryAction={incomes.length > 0 ? <Button variant="outline" onClick={handlePrint} size="sm">{selectedIncomeIds.length > 0 ? `${t('common.print')} · ${t('finance.selectedCount').replace('{count}', String(printableIncomes.length))}` : t('common.print')}</Button> : undefined}
         filters={incomes.length > 0 ? <>
           <FinanceSearchInput value={searchQuery} onChange={(value) => { setSearchQuery(value); setSelectedIncomeIds([]) }} label={t('finance.search')} placeholder={t('finance.searchPlaceholder')} />
           <AppSelect value={groupReportsByMonth ? 'month' : 'default'} onChange={(value) => setGroupReportsByMonth(value === 'month')} options={[{ value: 'default', label: t('common.noMonthGrouping') }, { value: 'month', label: t('common.groupByMonth') }]} ariaLabel={t('common.groupByMonth')} className="w-full lg:w-48" />
-          <input type="date" value={filterFromDate} onChange={(event) => { setFilterFromDate(event.target.value); setSelectedIncomeIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterFrom')} />
-          <input type="date" value={filterToDate} onChange={(event) => { setFilterToDate(event.target.value); setSelectedIncomeIds([]) }} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm lg:w-auto" aria-label={t('dashboard.filterTo')} />
           <AppSelect value={categoryFilter} onChange={(value) => { setCategoryFilter(value); setSelectedIncomeIds([]) }} options={[{ value: '', label: t('transactions.allCategories') }, ...availableIncomeCategories.map((category) => ({ value: category, label: formatCategoryLabel(category, t) }))]} ariaLabel={t('common.category')} className="w-full lg:w-48" />
         </> : undefined}
         sortingLabel={t('common.sortBy')}
@@ -849,6 +859,7 @@ export default function IncomePage() {
           <AppSelect value={sortDirection} onChange={(value) => setSortDirection(value as 'asc' | 'desc')} options={[{ value: 'desc', label: t('common.descending') }, { value: 'asc', label: t('common.ascending') }]} ariaLabel={t('common.sortDirection')} className="w-full lg:w-40" />
         </> : undefined}
         utilities={<>
+          <p className="w-full text-xs text-slate-600">{t('finance.exportScope')} {t('finance.printScope')}</p>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} size="sm" disabled={importing}>{importing ? t('transactions.importing') : t('common.importCsv')}</Button>
           {incomes.length > 0 && <Button variant="outline" onClick={handleExportCSV} size="sm">{t('common.exportCsv')}</Button>}
           {hasForeignCurrencySnapshots && <AppSelect value={printCurrencyMode} onChange={(value) => setPrintCurrencyMode(value as 'workspace' | 'both')} options={[{ value: 'workspace', label: t('currencySnapshot.workspaceOnly') }, { value: 'both', label: t('currencySnapshot.originalAndWorkspace') }]} ariaLabel={t('common.currency')} className="w-full sm:w-56" />}
