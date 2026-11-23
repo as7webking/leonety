@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-21T20:12:36.288Z",
+  "generatedAt": "2026-11-23T20:44:03.337Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -12,6 +12,7 @@
   ],
   "translationFiles": [
     "src/lib/accounting-ux-i18n.ts",
+    "src/lib/addon-foundation-i18n.ts",
     "src/lib/admin-users-i18n.ts",
     "src/lib/app-mode-i18n.ts",
     "src/lib/app-navigation-i18n.ts",
@@ -58,50 +59,50 @@
   ],
   "coverage": {
     "en": {
-      "translated": 3001,
-      "total": 3001,
+      "translated": 3003,
+      "total": 3003,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 3001,
-      "total": 3001,
+      "translated": 3003,
+      "total": 3003,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 3001,
-      "total": 3001,
+      "translated": 3003,
+      "total": 3003,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 3001,
-      "total": 3001,
+      "translated": 3003,
+      "total": 3003,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "uk": {
-      "translated": 3001,
-      "total": 3001,
+      "translated": 3003,
+      "total": 3003,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "pl": {
-      "translated": 3001,
-      "total": 3001,
+      "translated": 3003,
+      "total": 3003,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "fr": {
-      "translated": 3001,
-      "total": 3001,
+      "translated": 3003,
+      "total": 3003,
       "percent": 100,
       "missing": [],
       "usedMissing": []
@@ -111,7 +112,7 @@
   "hardcodedStrings": [
     {
       "file": "src/app/(app)/invoices/page.tsx",
-      "line": 2307,
+      "line": 2321,
       "type": "jsx-text",
       "text": "IBAN:"
     },
@@ -267,7 +268,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 3001,
+    "englishKeyCount": 3003,
     "authenticatedSourceFileCount": 95,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 26
