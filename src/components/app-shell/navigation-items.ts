@@ -21,6 +21,7 @@ import {
   Settings,
 } from 'lucide-react'
 import type { AppMode } from '@/lib/app-mode'
+import type { BuiltInAddonDefinition } from '../../lib/addons/registry'
 
 export type NavigationItem = {
   href: string
@@ -85,6 +86,18 @@ export const flatNavigationItems = [
   ...primaryNavigation,
   ...navigationGroups.flatMap((group) => group.items),
 ]
+
+export function getEnabledAddonNavigationItems(
+  enabledAddonIds: readonly string[],
+  registry: readonly BuiltInAddonDefinition[],
+): NavigationItem[] {
+  const enabled = new Set(enabledAddonIds)
+  return registry.flatMap((addon) =>
+    addon.status === 'available' && addon.route && enabled.has(addon.id)
+      ? [{ href: addon.route, labelKey: addon.titleKey, icon: Boxes }]
+      : [],
+  )
+}
 
 function isVisibleInMode(item: NavigationItem, mode: AppMode) {
   return !item.modes || item.modes.includes(mode)

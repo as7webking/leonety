@@ -7,16 +7,19 @@ import { Logo } from '@/components/logo'
 import { T } from '@/components/t'
 import { ProfileMenuClient } from '@/components/app-shell/profile-menu-client'
 import { WorkspaceSelectorClient } from '@/components/app-shell/workspace-selector-client'
-import { getActiveNavigationHref, getNavigationForMode } from '@/components/app-shell/navigation-items'
+import { getActiveNavigationHref, getEnabledAddonNavigationItems, getNavigationForMode } from '@/components/app-shell/navigation-items'
 import { DesktopNavigationLink } from '@/components/app-shell/desktop-navigation-link'
 import { useCompany } from '@/contexts/company-context'
 import { normalizeAppMode } from '@/lib/app-mode'
 import { usePathname } from 'next/navigation'
 import { useI18n } from '@/contexts/i18n-context'
+import { useWorkspaceAddons } from '@/contexts/workspace-addon-context'
+import { builtInAddonRegistry } from '@/lib/addons/registry'
 
 export function AppSidebar() {
   const { currentCompany } = useCompany()
-  const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
+  const { enabledAddonIds } = useWorkspaceAddons()
+  const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type), getEnabledAddonNavigationItems(enabledAddonIds, builtInAddonRegistry))
   const pathname = usePathname()
   const { t } = useI18n()
   const items = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items), ...(navigation.addonGroup?.items ?? [])]

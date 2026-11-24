@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
-import { getNavigationForMode } from '../components/app-shell/navigation-items.ts'
+import { getEnabledAddonNavigationItems, getNavigationForMode } from '../components/app-shell/navigation-items.ts'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
 import { builtInAddonRegistry } from './addons/registry.ts'
 
@@ -29,13 +29,35 @@ test('only supplied active addon links enter the dedicated sidebar group', () =>
   assert.equal(disabled.addonGroup, null)
 })
 
-test('catalog is inside the authenticated app route and does not offer fake activation controls', () => {
+test('sidebar addon links are limited to available registry routes returned for the workspace', () => {
+  const planned = getEnabledAddonNavigationItems(['kassenbuch-de'], builtInAddonRegistry)
+  assert.deepEqual(planned, [])
+
+  const registrySource = readFileSync(new URL('./addons/registry.ts', import.meta.url), 'utf8')
+  const navigationSource = readFileSync(new URL('../components/app-shell/navigation-items.ts', import.meta.url), 'utf8')
+  assert.match(navigationSource, /addon\.status === 'available' && addon\.route/)
+  assert.match(registrySource, /resolveWorkspaceAddonActivationStates/)
+})
+
+test('catalog is authenticated and consumes persisted workspace activation state', () => {
   const page = readFileSync(new URL('../app/(app)/addons/page.tsx', import.meta.url), 'utf8')
   const appLayout = readFileSync(new URL('../app/(app)/layout.tsx', import.meta.url), 'utf8')
   const proxy = readFileSync(new URL('../proxy.ts', import.meta.url), 'utf8')
+  const api = readFileSync(new URL('../app/api/addons/route.ts', import.meta.url), 'utf8')
+  const provider = readFileSync(new URL('../contexts/workspace-addon-context.tsx', import.meta.url), 'utf8')
 
   assert.match(appLayout, /AuthenticatedLayout/)
   assert.match(proxy, /const protectedRoutes = \['\/app'\]/)
-  assert.match(page, /addons\.activationUnavailable/)
-  assert.doesNotMatch(page, /Activate|Deactivate|fetch\(/i)
+  assert.match(page, /useWorkspaceAddons/)
+  assert.match(page, /addons\.loadFailed/)
+  assert.match(api, /auth\.getUser\(\)/)
+  assert.match(api, /\.eq\('owner_id', userId\)/)
+  assert.match(api, /\.upsert\([\s\S]*onConflict: 'company_id,addon_id'/)
+  assert.match(api, /canChangeWorkspaceAddonActivation\(addon, parsed\.data\.enabled\)/)
+  assert.match(api, /activations\.filter\(\(activation\) => activation\.canOpen\)/)
+  assert.match(page, /activation\.canOpen/)
+  assert.doesNotMatch(api, /createSupabaseAdminClient/)
+  assert.match(provider, /snapshot\.workspaceId === currentCompanyId/)
+  assert.match(provider, /AbortController/)
+  assert.doesNotMatch(provider, /localStorage/)
 })

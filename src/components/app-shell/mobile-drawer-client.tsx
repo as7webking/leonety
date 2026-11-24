@@ -8,9 +8,11 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { Logo } from '@/components/logo'
 import { ProfileMenuClient } from '@/components/app-shell/profile-menu-client'
 import { WorkspaceSelectorClient } from '@/components/app-shell/workspace-selector-client'
-import { getActiveNavigationHref, getNavigationForMode } from '@/components/app-shell/navigation-items'
+import { getActiveNavigationHref, getEnabledAddonNavigationItems, getNavigationForMode } from '@/components/app-shell/navigation-items'
 import { useI18n } from '@/contexts/i18n-context'
 import { useCompany } from '@/contexts/company-context'
+import { useWorkspaceAddons } from '@/contexts/workspace-addon-context'
+import { builtInAddonRegistry } from '@/lib/addons/registry'
 import { normalizeAppMode } from '@/lib/app-mode'
 import { trapFocusWithin } from '@/lib/dialog-focus'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
@@ -24,7 +26,8 @@ export function MobileDrawerClient() {
   const pathname = usePathname()
   const { t } = useI18n()
   const { currentCompany } = useCompany()
-  const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
+  const { enabledAddonIds } = useWorkspaceAddons()
+  const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type), getEnabledAddonNavigationItems(enabledAddonIds, builtInAddonRegistry))
   const navigationItems = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items), ...(navigation.addonGroup?.items ?? [])]
   const activeHref = getActiveNavigationHref(pathname, navigationItems)
   const gestureRef = useRef<Pick<NavigationSwipe, 'startX' | 'startY'> | null>(null)
