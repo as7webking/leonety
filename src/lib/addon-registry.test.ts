@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 // @ts-expect-error Node's native TypeScript runner requires the explicit extension.
-import { builtInAddonRegistry, resolveEnabledWorkspaceAddons, type BuiltInAddonDefinition } from './addons/registry.ts'
+import { builtInAddonRegistry, canChangeWorkspaceAddonActivation, getWorkspaceAddonCapabilities, resolveEnabledWorkspaceAddons, resolveWorkspaceAddonActivationStates, type BuiltInAddonDefinition } from './addons/registry.ts'
 
 test('built-in addons are stable, typed and disabled by default', () => {
   assert.deepEqual(builtInAddonRegistry.map(({ id }) => id), ['kassenbuch-de'])
@@ -40,4 +40,28 @@ test('unknown activation ids and planned addons never contribute navigation', ()
     resolveEnabledWorkspaceAddons({ workspaceId: 'workspace-a', entitledAddonIds: [] }, activations),
     [],
   )
+})
+
+test('missing persisted rows resolve to disabled and availability is distinct from activation', () => {
+  const [state] = resolveWorkspaceAddonActivationStates([])
+  assert.equal(state.enabled, false)
+  assert.equal(state.available, false)
+  assert.equal(state.canEnable, false)
+  assert.equal(state.canOpen, false)
+
+  const available: BuiltInAddonDefinition = { ...builtInAddonRegistry[0], status: 'available', route: '/app/cash' }
+  assert.deepEqual(getWorkspaceAddonCapabilities(available, false), {
+    available: true,
+    canEnable: true,
+    canOpen: false,
+  })
+  assert.deepEqual(getWorkspaceAddonCapabilities({ ...available, requiredEntitlement: 'cash' }, false), {
+    available: true,
+    canEnable: false,
+    canOpen: false,
+  })
+  assert.equal(getWorkspaceAddonCapabilities(available, true).canOpen, true)
+  assert.equal(canChangeWorkspaceAddonActivation(builtInAddonRegistry[0], true), false)
+  assert.equal(canChangeWorkspaceAddonActivation(builtInAddonRegistry[0], false), true)
+  assert.equal(canChangeWorkspaceAddonActivation(available, true), true)
 })
