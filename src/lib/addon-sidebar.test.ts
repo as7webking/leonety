@@ -32,6 +32,7 @@ test('only supplied active addon links enter the dedicated sidebar group', () =>
 test('sidebar addon links are limited to available registry routes returned for the workspace', () => {
   const planned = getEnabledAddonNavigationItems(['kassenbuch-de'], builtInAddonRegistry)
   assert.deepEqual(planned, [])
+  assert.equal(builtInAddonRegistry[0].route, null)
 
   const registrySource = readFileSync(new URL('./addons/registry.ts', import.meta.url), 'utf8')
   const navigationSource = readFileSync(new URL('../components/app-shell/navigation-items.ts', import.meta.url), 'utf8')
@@ -50,6 +51,13 @@ test('catalog is authenticated and consumes persisted workspace activation state
   assert.match(proxy, /const protectedRoutes = \['\/app'\]/)
   assert.match(page, /useWorkspaceAddons/)
   assert.match(page, /addons\.loadFailed/)
+  assert.match(page, /addons\.catalog\.empty/)
+  assert.match(page, /addons\.category\.\$\{addon\.category\}/)
+  assert.match(page, /setDeactivationTarget\(addon\.id\)/)
+  assert.match(page, /\}, \[currentCompanyId\]\)/)
+  assert.match(page, /ConfirmDialog/)
+  assert.match(page, /addons\.deactivateConfirm\.description/)
+  assert.match(page, /destructive/)
   assert.match(api, /auth\.getUser\(\)/)
   assert.match(api, /\.eq\('owner_id', userId\)/)
   assert.match(api, /\.upsert\([\s\S]*onConflict: 'company_id,addon_id'/)

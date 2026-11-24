@@ -65,3 +65,10 @@ test('missing persisted rows resolve to disabled and availability is distinct fr
   assert.equal(canChangeWorkspaceAddonActivation(builtInAddonRegistry[0], false), true)
   assert.equal(canChangeWorkspaceAddonActivation(available, true), true)
 })
+
+test('enabled state never opens a planned addon without an available registered route', () => {
+  const [state] = resolveWorkspaceAddonActivationStates([{ addon_id: 'kassenbuch-de', enabled: true }])
+  assert.equal(state.enabled, true)
+  assert.equal(state.available, false)
+  assert.equal(state.canOpen, false)
+})

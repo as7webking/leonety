@@ -35,7 +35,8 @@ function tabEvent(shiftKey = false) {
 
 test('ConfirmDialog exposes modal semantics, focuses safe cancel, traps keys, restores opener, and guards actions', () => {
   assert.match(confirmDialog, /role="dialog" aria-modal="true" aria-labelledby=\{titleId\}/)
-  assert.match(confirmDialog, /aria-describedby=\{description \? descriptionId : undefined\}/)
+  assert.match(confirmDialog, /aria-describedby=\{describedBy\}/)
+  assert.match(confirmDialog, /errorMessage && <p id=\{errorId\}[^>]*role="alert"/)
   assert.match(confirmDialog, /max-w-md[\s\S]*?p-5/)
   assert.match(confirmDialog, /overflow-y-auto/)
   assert.match(confirmDialog, /flex flex-col justify-end gap-2 sm:flex-row/)

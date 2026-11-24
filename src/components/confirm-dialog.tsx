@@ -12,6 +12,7 @@ interface ConfirmDialogProps {
   confirmLabel: string
   cancelLabel: string
   destructive?: boolean
+  errorMessage?: string
   onConfirm: () => void | Promise<void>
   onCancel: () => void
 }
@@ -23,12 +24,14 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   destructive,
+  errorMessage,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   useBodyScrollLock(open)
   const titleId = useId()
   const descriptionId = useId()
+  const errorId = useId()
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const confirmingRef = useRef(false)
@@ -73,11 +76,14 @@ export function ConfirmDialog({
 
   if (!open) return null
 
+  const describedBy = [description ? descriptionId : null, errorMessage ? errorId : null].filter(Boolean).join(' ') || undefined
+
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/40 px-4 py-[max(1rem,env(safe-area-inset-top))] sm:py-12">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} tabIndex={-1} className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={describedBy} tabIndex={-1} className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
         <h2 id={titleId} className="text-lg font-semibold text-slate-950">{title}</h2>
         {description && <p id={descriptionId} className="mt-2 text-sm leading-6 text-slate-600">{description}</p>}
+        {errorMessage && <p id={errorId} className="mt-3 text-sm text-rose-700" role="alert">{errorMessage}</p>}
         <div className="mt-5 flex flex-col justify-end gap-2 sm:flex-row">
           <Button ref={cancelButtonRef} type="button" variant="outline" disabled={confirming} onClick={onCancel}>
             {cancelLabel}

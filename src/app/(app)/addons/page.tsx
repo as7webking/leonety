@@ -1,18 +1,42 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PageContainer, PageHeader } from '@/components'
 import { useCompany } from '@/contexts/company-context'
 import { useI18n } from '@/contexts/i18n-context'
 import { useWorkspaceAddons } from '@/contexts/workspace-addon-context'
 import { builtInAddonRegistry } from '@/lib/addons/registry'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+
+type AddonId = (typeof builtInAddonRegistry)[number]['id']
 
 export default function AddonsPage() {
-  const { currentCompany, loading } = useCompany()
+  const { currentCompany, currentCompanyId, loading } = useCompany()
   const { t } = useI18n()
   const { activations, loading: activationLoading, error, saveError, refresh, setEnabled } = useWorkspaceAddons()
   const [pendingAddonId, setPendingAddonId] = useState<string | null>(null)
+  const [deactivationTarget, setDeactivationTarget] = useState<AddonId | null>(null)
+
+  useEffect(() => {
+    setDeactivationTarget(null)
+    setPendingAddonId(null)
+  }, [currentCompanyId])
+
+  const targetAddon = builtInAddonRegistry.find((addon) => addon.id === deactivationTarget)
+  const targetActivation = activations.find((activation) => activation.addonId === deactivationTarget)
+
+  async function handleActivation(addonId: AddonId, enabled: boolean) {
+    setPendingAddonId(addonId)
+    try {
+      await setEnabled(addonId, enabled)
+      if (!enabled) setDeactivationTarget(null)
+    } catch {
+      // The provider exposes the safe localized failure state.
+    } finally {
+      setPendingAddonId(null)
+    }
+  }
 
   return (
     <PageContainer>
@@ -33,12 +57,18 @@ export default function AddonsPage() {
           </button>
         </div>
       )}
+      {builtInAddonRegistry.length === 0 && !loading && (
+        <p className="rounded-md border border-slate-200 px-4 py-3 text-sm text-slate-600" role="status">
+          {t('addons.catalog.empty')}
+        </p>
+      )}
       <div className="divide-y divide-slate-200 border-y border-slate-200">
         {builtInAddonRegistry.map((addon) => (
           <section key={addon.id} className="flex flex-col gap-3 py-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-slate-950">{t(addon.titleKey)}</h2>
               <p className="mt-1 text-sm text-slate-600">{t(addon.descriptionKey)}</p>
+              <p className="mt-2 text-xs font-medium text-slate-500">{t(`addons.category.${addon.category}`)}</p>
               {currentCompany && !loading && !activationLoading && !error && (() => {
                 const activation = activations.find((item) => item.addonId === addon.id)
                 if (!activation) return null
@@ -59,16 +89,9 @@ export default function AddonsPage() {
                           type="button"
                           disabled={pending}
                           className="min-h-10 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 disabled:cursor-wait disabled:opacity-60"
-                          onClick={async () => {
-                            setPendingAddonId(addon.id)
-                            try {
-                              await setEnabled(addon.id, !activation.enabled)
-                            } catch {
-                              // The provider exposes the safe localized failure state.
-                            } finally {
-                              setPendingAddonId(null)
-                            }
-                          }}
+                          onClick={() => activation.enabled
+                            ? setDeactivationTarget(addon.id)
+                            : void handleActivation(addon.id, true)}
                         >
                           {pending ? t('addons.saving') : activation.enabled ? t('addons.deactivate') : t('addons.activate')}
                         </button>
@@ -89,6 +112,17 @@ export default function AddonsPage() {
           </section>
         ))}
       </div>
+      <ConfirmDialog
+        open={Boolean(targetAddon && targetActivation?.enabled && targetActivation.canManage)}
+        title={t('addons.deactivateConfirm.title')}
+        description={targetAddon ? t('addons.deactivateConfirm.description') : ''}
+        errorMessage={saveError ? t('addons.saveFailed') : undefined}
+        confirmLabel={t('addons.deactivate')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        onCancel={() => setDeactivationTarget(null)}
+        onConfirm={() => targetAddon ? handleActivation(targetAddon.id, false) : undefined}
+      />
     </PageContainer>
   )
 }
