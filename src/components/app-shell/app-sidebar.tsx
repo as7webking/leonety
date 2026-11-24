@@ -12,12 +12,14 @@ import { DesktopNavigationLink } from '@/components/app-shell/desktop-navigation
 import { useCompany } from '@/contexts/company-context'
 import { normalizeAppMode } from '@/lib/app-mode'
 import { usePathname } from 'next/navigation'
+import { useI18n } from '@/contexts/i18n-context'
 
 export function AppSidebar() {
   const { currentCompany } = useCompany()
   const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
   const pathname = usePathname()
-  const items = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items)]
+  const { t } = useI18n()
+  const items = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items), ...(navigation.addonGroup?.items ?? [])]
   const activeHref = getActiveNavigationHref(pathname, items)
 
   return (
@@ -54,6 +56,15 @@ export function AppSidebar() {
               })}
             </section>
           ))}
+          {navigation.addonGroup && (
+            <section className="mt-5 space-y-1" aria-label={t(navigation.addonGroup.labelKey)}>
+              <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400"><T k={navigation.addonGroup.labelKey} /></p>
+              {navigation.addonGroup.items.map((item) => {
+                const Icon = item.icon
+                return <DesktopNavigationLink key={item.href} href={item.href} activeHref={activeHref} labelKey={item.labelKey} icon={<Icon className="h-4 w-4" aria-hidden="true" />} />
+              })}
+            </section>
+          )}
         </div>
       </nav>
 

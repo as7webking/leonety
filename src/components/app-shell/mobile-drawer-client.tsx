@@ -25,7 +25,7 @@ export function MobileDrawerClient() {
   const { t } = useI18n()
   const { currentCompany } = useCompany()
   const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type))
-  const navigationItems = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items)]
+  const navigationItems = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items), ...(navigation.addonGroup?.items ?? [])]
   const activeHref = getActiveNavigationHref(pathname, navigationItems)
   const gestureRef = useRef<Pick<NavigationSwipe, 'startX' | 'startY'> | null>(null)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -175,6 +175,21 @@ export function MobileDrawerClient() {
                 })}
               </section>
             ))}
+
+            {navigation.addonGroup && (
+              <section className="space-y-1" aria-label={t(navigation.addonGroup.labelKey)}>
+                <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{t(navigation.addonGroup.labelKey)}</p>
+                {navigation.addonGroup.items.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <Link key={item.href} href={item.href} onClick={() => setOpen(false)} aria-current={activeHref === item.href ? 'page' : undefined} className={`flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ${activeHref === item.href ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'}`}>
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      {t(item.labelKey)}
+                    </Link>
+                  )
+                })}
+              </section>
+            )}
 
             <div className="space-y-3 border-t border-slate-200 pt-4">
               <LanguageSwitcher />

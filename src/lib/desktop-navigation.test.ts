@@ -43,7 +43,7 @@ test('desktop and mobile navigation share exclusive active styling with distinct
   assert.match(desktop, /bg-blue-50 text-blue-700[\s\S]*text-slate-700 hover:bg-slate-100/)
   assert.match(desktop, /focus-visible:ring-slate-900/)
   assert.match(mobile, /getActiveNavigationHref\(pathname, navigationItems\)/)
-  assert.equal((mobile.match(/aria-current=\{activeHref === item\.href \? 'page' : undefined\}/g) ?? []).length, 2)
+  assert.equal((mobile.match(/aria-current=\{activeHref === item\.href \? 'page' : undefined\}/g) ?? []).length, 3)
   assert.match(mobile, /bg-blue-50 text-blue-700[\s\S]*text-slate-700 hover:bg-slate-100/)
   assert.match(mobile, /focus-visible:ring-slate-900/)
   assert.match(sidebar, /min-h-0 flex-1 overflow-y-auto/)

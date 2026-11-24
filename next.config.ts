@@ -9,6 +9,7 @@ const appRoutes = [
   '/onboarding',
   '/profile',
   '/workspaces',
+  '/addons',
   '/upgrade',
   '/notifications',
   '/clients',

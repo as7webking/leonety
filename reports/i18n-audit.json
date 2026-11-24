@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-23T20:44:03.337Z",
+  "generatedAt": "2026-11-24T15:19:23.784Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -59,50 +59,50 @@
   ],
   "coverage": {
     "en": {
-      "translated": 3003,
-      "total": 3003,
+      "translated": 3012,
+      "total": 3012,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 3003,
-      "total": 3003,
+      "translated": 3012,
+      "total": 3012,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 3003,
-      "total": 3003,
+      "translated": 3012,
+      "total": 3012,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 3003,
-      "total": 3003,
+      "translated": 3012,
+      "total": 3012,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "uk": {
-      "translated": 3003,
-      "total": 3003,
+      "translated": 3012,
+      "total": 3012,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "pl": {
-      "translated": 3003,
-      "total": 3003,
+      "translated": 3012,
+      "total": 3012,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "fr": {
-      "translated": 3003,
-      "total": 3003,
+      "translated": 3012,
+      "total": 3012,
       "percent": 100,
       "missing": [],
       "usedMissing": []
@@ -268,8 +268,8 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 3003,
-    "authenticatedSourceFileCount": 95,
+    "englishKeyCount": 3012,
+    "authenticatedSourceFileCount": 96,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 26
   }

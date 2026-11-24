@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Bell,
+  Boxes,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
@@ -75,6 +76,7 @@ export const navigationGroups: NavigationGroup[] = [
       { href: '/app/notifications', labelKey: 'nav.notifications', icon: Bell },
       { href: '/app/mail', labelKey: 'nav.mail', icon: Mail },
       { href: '/app/settings', labelKey: 'nav.settings', icon: Settings },
+      { href: '/app/addons', labelKey: 'nav.addons', icon: Boxes },
     ],
   },
 ]
@@ -88,7 +90,10 @@ function isVisibleInMode(item: NavigationItem, mode: AppMode) {
   return !item.modes || item.modes.includes(mode)
 }
 
-export function getNavigationForMode(mode: AppMode) {
+export function getNavigationForMode(
+  mode: AppMode,
+  enabledAddonItems: readonly NavigationItem[] = [],
+) {
   return {
     primary: primaryNavigation.filter((item) => isVisibleInMode(item, mode)),
     groups: navigationGroups
@@ -97,6 +102,7 @@ export function getNavigationForMode(mode: AppMode) {
         items: group.items.filter((item) => isVisibleInMode(item, mode)),
       }))
       .filter((group) => group.items.length > 0),
+    addonGroup: enabledAddonItems.length > 0 ? { labelKey: 'addons.section', items: [...enabledAddonItems] } : null,
   }
 }
 

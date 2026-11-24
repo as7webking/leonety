@@ -45,6 +45,7 @@ export async function proxy(request: NextRequest) {
     '/onboarding',
     '/profile',
     '/workspaces',
+    '/addons',
     '/upgrade',
     '/clients',
     '/invoices',
