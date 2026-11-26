@@ -7,23 +7,13 @@ import { Logo } from '@/components/logo'
 import { T } from '@/components/t'
 import { ProfileMenuClient } from '@/components/app-shell/profile-menu-client'
 import { WorkspaceSelectorClient } from '@/components/app-shell/workspace-selector-client'
-import { getActiveNavigationHref, getEnabledAddonNavigationItems, getNavigationForMode } from '@/components/app-shell/navigation-items'
 import { DesktopNavigationLink } from '@/components/app-shell/desktop-navigation-link'
-import { useCompany } from '@/contexts/company-context'
-import { normalizeAppMode } from '@/lib/app-mode'
-import { usePathname } from 'next/navigation'
 import { useI18n } from '@/contexts/i18n-context'
-import { useWorkspaceAddons } from '@/contexts/workspace-addon-context'
-import { builtInAddonRegistry } from '@/lib/addons/registry'
+import { useAppNavigation } from '@/components/app-shell/use-app-navigation'
 
 export function AppSidebar() {
-  const { currentCompany } = useCompany()
-  const { enabledAddonIds } = useWorkspaceAddons()
-  const navigation = getNavigationForMode(normalizeAppMode(currentCompany?.type), getEnabledAddonNavigationItems(enabledAddonIds, builtInAddonRegistry))
-  const pathname = usePathname()
+  const { navigation, activeHref } = useAppNavigation()
   const { t } = useI18n()
-  const items = [...navigation.primary, ...navigation.groups.flatMap((group) => group.items), ...(navigation.addonGroup?.items ?? [])]
-  const activeHref = getActiveNavigationHref(pathname, items)
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-slate-200 bg-white pb-[calc(var(--app-footer-content-height)+env(safe-area-inset-bottom))] xl:flex xl:flex-col" aria-labelledby="app-sidebar-label">

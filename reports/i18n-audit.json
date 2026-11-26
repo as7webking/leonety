@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-26T18:25:00.259Z",
+  "generatedAt": "2026-11-26T20:08:45.290Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -184,7 +184,7 @@
     },
     {
       "file": "src/components/incoming-order-alert.tsx",
-      "line": 129,
+      "line": 134,
       "type": "jsx-text",
       "text": "WooCommerce · #"
     },
@@ -269,7 +269,7 @@
   ],
   "summary": {
     "englishKeyCount": 3031,
-    "authenticatedSourceFileCount": 96,
+    "authenticatedSourceFileCount": 97,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 26
   }
