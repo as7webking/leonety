@@ -103,6 +103,20 @@ test('urgent order alerts separate provider acceptance from acknowledgement and 
   assert.match(migration, /push_attempt_count between 0 and 3/)
 })
 
+test('incoming order polling rejects stale workspace responses and handles network failure', () => {
+  const alertSource = readFileSync(new URL('../components/incoming-order-alert.tsx', import.meta.url), 'utf8')
+  assert.match(alertSource, /key={currentCompanyId \?\? 'none'}/)
+  assert.match(alertSource, /signal:controller\.signal/)
+  assert.match(alertSource, /controller\.abort\(\)/)
+  assert.match(alertSource, /if \(requestInFlight\) return/)
+  assert.match(alertSource, /requestInFlight = false/)
+  assert.match(alertSource, /payload\.companyId !== currentCompanyId/)
+  assert.match(alertSource, /!mountedRef\.current/)
+  assert.match(alertSource, /catch \{\s*\/\/ Polling is best-effort/)
+  assert.match(alertSource, /serviceWorker\?\.addEventListener/)
+  assert.match(alertSource, /window\.clearInterval\(poll\)/)
+})
+
 test('validates MP3 and WAV content signatures, not MIME alone', () => {
   assert.equal(detectAudioType(Uint8Array.from([0x49,0x44,0x33,0,0,0]), 'audio/mpeg'), 'audio/mpeg')
   assert.equal(detectAudioType(Uint8Array.from([0x52,0x49,0x46,0x46,0,0,0,0,0x57,0x41,0x56,0x45]), 'audio/wav'), 'audio/wav')

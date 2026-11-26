@@ -30,11 +30,16 @@ function playDefaultChime(volume = 0.7) {
 
 export function IncomingOrderAlert() {
   const { currentCompanyId } = useCompany()
+  return <IncomingOrderAlertWorkspace key={currentCompanyId ?? 'none'} currentCompanyId={currentCompanyId} />
+}
+
+function IncomingOrderAlertWorkspace({ currentCompanyId }: { currentCompanyId: string | null }) {
   const { locale, t } = useI18n()
   const [alert, setAlert] = useState<IncomingOrderPushPayload | null>(null)
   const [ackError, setAckError] = useState(false)
   const stopRef = useRef<(() => void) | null>(null)
   const activeEventIdRef = useRef('')
+  const mountedRef = useRef(true)
 
   const stopSound = useCallback(() => { stopRef.current?.(); stopRef.current = null }, [])
   const receive = useCallback((payload: IncomingOrderPushPayload) => {
@@ -49,7 +54,7 @@ export function IncomingOrderAlert() {
       try {
         const response = await fetch(`/api/order-notifications/sound?companyId=${encodeURIComponent(payload.companyId)}`, { cache:'no-store' })
         const sound = await response.json().catch(() => ({}))
-        if (!response.ok || sound.enabled === false) return
+        if (!mountedRef.current || !response.ok || sound.enabled === false) return
         const volume = Math.min(1, Math.max(0, Number(sound.volume ?? 0.7)))
         if (sound.url) {
           const audio = new Audio(sound.url)
@@ -69,28 +74,44 @@ export function IncomingOrderAlert() {
   }, [currentCompanyId, stopSound])
 
   useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
+  useEffect(() => {
+    stopSound()
     if (!currentCompanyId) return
+    const controller = new AbortController()
+    let requestInFlight = false
     const loadUnacknowledged = async () => {
-      const eventId = activeEventIdRef.current
-      const params = new URLSearchParams({ companyId:currentCompanyId })
-      if (eventId && eventId !== 'test') params.set('eventId', eventId)
-      const response = await fetch(`/api/order-notifications/events?${params.toString()}`, { cache:'no-store' })
-      const payload = await response.json().catch(() => ({}))
-      const event = (payload.events as EventRow[] | undefined)?.find((item) => item.acknowledgement_status !== 'acknowledged')
-      if (!response.ok) return
-      if (eventId && eventId !== 'test' && payload.activeAcknowledged) {
-        activeEventIdRef.current = ''; stopSound(); setAlert(null); return
-      }
-      if ((!activeEventIdRef.current || activeEventIdRef.current === 'test') && event && event.acknowledgement_status !== 'acknowledged') {
-        receive(createIncomingOrderPushPayload({ eventId:event.id, locale, companyId:currentCompanyId, orderId:event.external_order_id, orderNumber:event.order_number || event.external_order_id, amount:event.amount || '', currency:event.currency || '' }))
+      if (requestInFlight) return
+      requestInFlight = true
+      try {
+        const eventId = activeEventIdRef.current
+        const params = new URLSearchParams({ companyId:currentCompanyId })
+        if (eventId && eventId !== 'test') params.set('eventId', eventId)
+        const response = await fetch(`/api/order-notifications/events?${params.toString()}`, { cache:'no-store', signal:controller.signal })
+        const payload = await response.json().catch(() => ({}))
+        if (controller.signal.aborted || !response.ok) return
+        const event = (payload.events as EventRow[] | undefined)?.find((item) => item.acknowledgement_status !== 'acknowledged')
+        if (eventId && eventId !== 'test' && payload.activeAcknowledged) {
+          activeEventIdRef.current = ''; stopSound(); setAlert(null); return
+        }
+        if ((!activeEventIdRef.current || activeEventIdRef.current === 'test') && event && event.acknowledgement_status !== 'acknowledged') {
+          receive(createIncomingOrderPushPayload({ eventId:event.id, locale, companyId:currentCompanyId, orderId:event.external_order_id, orderNumber:event.order_number || event.external_order_id, amount:event.amount || '', currency:event.currency || '' }))
+        }
+      } catch {
+        // Polling is best-effort; keep the current alert state on network failure.
+      } finally {
+        requestInFlight = false
       }
     }
     void loadUnacknowledged()
     const poll = window.setInterval(() => void loadUnacknowledged(), 15_000)
-    if (!('serviceWorker' in navigator)) return
     const handleMessage = (event: MessageEvent<IncomingOrderPushPayload>) => receive(event.data)
-    navigator.serviceWorker.addEventListener('message', handleMessage)
-    return () => { window.clearInterval(poll); navigator.serviceWorker.removeEventListener('message', handleMessage); stopSound() }
+    const serviceWorker = 'serviceWorker' in navigator ? navigator.serviceWorker : null
+    serviceWorker?.addEventListener('message', handleMessage)
+    return () => { controller.abort(); window.clearInterval(poll); serviceWorker?.removeEventListener('message', handleMessage); stopSound() }
   }, [currentCompanyId, locale, receive, stopSound])
 
   const acknowledge = async () => {

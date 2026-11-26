@@ -1,14 +1,11 @@
 'use client'
 
 import { useEffect } from 'react'
-import { usePathname } from 'next/navigation'
 
 const CLIENT_REQUEST_INTERVAL_MS = 60_000
 const CHANNEL_NAME = 'leonety-activity-heartbeat'
 
 export function ActivityHeartbeat() {
-  const pathname = usePathname()
-
   useEffect(() => {
     let lastRequestAt = 0
     let trailingTimer: ReturnType<typeof setTimeout> | undefined
@@ -70,7 +67,7 @@ export function ActivityHeartbeat() {
       if (trailingTimer) clearTimeout(trailingTimer)
       channel?.close()
     }
-  }, [pathname])
+  }, [])
 
   return null
 }

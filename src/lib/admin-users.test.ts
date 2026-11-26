@@ -64,6 +64,8 @@ test('activity heartbeat authenticates server-side and writes only via throttled
   assert.match(apiSource, /record_leonety_user_activity/)
   assert.match(apiSource, /status: 204/)
   assert.doesNotMatch(clientSource, /mousemove|scroll/)
+  assert.doesNotMatch(clientSource, /usePathname/)
+  assert.match(clientSource, /CLIENT_REQUEST_INTERVAL_MS\s*-\s*\(now\s*-\s*lastRequestAt\)/)
   assert.match(migrationSource, /interval '5 minutes'/)
   assert.match(migrationSource, /references auth\.users\(id\)/)
   assert.match(migrationSource, /revoke all on table public\.user_activity from public, anon, authenticated/)
