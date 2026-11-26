@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-24T20:15:44.007Z",
+  "generatedAt": "2026-11-26T18:25:00.259Z",
   "scope": "Authenticated application only; public landing excluded.",
   "locales": [
     "en",
@@ -59,50 +59,50 @@
   ],
   "coverage": {
     "en": {
-      "translated": 3029,
-      "total": 3029,
+      "translated": 3031,
+      "total": 3031,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "de": {
-      "translated": 3029,
-      "total": 3029,
+      "translated": 3031,
+      "total": 3031,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "ru": {
-      "translated": 3029,
-      "total": 3029,
+      "translated": 3031,
+      "total": 3031,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "tr": {
-      "translated": 3029,
-      "total": 3029,
+      "translated": 3031,
+      "total": 3031,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "uk": {
-      "translated": 3029,
-      "total": 3029,
+      "translated": 3031,
+      "total": 3031,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "pl": {
-      "translated": 3029,
-      "total": 3029,
+      "translated": 3031,
+      "total": 3031,
       "percent": 100,
       "missing": [],
       "usedMissing": []
     },
     "fr": {
-      "translated": 3029,
-      "total": 3029,
+      "translated": 3031,
+      "total": 3031,
       "percent": 100,
       "missing": [],
       "usedMissing": []
@@ -184,7 +184,7 @@
     },
     {
       "file": "src/components/incoming-order-alert.tsx",
-      "line": 113,
+      "line": 129,
       "type": "jsx-text",
       "text": "WooCommerce · #"
     },
@@ -268,7 +268,7 @@
     }
   ],
   "summary": {
-    "englishKeyCount": 3029,
+    "englishKeyCount": 3031,
     "authenticatedSourceFileCount": 96,
     "usedMissingInEnglishCount": 0,
     "hardcodedStringSuspectCount": 26

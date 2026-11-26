@@ -20,6 +20,18 @@ test('workspace loading ignores routine auth refresh events and deduplicates ini
   assert.doesNotMatch(providerSource, /onAuthStateChange\(\(\) => \{\s*void refreshCompanies/)
 })
 
+test('workspace load failures remain distinct from an empty workspace list and can be retried', () => {
+  const selectorSource = readFileSync(new URL('../components/app-shell/workspace-selector-client.tsx', import.meta.url), 'utf8')
+  const localeSource = readFileSync(new URL('./app-navigation-i18n.ts', import.meta.url), 'utf8')
+
+  assert.match(providerSource, /loadError: boolean/)
+  assert.match(providerSource, /setLoadError\(true\)/)
+  assert.match(selectorSource, /loadError &&/)
+  assert.match(selectorSource, /refreshCompanies\(\)/)
+  assert.match(localeSource, /workspaces\.loadFailed/)
+  assert.match(localeSource, /workspaces\.retry/)
+})
+
 test('navigation memory is process-local and clearable without browser persistence', () => {
   clearAppNavigationMemory()
   setAppDataMemory('workspace:transactions', { count: 3 })

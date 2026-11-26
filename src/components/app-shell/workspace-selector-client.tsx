@@ -9,7 +9,7 @@ const WORKSPACE_ACTION_VALUE = '__workspace_action__'
 
 export function WorkspaceSelectorClient() {
   const router = useRouter()
-  const { companies, currentCompanyId, loading, setCurrentCompanyId } = useCompany()
+  const { companies, currentCompanyId, loading, loadError, refreshCompanies, setCurrentCompanyId } = useCompany()
   const { t } = useI18n()
   const options = [
     ...(companies.length === 0 ? [{ value: '', label: t('nav.noWorkspace'), disabled: true }] : []),
@@ -37,6 +37,19 @@ export function WorkspaceSelectorClient() {
         ariaLabel={t('nav.currentCompany')}
         className="w-full"
       />
+      {loadError && (
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-rose-700" role="alert">
+          <span>{t('workspaces.loadFailed')}</span>
+          <button
+            type="button"
+            className="shrink-0 font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700"
+            disabled={loading}
+            onClick={() => void refreshCompanies()}
+          >
+            {t('workspaces.retry')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

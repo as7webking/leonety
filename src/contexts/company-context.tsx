@@ -19,6 +19,7 @@ interface CompanyContextValue {
   currentCompany: Company | null
   currentCompanyId: string | null
   loading: boolean
+  loadError: boolean
   setCurrentCompanyId: (companyId: string) => void
   refreshCompanies: (preferredCompanyId?: string | null) => Promise<void>
 }
@@ -35,6 +36,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [currentCompanyId, setCurrentCompanyIdState] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const resolvedUserIdRef = useRef<string | null>(null)
   const inFlightRef = useRef<{ userId: string; promise: Promise<void> } | null>(null)
   const requestVersionRef = useRef(0)
@@ -55,6 +57,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     setCompanies([])
     setCurrentCompanyIdState(null)
     setLoading(false)
+    setLoadError(false)
   }, [])
 
   const loadCompaniesForUser = useCallback((nextUserId: string, preferredCompanyId?: string | null) => {
@@ -69,6 +72,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       setCompanies([])
       setCurrentCompanyIdState(null)
     }
+    setLoadError(false)
     if (isInitialLoad || userChanged) setLoading(true)
     const requestVersion = requestVersionRef.current + 1
     requestVersionRef.current = requestVersion
@@ -83,10 +87,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         if (requestVersion !== requestVersionRef.current) return
         console.error('Failed to load companies:', error)
-        if (isInitialLoad || userChanged) {
-          setCompanies([])
-          setCurrentCompanyIdState(null)
-        }
+        setLoadError(true)
         return
       }
 
@@ -111,7 +112,11 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       } else {
         window.localStorage.removeItem(getStorageKey(nextUserId))
       }
-    })().finally(() => {
+    })().catch((error: unknown) => {
+      if (requestVersion !== requestVersionRef.current) return
+      console.error('Failed to load companies:', error)
+      setLoadError(true)
+    }).finally(() => {
       if (requestVersion === requestVersionRef.current) {
         if (inFlightRef.current?.promise === request) inFlightRef.current = null
         setLoading(false)
@@ -123,12 +128,21 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   }, [supabase])
 
   const refreshCompanies = useCallback(async (preferredCompanyId?: string | null) => {
-    const { data: authData } = await supabase.auth.getUser()
-    if (!authData.user) {
-      clearCompanyState()
-      return
+    setLoadError(false)
+    setLoading(true)
+    try {
+      const { data: authData, error } = await supabase.auth.getUser()
+      if (error) throw error
+      if (!authData.user) {
+        clearCompanyState()
+        return
+      }
+      await loadCompaniesForUser(authData.user.id, preferredCompanyId)
+    } catch (error) {
+      console.error('Failed to load workspace session:', error)
+      setLoadError(true)
+      setLoading(false)
     }
-    await loadCompaniesForUser(authData.user.id, preferredCompanyId)
   }, [clearCompanyState, loadCompaniesForUser, supabase])
 
   useEffect(() => {
@@ -162,6 +176,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         currentCompany,
         currentCompanyId,
         loading,
+        loadError,
         setCurrentCompanyId,
         refreshCompanies,
       }}
