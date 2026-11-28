@@ -111,15 +111,27 @@ export async function POST(request: Request) {
     }
 
     const currentPeriodEnd = data.data?.current_billing_period?.ends_at ?? subscription.current_period_end
-    await adminSupabase
+    const { data: persistedSubscription, error: persistenceError } = await adminSupabase
       .from('billing_subscriptions')
       .update({
         cancel_at_period_end: true,
         current_period_end: currentPeriodEnd,
         updated_at: new Date().toISOString(),
       })
+      .eq('company_id', companyId)
       .eq('provider', 'paddle')
       .eq('provider_subscription_id', subscription.provider_subscription_id)
+      .select('provider_subscription_id')
+      .maybeSingle<{ provider_subscription_id: string }>()
+
+    if (persistenceError || !persistedSubscription) {
+      safeLog('error', 'Paddle cancellation was scheduled but local state could not be saved', {
+        requestId,
+        companyId,
+        persistenceErrorCode: persistenceError?.code ?? null,
+      })
+      return jsonError('Cancellation was scheduled with Paddle, but its status could not be saved locally. Refresh billing status before retrying.', 503, requestId)
+    }
 
     safeLog('info', 'Subscription cancellation scheduled', { requestId, companyId })
     return NextResponse.json({ ok: true, requestId, currentPeriodEnd })
