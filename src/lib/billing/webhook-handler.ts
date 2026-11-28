@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { getPlanFromProviderPriceId, getProviderApiKey, getWebhookSecret } from './server-config'
 import { isBillingProvider, type BillingProvider, type PaidAppPlan } from './plans'
+import { verifyBillingWebhookSignature } from './webhook-security'
 
 type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'paused' | 'cancelled' | 'expired'
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
@@ -44,73 +45,9 @@ function toIsoFromUnix(value: unknown) {
   return typeof value === 'number' ? new Date(value * 1000).toISOString() : null
 }
 
-function timingSafeEqual(a: string, b: string) {
-  const left = Buffer.from(a)
-  const right = Buffer.from(b)
-  return left.length === right.length && crypto.timingSafeEqual(left, right)
-}
-
-function getStripeSignatureParts(header: string) {
-  const parts = Object.fromEntries(
-    header.split(',').map((part) => {
-      const [key, ...value] = part.split('=')
-      return [key, value.join('=')]
-    })
-  )
-  return { timestamp: parts.t, signature: parts.v1 }
-}
-
-function verifyStripeSignature(rawBody: string, signatureHeader: string | null, secret: string) {
-  if (!signatureHeader) return false
-
-  const { timestamp, signature } = getStripeSignatureParts(signatureHeader)
-  if (!timestamp || !signature) return false
-
-  const timestampSeconds = Number(timestamp)
-  if (!Number.isFinite(timestampSeconds)) return false
-
-  const ageSeconds = Math.abs(Date.now() / 1000 - timestampSeconds)
-  if (ageSeconds > 300) return false
-
-  const signedPayload = `${timestamp}.${rawBody}`
-  const expected = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex')
-  return timingSafeEqual(expected, signature)
-}
-
-function parsePaddleSignature(header: string) {
-  const values = Object.fromEntries(
-    header.split(';').map((part) => {
-      const [key, ...value] = part.trim().split('=')
-      return [key, value.join('=')]
-    })
-  )
-
-  return { timestamp: values.ts, signature: values.h1 }
-}
-
-function verifyPaddleSignature(rawBody: string, signatureHeader: string | null, secret: string) {
-  if (!signatureHeader) return false
-
-  const { timestamp, signature } = parsePaddleSignature(signatureHeader)
-  if (!timestamp || !signature) return false
-
-  const timestampSeconds = Number(timestamp)
-  if (!Number.isFinite(timestampSeconds)) return false
-
-  const ageSeconds = Math.abs(Date.now() / 1000 - timestampSeconds)
-  if (ageSeconds > 300) return false
-
-  const signedPayload = `${timestamp}:${rawBody}`
-  const expected = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex')
-  return timingSafeEqual(expected, signature)
-}
-
 function verifyWebhookSignature(provider: BillingProvider, request: Request, rawBody: string, secret: string) {
-  if (provider === 'stripe') {
-    return verifyStripeSignature(rawBody, request.headers.get('stripe-signature'), secret)
-  }
-
-  return verifyPaddleSignature(rawBody, request.headers.get('paddle-signature'), secret)
+  const headerName = provider === 'stripe' ? 'stripe-signature' : 'paddle-signature'
+  return verifyBillingWebhookSignature(provider, rawBody, request.headers.get(headerName), secret)
 }
 
 function mapStripeStatus(status: string | undefined): SubscriptionStatus {
@@ -345,7 +282,7 @@ async function insertPayment(provider: BillingProvider, payment: NormalizedPayme
 
 async function markEventProcessed(provider: BillingProvider, eventId: string, patch: Record<string, unknown>) {
   const supabase = createSupabaseAdminClient()
-  await supabase
+  const { data, error } = await supabase
     .from('billing_events')
     .update({
       ...patch,
@@ -353,6 +290,11 @@ async function markEventProcessed(provider: BillingProvider, eventId: string, pa
     })
     .eq('provider', provider)
     .eq('provider_event_id', eventId)
+    .select('provider_event_id')
+    .maybeSingle<{ provider_event_id: string }>()
+
+  if (error) throw error
+  if (!data) throw new Error('Billing event processing state could not be persisted')
 }
 
 async function markEventFailed(provider: BillingProvider, eventId: string, message: string) {
